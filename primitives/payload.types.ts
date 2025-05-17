@@ -334,43 +334,43 @@ export interface Function {
         | 'raifle/sorcererlm-8x22b'
         | 'eva-unit-01/eva-qwen-2.5-32b'
         | 'thedrummer/unslopnemo-12b'
-        | 'anthropic/claude-3.5-haiku-20241022'
-        | 'anthropic/claude-3.5-haiku-20241022'
         | 'anthropic/claude-3.5-haiku'
         | 'anthropic/claude-3.5-haiku'
+        | 'anthropic/claude-3.5-haiku-20241022'
+        | 'anthropic/claude-3.5-haiku-20241022'
         | 'neversleep/llama-3.1-lumimaid-70b'
-        | 'anthropic/claude-3.5-sonnet'
-        | 'anthropic/claude-3.5-sonnet'
         | 'anthracite-org/magnum-v4-72b'
+        | 'anthropic/claude-3.5-sonnet'
+        | 'anthropic/claude-3.5-sonnet'
         | 'x-ai/grok-beta'
-        | 'mistralai/ministral-3b'
         | 'mistralai/ministral-8b'
+        | 'mistralai/ministral-3b'
         | 'qwen/qwen-2.5-7b-instruct'
         | 'qwen/qwen-2.5-7b-instruct'
         | 'nvidia/llama-3.1-nemotron-70b-instruct'
-        | 'inflection/inflection-3-pi'
         | 'inflection/inflection-3-productivity'
+        | 'inflection/inflection-3-pi'
         | 'google/gemini-flash-1.5-8b'
-        | 'liquid/lfm-40b'
         | 'thedrummer/rocinante-12b'
         | 'anthracite-org/magnum-v2-72b'
+        | 'liquid/lfm-40b'
         | 'meta-llama/llama-3.2-3b-instruct'
         | 'meta-llama/llama-3.2-3b-instruct'
-        | 'meta-llama/llama-3.2-11b-vision-instruct'
-        | 'meta-llama/llama-3.2-11b-vision-instruct'
+        | 'meta-llama/llama-3.2-1b-instruct'
+        | 'meta-llama/llama-3.2-1b-instruct'
         | 'meta-llama/llama-3.2-90b-vision-instruct'
-        | 'meta-llama/llama-3.2-1b-instruct'
-        | 'meta-llama/llama-3.2-1b-instruct'
+        | 'meta-llama/llama-3.2-11b-vision-instruct'
+        | 'meta-llama/llama-3.2-11b-vision-instruct'
         | 'qwen/qwen-2.5-72b-instruct'
         | 'qwen/qwen-2.5-72b-instruct'
         | 'neversleep/llama-3.1-lumimaid-8b'
-        | 'openai/o1-preview-2024-09-12'
-        | 'openai/o1-mini-2024-09-12'
-        | 'openai/o1-mini'
         | 'openai/o1-preview'
+        | 'openai/o1-preview-2024-09-12'
+        | 'openai/o1-mini'
+        | 'openai/o1-mini-2024-09-12'
         | 'mistralai/pixtral-12b'
-        | 'cohere/command-r-08-2024'
         | 'cohere/command-r-plus-08-2024'
+        | 'cohere/command-r-08-2024'
         | 'qwen/qwen-2.5-vl-7b-instruct'
         | 'qwen/qwen-2.5-vl-7b-instruct'
         | 'sao10k/l3.1-euryale-70b'
@@ -381,20 +381,20 @@ export interface Function {
         | 'sao10k/l3-lunaris-8b'
         | 'aetherwiing/mn-starcannon-12b'
         | 'openai/gpt-4o-2024-08-06'
+        | 'meta-llama/llama-3.1-405b'
+        | 'meta-llama/llama-3.1-405b'
         | 'nothingiisreal/mn-celeste-12b'
-        | 'meta-llama/llama-3.1-405b'
-        | 'meta-llama/llama-3.1-405b'
-        | 'perplexity/llama-3.1-sonar-large-128k-online'
         | 'perplexity/llama-3.1-sonar-small-128k-online'
+        | 'perplexity/llama-3.1-sonar-large-128k-online'
         | 'meta-llama/llama-3.1-8b-instruct'
         | 'meta-llama/llama-3.1-8b-instruct'
-        | 'meta-llama/llama-3.1-70b-instruct'
         | 'meta-llama/llama-3.1-405b-instruct'
+        | 'meta-llama/llama-3.1-70b-instruct'
         | 'mistralai/codestral-mamba'
         | 'mistralai/mistral-nemo'
         | 'mistralai/mistral-nemo'
-        | 'openai/gpt-4o-mini-2024-07-18'
         | 'openai/gpt-4o-mini'
+        | 'openai/gpt-4o-mini-2024-07-18'
         | 'google/gemma-2-27b-it'
         | 'alpindale/magnum-72b'
         | 'google/gemma-2-9b-it'
@@ -406,10 +406,10 @@ export interface Function {
         | 'sao10k/l3-euryale-70b'
         | 'cognitivecomputations/dolphin-mixtral-8x22b'
         | 'qwen/qwen-2-72b-instruct'
-        | 'mistralai/mistral-7b-instruct-v0.3'
+        | 'mistralai/mistral-7b-instruct'
+        | 'mistralai/mistral-7b-instruct'
         | 'nousresearch/hermes-2-pro-llama-3-8b'
-        | 'mistralai/mistral-7b-instruct'
-        | 'mistralai/mistral-7b-instruct'
+        | 'mistralai/mistral-7b-instruct-v0.3'
         | 'microsoft/phi-3-mini-128k-instruct'
         | 'microsoft/phi-3-medium-128k-instruct'
         | 'neversleep/llama-3-lumimaid-70b'
@@ -427,8 +427,8 @@ export interface Function {
         | 'meta-llama/llama-3-70b-instruct'
         | 'mistralai/mixtral-8x22b-instruct'
         | 'microsoft/wizardlm-2-8x22b'
-        | 'openai/gpt-4-turbo'
         | 'google/gemini-pro-1.5'
+        | 'openai/gpt-4-turbo'
         | 'cohere/command-r-plus'
         | 'cohere/command-r-plus-04-2024'
         | 'sophosympatheia/midnight-rose-70b'
@@ -436,32 +436,32 @@ export interface Function {
         | 'cohere/command-r'
         | 'anthropic/claude-3-haiku'
         | 'anthropic/claude-3-haiku'
-        | 'anthropic/claude-3-sonnet'
-        | 'anthropic/claude-3-sonnet'
         | 'anthropic/claude-3-opus'
         | 'anthropic/claude-3-opus'
+        | 'anthropic/claude-3-sonnet'
+        | 'anthropic/claude-3-sonnet'
         | 'cohere/command-r-03-2024'
         | 'mistralai/mistral-large'
-        | 'openai/gpt-4-turbo-preview'
         | 'openai/gpt-3.5-turbo-0613'
+        | 'openai/gpt-4-turbo-preview'
         | 'nousresearch/nous-hermes-2-mixtral-8x7b-dpo'
-        | 'mistralai/mistral-small'
         | 'mistralai/mistral-medium'
+        | 'mistralai/mistral-small'
         | 'mistralai/mistral-tiny'
         | 'mistralai/mistral-7b-instruct-v0.2'
         | 'mistralai/mixtral-8x7b-instruct'
         | 'neversleep/noromaid-20b'
-        | 'anthropic/claude-2'
-        | 'anthropic/claude-2'
         | 'anthropic/claude-2.1'
         | 'anthropic/claude-2.1'
-        | 'alpindale/goliath-120b'
+        | 'anthropic/claude-2'
+        | 'anthropic/claude-2'
         | 'undi95/toppy-m-7b'
-        | 'openai/gpt-4-1106-preview'
+        | 'alpindale/goliath-120b'
         | 'openai/gpt-3.5-turbo-1106'
+        | 'openai/gpt-4-1106-preview'
         | 'jondurbin/airoboros-l2-70b'
-        | 'mistralai/mistral-7b-instruct-v0.1'
         | 'openai/gpt-3.5-turbo-instruct'
+        | 'mistralai/mistral-7b-instruct-v0.1'
         | 'pygmalionai/mythalion-13b'
         | 'openai/gpt-3.5-turbo-16k'
         | 'openai/gpt-4-32k'
@@ -472,10 +472,10 @@ export interface Function {
         | 'undi95/remm-slerp-l2-13b'
         | 'gryphe/mythomax-l2-13b'
         | 'meta-llama/llama-2-70b-chat'
-        | 'openai/gpt-4'
-        | 'openai/gpt-4-0314'
         | 'openai/gpt-3.5-turbo'
         | 'openai/gpt-3.5-turbo-0125'
+        | 'openai/gpt-4'
+        | 'openai/gpt-4-0314'
         | 'openrouter/optimus-alpha'
         | 'nvidia/llama-3.1-nemotron-nano-8b-v1'
         | 'tokyotech-llm/llama-3.1-swallow-8b-instruct-v0.3'
@@ -496,11 +496,11 @@ export interface Function {
         | 'mattshumer/reflection-70b'
         | 'google/gemini-flash-1.5-exp'
         | 'lynn/soliloquy-v3'
-        | 'ai21/jamba-1-5-large'
         | '01-ai/yi-1.5-34b-chat'
         | 'ai21/jamba-1-5-mini'
-        | '01-ai/yi-large-fc'
+        | 'ai21/jamba-1-5-large'
         | '01-ai/yi-large-turbo'
+        | '01-ai/yi-large-fc'
         | '01-ai/yi-vision'
         | 'google/gemini-pro-1.5-exp'
         | 'cognitivecomputations/dolphin-llama-3-70b'
@@ -511,20 +511,20 @@ export interface Function {
         | 'microsoft/phi-3-medium-4k-instruct'
         | 'bigcode/starcoder2-15b-instruct'
         | 'openchat/openchat-8b'
-        | 'perplexity/llama-3-sonar-small-32k-chat'
         | 'perplexity/llama-3-sonar-large-32k-online'
+        | 'deepseek/deepseek-chat-v2.5'
+        | 'perplexity/llama-3-sonar-small-32k-chat'
         | 'perplexity/llama-3-sonar-small-32k-online'
         | 'perplexity/llama-3-sonar-large-32k-chat'
-        | 'deepseek/deepseek-chat-v2.5'
-        | 'meta-llama/llama-3-70b'
         | 'meta-llama/llama-3-8b'
+        | 'meta-llama/llama-3-70b'
         | 'liuhaotian/llava-yi-34b'
-        | 'qwen/qwen-4b-chat'
         | 'qwen/qwen-110b-chat'
-        | 'qwen/qwen-14b-chat'
-        | 'qwen/qwen-7b-chat'
         | 'qwen/qwen-72b-chat'
         | 'qwen/qwen-32b-chat'
+        | 'qwen/qwen-14b-chat'
+        | 'qwen/qwen-7b-chat'
+        | 'qwen/qwen-4b-chat'
         | 'snowflake/snowflake-arctic-instruct'
         | 'fireworks/firellava-13b'
         | 'lynn/soliloquy-l3'
@@ -540,19 +540,19 @@ export interface Function {
         | 'nousresearch/nous-hermes-2-mixtral-8x7b-sft'
         | 'austism/chronos-hermes-13b'
         | 'jondurbin/bagel-34b'
-        | 'neversleep/noromaid-mixtral-8x7b-instruct'
         | 'nousresearch/nous-hermes-yi-34b'
+        | 'neversleep/noromaid-mixtral-8x7b-instruct'
         | 'cognitivecomputations/dolphin-mixtral-8x7b'
         | 'recursal/rwkv-5-3b-ai-town'
         | 'rwkv/rwkv-5-world-3b'
         | 'togethercomputer/stripedhyena-nous-7b'
         | 'togethercomputer/stripedhyena-hessian-7b'
         | 'koboldai/psyfighter-13b-2'
-        | 'nousresearch/nous-hermes-2-vision-7b'
-        | 'gryphe/mythomist-7b'
         | '01-ai/yi-34b'
-        | '01-ai/yi-6b'
         | '01-ai/yi-34b-chat'
+        | '01-ai/yi-6b'
+        | 'gryphe/mythomist-7b'
+        | 'nousresearch/nous-hermes-2-vision-7b'
         | 'openrouter/cinematika-7b'
         | 'nousresearch/nous-capybara-7b'
         | 'jebcarter/psyfighter-13b'
@@ -565,21 +565,21 @@ export interface Function {
         | 'openai/gpt-4-vision-preview'
         | 'lizpreciatior/lzlv-70b-fp16-hf'
         | 'openrouter/auto'
-        | 'google/palm-2-codechat-bison-32k'
         | 'google/palm-2-chat-bison-32k'
+        | 'google/palm-2-codechat-bison-32k'
         | 'teknium/openhermes-2-mistral-7b'
         | 'open-orca/mistral-7b-openorca'
         | 'nousresearch/nous-hermes-llama2-70b'
         | 'xwin-lm/xwin-lm-70b'
         | 'migtissera/synthia-70b'
         | 'meta-llama/codellama-34b-instruct'
-        | 'nousresearch/nous-hermes-llama2-13b'
         | 'phind/phind-codellama-34b'
+        | 'nousresearch/nous-hermes-llama2-13b'
         | 'huggingfaceh4/zephyr-7b-beta'
-        | 'anthropic/claude-1'
-        | 'anthropic/claude-instant-1.0'
-        | 'anthropic/claude-1.2'
         | 'anthropic/claude-instant-1'
+        | 'anthropic/claude-1'
+        | 'anthropic/claude-1.2'
+        | 'anthropic/claude-instant-1.0'
         | 'google/palm-2-chat-bison'
         | 'google/palm-2-codechat-bison'
         | 'meta-llama/llama-2-13b-chat'
@@ -1104,8 +1104,73 @@ export interface SettingsSelect<T extends boolean = true> {
  * via the `definition` "TaskGenerate".
  */
 export interface TaskGenerate {
-  input?: unknown;
-  output?: unknown;
+  input: {
+    prompt: string;
+    model?: string | null;
+    system?: string | null;
+    format?: ('text' | 'object' | 'code' | 'list') | null;
+    schema?:
+      | {
+          [k: string]: unknown;
+        }
+      | unknown[]
+      | string
+      | number
+      | boolean
+      | null;
+    settings?:
+      | {
+          [k: string]: unknown;
+        }
+      | unknown[]
+      | string
+      | number
+      | boolean
+      | null;
+  };
+  output: {
+    content?: string | null;
+    data?:
+      | {
+          [k: string]: unknown;
+        }
+      | unknown[]
+      | string
+      | number
+      | boolean
+      | null;
+    citations?:
+      | {
+          [k: string]: unknown;
+        }
+      | unknown[]
+      | string
+      | number
+      | boolean
+      | null;
+    reasoning?: string | null;
+    headers?:
+      | {
+          [k: string]: unknown;
+        }
+      | unknown[]
+      | string
+      | number
+      | boolean
+      | null;
+    body?:
+      | {
+          [k: string]: unknown;
+        }
+      | unknown[]
+      | string
+      | number
+      | boolean
+      | null;
+    latency?: number | null;
+    status?: number | null;
+    statusText?: string | null;
+  };
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
