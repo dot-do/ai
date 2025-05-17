@@ -8,7 +8,13 @@ export const Batches: CollectionConfig = {
   },
   versions: true,
   fields: [
-    { name: 'status', type: 'select', defaultValue: 'Pending', options: ['Pending', 'Generating', 'Completed', 'Failed'], required: true },
+    {
+      name: 'status',
+      type: 'select',
+      defaultValue: 'Pending',
+      options: ['Pending', 'Generating', 'Completed', 'Failed'],
+      required: true,
+    },
     { name: 'generations', type: 'join', collection: 'generations', on: 'batch' },
   ],
 }

@@ -37,8 +37,8 @@ export default buildConfig({
   jobs: {
     tasks: [],
     workflows: [],
-    jobsCollectionOverrides: ({defaultJobsCollection}) => {
-      if(!defaultJobsCollection.admin){
+    jobsCollectionOverrides: ({ defaultJobsCollection }) => {
+      if (!defaultJobsCollection.admin) {
         defaultJobsCollection.admin = {}
       }
       defaultJobsCollection.admin.hidden = false
@@ -48,9 +48,10 @@ export default buildConfig({
         plural: 'Jobs',
       }
       defaultJobsCollection.fields.map((field) => {
-        if(field.type === 'json'){
+        if (field.type === 'json') {
           field.admin = {
-            ...field.admin, editorOptions
+            ...field.admin,
+            editorOptions,
           }
         }
       })

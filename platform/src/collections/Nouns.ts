@@ -29,23 +29,33 @@ export const Nouns: CollectionConfig = {
   },
   versions: true,
   fields: [
-    { type: 'row', fields: [
-      // { name: 'id', type: 'text', admin: { hidden: true } },
-      // { name: 'ns', type: 'relationship', relationTo: 'databases', label: 'Namespace' },
-      { name: 'id', type: 'text', required: true, label: 'Name' },
-      // { name: 'name', type: 'text', label: 'Name' },
-      { name: 'typeOf', type: 'relationship', relationTo:'nouns', hasMany: true },
-      // { name: 'sameAs', type: 'relationship', relationTo: 'types' },
-      // { name: 'generate', type: 'select', defaultValue: 'Object', options: ['List', 'Object', 'Markdown', 'Code', 'Nothing'] },
-      { name: 'generate', type: 'relationship', relationTo: 'functions' },
-    ]},
+    {
+      type: 'row',
+      fields: [
+        // { name: 'id', type: 'text', admin: { hidden: true } },
+        // { name: 'ns', type: 'relationship', relationTo: 'databases', label: 'Namespace' },
+        { name: 'id', type: 'text', required: true, label: 'Name' },
+        // { name: 'name', type: 'text', label: 'Name' },
+        { name: 'typeOf', type: 'relationship', relationTo: 'nouns', hasMany: true },
+        // { name: 'sameAs', type: 'relationship', relationTo: 'types' },
+        // { name: 'generate', type: 'select', defaultValue: 'Object', options: ['List', 'Object', 'Markdown', 'Code', 'Nothing'] },
+        { name: 'generate', type: 'relationship', relationTo: 'functions' },
+      ],
+    },
     { name: 'context', type: 'code', admin: { language: 'mdx', editorOptions } },
-    { name: 'relationships', type: 'array', fields: [
-      { type: 'row', fields: [
-        { name: 'predicate', type: 'text' },
-        { name: 'object', type: 'relationship', relationTo: ['nouns','things'] },
-      ]},
-    ]},
+    {
+      name: 'relationships',
+      type: 'array',
+      fields: [
+        {
+          type: 'row',
+          fields: [
+            { name: 'predicate', type: 'text' },
+            { name: 'object', type: 'relationship', relationTo: ['nouns', 'things'] },
+          ],
+        },
+      ],
+    },
     // { name: 'subClasses', type: 'join', collection: 'nouns', on: 'subClassOf' },
     { name: 'related', type: 'join', collection: 'nouns', on: 'relationships.object' },
     { name: 'things', type: 'join', collection: 'things', on: 'type' },
@@ -58,5 +68,5 @@ export const Nouns: CollectionConfig = {
         return data
       },
     ],
-  }
+  },
 }

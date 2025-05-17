@@ -4,7 +4,6 @@ import config from '@payload-config'
 import { getPayload } from 'payload'
 import { cache } from 'react'
 
-
 export const model = createOpenAI({
   compatibility: 'compatible',
   apiKey: process.env.AI_GATEWAY_TOKEN!,
