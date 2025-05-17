@@ -11,7 +11,7 @@ export const client = new API()
 export const api = createApiProxy()
 export const cli = new CLI()
 
-export type { ClientOptions, ErrorResponse, ListResponse, QueryParams } from './src/types'
+export type { ClientOptions, ErrorResponse, ListResponse, QueryParams, ResearchParams, ResearchResult } from './src/types'
 
 export * from './types'
 
