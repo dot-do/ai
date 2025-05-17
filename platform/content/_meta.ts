@@ -1,5 +1,8 @@
 import type { MetaRecord } from 'nextra'
 
 export default {
-  things: ''
+  index: '',
+  'getting-started': '',
+  _ai: { type: 'separator', title: 'AI' },
+  database: '',
 } satisfies MetaRecord
