@@ -1,58 +1,91 @@
-# Turborepo Tailwind CSS starter
+# [`workflows.do`](https://workflows.do)
 
-This Turborepo starter is maintained by the Turborepo core team.
+```ts
+import { ai, db } from 'workflows.do'
 
-## Using this example
+await db.ideas.create({ concept: 'Digital AI Workers' })
+await db.ideas.create({ concept: 'Agentic Workflow Platform' })
 
-Run the following command:
+const ideas = await db.ideas.search('AI Agents')
 
-```sh
-npx create-turbo@latest -e with-tailwind
+ideas.forEach(async (idea) => {
+  idea.status = 'Evaluating market potential'
+  const leanCanvas = await ai.defineLeanCanvas({ idea })
+  const marketResearch = await ai.research({ idea, leanCanvas })
+  await db.ideas.update({ ...idea, leanCanvas, marketResearch })
+})
+
 ```
 
-## What's inside?
+Or define the Functions & Workflows explicitly:
 
-This Turborepo includes the following packages/apps:
+```ts
+import { AI } from 'workflows.do'
 
-### Apps and Packages
+const ai = AI({
 
-- `docs`: a [Next.js](https://nextjs.org/) app with [Tailwind CSS](https://tailwindcss.com/)
-- `web`: another [Next.js](https://nextjs.org/) app with [Tailwind CSS](https://tailwindcss.com/)
-- `ui`: a stub React component library with [Tailwind CSS](https://tailwindcss.com/) shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
+  // Specify a strongly-typed schema for the AI to generate a structured output
+  defineLeanCanvas: {
+    productName: 'name of the product or service',
+    problem: ['top 3 problems the product solves'],
+    solution: ['top 3 solutions the product offers'],
+    uniqueValueProposition: 'clear message that states the benefit of your product',
+    unfairAdvantage: 'something that cannot be easily copied or bought',
+    customerSegments: ['list of target customer segments'],
+    keyMetrics: ['list of key numbers that tell you how your business is doing'],
+    channels: ['path to acquire customers'],
+    costStructure: ['list of operational costs'],
+    revenueStreams: ['list of revenue sources'],
+  },
 
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
+  // The type can also be a string array
+  brainstormIdeas: ['List 25 startup ideas leveraging AI Agents, Agentic Workflows, and/or Services delivered by AI Agents']
 
-### Building packages/ui
+  // Explicitly define the AI model, prompt, and output type
+  research: {
+    model: 'perplexity/sonar-deep-research',
+    prompt: 'Research {input}',
+    output: 'markdown',
+  },
 
-This example is set up to produce compiled styles for `ui` components into the `dist` directory. The component `.tsx` files are consumed by the Next.js apps directly using `transpilePackages` in `next.config.ts`. This was chosen for several reasons:
+  // Define functions that will be durably executed with automatic retries
+  ideate: async (args, { ai, db }) => {
+    const ideas = await ai.brainstormIdeas(args)
 
-- Make sharing one `tailwind.config.ts` to apps and packages as easy as possible.
-- Make package compilation simple by only depending on the Next.js Compiler and `tailwindcss`.
-- Ensure Tailwind classes do not overwrite each other. The `ui` package uses a `ui-` prefix for it's classes.
-- Maintain clear package export boundaries.
+    const results = Promise.all(ideas.map(async (idea) => {
+      idea.status = 'Evaluating market potential'
+      idea.leanCanvas = await ai.defineLeanCanvas({ idea })
+      idea.marketResearch = await ai.research({ idea, leanCanvas: idea.leanCanvas })
+      db.ideas.update(idea)
+      return idea
+    }))
 
-Another option is to consume `packages/ui` directly from source without building. If using this option, you will need to update the `tailwind.config.ts` in your apps to be aware of your package locations, so it can find all usages of the `tailwindcss` class names for CSS compilation.
+    return results
+  }
 
-For example, in [tailwind.config.ts](packages/tailwind-config/tailwind.config.ts):
+})
 
-```js
-  content: [
-    // app content
-    `src/**/*.{js,ts,jsx,tsx}`,
-    // include packages if not transpiling
-    "../../packages/ui/*.{js,ts,jsx,tsx}",
-  ],
+const ideas = await ai.ideate({ icp: 'Early-stage Startup Founders' })
+
 ```
 
-If you choose this strategy, you can remove the `tailwindcss` and `autoprefixer` dependencies from the `ui` package.
+Or define the Data Models explicitly:
 
-### Utilities
+```ts
+import { DB } from 'workflows.do'
 
-This Turborepo has some additional tools already setup for you:
+const db = DB({
+  leanCanvas: {
 
-- [Tailwind CSS](https://tailwindcss.com/) for styles
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
+  }
+})
+```
+
+```ts
+import { every, on } from 'workflows.do'
+
+every('hour during business hours', async (event, { ai, db }) => {
+  
+})
+```
+
