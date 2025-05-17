@@ -11,13 +11,14 @@ import { fileURLToPath } from 'url'
 
 import { editorOptions } from './lib/collections'
 
-import { Nouns } from './collections/Nouns'
-import { Things } from './collections/Things'
-import { Users } from './collections/Users'
-import { Roles } from './collections/Roles'
 import { Functions } from './collections/Functions'
 import { Workflows } from './collections/Workflows'
+import { Nouns } from './collections/Nouns'
+import { Things } from './collections/Things'
+import { Events } from './collections/Events'
 import { Webhooks } from './collections/Webhooks'
+import { Users } from './collections/Users'
+import { Roles } from './collections/Roles'
 
 
 import { Settings } from './globals/Settings'
@@ -40,7 +41,7 @@ export default buildConfig({
       baseDir: path.resolve(dirname),
     },
   },
-  collections: [Functions, Workflows, Nouns, Things, Users, Roles, Webhooks],
+  collections: [Functions, Workflows, Nouns, Things, Events, Users, Roles, Webhooks],
   globals: [Settings],
   jobs: {
     tasks: [generate],
@@ -52,8 +53,8 @@ export default buildConfig({
       defaultJobsCollection.admin.hidden = false
       defaultJobsCollection.admin.group = 'Admin'
       defaultJobsCollection.labels = {
-        singular: 'Event',
-        plural: 'Events',
+        singular: 'Job Queue',
+        plural: 'Job Queue',
       }
       defaultJobsCollection.fields.map((field) => {
         if (field.type === 'json') {

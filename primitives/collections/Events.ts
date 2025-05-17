@@ -66,26 +66,31 @@ export const Events: CollectionConfig = {
       admin: { editorOptions, language: 'mdx', condition: ({ execution }) => !!execution },
     },
     {
+      name: 'content',
+      type: 'code',
+      admin: { editorOptions, language: 'mdx', readOnly: true, condition: ({ content }) => !!content },
+    },
+    {
       name: 'data',
       type: 'json',
       admin: { editorOptions, readOnly: true, condition: ({ data }) => !!data },
     },
-    {
-      name: 'webhooks',
-      type: 'array',
-      admin: { readOnly: true, condition: ({ status }) => status !== 'Pending' },
-      fields: [
-        { name: 'webhook', type: 'relationship', relationTo: 'webhooks' },
-        { name: 'timestamp', type: 'date', defaultValue: () => new Date().toISOString() },
-        {
-          name: 'status',
-          type: 'select',
-          defaultValue: 'Pending',
-          options: ['Pending', 'Success', 'Error'],
-        },
-        { name: 'data', type: 'json' },
-      ],
-    },
+    // {
+    //   name: 'webhooks',
+    //   type: 'array',
+    //   admin: { readOnly: true, condition: ({ status }) => status !== 'Pending' },
+    //   fields: [
+    //     { name: 'webhook', type: 'relationship', relationTo: 'webhooks' },
+    //     { name: 'timestamp', type: 'date', defaultValue: () => new Date().toISOString() },
+    //     {
+    //       name: 'status',
+    //       type: 'select',
+    //       defaultValue: 'Pending',
+    //       options: ['Pending', 'Success', 'Error'],
+    //     },
+    //     { name: 'data', type: 'json' },
+    //   ],
+    // },
   ],
   hooks: {
     afterOperation: [onEventCreate],

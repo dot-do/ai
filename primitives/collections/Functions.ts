@@ -8,7 +8,7 @@ export const Functions: CollectionConfig = {
     group: 'AI',
     useAsTitle: 'name',
   },
-  versions: true,
+  // versions: true,
   fields: [
     { name: 'name', type: 'text', required: true, unique: true, admin: { position: 'sidebar' } },
     {
@@ -69,6 +69,6 @@ export const Functions: CollectionConfig = {
       admin: { language: 'yaml', editorOptions },
     },
     { name: 'data', type: 'json', admin: { hidden: true } },
-    // { name: 'executions', type: 'join', collection: 'events', on: 'execution', hasMany: true },
+    { name: 'executions', type: 'join', collection: 'events', on: 'execution', hasMany: true },
   ],
 }

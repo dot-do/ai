@@ -9,7 +9,20 @@ export const onEventCreate: CollectionAfterOperationHook<'events'> = async ({ re
   console.log(result)
 
   if (result.execution) {
-    const job = await payload.jobs.queue({ workflow: 'executeFunction', input: result })
+    const fn = await payload.findByID({ collection: 'functions', id: result.execution as string })
+    const input = {
+      model: fn.model,
+      prompt: fn.prompt 
+        ? fn.prompt.includes('{input}') 
+          ? fn.prompt.replace('{input}', result.input || '') 
+          : fn.prompt + '\n\n' + (result.input || '') 
+        : result.input || '',
+      system: fn.system,
+      output: fn.output,
+      schema: fn.schema,
+      settings: fn.settings,
+    }
+    const job = await payload.jobs.queue({ task: 'generate', input })
     console.log(job)
     waitUntil(payload.jobs.run())
   }
