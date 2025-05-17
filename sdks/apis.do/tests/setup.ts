@@ -47,27 +47,8 @@ export async function startLocalServer(hookTimeout = 60000): Promise<string> {
   console.log(`Environment: ${isCI ? 'CI' : 'Local'}, Hook timeout: ${hookTimeout}ms`)
 
   if (isCI) {
-    console.log('Running in CI environment, checking if server is running...')
-
-    const maxAttempts = Math.floor((hookTimeout - 10000) / 1000)
-    let attempts = 0
-
-    console.log(`Will try server health check up to ${maxAttempts} times...`)
-
-    while (attempts < maxAttempts) {
-      const ready = await isServerRunning()
-      if (ready) {
-        console.log('Server is ready on port 3000 in CI environment')
-        return process.env.APIS_DO_API_KEY || process.env.DO_API_KEY || 'test-api-key'
-      }
-
-      console.log(`Waiting for server to be ready in CI (${attempts + 1}/${maxAttempts})...`)
-      await sleep(1000)
-      attempts++
-    }
-
-    console.error('Server health check timed out after', maxAttempts, 'attempts in CI environment')
-    throw new Error(`Server health check timed out after ${maxAttempts} attempts in CI environment`)
+    console.log('Running in CI environment, skipping local server startup')
+    return process.env.APIS_DO_API_KEY || process.env.DO_API_KEY || 'test-api-key'
   }
 
   // Check if server is already running (for local environment)
@@ -83,11 +64,6 @@ export async function startLocalServer(hookTimeout = 60000): Promise<string> {
   console.log(`Root directory: ${rootDir}`)
 
   try {
-    if (isCI) {
-      console.log('Running in CI environment, skipping local server startup')
-      return process.env.APIS_DO_API_KEY || process.env.DO_API_KEY || 'test-api-key'
-    }
-    
     serverProcess = spawn('pnpm', ['dev'], {
       cwd: rootDir,
       stdio: 'pipe',
