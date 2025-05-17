@@ -7,6 +7,7 @@ export const Events: CollectionConfig = {
   slug: 'events',
   admin: {
     group: 'Data',
+    useAsTitle: 'input',
   },
   versions: true,
   access: {

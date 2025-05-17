@@ -15,6 +15,6 @@ export const Webhooks: CollectionConfig = {
       options: ['Create', 'Update', 'Delete'],
       hasMany: true,
     },
-    { name: 'things', type: 'relationship', relationTo: 'things', hasMany: true },
+    { name: 'nouns', type: 'relationship', relationTo: 'nouns', hasMany: true },
   ],
 }
