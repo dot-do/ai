@@ -8,7 +8,7 @@ import './styles.css'
 
 import type { Metadata } from 'next'
 import { Providers } from '../providers'
-import { siteConfig } from '@/components/site-config'
+import { siteConfig } from 'components/site-config'
 
 export const metadata = {
   title: {
@@ -32,7 +32,14 @@ const banner = <Banner storageKey='some-key'>Functions.do is released 🎉</Bann
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const pageMap = await getPageMap('/docs')
 
-  const navbar = <Navbar logo={<b>{siteConfig.name}</b>} logoLink={siteConfig.url} chatLink={siteConfig.baseLinks.discord_chat_link} projectLink={siteConfig.baseLinks.github} />
+  const navbar = (
+    <Navbar
+      logo={<b>{siteConfig.name}</b>}
+      logoLink={siteConfig.url}
+      chatLink={siteConfig.baseLinks.discord_chat_link}
+      projectLink={siteConfig.baseLinks.github}
+    />
+  )
 
   return (
     <html lang='en' dir='ltr' suppressHydrationWarning>
@@ -41,17 +48,17 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       </Head>
       <body>
         {/* <Providers> */}
-          <Layout
-            // banner={banner}
-            navbar={navbar}
-            footer={<footer>Footer</footer>}
-            pageMap={pageMap}
-            docsRepositoryBase={siteConfig.baseLinks.docs_repo_base}
-            sidebar={{ defaultMenuCollapseLevel: 1 }}
-            themeSwitch={{ system: 'System', light: 'Light', dark: 'Dark' }}
-          >
-            {children}
-          </Layout>
+        <Layout
+          // banner={banner}
+          navbar={navbar}
+          footer={<footer>Footer</footer>}
+          pageMap={pageMap}
+          docsRepositoryBase={siteConfig.baseLinks.docs_repo_base}
+          sidebar={{ defaultMenuCollapseLevel: 1 }}
+          themeSwitch={{ system: 'System', light: 'Light', dark: 'Dark' }}
+        >
+          {children}
+        </Layout>
         {/* </Providers> */}
       </body>
     </html>
