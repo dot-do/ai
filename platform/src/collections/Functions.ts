@@ -1,5 +1,6 @@
 import type { CollectionConfig, Condition } from 'payload'
 import { editorOptions } from '@/lib/collections'
+import { getModels } from '@/lib/ai'
 
 export const Functions: CollectionConfig = {
   slug: 'functions',
@@ -21,8 +22,10 @@ export const Functions: CollectionConfig = {
         },
         {
           name: 'model',
-          type: 'text',
-          defaultValue: ({ req }) => req.payload.findGlobal({ slug: 'settings' }).then((settings) => settings.defaultModel || 'gemini-2.5-pro-preview'),
+          // type: 'text',
+          type: 'select',
+          options: await getModels(),
+          defaultValue: ({ req }) => req.payload.findGlobal({ slug: 'settings' }).then((settings) => settings.defaultModel || 'google/gemini-2.5-pro-preview'),
         },
       ],
     },
