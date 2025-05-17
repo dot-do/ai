@@ -41,7 +41,7 @@ export const generateNoun: WorkflowConfig<'generateNoun'> = {
       output: 'no-schema',
     }).then((results) => ({
       data: matter.stringify('', { data: results.object }),
-      content: matter.stringify('', { data: { $id: id, ...results.object as any } }),
+      content: matter.stringify('', { data: { $id: id, ...results.object as object } }),
       request: results.request,
       response: results.response,
       usage: results.usage,

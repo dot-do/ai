@@ -906,7 +906,7 @@ export interface WorkflowExecuteFunction {
 export interface WorkflowExecuteWorkflow {
   input: {
     workflowId: string;
-    input?:
+    input:
       | {
           [k: string]: unknown;
         }
@@ -915,8 +915,8 @@ export interface WorkflowExecuteWorkflow {
       | number
       | boolean
       | null;
-    timeout?: number | null;
-    memoryLimit?: number | null;
+    timeout: number;
+    memoryLimit: number;
     eventId?: string | null;
   };
 }

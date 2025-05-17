@@ -1,33 +1,21 @@
 import { WorkflowConfig } from 'payload'
 
-type WorkflowInput = {
-  workflowId: string;
-  input?: any;
-  timeout?: number;
-  memoryLimit?: number;
-  eventId?: string;
-};
 
-type WorkflowOutput = {
-  result: any | null;
-  logs: string[];
-  error?: string;
-};
 
-export const executeWorkflow: WorkflowConfig<any> = {
+export const executeWorkflow: WorkflowConfig<'executeWorkflow'> = {
   slug: 'executeWorkflow',
   inputSchema: [
     { name: 'workflowId', type: 'text', required: true },
-    { name: 'input', type: 'json' },
-    { name: 'timeout', type: 'number' },
-    { name: 'memoryLimit', type: 'number' },
+    { name: 'input', type: 'json', required: true },
+    { name: 'timeout', type: 'number', defaultValue: 5000, required: true },
+    { name: 'memoryLimit', type: 'number', defaultValue: 128, required: true },
     { name: 'eventId', type: 'text' },
   ],
   handler: async function({ job, tasks, req }) {
     const { payload } = req;
     
-    const input = job.input as unknown as WorkflowInput;
-    const { workflowId, timeout = 5000, memoryLimit = 128, eventId } = input;
+    const input = job.input
+    const { workflowId, timeout, memoryLimit, eventId } = input;
     
     let event;
     try {
@@ -78,7 +66,7 @@ export const executeWorkflow: WorkflowConfig<any> = {
           result: null,
           error: errorMessage,
           logs: [] 
-        } as WorkflowOutput;
+        }
         
         await payload.update({
           collection: 'payload-jobs',
@@ -103,7 +91,7 @@ export const executeWorkflow: WorkflowConfig<any> = {
           logs.push(`API GET: ${path}`);
           return { success: true, message: 'Mock API response' };
         },
-        post: async (path: string, data: any) => {
+        post: async (path: string, data: object) => {
           logs.push(`API POST: ${path} with data: ${JSON.stringify(data)}`);
           return { success: true, message: 'Mock API response' };
         },
@@ -114,7 +102,7 @@ export const executeWorkflow: WorkflowConfig<any> = {
           logs.push(`AI generate: ${prompt}`);
           return { text: 'Mock AI response' };
         },
-        generateIdeas: async (params: any) => {
+        generateIdeas: async (params: object) => {
           logs.push(`AI generateIdeas: ${JSON.stringify(params)}`);
           return { ideas: ['Mock idea 1', 'Mock idea 2'] };
         },
@@ -126,11 +114,11 @@ export const executeWorkflow: WorkflowConfig<any> = {
           return { results: [] };
         },
         ideas: {
-          findSimilar: async (params: any) => {
+          findSimilar: async (params: object) => {
             logs.push(`DB ideas.findSimilar: ${JSON.stringify(params)}`);
             return [];
           },
-          create: async (params: any) => {
+          create: async (params: object) => {
             logs.push(`DB ideas.create: ${JSON.stringify(params)}`);
             return { id: 'mock-id', ...params };
           },
@@ -149,7 +137,7 @@ export const executeWorkflow: WorkflowConfig<any> = {
       await context.global.set(
         'console',
         new ivm.Reference({
-          log: (...args: any[]) => {
+          log: (...args: object[]) => {
             const logMessage = args.map((arg) => 
               (typeof arg === 'object' ? JSON.stringify(arg) : String(arg))
             ).join(' ');
@@ -183,7 +171,7 @@ export const executeWorkflow: WorkflowConfig<any> = {
             }
           }
         });
-      } catch (error: any) {
+      } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         
         await payload.update({
@@ -202,7 +190,7 @@ export const executeWorkflow: WorkflowConfig<any> = {
           result: null,
           error: errorMessage,
           logs,
-        } as WorkflowOutput;
+        }
         
         await payload.update({
           collection: 'payload-jobs',
@@ -224,7 +212,7 @@ export const executeWorkflow: WorkflowConfig<any> = {
         result,
         error: undefined,
         logs,
-      } as WorkflowOutput;
+      }
       
       await payload.update({
         collection: 'payload-jobs',
@@ -238,7 +226,7 @@ export const executeWorkflow: WorkflowConfig<any> = {
       });
       
       return;
-    } catch (error: any) {
+    } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       
       if (event) {
@@ -249,17 +237,17 @@ export const executeWorkflow: WorkflowConfig<any> = {
             status: 'Error',
             data: { 
               error: errorMessage,
-              stack: error.stack
+              stack: error instanceof Error ? error.stack : undefined,
             }
           }
-        });
+        })
       }
       
       const output = {
         result: null,
         error: errorMessage,
         logs: [],
-      } as WorkflowOutput;
+      }
       
       await payload.update({
         collection: 'payload-jobs',

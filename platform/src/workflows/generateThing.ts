@@ -28,7 +28,7 @@ export const generateThing: WorkflowConfig<'generateThing'> = {
       // }),
     }).then((results) => ({
       data: matter.stringify('', { data: results.object }),
-      content: matter.stringify('', { data: { $id: job.input.id, $type: job.input.type, ...results.object as any } }),
+      content: matter.stringify('', { data: { $id: job.input.id, $type: job.input.type, ...results.object as object } }),
       request: results.request,
       response: results.response,
       usage: results.usage,
