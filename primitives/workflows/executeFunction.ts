@@ -1,6 +1,5 @@
 import { WorkflowConfig } from 'payload'
 import { waitUntil } from '@vercel/functions'
-import { ai } from 'ai-functions'
 import { Events } from '@/collections/Events'
 import { model as llm } from '@/lib/ai'
 import yaml from 'yaml'

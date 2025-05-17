@@ -1,7 +1,7 @@
 import { WorkflowConfig } from 'payload'
 import { generateObject } from 'ai'
 import matter from 'gray-matter'
-import { model } from '@/lib/ai'
+import { model } from '../lib/ai'
 
 type GenerateNounInput = {
   id: string
@@ -46,14 +46,14 @@ export const generateNoun: WorkflowConfig<'generateNoun'> = {
       usage: results.usage,
     }))
 
-    const generation = await payload.create({
-      collection: 'generations',
-      data: {
-        request: JSON.parse(results.request.body || '{}'),
-        response: results.response,
-        metadata: results.usage,
-      },
-    })
+    // const generation = await payload.create({
+    //   collection: 'generations',
+    //   data: {
+    //     request: JSON.parse(results.request.body || '{}'),
+    //     response: results.response,
+    //     metadata: results.usage,
+    //   },
+    // })
 
     try {
       const noun = await payload.create({

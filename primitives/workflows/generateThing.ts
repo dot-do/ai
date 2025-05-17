@@ -1,8 +1,8 @@
 import { WorkflowConfig } from 'payload'
 import { generateObject, generateText } from 'ai'
 import matter from 'gray-matter'
-import { Things } from '@/collections/Things'
-import { model } from '@/lib/ai'
+import { Things } from '../collections/Things'
+import { model } from '../lib/ai'
 
 export const generateThing: WorkflowConfig<'generateThing'> = {
   slug: 'generateThing',
@@ -51,24 +51,24 @@ export const generateThing: WorkflowConfig<'generateThing'> = {
             usage: results.usage,
           }))
 
-    const generation = await payload.create({
-      collection: 'generations',
-      data: {
-        request: JSON.parse(results.request.body || '{}'),
-        response: results.response,
-        metadata: results.usage,
-      },
-    })
+    // const generation = await payload.create({
+    //   collection: 'generations',
+    //   data: {
+    //     request: JSON.parse(results.request.body || '{}'),
+    //     response: results.response,
+    //     metadata: results.usage,
+    //   },
+    // })
 
-    const data = await payload.update({
-      collection: 'things',
-      id: job.input.id,
-      data: {
-        generation: generation.id,
-        data: results.data,
-        content: results.content,
-      },
-    })
-    console.log(data)
+    // const data = await payload.update({
+    //   collection: 'things',
+    //   id: job.input.id,
+    //   data: {
+    //     generation: generation.id,
+    //     data: results.data,
+    //     content: results.content,
+    //   },
+    // })
+    // console.log(data)
   },
 }
