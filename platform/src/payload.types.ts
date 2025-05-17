@@ -90,9 +90,6 @@ export interface Config {
     things: {
       events: 'events';
     };
-    functions: {
-      executions: 'events';
-    };
     batches: {
       generations: 'generations';
     };
@@ -201,7 +198,383 @@ export interface Function {
   id: string;
   name: string;
   output?: ('Object' | 'ObjectArray' | 'Text' | 'TextArray' | 'Code') | null;
-  model?: string | null;
+  object?: (string | null) | Noun;
+  model?:
+    | (
+        | 'openai/codex-mini'
+        | 'meta-llama/llama-3.3-8b-instruct'
+        | 'nousresearch/deephermes-3-mistral-24b-preview'
+        | 'mistralai/mistral-medium-3'
+        | 'google/gemini-2.5-pro-preview'
+        | 'arcee-ai/caller-large'
+        | 'arcee-ai/spotlight'
+        | 'arcee-ai/maestro-reasoning'
+        | 'arcee-ai/virtuoso-large'
+        | 'arcee-ai/coder-large'
+        | 'arcee-ai/virtuoso-medium-v2'
+        | 'arcee-ai/arcee-blitz'
+        | 'microsoft/phi-4-reasoning-plus'
+        | 'microsoft/phi-4-reasoning'
+        | 'qwen/qwen3-0.6b-04-28'
+        | 'inception/mercury-coder-small-beta'
+        | 'qwen/qwen3-1.7b'
+        | 'qwen/qwen3-4b'
+        | 'opengvlab/internvl3-14b'
+        | 'opengvlab/internvl3-2b'
+        | 'deepseek/deepseek-prover-v2'
+        | 'meta-llama/llama-guard-4-12b'
+        | 'qwen/qwen3-30b-a3b'
+        | 'qwen/qwen3-8b'
+        | 'qwen/qwen3-14b'
+        | 'qwen/qwen3-32b'
+        | 'qwen/qwen3-235b-a22b'
+        | 'tngtech/deepseek-r1t-chimera'
+        | 'thudm/glm-z1-rumination-32b'
+        | 'thudm/glm-z1-9b'
+        | 'thudm/glm-4-9b'
+        | 'microsoft/mai-ds-r1'
+        | 'thudm/glm-z1-32b'
+        | 'thudm/glm-4-32b'
+        | 'google/gemini-2.5-flash-preview'
+        | 'openai/o4-mini-high'
+        | 'openai/o3'
+        | 'openai/o4-mini'
+        | 'shisa-ai/shisa-v2-llama3.3-70b'
+        | 'qwen/qwen2.5-coder-7b-instruct'
+        | 'openai/gpt-4.1'
+        | 'openai/gpt-4.1-mini'
+        | 'openai/gpt-4.1-nano'
+        | 'eleutherai/llemma_7b'
+        | 'alfredpros/codellama-7b-instruct-solidity'
+        | 'arliai/qwq-32b-arliai-rpr-v1'
+        | 'agentica-org/deepcoder-14b-preview'
+        | 'moonshotai/kimi-vl-a3b-thinking'
+        | 'x-ai/grok-3-mini-beta'
+        | 'x-ai/grok-3-beta'
+        | 'nvidia/llama-3.3-nemotron-super-49b-v1'
+        | 'nvidia/llama-3.1-nemotron-ultra-253b-v1'
+        | 'meta-llama/llama-4-maverick'
+        | 'meta-llama/llama-4-scout'
+        | 'all-hands/openhands-lm-32b-v0.1'
+        | 'deepseek/deepseek-v3-base'
+        | 'scb10x/llama3.1-typhoon2-8b-instruct'
+        | 'scb10x/llama3.1-typhoon2-70b-instruct'
+        | 'bytedance-research/ui-tars-72b'
+        | 'qwen/qwen2.5-vl-3b-instruct'
+        | 'google/gemini-2.5-pro-exp-03-25'
+        | 'qwen/qwen2.5-vl-32b-instruct'
+        | 'deepseek/deepseek-chat-v3-0324'
+        | 'featherless/qwerky-72b'
+        | 'openai/o1-pro'
+        | 'mistralai/mistral-small-3.1-24b-instruct'
+        | 'open-r1/olympiccoder-32b'
+        | 'google/gemma-3-1b-it'
+        | 'google/gemma-3-4b-it'
+        | 'ai21/jamba-1.6-large'
+        | 'ai21/jamba-1.6-mini'
+        | 'google/gemma-3-12b-it'
+        | 'cohere/command-a'
+        | 'openai/gpt-4o-mini-search-preview'
+        | 'openai/gpt-4o-search-preview'
+        | 'rekaai/reka-flash-3'
+        | 'google/gemma-3-27b-it'
+        | 'thedrummer/anubis-pro-105b-v1'
+        | 'thedrummer/skyfall-36b-v2'
+        | 'microsoft/phi-4-multimodal-instruct'
+        | 'perplexity/sonar-reasoning-pro'
+        | 'perplexity/sonar-pro'
+        | 'perplexity/sonar-deep-research'
+        | 'deepseek/deepseek-r1-zero'
+        | 'qwen/qwq-32b'
+        | 'moonshotai/moonlight-16b-a3b-instruct'
+        | 'nousresearch/deephermes-3-llama-3-8b-preview'
+        | 'openai/gpt-4.5-preview'
+        | 'google/gemini-2.0-flash-lite-001'
+        | 'anthropic/claude-3.7-sonnet'
+        | 'perplexity/r1-1776'
+        | 'mistralai/mistral-saba'
+        | 'cognitivecomputations/dolphin3.0-r1-mistral-24b'
+        | 'cognitivecomputations/dolphin3.0-mistral-24b'
+        | 'meta-llama/llama-guard-3-8b'
+        | 'openai/o3-mini-high'
+        | 'deepseek/deepseek-r1-distill-llama-8b'
+        | 'google/gemini-2.0-flash-001'
+        | 'qwen/qwen-vl-plus'
+        | 'aion-labs/aion-1.0'
+        | 'aion-labs/aion-1.0-mini'
+        | 'aion-labs/aion-rp-llama-3.1-8b'
+        | 'qwen/qwen-vl-max'
+        | 'qwen/qwen-turbo'
+        | 'qwen/qwen2.5-vl-72b-instruct'
+        | 'qwen/qwen-plus'
+        | 'qwen/qwen-max'
+        | 'openai/o3-mini'
+        | 'deepseek/deepseek-r1-distill-qwen-1.5b'
+        | 'mistralai/mistral-small-24b-instruct-2501'
+        | 'deepseek/deepseek-r1-distill-qwen-32b'
+        | 'deepseek/deepseek-r1-distill-qwen-14b'
+        | 'perplexity/sonar-reasoning'
+        | 'perplexity/sonar'
+        | 'liquid/lfm-7b'
+        | 'liquid/lfm-3b'
+        | 'deepseek/deepseek-r1-distill-llama-70b'
+        | 'deepseek/deepseek-r1'
+        | 'minimax/minimax-01'
+        | 'mistralai/codestral-2501'
+        | 'microsoft/phi-4'
+        | 'deepseek/deepseek-chat'
+        | 'sao10k/l3.3-euryale-70b'
+        | 'openai/o1'
+        | 'eva-unit-01/eva-llama-3.33-70b'
+        | 'x-ai/grok-2-vision-1212'
+        | 'x-ai/grok-2-1212'
+        | 'cohere/command-r7b-12-2024'
+        | 'google/gemini-2.0-flash-exp'
+        | 'meta-llama/llama-3.3-70b-instruct'
+        | 'amazon/nova-lite-v1'
+        | 'amazon/nova-micro-v1'
+        | 'amazon/nova-pro-v1'
+        | 'qwen/qwq-32b-preview'
+        | 'eva-unit-01/eva-qwen-2.5-72b'
+        | 'openai/gpt-4o-2024-11-20'
+        | 'mistralai/mistral-large-2411'
+        | 'mistralai/mistral-large-2407'
+        | 'mistralai/pixtral-large-2411'
+        | 'x-ai/grok-vision-beta'
+        | 'infermatic/mn-inferor-12b'
+        | 'qwen/qwen-2.5-coder-32b-instruct'
+        | 'raifle/sorcererlm-8x22b'
+        | 'eva-unit-01/eva-qwen-2.5-32b'
+        | 'thedrummer/unslopnemo-12b'
+        | 'anthropic/claude-3.5-haiku'
+        | 'anthropic/claude-3.5-haiku-20241022'
+        | 'neversleep/llama-3.1-lumimaid-70b'
+        | 'anthracite-org/magnum-v4-72b'
+        | 'anthropic/claude-3.5-sonnet'
+        | 'x-ai/grok-beta'
+        | 'mistralai/ministral-8b'
+        | 'mistralai/ministral-3b'
+        | 'qwen/qwen-2.5-7b-instruct'
+        | 'nvidia/llama-3.1-nemotron-70b-instruct'
+        | 'inflection/inflection-3-productivity'
+        | 'inflection/inflection-3-pi'
+        | 'google/gemini-flash-1.5-8b'
+        | 'thedrummer/rocinante-12b'
+        | 'anthracite-org/magnum-v2-72b'
+        | 'liquid/lfm-40b'
+        | 'meta-llama/llama-3.2-3b-instruct'
+        | 'meta-llama/llama-3.2-1b-instruct'
+        | 'meta-llama/llama-3.2-90b-vision-instruct'
+        | 'meta-llama/llama-3.2-11b-vision-instruct'
+        | 'qwen/qwen-2.5-72b-instruct'
+        | 'neversleep/llama-3.1-lumimaid-8b'
+        | 'openai/o1-preview'
+        | 'openai/o1-preview-2024-09-12'
+        | 'openai/o1-mini'
+        | 'openai/o1-mini-2024-09-12'
+        | 'mistralai/pixtral-12b'
+        | 'cohere/command-r-plus-08-2024'
+        | 'cohere/command-r-08-2024'
+        | 'qwen/qwen-2.5-vl-7b-instruct'
+        | 'sao10k/l3.1-euryale-70b'
+        | 'microsoft/phi-3.5-mini-128k-instruct'
+        | 'nousresearch/hermes-3-llama-3.1-70b'
+        | 'nousresearch/hermes-3-llama-3.1-405b'
+        | 'openai/chatgpt-4o-latest'
+        | 'sao10k/l3-lunaris-8b'
+        | 'aetherwiing/mn-starcannon-12b'
+        | 'openai/gpt-4o-2024-08-06'
+        | 'meta-llama/llama-3.1-405b'
+        | 'nothingiisreal/mn-celeste-12b'
+        | 'perplexity/llama-3.1-sonar-small-128k-online'
+        | 'perplexity/llama-3.1-sonar-large-128k-online'
+        | 'meta-llama/llama-3.1-8b-instruct'
+        | 'meta-llama/llama-3.1-405b-instruct'
+        | 'meta-llama/llama-3.1-70b-instruct'
+        | 'mistralai/codestral-mamba'
+        | 'mistralai/mistral-nemo'
+        | 'openai/gpt-4o-mini'
+        | 'openai/gpt-4o-mini-2024-07-18'
+        | 'google/gemma-2-27b-it'
+        | 'alpindale/magnum-72b'
+        | 'google/gemma-2-9b-it'
+        | '01-ai/yi-large'
+        | 'ai21/jamba-instruct'
+        | 'anthropic/claude-3.5-sonnet-20240620'
+        | 'sao10k/l3-euryale-70b'
+        | 'cognitivecomputations/dolphin-mixtral-8x22b'
+        | 'qwen/qwen-2-72b-instruct'
+        | 'mistralai/mistral-7b-instruct'
+        | 'nousresearch/hermes-2-pro-llama-3-8b'
+        | 'mistralai/mistral-7b-instruct-v0.3'
+        | 'microsoft/phi-3-mini-128k-instruct'
+        | 'microsoft/phi-3-medium-128k-instruct'
+        | 'neversleep/llama-3-lumimaid-70b'
+        | 'deepseek/deepseek-coder'
+        | 'google/gemini-flash-1.5'
+        | 'openai/gpt-4o'
+        | 'meta-llama/llama-guard-2-8b'
+        | 'openai/gpt-4o-2024-05-13'
+        | 'allenai/olmo-7b-instruct'
+        | 'neversleep/llama-3-lumimaid-8b'
+        | 'sao10k/fimbulvetr-11b-v2'
+        | 'meta-llama/llama-3-8b-instruct'
+        | 'meta-llama/llama-3-70b-instruct'
+        | 'mistralai/mixtral-8x22b-instruct'
+        | 'microsoft/wizardlm-2-8x22b'
+        | 'google/gemini-pro-1.5'
+        | 'openai/gpt-4-turbo'
+        | 'cohere/command-r-plus'
+        | 'cohere/command-r-plus-04-2024'
+        | 'sophosympatheia/midnight-rose-70b'
+        | 'cohere/command'
+        | 'cohere/command-r'
+        | 'anthropic/claude-3-haiku'
+        | 'anthropic/claude-3-opus'
+        | 'anthropic/claude-3-sonnet'
+        | 'cohere/command-r-03-2024'
+        | 'mistralai/mistral-large'
+        | 'openai/gpt-3.5-turbo-0613'
+        | 'openai/gpt-4-turbo-preview'
+        | 'nousresearch/nous-hermes-2-mixtral-8x7b-dpo'
+        | 'mistralai/mistral-medium'
+        | 'mistralai/mistral-small'
+        | 'mistralai/mistral-tiny'
+        | 'mistralai/mistral-7b-instruct-v0.2'
+        | 'mistralai/mixtral-8x7b-instruct'
+        | 'neversleep/noromaid-20b'
+        | 'anthropic/claude-2.1'
+        | 'anthropic/claude-2'
+        | 'undi95/toppy-m-7b'
+        | 'alpindale/goliath-120b'
+        | 'openai/gpt-3.5-turbo-1106'
+        | 'openai/gpt-4-1106-preview'
+        | 'jondurbin/airoboros-l2-70b'
+        | 'openai/gpt-3.5-turbo-instruct'
+        | 'mistralai/mistral-7b-instruct-v0.1'
+        | 'pygmalionai/mythalion-13b'
+        | 'openai/gpt-3.5-turbo-16k'
+        | 'openai/gpt-4-32k'
+        | 'openai/gpt-4-32k-0314'
+        | 'mancer/weaver'
+        | 'anthropic/claude-2.0'
+        | 'undi95/remm-slerp-l2-13b'
+        | 'gryphe/mythomax-l2-13b'
+        | 'meta-llama/llama-2-70b-chat'
+        | 'openai/gpt-3.5-turbo'
+        | 'openai/gpt-3.5-turbo-0125'
+        | 'openai/gpt-4'
+        | 'openai/gpt-4-0314'
+        | 'openrouter/optimus-alpha'
+        | 'nvidia/llama-3.1-nemotron-nano-8b-v1'
+        | 'tokyotech-llm/llama-3.1-swallow-8b-instruct-v0.3'
+        | 'openrouter/quasar-alpha'
+        | 'allenai/molmo-7b-d'
+        | 'steelskull/l3.3-electra-r1-70b'
+        | 'allenai/olmo-2-0325-32b-instruct'
+        | 'latitudegames/wayfarer-large-70b-llama-3.3'
+        | 'qwen/qwen2.5-32b-instruct'
+        | 'allenai/llama-3.1-tulu-3-405b'
+        | 'sao10k/l3.1-70b-hanami-x1'
+        | 'inflatebot/mn-mag-mell-r1'
+        | 'google/gemini-exp-1121'
+        | 'google/gemini-exp-1114'
+        | 'x-ai/grok-2-mini'
+        | 'x-ai/grok-2'
+        | 'eva-unit-01/eva-qwen-2.5-14b'
+        | 'mattshumer/reflection-70b'
+        | 'google/gemini-flash-1.5-exp'
+        | 'lynn/soliloquy-v3'
+        | '01-ai/yi-1.5-34b-chat'
+        | 'ai21/jamba-1-5-mini'
+        | 'ai21/jamba-1-5-large'
+        | '01-ai/yi-large-turbo'
+        | '01-ai/yi-large-fc'
+        | '01-ai/yi-vision'
+        | 'google/gemini-pro-1.5-exp'
+        | 'cognitivecomputations/dolphin-llama-3-70b'
+        | 'qwen/qwen-2-7b-instruct'
+        | 'nousresearch/hermes-2-theta-llama-3-8b'
+        | 'sao10k/l3-stheno-8b'
+        | 'nvidia/nemotron-4-340b-instruct'
+        | 'microsoft/phi-3-medium-4k-instruct'
+        | 'bigcode/starcoder2-15b-instruct'
+        | 'openchat/openchat-8b'
+        | 'perplexity/llama-3-sonar-large-32k-online'
+        | 'deepseek/deepseek-chat-v2.5'
+        | 'perplexity/llama-3-sonar-small-32k-chat'
+        | 'perplexity/llama-3-sonar-small-32k-online'
+        | 'perplexity/llama-3-sonar-large-32k-chat'
+        | 'meta-llama/llama-3-8b'
+        | 'meta-llama/llama-3-70b'
+        | 'liuhaotian/llava-yi-34b'
+        | 'qwen/qwen-110b-chat'
+        | 'qwen/qwen-72b-chat'
+        | 'qwen/qwen-32b-chat'
+        | 'qwen/qwen-14b-chat'
+        | 'qwen/qwen-7b-chat'
+        | 'qwen/qwen-4b-chat'
+        | 'snowflake/snowflake-arctic-instruct'
+        | 'fireworks/firellava-13b'
+        | 'lynn/soliloquy-l3'
+        | 'microsoft/wizardlm-2-7b'
+        | 'huggingfaceh4/zephyr-orpo-141b-a35b'
+        | 'mistralai/mixtral-8x22b'
+        | 'databricks/dbrx-instruct'
+        | 'google/gemma-7b-it'
+        | 'nousresearch/nous-hermes-2-mistral-7b-dpo'
+        | 'meta-llama/codellama-70b-instruct'
+        | 'recursal/eagle-7b'
+        | '01-ai/yi-34b-200k'
+        | 'nousresearch/nous-hermes-2-mixtral-8x7b-sft'
+        | 'austism/chronos-hermes-13b'
+        | 'jondurbin/bagel-34b'
+        | 'nousresearch/nous-hermes-yi-34b'
+        | 'neversleep/noromaid-mixtral-8x7b-instruct'
+        | 'cognitivecomputations/dolphin-mixtral-8x7b'
+        | 'recursal/rwkv-5-3b-ai-town'
+        | 'rwkv/rwkv-5-world-3b'
+        | 'togethercomputer/stripedhyena-nous-7b'
+        | 'togethercomputer/stripedhyena-hessian-7b'
+        | 'koboldai/psyfighter-13b-2'
+        | '01-ai/yi-34b'
+        | '01-ai/yi-34b-chat'
+        | '01-ai/yi-6b'
+        | 'gryphe/mythomist-7b'
+        | 'nousresearch/nous-hermes-2-vision-7b'
+        | 'openrouter/cinematika-7b'
+        | 'nousresearch/nous-capybara-7b'
+        | 'jebcarter/psyfighter-13b'
+        | 'openchat/openchat-7b'
+        | 'intel/neural-chat-7b'
+        | 'anthropic/claude-instant-1.1'
+        | 'teknium/openhermes-2.5-mistral-7b'
+        | 'liuhaotian/llava-13b'
+        | 'nousresearch/nous-capybara-34b'
+        | 'openai/gpt-4-vision-preview'
+        | 'lizpreciatior/lzlv-70b-fp16-hf'
+        | 'openrouter/auto'
+        | 'google/palm-2-chat-bison-32k'
+        | 'google/palm-2-codechat-bison-32k'
+        | 'teknium/openhermes-2-mistral-7b'
+        | 'open-orca/mistral-7b-openorca'
+        | 'nousresearch/nous-hermes-llama2-70b'
+        | 'xwin-lm/xwin-lm-70b'
+        | 'migtissera/synthia-70b'
+        | 'meta-llama/codellama-34b-instruct'
+        | 'phind/phind-codellama-34b'
+        | 'nousresearch/nous-hermes-llama2-13b'
+        | 'huggingfaceh4/zephyr-7b-beta'
+        | 'anthropic/claude-instant-1'
+        | 'anthropic/claude-1'
+        | 'anthropic/claude-1.2'
+        | 'anthropic/claude-instant-1.0'
+        | 'google/palm-2-chat-bison'
+        | 'google/palm-2-codechat-bison'
+        | 'meta-llama/llama-2-13b-chat'
+        | 'openai/gpt-3.5-turbo-0301'
+      )
+    | null;
   system?: string | null;
   prompt?: string | null;
   schema?: string | null;
@@ -215,27 +588,17 @@ export interface Function {
     | number
     | boolean
     | null;
-  executions?: {
-    docs?: (string | Event)[];
-    hasNextPage?: boolean;
-    totalDocs?: number;
-  };
   updatedAt: string;
   createdAt: string;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "events".
+ * via the `definition` "things".
  */
-export interface Event {
+export interface Thing {
   id: string;
-  status?: ('Pending' | 'Processing' | 'Success' | 'Error') | null;
-  execution?: (string | null) | Function;
-  workflow?: (string | null) | Workflow;
+  type: string | Noun;
   generation?: (string | null) | Generation;
-  noun?: (string | null) | Noun;
-  thing?: (string | null) | Thing;
-  input?: string | null;
   data?:
     | {
         [k: string]: unknown;
@@ -245,34 +608,19 @@ export interface Event {
     | number
     | boolean
     | null;
-  webhooks?:
+  content?: string | null;
+  relationships?:
     | {
-        webhook?: (string | null) | Webhook;
-        timestamp?: string | null;
-        status?: ('Pending' | 'Success' | 'Error') | null;
-        data?:
-          | {
-              [k: string]: unknown;
-            }
-          | unknown[]
-          | string
-          | number
-          | boolean
-          | null;
+        predicate?: string | null;
+        object?: (string | null) | Thing;
         id?: string | null;
       }[]
     | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "workflows".
- */
-export interface Workflow {
-  id: string;
-  name: string;
-  code?: string | null;
+  events?: {
+    docs?: (string | Event)[];
+    hasNextPage?: boolean;
+    totalDocs?: number;
+  };
   updatedAt: string;
   createdAt: string;
 }
@@ -332,12 +680,17 @@ export interface Batch {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "things".
+ * via the `definition` "events".
  */
-export interface Thing {
+export interface Event {
   id: string;
-  type: string | Noun;
+  status?: ('Pending' | 'Processing' | 'Success' | 'Error') | null;
+  execution?: (string | null) | Function;
+  workflow?: (string | null) | Workflow;
   generation?: (string | null) | Generation;
+  noun?: (string | null) | Noun;
+  thing?: (string | null) | Thing;
+  input?: string | null;
   data?:
     | {
         [k: string]: unknown;
@@ -347,19 +700,34 @@ export interface Thing {
     | number
     | boolean
     | null;
-  content?: string | null;
-  relationships?:
+  webhooks?:
     | {
-        predicate?: string | null;
-        object?: (string | null) | Thing;
+        webhook?: (string | null) | Webhook;
+        timestamp?: string | null;
+        status?: ('Pending' | 'Success' | 'Error') | null;
+        data?:
+          | {
+              [k: string]: unknown;
+            }
+          | unknown[]
+          | string
+          | number
+          | boolean
+          | null;
         id?: string | null;
       }[]
     | null;
-  events?: {
-    docs?: (string | Event)[];
-    hasNextPage?: boolean;
-    totalDocs?: number;
-  };
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "workflows".
+ */
+export interface Workflow {
+  id: string;
+  name: string;
+  code?: string | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -645,13 +1013,13 @@ export interface ThingsSelect<T extends boolean = true> {
 export interface FunctionsSelect<T extends boolean = true> {
   name?: T;
   output?: T;
+  object?: T;
   model?: T;
   system?: T;
   prompt?: T;
   schema?: T;
   settings?: T;
   data?: T;
-  executions?: T;
   updatedAt?: T;
   createdAt?: T;
 }
