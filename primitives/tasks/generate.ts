@@ -24,6 +24,7 @@ export const generate: TaskConfig<'generate'> = {
     { name: 'statusText', type: 'text' },
   ],
   handler: async ({ job, tasks, req }) => {
+    let error, data, headers, body, text, latency, status, statusText, reasoning, content, citations
     const start = Date.now()
     const { payload } = req
     let { model, prompt, system, format, schema, ...settings } = job.input as any
@@ -48,40 +49,47 @@ export const generate: TaskConfig<'generate'> = {
         : undefined,
       ...settings,
     }
-    const response = await fetch(process.env.AI_GATEWAY_URL!, {
-      method: 'POST',
-      headers: { 
-        'Authorization': `Bearer ${process.env.AI_GATEWAY_TOKEN}`,
-        'HTTP-Referer': 'https://workflows.do',
-        'X-Title': 'Workflows.do Business-as-Code',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(request),
-    })
-    const latency = Date.now() - start
-    const headers = Object.fromEntries(response.headers)
-    const status = response.status
-    const statusText = response.statusText
-    const body = await response.json()
-    const content = body.choices?.[0]?.message?.content
-    const citations = body.choices?.[0]?.message?.citations
-    const reasoning = body.choices?.[0]?.message?.reasoning
-    let data
-    let error
     try {
-      data = JSON.parse(content)
-      // try to parse with zod
-      if (schema) {
-        data = toZodSchema(schema).parse(data)
+      const response = await fetch(process.env.AI_GATEWAY_URL + '/chat/completions', {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${process.env.AI_GATEWAY_TOKEN}`,
+          'HTTP-Referer': 'https://workflows.do',
+          'X-Title': 'Workflows.do Business-as-Code',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(request),
+      })
+      latency = Date.now() - start
+      headers = Object.fromEntries(response.headers)
+      status = response.status
+      statusText = response.statusText
+      
+      text = await response.text()
+      console.log(text)
+      try {
+        body = JSON.parse(text)
+      } catch (e) {
+        error = String(e)
+      }
+      content = body?.choices?.[0]?.message?.content
+      citations = body?.choices?.[0]?.message?.citations
+      reasoning = body?.choices?.[0]?.message?.reasoning
+      if (format === 'object') {
+        try {
+          data = JSON.parse(content)
+          // try to parse with zod
+          if (schema) {
+            data = toZodSchema(schema).parse(data)
+          }
+        } catch (e) {
+          error = String(e)
+        }
       }
     } catch (e) {
-      if (e instanceof Error) {
-        error = { message: e.message, stack: e.stack }
-      } else {
-        error = { message: String(e) }
-      }
-     }
-    const output = { headers, body, latency, status, statusText, data, reasoning, content, citations, error }
+      error = String(e)
+    } 
+    const output = { headers, body, text, latency, status, statusText, data, reasoning, content, citations, error }
     return { output } 
   },
 }
