@@ -34,6 +34,7 @@ import type {
   AIInstance,
   DatabaseAccess,
   APIAccess,
+  DBConfig,
 } from './types'
 import { API } from './client.js'
 
@@ -381,6 +382,21 @@ export const db = createDatabaseAccess()
 import { API as ApisDoAPI } from 'apis.do'
 
 export const client = new ApisDoAPI()
+
+/**
+ * Creates a typed database schema
+ */
+export function DB<T extends DBConfig>(config: T): DatabaseAccess {
+  fetch(`${getBaseUrl()}/db/schema`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(config),
+  }).catch((error) => console.error('Error registering DB schema:', error))
+  
+  return createDatabaseAccess()
+}
 
 /**
  * Durable Objects access

@@ -23,15 +23,29 @@ export type AIFunctionSchema<TOutput = any> = Record<string, any> & {
 export type SchemaToOutput<T extends Record<string, any>> = T extends { __output?: infer U } ? U : T
 
 /**
+ * More specific database model typing
+ */
+export interface DatabaseModel<T = any> {
+}
+
+/**
+ * Database configuration for schema definitions
+ */
+export interface DBConfig {
+  [modelName: string]: Record<string, any> // Schema definition
+}
+
+/**
  * Database access interface
  */
 export interface DatabaseAccess {
   [collection: string]: {
-    create: (data: Record<string, any>) => Promise<{ url: string } & Record<string, any>>
-    findOne: (query: Record<string, any>) => Promise<Record<string, any>>
-    find: (query: Record<string, any>) => Promise<Array<Record<string, any>>>
-    update: (id: string, data: Record<string, any>) => Promise<Record<string, any>>
+    create: <T extends Record<string, any>>(data: T) => Promise<T & { id: string, url: string }>
+    findOne: <T extends Record<string, any>>(query: Partial<T>) => Promise<T | null>
+    find: <T extends Record<string, any>>(query: Partial<T>) => Promise<T[]>
+    update: <T extends Record<string, any>>(id: string, data: Partial<T>) => Promise<T>
     delete: (id: string) => Promise<void>
+    search: <T extends Record<string, any>>(query: string) => Promise<T[]>
     [method: string]: (...args: any[]) => Promise<any>
   }
 }
