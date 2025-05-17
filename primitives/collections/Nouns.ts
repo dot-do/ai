@@ -30,7 +30,7 @@ export const Nouns: CollectionConfig = {
     useAsTitle: 'name',
     // useAsTitle: 'ns.id'
   },
-  versions: true,
+  // versions: true,
   fields: [
     { name: 'name', type: 'text', required: true, admin: { position: 'sidebar' } },
     // { name: 'typeOf', type: 'relationship', relationTo: 'nouns', hasMany: true, admin: { position: 'sidebar' } },
@@ -45,6 +45,7 @@ export const Nouns: CollectionConfig = {
         // { name: 'generate', type: 'select', defaultValue: 'Object', options: ['List', 'Object', 'Markdown', 'Code', 'Nothing'] },
       ],
     },
+    // { name: 'schema', type: 'code', admin: { language: 'yaml', editorOptions } },
     { name: 'context', type: 'code', admin: { language: 'mdx', editorOptions } },
     {
       name: 'relationships',
@@ -64,12 +65,12 @@ export const Nouns: CollectionConfig = {
     { name: 'things', type: 'join', collection: 'things', on: 'type' },
   ],
   hooks: {
-    beforeChange: [
-      async ({ data }) => {
-        const { content } = matter(data.context || '')
-        data.content = content
-        return data
-      },
-    ],
+    // beforeChange: [
+    //   async ({ data }) => {
+    //     const { content } = matter(data.context || '')
+    //     data.content = content
+    //     return data
+    //   },
+    // ],
   },
 }

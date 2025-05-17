@@ -11,6 +11,7 @@ export const generate: TaskConfig<'generate'> = {
     { name: 'format', type: 'select', defaultValue: 'text', options: ['text', 'object', 'code', 'list'] },
     { name: 'schema', type: 'json' },
     { name: 'settings', type: 'json' },
+    { name: 'context', type: 'text'},
     { name: 'event', type: 'relationship', relationTo: 'events' },
     { name: 'object', type: 'relationship', relationTo: 'nouns' },
   ],
@@ -26,9 +27,10 @@ export const generate: TaskConfig<'generate'> = {
     { name: 'statusText', type: 'text' },
   ],
   handler: async ({ job, tasks, req }) => {
-    let error, data, headers, body, text, latency, status, statusText, reasoning, content, citations
+    let error, data, headers, body, bodyText, text, latency, status, statusText, reasoning, content, citations
     const start = Date.now()
     const { payload } = req
+    // TODO: figure out why job.input has an inferred type of string when it should be the input schema object type
     let { model, prompt, system, format, schema, ...settings } = job.input as any
     if (format === 'object') {
       if (!system?.toLowerCase().includes('json')) system += '\n\nRespond only in JSON format.'
@@ -67,16 +69,18 @@ export const generate: TaskConfig<'generate'> = {
       status = response.status
       statusText = response.statusText
       
-      text = await response.text()
-      console.log(text)
+      bodyText = await response.text()
+      console.log(bodyText.trim().slice(0, 1000))
       try {
-        body = JSON.parse(text)
+        body = JSON.parse(bodyText)
       } catch (e) {
         error = String(e)
+        console.error(e)
       }
-      content = body?.choices?.[0]?.message?.content
-      citations = body?.choices?.[0]?.message?.citations
-      reasoning = body?.choices?.[0]?.message?.reasoning
+      content = body?.choices?.[0]?.text
+      reasoning = body?.choices?.[0]?.reasoning
+      citations = body?.citations
+      // console.log({ content, citations, reasoning })
       if (format === 'object') {
         try {
           data = JSON.parse(content)
@@ -86,38 +90,44 @@ export const generate: TaskConfig<'generate'> = {
           }
         } catch (e) {
           error = String(e)
+          console.error(e)
         }
       }
-    } catch (e) {
-      error = String(e)
-    } 
 
     if ((job.input as any).event) {
       await payload.update({
         collection: 'events',
         id: (job.input as any).event,
-        data: { content, data, reasoning, citations, error },
+        data: { status: 'Success', content, data, reasoning, citations, error },
       })
     }
 
     // TODO: if function has an object (ie. the associated Noun), create a new Thing of that Noun
 
     if ((job.input as any).object) {
+      const thing = {
+        type: (job.input as any).object,
+        content,
+        data,
+        reasoning,
+        context: (job.input as any).context,
+        citations: citations?.join('\n'),
+        // citations,
+        // error,
+      }
+      console.log({ thing })
       await payload.create({
         collection: 'things',
-        data: {
-          type: (job.input as any).object.id,
-          content,
-          data,
-          reasoning,
-          citations: citations?.join('\n'),
-          // citations,
-          // error,
-        },
+        data: thing,
       })
     }
 
     // TODO: get usage / cost information
+
+  } catch (e) {
+    error = String(e)
+    console.error(e)
+  } 
 
     const output = { headers, body, text, latency, status, statusText, data, reasoning, content, citations, error }
     return { output } 

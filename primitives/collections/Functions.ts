@@ -2,13 +2,15 @@ import type { CollectionConfig, Condition } from 'payload'
 import { editorOptions } from '../lib/collections'
 import { getModels } from '../lib/ai'
 
+const models = await getModels()
+
 export const Functions: CollectionConfig = {
   slug: 'functions',
   admin: {
     group: 'AI',
     useAsTitle: 'name',
   },
-  versions: true,
+  // versions: true,
   fields: [
     { name: 'name', type: 'text', required: true, unique: true, admin: { position: 'sidebar' } },
     {
@@ -28,7 +30,7 @@ export const Functions: CollectionConfig = {
       name: 'model',
       // type: 'text',
       type: 'select',
-      options: await getModels(),
+      options: models,
       // defaultValue: ({ req }) => req.payload.findGlobal({ slug: 'settings' }).then((settings) => settings.defaultModel || 'google/gemini-2.5-pro-preview'),
       admin: { position: 'sidebar' },
     },
@@ -65,10 +67,10 @@ export const Functions: CollectionConfig = {
     {
       name: 'settings',
       type: 'code',
-      defaultValue: 'temperature: 1.0',
+      // defaultValue: 'temperature: 1.0',
       admin: { language: 'yaml', editorOptions },
     },
-    { name: 'data', type: 'json', admin: { hidden: true } },
+    // { name: 'data', type: 'json', admin: { hidden: true } },
     { name: 'executions', type: 'join', collection: 'events', on: 'execution', hasMany: true },
   ],
 }

@@ -598,15 +598,6 @@ export interface Function {
   prompt?: string | null;
   schema?: string | null;
   settings?: string | null;
-  data?:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
   executions?: {
     docs?: (string | Event)[];
     hasNextPage?: boolean;
@@ -660,6 +651,7 @@ export interface Thing {
   id: string;
   name?: string | null;
   type: string | Noun;
+  context?: string | null;
   content?: string | null;
   data?:
     | {
@@ -972,7 +964,6 @@ export interface FunctionsSelect<T extends boolean = true> {
   prompt?: T;
   schema?: T;
   settings?: T;
-  data?: T;
   executions?: T;
   updatedAt?: T;
   createdAt?: T;
@@ -1014,6 +1005,7 @@ export interface NounsSelect<T extends boolean = true> {
 export interface ThingsSelect<T extends boolean = true> {
   name?: T;
   type?: T;
+  context?: T;
   content?: T;
   data?: T;
   reasoning?: T;
@@ -1212,6 +1204,7 @@ export interface TaskGenerate {
       | number
       | boolean
       | null;
+    context?: string | null;
     event?: (string | null) | Event;
     object?: (string | null) | Noun;
   };
@@ -1356,6 +1349,7 @@ export interface WorkflowGenerateThing {
   input: {
     name?: string | null;
     type: string | Noun;
+    context?: string | null;
     content?: string | null;
     data?:
       | {
