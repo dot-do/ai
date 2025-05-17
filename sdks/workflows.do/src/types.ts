@@ -80,6 +80,26 @@ export interface AIInstance {
 }
 
 /**
+ * Type of the pre-configured `ai` instance
+ */
+export type AiClient = AIInstance
+
+/**
+ * Type of the `AI` factory function
+ */
+export type AIFactory = <T extends AIConfig>(config: T) => AIInstance
+
+/**
+ * Database instance returned by `db` or `DB`
+ */
+export interface DBInstance extends DatabaseAccess {}
+
+/**
+ * Type of the `DB` factory function
+ */
+export type DBFactory<TSchema extends Record<string, any>> = (schema: TSchema) => DBInstance
+
+/**
  * Workflow step configuration
  */
 export interface WorkflowStep {

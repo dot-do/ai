@@ -376,11 +376,15 @@ export const ai = new Proxy({} as AIInstance, {
 export const db = createDatabaseAccess()
 
 /**
+ * Create a typed database instance from a schema definition
+ */
+export function DB<TSchema extends Record<string, any>>(_schema: TSchema): DatabaseAccess {
+  return createDatabaseAccess()
+}
+
+/**
  * External API integrations
  */
-import { API as ApisDoAPI } from 'apis.do'
-
-export const client = new ApisDoAPI()
 
 /**
  * Durable Objects access
@@ -401,6 +405,10 @@ export type {
   AIContext,
   AIEventHandler,
   AIInstance,
+  AiClient,
+  AIFactory,
   DatabaseAccess,
+  DBInstance,
+  DBFactory,
   APIAccess,
 }
