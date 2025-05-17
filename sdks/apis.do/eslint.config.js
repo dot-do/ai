@@ -1,3 +1,3 @@
-import tsConfig from 'eslint-config/typescript'
+import { config } from "@repo/eslint-config/base";
 
-export default tsConfig
+export default config;
