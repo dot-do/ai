@@ -1,21 +1,23 @@
 # Roadmap
 
+## v0.2.0
 
-- [ ] `ai` Proxy object with arbitrary functions to generate object
-- [ ] `ai` tagged template literal to generate text
-- [ ] `list` to generate string array via numbered markdown ordered list
-- [ ] `research` function and template literal to do deep research and return markdown w/ citations
-- [ ] `AI` function to define generative functions w/ schema
-- [ ] `AI` function to define string array functions via numbered markdown ordered list
-- [ ] `AI` function to define code function with `ai` and `db` args in 2nd arg (`ctx`)
-- [ ] `DB` function to define data models
-- [ ] `DB` function allow `getOrCreate` to automatically generate on `id` not found 
+- [ ] LLM.do Model Routing
+- [ ] Functions.do Generate Text
+- [ ] Functions.do Generate TextArray
+- [ ] Functions.do Generate Object
+- [ ] Functions.do Generate ObjectArray
+- [ ] Functions.do Generate Strongly-Typed Object
+- [ ] Functions.do Generate Strongly-Typed ObjectArray
+- [ ] Functions.do Generate Code
+- [ ] Functions.do Generate UI
+- [ ] Database.do List + CRUD
+- [ ] Database.do Get or Generate
+- [ ] Workflows.do Code Execution
+- [ ] Workflows.do Execution at Intervals
+- [ ] Workflows.do Execution on Events
 
-- [ ] `every` function to define recurring events
-- [ ] `on` function to define one-time events
+## v0.3.0
 
-- [ ] SDK
-- [ ] API
-- [ ] Admin
-- [ ] Docs
-
+- [ ] LLM.do Managed Tool Use
+- [ ] Triggers.do Event-Driven Process Execution
