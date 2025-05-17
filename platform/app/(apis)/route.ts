@@ -1,9 +1,11 @@
-import { payload } from 'ai-primitives'
+import { config } from 'ai-primitives'
+import { getPayload } from 'payload'
 
 export const GET = async (request: Request) => {
   const { headers } = request
   const { origin } = new URL(request.url)
 
+  const payload = await getPayload({ config })
   const { user } = await payload.auth({ headers })
 
   // const data = await payload.find({ collection: 'users' })
