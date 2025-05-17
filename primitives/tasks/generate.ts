@@ -11,6 +11,8 @@ export const generate: TaskConfig<'generate'> = {
     { name: 'format', type: 'select', defaultValue: 'text', options: ['text', 'object', 'code', 'list'] },
     { name: 'schema', type: 'json' },
     { name: 'settings', type: 'json' },
+    { name: 'event', type: 'relationship', relationTo: 'events' },
+    { name: 'object', type: 'relationship', relationTo: 'nouns' },
   ],
   outputSchema: [
     { name: 'content', type: 'text' },
@@ -89,6 +91,34 @@ export const generate: TaskConfig<'generate'> = {
     } catch (e) {
       error = String(e)
     } 
+
+    if ((job.input as any).event) {
+      await payload.update({
+        collection: 'events',
+        id: (job.input as any).event,
+        data: { content, data, reasoning, citations, error },
+      })
+    }
+
+    // TODO: if function has an object (ie. the associated Noun), create a new Thing of that Noun
+
+    if ((job.input as any).object) {
+      await payload.create({
+        collection: 'things',
+        data: {
+          type: (job.input as any).object.id,
+          content,
+          data,
+          reasoning,
+          citations: citations?.join('\n'),
+          // citations,
+          // error,
+        },
+      })
+    }
+
+    // TODO: get usage / cost information
+
     const output = { headers, body, text, latency, status, statusText, data, reasoning, content, citations, error }
     return { output } 
   },

@@ -27,11 +27,12 @@ export const Nouns: CollectionConfig = {
   slug: 'nouns',
   admin: {
     group: 'Data',
+    useAsTitle: 'name',
     // useAsTitle: 'ns.id'
   },
   versions: true,
   fields: [
-    { name: 'id', type: 'text', required: true, label: 'Name', admin: { position: 'sidebar' } },
+    { name: 'name', type: 'text', required: true, admin: { position: 'sidebar' } },
     // { name: 'typeOf', type: 'relationship', relationTo: 'nouns', hasMany: true, admin: { position: 'sidebar' } },
     { name: 'generate', type: 'relationship', relationTo: 'functions', admin: { position: 'sidebar' } },
     {

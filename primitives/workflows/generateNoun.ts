@@ -59,7 +59,7 @@ export const generateNoun: WorkflowConfig<'generateNoun'> = {
       const noun = await payload.create({
         collection: 'nouns',
         data: {
-          id,
+          name: id,
           generate: null, // We've already generated it
           context: results.content,
         },

@@ -8,7 +8,7 @@ export const Functions: CollectionConfig = {
     group: 'AI',
     useAsTitle: 'name',
   },
-  // versions: true,
+  versions: true,
   fields: [
     { name: 'name', type: 'text', required: true, unique: true, admin: { position: 'sidebar' } },
     {
@@ -22,7 +22,7 @@ export const Functions: CollectionConfig = {
       name: 'object',
       type: 'relationship',
       relationTo: 'nouns',
-      admin: { position: 'sidebar', condition: (data) => data.output === 'Object' || data.output === 'ObjectArray' },
+      admin: { position: 'sidebar' },
     },
     {
       name: 'model',

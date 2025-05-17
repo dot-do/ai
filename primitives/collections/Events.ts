@@ -71,9 +71,24 @@ export const Events: CollectionConfig = {
       admin: { editorOptions, language: 'mdx', readOnly: true, condition: ({ content }) => !!content },
     },
     {
+      name: 'reasoning',
+      type: 'code',
+      admin: { editorOptions, language: 'mdx', readOnly: true, condition: ({ reasoning }) => !!reasoning },
+    },
+    {
+      name: 'citations',
+      type: 'code',
+      admin: { editorOptions, language: 'mdx', readOnly: true, condition: ({ citations }) => !!citations },
+    },
+    {
       name: 'data',
       type: 'json',
       admin: { editorOptions, readOnly: true, condition: ({ data }) => !!data },
+    },
+    {
+      name: 'error',
+      type: 'json',
+      admin: { editorOptions, readOnly: true, condition: ({ error }) => !!error },
     },
     // {
     //   name: 'webhooks',

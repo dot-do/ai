@@ -13,13 +13,13 @@ export const generateThing: WorkflowConfig<'generateThing'> = {
 
     const type = job.input.type || 'JSON Object'
 
-    console.log(`Generating ${type}/${job.input.id}`)
+    console.log(`Generating ${type}/${job.input.name}`)
 
     const results =
       job.input.type === 'Object'
         ? await generateObject({
             model: model('google/gemini-2.5-pro-preview', { structuredOutputs: true }),
-            prompt: `Generate a ${type} with an @id of ${job.input.id} with the appropriate properties and relationships (including content in markdown format if applicable)`,
+            prompt: `Generate a ${type} with an @id of ${job.input.name} with the appropriate properties and relationships (including content in markdown format if applicable)`,
             output: 'no-schema',
             // mode: 'auto',
             // schema: z.object({
@@ -29,14 +29,14 @@ export const generateThing: WorkflowConfig<'generateThing'> = {
             // }),
           }).then((results) => ({
             data: matter.stringify('', { data: results.object }),
-            content: matter.stringify('', { data: { $id: job.input.id, $type: job.input.type, ...(results.object as object) } }),
+            content: matter.stringify('', { data: { $id: job.input.name, $type: job.input.type, ...(results.object as object) } }),
             request: results.request,
             response: results.response,
             usage: results.usage,
           }))
         : await generateText({
             model: model('google/gemini-2.5-pro-preview', { structuredOutputs: true }),
-            prompt: `Generate a ${type} with an @id of ${job.input.id}`,
+            prompt: `Generate a ${type} with an @id of ${job.input.name}`,
             // mode: 'auto',
             // schema: z.object({
             //   id: z.string(),
@@ -45,7 +45,7 @@ export const generateThing: WorkflowConfig<'generateThing'> = {
             // }),
           }).then((results) => ({
             data: undefined,
-            content: matter.stringify(results.text, { data: { $id: job.input.id, $type: job.input.type } }),
+            content: matter.stringify(results.text, { data: { $id: job.input.name, $type: job.input.type } }),
             request: results.request,
             response: results.response,
             usage: results.usage,

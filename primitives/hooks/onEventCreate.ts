@@ -9,7 +9,7 @@ export const onEventCreate: CollectionAfterOperationHook<'events'> = async ({ re
   console.log(result)
 
   if (result.execution) {
-    const fn = await payload.findByID({ collection: 'functions', id: result.execution as string })
+    const fn = await payload.findByID({ collection: 'functions', id: result.execution as string, depth: 0 })
     const input = {
       model: fn.model,
       prompt: fn.prompt 
@@ -21,6 +21,7 @@ export const onEventCreate: CollectionAfterOperationHook<'events'> = async ({ re
       output: fn.output,
       schema: fn.schema,
       settings: fn.settings,
+      object: fn.object,
     }
     const job = await payload.jobs.queue({ task: 'generate', input })
     console.log(job)
