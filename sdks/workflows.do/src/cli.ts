@@ -373,7 +373,7 @@ export class CLI {
         functions: {},
       }
 
-      const functionMatches = workflowContentStr.matchAll(/(\w+)\s*:\s*(?:async\s+)?\(?/g)
+      const functionMatches = workflowContentStr?.matchAll(/(\w+)\s*:\s*(?:async\s+)?\(?/g) || []
 
       for (const match of functionMatches) {
         const functionName = match[1]
@@ -404,7 +404,7 @@ export class CLI {
         handlers.push({
           type: 'event',
           event: match[1],
-          handler: match[2].toString(),
+          handler: match[2]?.toString() || '',
           source: filePath,
         })
       }
@@ -432,7 +432,7 @@ export class CLI {
         handlers.push({
           type: 'cron',
           cron: match[1],
-          handler: match[2].toString(),
+          handler: match[2]?.toString() || '',
           options,
           source: filePath,
         })

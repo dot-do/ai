@@ -13,7 +13,8 @@ describe('workflows.do SDK - Unit Tests', () => {
       expect(typeof ai.testHandler).toBe('function')
 
       const event = { type: 'test' }
-      await ai.testHandler(event)
+      expect(ai.testHandler).toBeDefined()
+      await ai.testHandler?.(event)
 
       expect(mockHandler).toHaveBeenCalledWith(
         event,
@@ -38,7 +39,9 @@ describe('workflows.do SDK - Unit Tests', () => {
       })
 
       expect(ai.testFunction).toBeDefined()
-      const result = await ai.testFunction({ input: 'test' })
+      const testFunction = ai.testFunction
+      expect(testFunction).toBeDefined()
+      const result = await testFunction?.({ input: 'test' })
       expect(result).toEqual({ result: 'test' })
       expect(fetch).toHaveBeenCalledWith('https://apis.do/ai/execute', expect.any(Object))
     })
