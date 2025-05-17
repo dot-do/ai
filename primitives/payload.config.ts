@@ -19,7 +19,10 @@ import { Functions } from './collections/Functions'
 import { Workflows } from './collections/Workflows'
 import { Webhooks } from './collections/Webhooks'
 
+
 import { Settings } from './globals/Settings'
+
+import { generate } from './tasks/generate'
 import { embedData } from './workflows/embedData'
 import { executeFunction } from './workflows/executeFunction'
 import { executeWorkflow } from './workflows/executeWorkflow'
@@ -40,7 +43,7 @@ export default buildConfig({
   collections: [Functions, Workflows, Nouns, Things, Users, Roles, Webhooks],
   globals: [Settings],
   jobs: {
-    tasks: [],
+    tasks: [generate],
     workflows: [embedData, executeFunction, executeWorkflow, generateDatabase, generateNoun, generateThing],
     jobsCollectionOverrides: ({ defaultJobsCollection }) => {
       if (!defaultJobsCollection.admin) {
