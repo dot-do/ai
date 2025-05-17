@@ -1,7 +1,7 @@
-import { spawn, ChildProcess } from 'node:child_process'
-import { resolve } from 'node:path'
-import { promisify } from 'node:util'
-import * as http from 'node:http'
+import { spawn, ChildProcess } from 'child_process'
+import { resolve } from 'path'
+import { promisify } from 'util'
+import * as http from 'http'
 
 const sleep = promisify(setTimeout)
 
@@ -77,34 +77,17 @@ export async function startLocalServer(hookTimeout = 60000): Promise<string> {
     return process.env.APIS_DO_API_KEY || process.env.DO_API_KEY || 'test-api-key'
   }
 
-  if (isCI) {
-    console.log('Running in CI environment, waiting for server to be ready')
-    const maxAttempts = Math.floor((hookTimeout - 10000) / 1000)
-    let attempts = 0
-
-    console.log(`Will try server health check up to ${maxAttempts} times...`)
-
-    while (attempts < maxAttempts) {
-      const ready = await isServerRunning()
-      if (ready) {
-        console.log('Server is ready on port 3000 in CI environment')
-        return process.env.APIS_DO_API_KEY || process.env.DO_API_KEY || 'test-api-key'
-      }
-
-      console.log(`Waiting for server to be ready in CI (${attempts + 1}/${maxAttempts})...`)
-      await sleep(1000)
-      attempts++
-    }
-
-    console.error('Server readiness timed out after', maxAttempts, 'attempts in CI')
-    throw new Error(`Server readiness timed out after ${maxAttempts} attempts in CI`)
-  }
 
   console.log('Starting local server...')
   const rootDir = resolve(__dirname, '../../../../')
   console.log(`Root directory: ${rootDir}`)
 
   try {
+    if (isCI) {
+      console.log('Running in CI environment, skipping local server startup')
+      return process.env.APIS_DO_API_KEY || process.env.DO_API_KEY || 'test-api-key'
+    }
+    
     serverProcess = spawn('pnpm', ['dev'], {
       cwd: rootDir,
       stdio: 'pipe',
