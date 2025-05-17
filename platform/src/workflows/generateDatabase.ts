@@ -5,8 +5,5 @@ export const generateDatabase: WorkflowConfig<'generateDatabase'> = {
   slug: 'generateDatabase',
   handler: async ({ job, tasks, req }) => {
     const { payload } = req
-
-
-    
   },
 }

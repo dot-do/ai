@@ -15,6 +15,5 @@ export const embedData: WorkflowConfig<'embedData'> = {
         },
       })
     )
-    
   },
 }
