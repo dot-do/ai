@@ -21,6 +21,12 @@ import { Workflows } from './collections/Workflows'
 import { Webhooks } from './collections/Webhooks'
 
 import { Settings } from './globals/Settings'
+import { embedData } from './workflows/embedData'
+import { executeFunction } from './workflows/executeFunction'
+import { executeWorkflow } from './workflows/executeWorkflow'
+import { generateDatabase } from './workflows/generateDatabase'
+import { generateNoun } from './workflows/generateNoun'
+import { generateThing } from './workflows/generateThing'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
@@ -36,7 +42,7 @@ export default buildConfig({
   globals: [Settings],
   jobs: {
     tasks: [],
-    workflows: [],
+    workflows: [embedData, executeFunction, executeWorkflow, generateDatabase, generateNoun, generateThing],
     jobsCollectionOverrides: ({ defaultJobsCollection }) => {
       if (!defaultJobsCollection.admin) {
         defaultJobsCollection.admin = {}
