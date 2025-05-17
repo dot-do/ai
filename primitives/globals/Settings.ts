@@ -1,5 +1,5 @@
 import type { GlobalConfig } from 'payload'
-import { editorOptions } from '@/lib/collections'
+import { editorOptions } from '../lib/collections'
 
 export const Settings: GlobalConfig = {
   slug: 'settings',

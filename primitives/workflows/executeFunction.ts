@@ -1,7 +1,6 @@
 import { WorkflowConfig } from 'payload'
 import { waitUntil } from '@vercel/functions'
-import { Events } from '@/collections/Events'
-import { model as llm } from '@/lib/ai'
+import { Events } from '../collections/Events'
 import yaml from 'yaml'
 import { generateText } from 'ai'
 
