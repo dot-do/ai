@@ -29,5 +29,6 @@ export const Workflows: CollectionConfig = {
   fields: [
     { name: 'name', type: 'text', required: true, unique: true },
     { name: 'code', type: 'code', defaultValue, admin: { editorOptions } },
+    { name: 'executions', type: 'join', collection: 'events', on: 'workflow', hasMany: true },
   ],
 }

@@ -18,7 +18,7 @@ export const onEventCreate: CollectionAfterOperationHook<'events'> = async ({ re
           : fn.prompt + '\n\n' + (result.input || '') 
         : result.input || '',
       system: fn.system,
-      output: fn.output,
+      format: fn.output || 'Text',
       schema: fn.schema,
       settings: fn.settings,
       context: result.input,

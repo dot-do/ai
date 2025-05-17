@@ -17,7 +17,7 @@ export const Functions: CollectionConfig = {
       name: 'output',
       type: 'select',
       defaultValue: 'Object',
-      options: ['Object', 'ObjectArray', 'Text', 'TextArray', 'Code'],
+      options: ['Text', 'Object', 'Code', 'List'] ,
       admin: { position: 'sidebar' },
     },
     {
