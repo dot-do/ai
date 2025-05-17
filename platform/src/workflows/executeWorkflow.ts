@@ -17,31 +17,31 @@ export const executeWorkflow: WorkflowConfig<'executeWorkflow'> = {
 
     let event
     try {
-      if (eventId) {
-        event = await payload.findByID({
-          collection: 'events',
-          id: eventId,
-        })
+      // if (eventId) {
+      //   event = await payload.findByID({
+      //     collection: 'events',
+      //     id: eventId,
+      //   })
 
-        if (!event) {
-          throw new Error(`Event with ID ${eventId} not found`)
-        }
+      //   if (!event) {
+      //     throw new Error(`Event with ID ${eventId} not found`)
+      //   }
 
-        await payload.update({
-          collection: 'events',
-          id: eventId,
-          data: { status: 'Processing' },
-        })
-      } else {
-        event = await payload.create({
-          collection: 'events',
-          data: {
-            input: JSON.stringify(input.input),
-            status: 'Processing',
-            data: { workflowId },
-          },
-        })
-      }
+      //   await payload.update({
+      //     collection: 'events',
+      //     id: eventId,
+      //     data: { status: 'Processing' },
+      //   })
+      // } else {
+      //   event = await payload.create({
+      //     collection: 'events',
+      //     data: {
+      //       input: JSON.stringify(input.input),
+      //       status: 'Processing',
+      //       data: { workflowId },
+      //     },
+      //   })
+      // }
 
       const workflow = await payload.findByID({
         collection: 'workflows',
@@ -51,14 +51,14 @@ export const executeWorkflow: WorkflowConfig<'executeWorkflow'> = {
       if (!workflow) {
         const errorMessage = `Workflow with ID ${workflowId} not found`
 
-        await payload.update({
-          collection: 'events',
-          id: event.id,
-          data: {
-            status: 'Error',
-            data: { error: errorMessage },
-          },
-        })
+        // await payload.update({
+        //   collection: 'events',
+        //   id: event.id,
+        //   data: {
+        //     status: 'Error',
+        //     data: { error: errorMessage },
+        //   },
+        // })
 
         const output = {
           result: null,
@@ -156,31 +156,31 @@ export const executeWorkflow: WorkflowConfig<'executeWorkflow'> = {
       try {
         result = await script.run(context, { timeout })
 
-        await payload.update({
-          collection: 'events',
-          id: event.id,
-          data: {
-            status: 'Success',
-            data: {
-              result,
-              logs,
-            },
-          },
-        })
+        // await payload.update({
+        //   collection: 'events',
+        //   id: event.id,
+        //   data: {
+        //     status: 'Success',
+        //     data: {
+        //       result,
+        //       logs,
+        //     },
+        //   },
+        // })
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error)
 
-        await payload.update({
-          collection: 'events',
-          id: event.id,
-          data: {
-            status: 'Error',
-            data: {
-              error: errorMessage,
-              logs,
-            },
-          },
-        })
+        // await payload.update({
+        //   collection: 'events',
+        //   id: event.id,
+        //   data: {
+        //     status: 'Error',
+        //     data: {
+        //       error: errorMessage,
+        //       logs,
+        //     },
+        //   },
+        // })
 
         const output = {
           result: null,
@@ -225,19 +225,19 @@ export const executeWorkflow: WorkflowConfig<'executeWorkflow'> = {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
 
-      if (event) {
-        await payload.update({
-          collection: 'events',
-          id: event.id,
-          data: {
-            status: 'Error',
-            data: {
-              error: errorMessage,
-              stack: error instanceof Error ? error.stack : undefined,
-            },
-          },
-        })
-      }
+      // if (event) {
+      //   await payload.update({
+      //     collection: 'events',
+      //     id: event.id,
+      //     data: {
+      //       status: 'Error',
+      //       data: {
+      //         error: errorMessage,
+      //         stack: error instanceof Error ? error.stack : undefined,
+      //       },
+      //     },
+      //   })
+      // }
 
       const output = {
         result: null,

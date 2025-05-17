@@ -21,6 +21,8 @@ url:
 
 `
 
+const admin = { position: 'sidebar' }
+
 export const Nouns: CollectionConfig = {
   slug: 'nouns',
   admin: {
@@ -29,17 +31,18 @@ export const Nouns: CollectionConfig = {
   },
   versions: true,
   fields: [
+    { name: 'id', type: 'text', required: true, label: 'Name', admin: { position: 'sidebar' } },
+    // { name: 'typeOf', type: 'relationship', relationTo: 'nouns', hasMany: true, admin: { position: 'sidebar' } },
+    { name: 'generate', type: 'relationship', relationTo: 'functions', admin: { position: 'sidebar' } },
     {
       type: 'row',
       fields: [
         // { name: 'id', type: 'text', admin: { hidden: true } },
         // { name: 'ns', type: 'relationship', relationTo: 'databases', label: 'Namespace' },
-        { name: 'id', type: 'text', required: true, label: 'Name' },
         // { name: 'name', type: 'text', label: 'Name' },
-        { name: 'typeOf', type: 'relationship', relationTo: 'nouns', hasMany: true },
         // { name: 'sameAs', type: 'relationship', relationTo: 'types' },
         // { name: 'generate', type: 'select', defaultValue: 'Object', options: ['List', 'Object', 'Markdown', 'Code', 'Nothing'] },
-        { name: 'generate', type: 'relationship', relationTo: 'functions' },
+        
       ],
     },
     { name: 'context', type: 'code', admin: { language: 'mdx', editorOptions } },

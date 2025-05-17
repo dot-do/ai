@@ -31,6 +31,7 @@ export const Events: CollectionConfig = {
           name: 'execution',
           type: 'relationship',
           relationTo: 'functions',
+          hasMany: false,
           admin: { readOnly: true, condition: ({ execution }) => !!execution },
         },
         {
@@ -39,12 +40,12 @@ export const Events: CollectionConfig = {
           relationTo: 'workflows',
           admin: { readOnly: true, condition: ({ workflow }) => !!workflow },
         },
-        {
-          name: 'generation',
-          type: 'relationship',
-          relationTo: 'generations',
-          admin: { readOnly: true, condition: ({ generation }) => !!generation },
-        },
+        // {
+        //   name: 'generation',
+        //   type: 'relationship',
+        //   relationTo: 'generations',
+        //   admin: { readOnly: true, condition: ({ generation }) => !!generation },
+        // },
         {
           name: 'noun',
           type: 'relationship',

@@ -67,13 +67,10 @@ export interface Config {
   };
   blocks: {};
   collections: {
-    nouns: Noun;
-    things: Thing;
     functions: Function;
     workflows: Workflow;
-    batches: Batch;
-    generations: Generation;
-    events: Event;
+    nouns: Noun;
+    things: Thing;
     users: User;
     roles: Role;
     webhooks: Webhook;
@@ -87,21 +84,12 @@ export interface Config {
       related: 'nouns';
       things: 'things';
     };
-    things: {
-      events: 'events';
-    };
-    batches: {
-      generations: 'generations';
-    };
   };
   collectionsSelect: {
-    nouns: NounsSelect<false> | NounsSelect<true>;
-    things: ThingsSelect<false> | ThingsSelect<true>;
     functions: FunctionsSelect<false> | FunctionsSelect<true>;
     workflows: WorkflowsSelect<false> | WorkflowsSelect<true>;
-    batches: BatchesSelect<false> | BatchesSelect<true>;
-    generations: GenerationsSelect<false> | GenerationsSelect<true>;
-    events: EventsSelect<false> | EventsSelect<true>;
+    nouns: NounsSelect<false> | NounsSelect<true>;
+    things: ThingsSelect<false> | ThingsSelect<true>;
     users: UsersSelect<false> | UsersSelect<true>;
     roles: RolesSelect<false> | RolesSelect<true>;
     webhooks: WebhooksSelect<false> | WebhooksSelect<true>;
@@ -152,43 +140,6 @@ export interface UserAuthOperations {
     email: string;
     password: string;
   };
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "nouns".
- */
-export interface Noun {
-  id: string;
-  typeOf?: (string | Noun)[] | null;
-  generate?: (string | null) | Function;
-  context?: string | null;
-  relationships?:
-    | {
-        predicate?: string | null;
-        object?:
-          | ({
-              relationTo: 'nouns';
-              value: string | Noun;
-            } | null)
-          | ({
-              relationTo: 'things';
-              value: string | Thing;
-            } | null);
-        id?: string | null;
-      }[]
-    | null;
-  related?: {
-    docs?: (string | Noun)[];
-    hasNextPage?: boolean;
-    totalDocs?: number;
-  };
-  things?: {
-    docs?: (string | Thing)[];
-    hasNextPage?: boolean;
-    totalDocs?: number;
-  };
-  updatedAt: string;
-  createdAt: string;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -593,85 +544,45 @@ export interface Function {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "things".
+ * via the `definition` "workflows".
  */
-export interface Thing {
+export interface Workflow {
   id: string;
-  type: string | Noun;
-  generation?: (string | null) | Generation;
-  data?:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
-  content?: string | null;
+  name: string;
+  code?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "nouns".
+ */
+export interface Noun {
+  id: string;
+  generate?: (string | null) | Function;
+  context?: string | null;
   relationships?:
     | {
         predicate?: string | null;
-        object?: (string | null) | Thing;
+        object?:
+          | ({
+              relationTo: 'nouns';
+              value: string | Noun;
+            } | null)
+          | ({
+              relationTo: 'things';
+              value: string | Thing;
+            } | null);
         id?: string | null;
       }[]
     | null;
-  events?: {
-    docs?: (string | Event)[];
+  related?: {
+    docs?: (string | Noun)[];
     hasNextPage?: boolean;
     totalDocs?: number;
   };
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "generations".
- */
-export interface Generation {
-  id: string;
-  provider?: string | null;
-  type?: ('Realtime' | 'Batch') | null;
-  batch?: (string | null) | Batch;
-  request?:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
-  response?:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
-  metadata?:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "batches".
- */
-export interface Batch {
-  id: string;
-  status: 'Pending' | 'Generating' | 'Completed' | 'Failed';
-  generations?: {
-    docs?: (string | Generation)[];
+  things?: {
+    docs?: (string | Thing)[];
     hasNextPage?: boolean;
     totalDocs?: number;
   };
@@ -684,13 +595,7 @@ export interface Batch {
  */
 export interface Event {
   id: string;
-  status?: ('Pending' | 'Processing' | 'Success' | 'Error') | null;
-  execution?: (string | null) | Function;
-  workflow?: (string | null) | Workflow;
-  generation?: (string | null) | Generation;
-  noun?: (string | null) | Noun;
-  thing?: (string | null) | Thing;
-  input?: string | null;
+  type: string | Noun;
   data?:
     | {
         [k: string]: unknown;
@@ -722,29 +627,6 @@ export interface Event {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "workflows".
- */
-export interface Workflow {
-  id: string;
-  name: string;
-  code?: string | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "webhooks".
- */
-export interface Webhook {
-  id: string;
-  type?: ('Incoming' | 'Outgoing') | null;
-  events?: ('Create' | 'Update' | 'Delete')[] | null;
-  things?: (string | Thing)[] | null;
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "users".
  */
 export interface User {
@@ -769,6 +651,18 @@ export interface User {
  */
 export interface Role {
   id: string;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "webhooks".
+ */
+export interface Webhook {
+  id: string;
+  type?: ('Incoming' | 'Outgoing') | null;
+  events?: ('Create' | 'Update' | 'Delete')[] | null;
+  things?: (string | Thing)[] | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -879,14 +773,6 @@ export interface PayloadLockedDocument {
   id: string;
   document?:
     | ({
-        relationTo: 'nouns';
-        value: string | Noun;
-      } | null)
-    | ({
-        relationTo: 'things';
-        value: string | Thing;
-      } | null)
-    | ({
         relationTo: 'functions';
         value: string | Function;
       } | null)
@@ -895,16 +781,12 @@ export interface PayloadLockedDocument {
         value: string | Workflow;
       } | null)
     | ({
-        relationTo: 'batches';
-        value: string | Batch;
+        relationTo: 'nouns';
+        value: string | Noun;
       } | null)
     | ({
-        relationTo: 'generations';
-        value: string | Generation;
-      } | null)
-    | ({
-        relationTo: 'events';
-        value: string | Event;
+        relationTo: 'things';
+        value: string | Thing;
       } | null)
     | ({
         relationTo: 'users';
@@ -966,48 +848,6 @@ export interface PayloadMigration {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "nouns_select".
- */
-export interface NounsSelect<T extends boolean = true> {
-  id?: T;
-  typeOf?: T;
-  generate?: T;
-  context?: T;
-  relationships?:
-    | T
-    | {
-        predicate?: T;
-        object?: T;
-        id?: T;
-      };
-  related?: T;
-  things?: T;
-  updatedAt?: T;
-  createdAt?: T;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "things_select".
- */
-export interface ThingsSelect<T extends boolean = true> {
-  id?: T;
-  type?: T;
-  generation?: T;
-  data?: T;
-  content?: T;
-  relationships?:
-    | T
-    | {
-        predicate?: T;
-        object?: T;
-        id?: T;
-      };
-  events?: T;
-  updatedAt?: T;
-  createdAt?: T;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "functions_select".
  */
 export interface FunctionsSelect<T extends boolean = true> {
@@ -1035,48 +875,38 @@ export interface WorkflowsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "batches_select".
+ * via the `definition` "nouns_select".
  */
-export interface BatchesSelect<T extends boolean = true> {
-  status?: T;
-  generations?: T;
-  updatedAt?: T;
-  createdAt?: T;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "generations_select".
- */
-export interface GenerationsSelect<T extends boolean = true> {
-  provider?: T;
-  type?: T;
-  batch?: T;
-  request?: T;
-  response?: T;
-  metadata?: T;
-  updatedAt?: T;
-  createdAt?: T;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "events_select".
- */
-export interface EventsSelect<T extends boolean = true> {
-  status?: T;
-  execution?: T;
-  workflow?: T;
-  generation?: T;
-  noun?: T;
-  thing?: T;
-  input?: T;
-  data?: T;
-  webhooks?:
+export interface NounsSelect<T extends boolean = true> {
+  id?: T;
+  generate?: T;
+  context?: T;
+  relationships?:
     | T
     | {
-        webhook?: T;
-        timestamp?: T;
-        status?: T;
-        data?: T;
+        predicate?: T;
+        object?: T;
+        id?: T;
+      };
+  related?: T;
+  things?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "things_select".
+ */
+export interface ThingsSelect<T extends boolean = true> {
+  id?: T;
+  type?: T;
+  data?: T;
+  content?: T;
+  relationships?:
+    | T
+    | {
+        predicate?: T;
+        object?: T;
         id?: T;
       };
   updatedAt?: T;
@@ -1234,7 +1064,6 @@ export interface WorkflowExecuteFunction {
     status?: ('Pending' | 'Processing' | 'Success' | 'Error') | null;
     execution?: (string | null) | Function;
     workflow?: (string | null) | Workflow;
-    generation?: (string | null) | Generation;
     noun?: (string | null) | Noun;
     thing?: (string | null) | Thing;
     input?: string | null;
@@ -1261,7 +1090,6 @@ export interface WorkflowExecuteFunction {
             | number
             | boolean
             | null;
-          id?: string | null;
         }[]
       | null;
     id: string;
@@ -1321,7 +1149,6 @@ export interface WorkflowGenerateThing {
   input: {
     id: string;
     type: string | Noun;
-    generation?: (string | null) | Generation;
     data?:
       | {
           [k: string]: unknown;
@@ -1339,11 +1166,6 @@ export interface WorkflowGenerateThing {
           id?: string | null;
         }[]
       | null;
-    events?: {
-      docs?: (string | Event)[];
-      hasNextPage?: boolean;
-      totalDocs?: number;
-    };
     updatedAt?: string | null;
     createdAt?: string | null;
   };
