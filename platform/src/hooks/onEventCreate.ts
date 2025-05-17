@@ -22,6 +22,8 @@ export const onEventCreate: CollectionAfterOperationHook<'events'> = async ({ re
         workflowId,
         input: result.input ? JSON.parse(result.input) : undefined,
         eventId: result.id,
+        timeout: 5000,
+        memoryLimit: 128,
       },
     })
     console.log(job)
