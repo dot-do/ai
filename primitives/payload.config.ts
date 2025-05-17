@@ -1,5 +1,6 @@
 // storage-adapter-import-placeholder
-import { mongooseAdapter } from '@payloadcms/db-mongodb'
+// import { mongooseAdapter } from '@payloadcms/db-mongodb'
+// import { sqliteAdapter } from '@payloadcms/db-sqlite'
 import { lexicalEditor } from '@payloadcms/richtext-lexical'
 import { multiTenantPlugin } from '@payloadcms/plugin-multi-tenant'
 import { Config } from 'payload'
@@ -10,6 +11,7 @@ import { fileURLToPath } from 'url'
 // import sharp from 'sharp'
 
 import { editorOptions } from './lib/collections'
+import { db } from './databases/sqlite'
 
 import { Functions } from './collections/Functions'
 import { Workflows } from './collections/Workflows'
@@ -74,9 +76,10 @@ export default buildConfig({
   typescript: {
     outputFile: path.resolve(dirname, 'payload.types.ts'),
   },
-  db: mongooseAdapter({
-    url: process.env.DATABASE_URI || '',
-  }),
+  db,
+  // db: mongooseAdapter({
+  //   url: process.env.DATABASE_URI || '',
+  // }),
   // sharp,
   plugins: [
     multiTenantPlugin<Config>({
