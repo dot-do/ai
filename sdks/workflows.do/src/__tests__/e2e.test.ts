@@ -279,7 +279,11 @@ describe('workflows.do SDK - E2E Tests', () => {
           }),
         )
 
-        const requestBody = JSON.parse(mockFetch.mock.calls[0][1].body)
+        expect(mockFetch).toHaveBeenCalled()
+        const mockCall = mockFetch.mock.calls[0]
+        expect(mockCall).toBeDefined()
+        expect(mockCall?.[1]).toBeDefined()
+        const requestBody = JSON.parse(mockCall?.[1]?.body)
         expect(requestBody.type).toBe('event')
         expect(requestBody.event).toBe(eventName)
         expect(requestBody.handler).toBe(handler.toString())
@@ -332,7 +336,11 @@ describe('workflows.do SDK - E2E Tests', () => {
           }),
         )
 
-        const requestBody = JSON.parse(mockFetch.mock.calls[0][1].body)
+        expect(mockFetch).toHaveBeenCalled()
+        const mockCall = mockFetch.mock.calls[0]
+        expect(mockCall).toBeDefined()
+        expect(mockCall?.[1]).toBeDefined()
+        const requestBody = JSON.parse(mockCall?.[1]?.body)
         expect(requestBody.cron).toBe(cronExpression)
         expect(requestBody.handler).toBe(handler.toString())
       })
@@ -354,7 +362,11 @@ describe('workflows.do SDK - E2E Tests', () => {
 
         every('0 12 * * *', handler, options)
 
-        const requestBody = JSON.parse(mockFetch.mock.calls[0][1].body)
+        expect(mockFetch).toHaveBeenCalled()
+        const mockCall = mockFetch.mock.calls[0]
+        expect(mockCall).toBeDefined()
+        expect(mockCall?.[1]).toBeDefined()
+        const requestBody = JSON.parse(mockCall?.[1]?.body)
         expect(requestBody.options).toEqual(options)
       })
 
