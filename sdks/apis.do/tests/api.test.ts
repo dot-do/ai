@@ -64,6 +64,10 @@ describe('apis.do E2E API Tests', () => {
       const createResult = await cli.create('functions', createData)
       expect(createResult).toBeDefined()
       expect(createResult.id).toBeDefined()
+      
+      if (!testResourceIds.functions) {
+        testResourceIds.functions = []
+      }
       testResourceIds.functions.push(createResult.id) // Track for cleanup
 
       const getResult = await cli.get('functions', createResult.id)

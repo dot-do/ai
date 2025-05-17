@@ -13,3 +13,7 @@ export const model = createOpenAI({
     'X-Title': 'Workflows.do Business-as-Code', // Optional. Site title for rankings on openrouter.ai.
   },
 })
+
+export const getModels = () => fetch('https://openrouter.ai/api/frontend/models/find')
+  .then((res) => res.json())
+  .then(({ data }) => data.models.map((model: { slug: string }) => model.slug))

@@ -64,7 +64,9 @@ describe('API', () => {
         where: { status: 'active' },
       })
 
-      const url = mockFetch.mock.calls[0][0]
+      expect(mockFetch).toHaveBeenCalled()
+      const url = mockFetch.mock.calls[0]?.[0]
+      expect(url).toBeDefined()
       expect(url).toContain('https://test-api.com/test-path')
       expect(url).toContain('limit=10')
       expect(url).toContain('page=2')
