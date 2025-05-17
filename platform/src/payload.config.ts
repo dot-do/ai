@@ -2,6 +2,8 @@
 import { mongooseAdapter } from '@payloadcms/db-mongodb'
 import { payloadCloudPlugin } from '@payloadcms/payload-cloud'
 import { lexicalEditor } from '@payloadcms/richtext-lexical'
+import { multiTenantPlugin } from '@payloadcms/plugin-multi-tenant'
+import { Config } from 'payload'
 import path from 'path'
 import { buildConfig } from 'payload'
 import { fileURLToPath } from 'url'
@@ -11,9 +13,6 @@ import { editorOptions } from './lib/collections'
 
 import { Nouns } from './collections/Nouns'
 import { Things } from './collections/Things'
-import { Generations } from './collections/Generations'
-import { Events } from './collections/Events'
-import { Batches } from './collections/Batches'
 import { Users } from './collections/Users'
 import { Roles } from './collections/Roles'
 import { Functions } from './collections/Functions'
@@ -38,7 +37,7 @@ export default buildConfig({
       baseDir: path.resolve(dirname),
     },
   },
-  collections: [Nouns, Things, Functions, Workflows, Batches, Generations, Events, Users, Roles, Webhooks],
+  collections: [Functions, Workflows, Nouns, Things, Users, Roles, Webhooks],
   globals: [Settings],
   jobs: {
     tasks: [],
@@ -50,8 +49,8 @@ export default buildConfig({
       defaultJobsCollection.admin.hidden = false
       defaultJobsCollection.admin.group = 'Admin'
       defaultJobsCollection.labels = {
-        singular: 'Job',
-        plural: 'Jobs',
+        singular: 'Event',
+        plural: 'Events',
       }
       defaultJobsCollection.fields.map((field) => {
         if (field.type === 'json') {
@@ -76,6 +75,23 @@ export default buildConfig({
   }),
   // sharp,
   plugins: [
+    multiTenantPlugin<Config>({
+      debug: true,
+      enabled: false,
+      userHasAccessToAllTenants: () => true,
+      tenantsSlug: 'projects',
+      tenantField: { name: 'project' },
+      tenantSelectorLabel: 'Project',
+      collections: {
+        nouns: {},
+        things: {},
+        functions: {},
+        workflows: {},
+        // navigation: {
+        //   isGlobal: true,
+        // }
+      },
+    }),
     payloadCloudPlugin(),
     // storage-adapter-placeholder
   ],

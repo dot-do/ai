@@ -44,6 +44,7 @@ export const Functions: CollectionConfig = {
       admin: { language: 'yaml', editorOptions },
     },
     { name: 'data', type: 'json', admin: { hidden: true } },
-    { name: 'executions', type: 'join', collection: 'events', on: 'execution', hasMany: true },
+    // { name: 'executions', type: 'join', collection: 'events', on: 'execution', hasMany: true },
+    // { name: 'executions', type: 'join', collection: 'payload-jobs', on: 'input.function', hasMany: true },
   ],
 }

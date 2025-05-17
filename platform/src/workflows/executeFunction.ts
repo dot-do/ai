@@ -14,11 +14,11 @@ export const executeFunction: WorkflowConfig<'executeFunction'> = {
     const { input } = job
 
     if (input.id) {
-      await payload.update({
-        collection: 'events',
-        id: input.id,
-        data: { status: 'Processing' },
-      })
+      // await payload.update({
+      //   collection: 'events',
+      //   id: input.id,
+      //   data: { status: 'Processing' },
+      // })
     }
   },
 }
