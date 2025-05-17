@@ -79,7 +79,7 @@ export async function startLocalServer(hookTimeout = 60000): Promise<string> {
 
 
   console.log('Starting local server...')
-  const rootDir = resolve(__dirname, '../../../../')
+  const rootDir = resolve(__dirname, '../../../')
   console.log(`Root directory: ${rootDir}`)
 
   try {
