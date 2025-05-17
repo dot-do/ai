@@ -1,7 +1,6 @@
 import { embed, embedMany, generateObject, generateText } from 'ai'
 import { createOpenAI } from '@ai-sdk/openai'
-import config from '@payload-config'
-import { getPayload } from 'payload'
+
 
 
 export const model = createOpenAI({
