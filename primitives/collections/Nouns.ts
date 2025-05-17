@@ -1,6 +1,6 @@
 import type { CollectionConfig } from 'payload'
 import dedent from 'dedent'
-import { editorOptions } from '@/lib/collections'
+import { editorOptions } from '../lib/collections'
 import matter from 'gray-matter'
 
 const defaultValue = dedent`
@@ -42,7 +42,6 @@ export const Nouns: CollectionConfig = {
         // { name: 'name', type: 'text', label: 'Name' },
         // { name: 'sameAs', type: 'relationship', relationTo: 'types' },
         // { name: 'generate', type: 'select', defaultValue: 'Object', options: ['List', 'Object', 'Markdown', 'Code', 'Nothing'] },
-        
       ],
     },
     { name: 'context', type: 'code', admin: { language: 'mdx', editorOptions } },

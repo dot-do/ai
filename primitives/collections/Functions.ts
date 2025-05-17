@@ -1,6 +1,6 @@
 import type { CollectionConfig, Condition } from 'payload'
-import { editorOptions } from '@/lib/collections'
-import { getModels } from '@/lib/ai'
+import { editorOptions } from '../lib/collections'
+import { getModels } from '../lib/ai'
 
 export const Functions: CollectionConfig = {
   slug: 'functions',
@@ -18,11 +18,12 @@ export const Functions: CollectionConfig = {
       options: ['Object', 'ObjectArray', 'Text', 'TextArray', 'Code'],
       admin: { position: 'sidebar' },
     },
-    { 
-      name: 'object', 
-      type: 'relationship', 
-      relationTo: 'nouns', 
-      admin: { position: 'sidebar', condition: (data) => data.output === 'Object' || data.output === 'ObjectArray' } },
+    {
+      name: 'object',
+      type: 'relationship',
+      relationTo: 'nouns',
+      admin: { position: 'sidebar', condition: (data) => data.output === 'Object' || data.output === 'ObjectArray' },
+    },
     {
       name: 'model',
       // type: 'text',

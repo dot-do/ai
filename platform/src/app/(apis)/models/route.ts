@@ -1,4 +1,4 @@
-import { getModels } from '@/lib/ai'
+import { getModels } from 'ai-primitives/lib/ai'
 
 export const revalidate = 600
 

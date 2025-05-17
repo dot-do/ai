@@ -1,6 +1,6 @@
 import type { CollectionConfig } from 'payload'
-import { editorOptions } from '@/lib/collections'
-import { onThingCreate } from '@/hooks/onThingCreate'
+import { editorOptions } from '../lib/collections'
+import { onThingCreate } from '../hooks/onThingCreate'
 
 export const Things: CollectionConfig = {
   slug: 'things',

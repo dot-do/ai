@@ -1,5 +1,5 @@
 import type { CollectionConfig } from 'payload'
-import { editorOptions } from '@/lib/collections'
+import { editorOptions } from '../lib/collections'
 
 editorOptions.language = 'ts'
 

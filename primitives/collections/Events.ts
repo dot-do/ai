@@ -1,7 +1,7 @@
 import type { CollectionConfig } from 'payload'
-import { editorOptions } from '@/lib/collections'
-import { isLoggedIn } from '@/lib/collections'
-import { onEventCreate } from '@/hooks/onEventCreate'
+import { editorOptions } from '../lib/collections'
+import { isLoggedIn } from '../lib/collections'
+import { onEventCreate } from '../hooks/onEventCreate'
 
 export const Events: CollectionConfig = {
   slug: 'events',

@@ -1,10 +1,8 @@
-import config from '@/payload.config'
-import { getPayload } from 'payload'
+import { payload } from 'ai-primitives'
 
 export const GET = async (request: Request) => {
   const { headers } = request
   const { origin } = new URL(request.url)
-  const payload = await getPayload({ config })
 
   const { user } = await payload.auth({ headers })
 
