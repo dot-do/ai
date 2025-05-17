@@ -3,7 +3,7 @@ import { Banner, Head } from 'nextra/components'
 import { getPageMap } from 'nextra/page-map'
 import { RiDiscordFill, RiGithubFill, RiNpmjsFill, RiTwitterXFill } from '@remixicon/react'
 import 'nextra-theme-docs/style.css'
-import './styles.css'
+// import './styles.css'
 // import '@code-hike/mdx/dist/index.css'
 
 import type { Metadata } from 'next'
@@ -51,7 +51,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <Layout
           // banner={banner}
           navbar={navbar}
-          footer={<footer>Footer</footer>}
+          footer={<footer></footer>}
           pageMap={pageMap}
           docsRepositoryBase={siteConfig.baseLinks.docs_repo_base}
           sidebar={{ defaultMenuCollapseLevel: 1 }}
