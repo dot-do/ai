@@ -13,7 +13,7 @@ export const Settings: GlobalConfig = {
         { name: 'name', type: 'text' },
         { name: 'domain', type: 'text' },
         { name: 'path', type: 'text' },
-        { name: 'defaultModel', type: 'text', defaultValue: 'gemini-2.5-pro-preview' },
+        { name: 'defaultModel', type: 'text', defaultValue: 'google/gemini-2.5-pro-preview' },
       ],
     },
     { name: 'context', type: 'code', admin: { language: 'mdx', editorOptions } },
