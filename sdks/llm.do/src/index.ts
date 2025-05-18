@@ -9,7 +9,7 @@ const provider = createOpenAI({
     'HTTP-Referer': 'https://workflows.do', // Optional. Site URL for rankings on openrouter.ai.
     'X-Title': 'Workflows.do Business-as-Code', // Optional. Site title for rankings on openrouter.ai.
   },
-  name: 'llm.do'
+  name: 'llm.do',
 })
 
 export type ProviderSettings = Parameters<typeof provider>[1]

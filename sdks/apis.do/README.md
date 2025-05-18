@@ -27,12 +27,12 @@ import { API } from 'apis.do'
 
 const api = API({
   baseUrl: 'https://apis.do',
-  apiKey: 'your-api-key'
+  apiKey: 'your-api-key',
 })
 
 // Use the API
 const result = await api.functions.find({
-  name: 'functionName'
+  name: 'functionName',
 })
 ```
 
