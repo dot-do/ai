@@ -4,10 +4,6 @@ export type OnEvent = {}
 
 export type Workflow = {}
 
-export type AIInstance = {
-  
-}
+export type AIInstance = {}
 
-export type AIFunction = {
-  
-}
+export type AIFunction = {}
