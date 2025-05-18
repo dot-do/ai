@@ -1,6 +1,6 @@
 import { getPayload } from 'payload';
 import { config as configPromise } from './index';
-import { DBClient, DBDefinition, DBOptions, SchemaDefinition, ThingOperations } from '../sdks/database.do/src/types';
+import { DBClient, DBDefinition, DBOptions, Noun, Thing, ThingOperations } from '../sdks/database.do/src/types';
 
 /**
  * DB function for defining Nouns and Schema to be generated
@@ -17,6 +17,8 @@ export const DB: DBDefinition = (schema, options: DBOptions = {}) => {
       id: `noun_${name.toLowerCase()}`,
       name,
       schema: schemaDefinition,
+      updatedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
     };
   }
   
@@ -77,7 +79,7 @@ const createThingOperations = (nounName: string): ThingOperations => {
         },
       });
       
-      return thing;
+      return thing as Thing;
     },
     
     /**
@@ -87,10 +89,12 @@ const createThingOperations = (nounName: string): ThingOperations => {
       const config = await configPromise;
       const payload = await getPayload({ config });
       
-      return await payload.findByID({
+      const thing = await payload.findByID({
         collection: 'things',
         id,
       });
+      
+      return thing as Thing;
     },
     
     /**
@@ -120,7 +124,7 @@ const createThingOperations = (nounName: string): ThingOperations => {
         };
       }
       
-      const noun = nounResponse.docs[0];
+      const noun = nounResponse.docs[0] as Noun;
       
       // Find Things of this type
       const response = await payload.find({
@@ -137,7 +141,7 @@ const createThingOperations = (nounName: string): ThingOperations => {
       });
       
       return {
-        docs: response.docs as any[],
+        docs: response.docs as Thing[],
         totalDocs: response.totalDocs,
         page: response.page || 1, // Ensure page is always a number
         totalPages: response.totalPages,
@@ -153,11 +157,13 @@ const createThingOperations = (nounName: string): ThingOperations => {
       const config = await configPromise;
       const payload = await getPayload({ config });
       
-      return await payload.update({
+      const thing = await payload.update({
         collection: 'things',
         id,
         data,
       });
+      
+      return thing as Thing;
     },
     
     /**

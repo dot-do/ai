@@ -1,5 +1,3 @@
-import { Noun, Thing } from 'ai-primitives';
-
 /**
  * Schema definition for a Noun
  */
@@ -12,6 +10,46 @@ export type SchemaDefinition = {
  */
 export interface DBOptions {
   project?: string;
+}
+
+/**
+ * Noun interface matching Payload's Noun collection
+ */
+export interface Noun {
+  id: string;
+  project?: string | null | any;
+  name: string;
+  generate?: string | null | any;
+  context?: string | null;
+  relationships?: {
+    predicate?: string | null;
+    object?: any;
+    id?: string | null;
+  }[] | null;
+  updatedAt: string;
+  createdAt: string;
+}
+
+/**
+ * Thing interface matching Payload's Thing collection
+ */
+export interface Thing {
+  id: string;
+  project?: string | null | any;
+  name?: string | null;
+  type: string | Noun;
+  context?: string | null;
+  content?: string | null;
+  data?: Record<string, unknown> | unknown[] | string | number | boolean | null;
+  reasoning?: string | null;
+  citations?: string | null;
+  relationships?: {
+    predicate?: string | null;
+    object?: string | null | any;
+    id?: string | null;
+  }[] | null;
+  updatedAt: string;
+  createdAt: string;
 }
 
 /**
