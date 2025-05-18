@@ -3,7 +3,7 @@ import { waitUntil } from '@vercel/functions'
 
 export const embedData: WorkflowConfig<'embedData'> = {
   slug: 'embedData',
-  handler: async ({ job, tasks, req }) => {
+  handler: async ({ req }) => {
     const { payload } = req
 
     waitUntil(
