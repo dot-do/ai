@@ -7,7 +7,7 @@ import 'nextra-theme-docs/style.css'
 // import '@code-hike/mdx/dist/index.css'
 
 import type { Metadata } from 'next'
-import { Providers } from '../providers'
+// import { Providers } from '../providers'
 import { siteConfig } from 'components/site-config'
 
 export const metadata = {
@@ -43,9 +43,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang='en' dir='ltr' suppressHydrationWarning>
-      <Head>
+      {/* <Head>
         <meta name='viewport' content='width=device-width, initial-scale=1.0' />
-      </Head>
+      </Head> */}
       <body>
         {/* <Providers> */}
         <Layout
