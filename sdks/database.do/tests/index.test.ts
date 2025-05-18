@@ -1,4 +1,4 @@
-import { DB, db } from '../src';
+import { DB, db } from '../src/index.js';
 
 describe('Database SDK', () => {
   describe('DB', () => {
