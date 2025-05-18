@@ -4,9 +4,7 @@ import type { AIWorkflowDefinition } from '../src'
 describe('APIs Type', () => {
   it('should have functions', () => {
     const AI: AIWorkflowDefinition = {
-      leanCanvas: {
-        
-      }
+      leanCanvas: {},
     }
     expect(AI.leanCanvas).toBeDefined()
   })

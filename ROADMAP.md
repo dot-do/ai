@@ -2,7 +2,7 @@
 
 ## v0.2.0 – Typed Building Blocks
 
-- [ ] LLM.do Model Routing - route generative requests to the best model based on the function definition.
+- [ ] LLM.do Model Routing - route generative requests to any model via https://api.llm.do
 - [ ] APIs.do List + CRUD - a thin layer over the primitive collections for create/read/update/delete operations.
 - [ ] Functions.do Generate Text - basic helper returning raw text from the language model.
 - [ ] Functions.do Generate TextArray - return an array of strings using numbered markdown lists.

@@ -19,7 +19,7 @@ The following tasks expand the simple examples and TypeScript interfaces shown i
 ## Implementations & Tests
 
 - [ ] Implement `ai` proxy object for generating arbitrary objects or text.
-- [ ] Support tagged template literals: `await ai\`Summarize {topic}\``.
+- [ ] Support tagged template literals: `await ai\`Summarize ${topic}\``.
 - [ ] Create a `list` helper to generate string arrays via numbered lists.
 - [ ] Provide a `research` function that returns markdown with citations.
 - [ ] Expand `AI()` to create functions that return typed objects or arrays.

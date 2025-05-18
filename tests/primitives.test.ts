@@ -6,7 +6,6 @@ const config = await configPromise
 if (!config.secret) config.secret = 'test-secret-key-for-payload'
 
 describe('config', () => {
-
   it('should have collections', () => {
     expect(config.collections.length).toBeGreaterThan(5)
   })
@@ -38,4 +37,3 @@ describe('payload', async () => {
     expect(session.token).toBeDefined()
   })
 })
-  
