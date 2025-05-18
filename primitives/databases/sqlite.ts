@@ -22,9 +22,9 @@ const float32Array = customType<{
 const adapter = sqliteAdapter({
   idType: 'uuid',
   client: {
-    url: process.env.DATABASE_URI || 'file:./ai.db',
-    syncUrl: process.env.DATABASE_SYNC_URI,
-    authToken: process.env.DATABASE_TOKEN || process.env.TURSO_AUTH_TOKEN,
+    url: process.env.SQLITE_URI || 'file:./ai.db',
+    syncUrl: process.env.SQLITE_SYNC_URI,
+    authToken: process.env.SQLITE_TOKEN || process.env.TURSO_AUTH_TOKEN,
   },
   afterSchemaInit: [
     ({ schema, extendTable }) => {
