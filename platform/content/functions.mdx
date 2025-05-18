@@ -3,3 +3,36 @@ title: Functions
 ---
 
 # Functions
+
+Functions are strongly typed AI calls. Use the `AI()` helper to declare prompts and durable logic.
+
+```ts
+import { AI } from 'workflows.do'
+
+const ai = AI({
+  defineLeanCanvas: {
+    productName: 'name of the product or service',
+    problem: ['top 3 problems the product solves'],
+    solution: ['top 3 solutions the product offers'],
+  },
+  brainstormIdeas: ['List 25 startup ideas leveraging AI Agents'],
+  research: {
+    model: 'perplexity/sonar-deep-research',
+    prompt: 'Research {input}',
+    output: 'markdown',
+  },
+  ideate: async (args, { ai, db }) => {
+    const ideas = await ai.brainstormIdeas(args)
+    return Promise.all(
+      ideas.map(async (idea) => {
+        idea.leanCanvas = await ai.defineLeanCanvas({ idea })
+        idea.marketResearch = await ai.research({ idea, leanCanvas: idea.leanCanvas })
+        await db.ideas.update(idea)
+        return idea
+      })
+    )
+  },
+})
+```
+
+With these definitions you can call `ai.ideate()` and receive structured results while the platform handles retries and persistence.
