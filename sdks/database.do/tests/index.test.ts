@@ -23,11 +23,13 @@ describe('Database SDK', () => {
 
   describe('db', () => {
     it('should provide CRUD operations for Things', async () => {
-      expect(typeof db['User'].create).toBe('function');
-      expect(typeof db['User'].get).toBe('function');
-      expect(typeof db['User'].list).toBe('function');
-      expect(typeof db['User'].update).toBe('function');
-      expect(typeof db['User'].delete).toBe('function');
+      const userOperations = db['User'];
+      expect(userOperations).toBeDefined();
+      expect(typeof userOperations?.create).toBe('function');
+      expect(typeof userOperations?.get).toBe('function');
+      expect(typeof userOperations?.list).toBe('function');
+      expect(typeof userOperations?.update).toBe('function');
+      expect(typeof userOperations?.delete).toBe('function');
     });
   });
 });
