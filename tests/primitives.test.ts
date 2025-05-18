@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { config } from 'ai-primitives'
+import { config as configPromise } from 'ai-primitives'
 import { getPayload } from 'payload'
 
+const config = await configPromise
+if (!config.secret) config.secret = 'test-secret-key-for-payload'
+
 describe('config', () => {
-  if (!config.secret) config.secret = 'test-secret-key-for-payload'
 
   it('should have collections', () => {
     expect(config.collections.length).toBeGreaterThan(5)
