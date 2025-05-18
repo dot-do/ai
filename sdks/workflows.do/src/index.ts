@@ -378,7 +378,7 @@ export const db = createDatabaseAccess()
 /**
  * External API integrations
  */
-import { API as ApisDoAPI } from '../../apis.do/dist'
+import { API as ApisDoAPI } from 'apis.do'
 
 export const client = new ApisDoAPI()
 
