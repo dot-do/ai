@@ -14,30 +14,26 @@ A TypeScript SDK for interacting with the APIs.do platform.
 
 ```bash
 npm install apis.do
-# or
-yarn add apis.do
-# or
-pnpm add apis.do
 ```
 
 ## Usage
 
 ```typescript
-import { API } from 'apis.do';
+// Use the default instance
+import { api } from 'apis.do'
 
-// Initialize with options
+// Or initialize with options
+import { API } from 'apis.do'
+
 const api = API({
   baseUrl: 'https://apis.do',
   apiKey: 'your-api-key'
-});
-
-// Or use the default instance
-import { api } from 'apis.do';
+})
 
 // Use the API
-const result = await api.functions.findBySlug({
-  slug: 'function-name'
-});
+const result = await api.functions.find({
+  name: 'functionName'
+})
 ```
 
 ## API Reference
@@ -45,18 +41,18 @@ const result = await api.functions.findBySlug({
 ### Types
 
 ```typescript
-import type { APIs, LLMs } from 'apis.do';
+import type { APIs, LLMs } from 'apis.do'
 ```
 
 ### Configuration
 
 ```typescript
-import { API } from 'apis.do';
+import { API } from 'apis.do'
 
 const api = API({
-  baseUrl?: string; // Default: 'https://do.mw'
-  apiKey?: string;  // Default: process.env.DO_TOKEN
-});
+  baseUrl?: string // Default: 'https://apis.do'
+  apiKey?: string  // Default: process.env.DO_TOKEN
+})
 ```
 
 ## License
