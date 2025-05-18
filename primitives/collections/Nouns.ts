@@ -1,4 +1,27 @@
 import type { CollectionConfig } from 'payload'
+import dedent from 'dedent'
+import { editorOptions } from '../lib/collections'
+import matter from 'gray-matter'
+
+const defaultValue = dedent`
+---
+$id: 
+$type: 
+name: 
+image: 
+description: 
+sameAs: 
+subjectOf:
+url: 
+---
+
+# {name}
+
+{description}
+
+`
+
+const admin = { position: 'sidebar' }
 
 export const Nouns: CollectionConfig = {
   slug: 'nouns',
