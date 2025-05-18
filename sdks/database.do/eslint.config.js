@@ -1,11 +1,14 @@
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-
-const rootConfig = require('../../.eslintrc.js');
-
-export default [
-  {
-    ...rootConfig,
-    ignores: ['dist/**', 'node_modules/**'],
+module.exports = {
+  root: true,
+  parser: '@typescript-eslint/parser',
+  plugins: ['@typescript-eslint'],
+  extends: [
+    'eslint:recommended',
+    'plugin:@typescript-eslint/recommended'
+  ],
+  ignorePatterns: ['dist/**', 'node_modules/**'],
+  rules: {
+    '@typescript-eslint/no-explicit-any': 'warn',
+    '@typescript-eslint/no-unused-vars': 'warn'
   }
-];
+};
