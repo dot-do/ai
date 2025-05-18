@@ -1,4 +1,4 @@
-# [Workflows.do](https://workflows.do) - Elegant Business Process Orchestration
+# [Workflows.do](https://workflows.do) - Agentic Workflow Execution & Orchestration
 
 [![npm version](https://img.shields.io/npm/v/workflows.do.svg)](https://www.npmjs.com/package/workflows.do)
 [![npm downloads](https://img.shields.io/npm/dm/workflows.do.svg)](https://www.npmjs.com/package/workflows.do)

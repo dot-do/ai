@@ -4,7 +4,8 @@
 import { lexicalEditor } from '@payloadcms/richtext-lexical'
 import { multiTenantPlugin } from '@payloadcms/plugin-multi-tenant'
 import { Config } from 'payload'
-import type { Access, CodeField } from 'payload'
+
+// import type { Access, CodeField } from 'payload'
 import path from 'path'
 import { buildConfig } from 'payload'
 import { fileURLToPath } from 'url'
@@ -32,6 +33,11 @@ import { executeWorkflow } from './workflows/executeWorkflow'
 import { generateDatabase } from './workflows/generateDatabase'
 import { generateNoun } from './workflows/generateNoun'
 import { generateThing } from './workflows/generateThing'
+
+// // https://payloadcms.com/docs/typescript/generating-types#disable-declare-statement
+// declare module 'payload' {
+//   export interface GeneratedTypes extends Config {}
+// }
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
@@ -75,6 +81,7 @@ export default buildConfig({
   secret: process.env.PAYLOAD_SECRET || '',
   typescript: {
     outputFile: path.resolve(dirname, 'payload.types.ts'),
+    declare: false,
   },
   db,
   // db: mongooseAdapter({

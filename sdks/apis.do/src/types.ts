@@ -1,56 +1,11 @@
-export interface ErrorResponse {
-  errors?: Array<{
-    message: string
-    code?: string
-    path?: string
-  }>
+import { Config } from 'ai-primitives/payload.types'
+
+// Define the LLMs type to include all supported models
+export type LLMs = Config['collections']['functions']['model']
+
+// Create a type that excludes all collection types starting with 'payload-'
+type OmitPayloadTypes<T> = {
+  [K in keyof T as K extends `payload-${string}` ? never : K]: T[K]
 }
 
-export interface ListResponse<T> {
-  data: T[]
-  meta?: {
-    total?: number
-    page?: number
-    pageSize?: number
-    hasNextPage?: boolean
-  }
-}
-
-export interface QueryParams {
-  [key: string]: any
-  limit?: number
-  page?: number
-  sort?: string | string[]
-  where?: Record<string, any>
-}
-
-/**
- * Client configuration options
- */
-export interface ClientOptions {
-  /**
-   * Base URL for API requests
-   * @default 'https://api.do'
-   */
-  baseUrl?: string
-
-  /**
-   * API key for authentication
-   */
-  apiKey?: string
-
-  /**
-   * Custom fetch implementation
-   */
-  fetch?: typeof fetch
-
-  /**
-   * Skip SSL certificate validation (only for testing)
-   */
-  ignoreSSLErrors?: boolean
-
-  /**
-   * Additional headers to include with requests
-   */
-  headers?: Record<string, string>
-}
+export type APIs = OmitPayloadTypes<Config['collections']>
