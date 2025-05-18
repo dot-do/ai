@@ -15,6 +15,7 @@ export const generate: TaskConfig<'generate'> = {
     { name: 'context', type: 'text' },
     { name: 'event', type: 'relationship', relationTo: 'events' },
     { name: 'object', type: 'relationship', relationTo: 'nouns' },
+    { name: 'project', type: 'relationship', relationTo: 'projects' },
   ],
   outputSchema: [
     { name: 'content', type: 'text' },
@@ -121,6 +122,10 @@ export const generate: TaskConfig<'generate'> = {
     // TODO: if function has an object (ie. the associated Noun), create a new Thing of that Noun
 
     if (job.input.object) {
+      if (!job.input.project) {
+        throw new Error('You must select a tenant (project) when creating a thing')
+      }
+      
       const thing = {
         type: job.input.object,
         content,
@@ -130,6 +135,7 @@ export const generate: TaskConfig<'generate'> = {
         citations: '',
         // citations,
         // error,
+        project: job.input.project, // Add project field for multi-tenant support
       }
       console.log({ thing })
       await payload.create({
