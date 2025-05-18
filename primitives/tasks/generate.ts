@@ -1,5 +1,6 @@
 import { TaskConfig } from 'payload'
-// import { waitUntil } from '@vercel/functions'
+import { generateText, generateObject } from 'ai'
+import { model } from '../lib/ai'
 import { toJsonSchema, toZodSchema } from '../lib/schema'
 
 export const generate: TaskConfig<'generate'> = {
@@ -27,11 +28,11 @@ export const generate: TaskConfig<'generate'> = {
     { name: 'statusText', type: 'text' },
   ],
   handler: async ({ job, req }) => {
-    let error, data, headers, body, bodyText, text, latency, status, statusText, reasoning, content, citations
+    let error, data, headers, body, text, latency, status, statusText, reasoning, content, citations
     const start = Date.now()
     const { payload } = req
     // TODO: figure out why job.input has an inferred type of string when it should be the input schema object type
-    let { model, prompt, system, format, schema, ...settings } = job.input
+    let { model: modelName, prompt, system, format, schema, ...settings } = job.input
     if (format === 'Object') {
       if (!system?.toLowerCase().includes('json')) system += '\n\nRespond only in JSON format.'
     }
@@ -42,59 +43,56 @@ export const generate: TaskConfig<'generate'> = {
       if (!system?.toLowerCase().includes('list')) system += '\n\nRespond only with a numbered, Markdown ordered list.'
     }
     system = system?.trim()
-    const request: object = {
-      model,
-      prompt: system ? undefined : prompt,
-      messages: system
-        ? [
-            { role: 'system', content: system },
-            { role: 'user', content: prompt },
-          ]
-        : undefined,
-      response_format: format === 'Object' ? (schema ? { type: 'json_schema', json_schema: toJsonSchema(schema) } : { type: 'json_object' }) : undefined,
-      ...settings,
-    }
-    // try {
-    const response = await fetch(process.env.AI_GATEWAY_URL + '/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env.AI_GATEWAY_TOKEN}`,
-        'HTTP-Referer': 'https://workflows.do',
-        'X-Title': 'Workflows.do Business-as-Code',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(request),
-    })
-    latency = Date.now() - start
-    headers = Object.fromEntries(response.headers)
-    status = response.status
-    statusText = response.statusText
-
-    bodyText = await response.text()
-    console.log(bodyText.trim().slice(0, 1000))
+    
     try {
-      body = JSON.parse(bodyText)
+      const aiModel = model(modelName || 'google/gemini-2.5-pro-preview', { 
+        structuredOutputs: true,
+        ...settings 
+      })
+      
+      if (format === 'Object') {
+        const results = schema 
+          ? await generateObject({
+              model: aiModel,
+              prompt,
+              system,
+              schema: toZodSchema(schema)
+            })
+          : await generateObject({
+              model: aiModel,
+              prompt,
+              system,
+              output: 'no-schema'
+            })
+
+        latency = Date.now() - start
+        data = results.object
+        content = results.object ? JSON.stringify(results.object) : ''
+        body = results.response
+        status = 200
+        statusText = 'OK'
+        headers = {}
+      } else {
+        const results = await generateText({
+          model: aiModel,
+          prompt,
+          system,
+        })
+
+        latency = Date.now() - start
+        content = results.text
+        reasoning = results.reasoning
+        body = results.response
+        status = 200
+        statusText = 'OK'
+        headers = {}
+      }
     } catch (e) {
       error = String(e)
       console.error(e)
     }
-    content = body?.choices?.[0]?.text || body?.choices?.[0]?.message?.content
-    reasoning = body?.choices?.[0]?.reasoning
-    citations = body?.citations
-    // console.log({ content, citations, reasoning })
-    if (format === 'Object') {
-      try {
-        data = JSON.parse(content)
-        // try to parse with zod
-        if (schema) {
-          data = toZodSchema(schema).parse(data)
-        }
-      } catch (e) {
-        error = String(e)
-        console.error(e)
-      }
-    }
-    if (format === 'List') {
+    
+    if (format === 'List' && typeof content === 'string') {
       try {
         // Extract numbered, markdown ordered lists and keep only the content after the numbers
         const regex = /\d+\.\s+(.*)/g
@@ -129,7 +127,7 @@ export const generate: TaskConfig<'generate'> = {
         data,
         reasoning,
         context: job.input.context,
-        citations: citations?.join('\n'),
+        citations: '',
         // citations,
         // error,
       }
