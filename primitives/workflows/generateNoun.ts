@@ -22,9 +22,9 @@ export const generateNoun: WorkflowConfig<'generateNoun'> = {
       required: false,
     },
   ],
-  handler: async ({ job, tasks, req }) => {
+  handler: async ({ job, req }) => {
     const { payload } = req
-    const settings = await payload.findGlobal({ slug: 'settings' })
+    // const settings = await payload.findGlobal({ slug: 'settings' })
 
     const input = job.input as unknown as GenerateNounInput
     const { id, queryContext } = input
@@ -67,6 +67,7 @@ export const generateNoun: WorkflowConfig<'generateNoun'> = {
 
       console.log(`Created Noun/${id}:`, noun)
     } catch (error) {
+      console.error(error)
       const noun = await payload.update({
         collection: 'nouns',
         id,
