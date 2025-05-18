@@ -22,9 +22,11 @@ import { Events } from './collections/Events'
 import { Webhooks } from './collections/Webhooks'
 import { Users } from './collections/Users'
 import { Roles } from './collections/Roles'
+import { Projects } from './collections/Projects'
+import { Settings } from './collections/Settings'
 
 
-import { Settings } from './globals/Settings'
+// import { Settings } from './globals/Settings'
 
 import { generate } from './tasks/generate'
 import { embedData } from './workflows/embedData'
@@ -49,8 +51,8 @@ export default buildConfig({
       baseDir: path.resolve(dirname),
     },
   },
-  collections: [Functions, Workflows, Nouns, Things, Events, Users, Roles, Webhooks],
-  globals: [Settings],
+  collections: [Functions, Workflows, Nouns, Things, Events, Projects, Users, Roles, Webhooks, Settings],
+  // globals: [Settings],
   jobs: {
     tasks: [generate],
     workflows: [embedData, executeFunction, executeWorkflow, generateDatabase, generateNoun, generateThing],
@@ -90,20 +92,23 @@ export default buildConfig({
   // sharp,
   plugins: [
     multiTenantPlugin<Config>({
-      debug: true,
-      enabled: false,
+      debug: false,
+      enabled: true,
       userHasAccessToAllTenants: () => true,
       tenantsSlug: 'projects',
       tenantField: { name: 'project' },
       tenantSelectorLabel: 'Project',
       collections: {
-        nouns: {},
-        things: {},
+        events: {},
         functions: {},
+        nouns: {},
+        roles: {},
+        things: {},
+        webhooks: {},
         workflows: {},
-        // navigation: {
-        //   isGlobal: true,
-        // }
+        settings: {
+          isGlobal: true,
+        }
       },
     }),
     // storage-adapter-placeholder

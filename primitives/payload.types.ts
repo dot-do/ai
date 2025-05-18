@@ -72,9 +72,11 @@ export interface Config {
     nouns: Noun;
     things: Thing;
     events: Event;
+    projects: Project;
     users: User;
     roles: Role;
     webhooks: Webhook;
+    settings: Setting;
     'payload-jobs': PayloadJob;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -101,9 +103,11 @@ export interface Config {
     nouns: NounsSelect<false> | NounsSelect<true>;
     things: ThingsSelect<false> | ThingsSelect<true>;
     events: EventsSelect<false> | EventsSelect<true>;
+    projects: ProjectsSelect<false> | ProjectsSelect<true>;
     users: UsersSelect<false> | UsersSelect<true>;
     roles: RolesSelect<false> | RolesSelect<true>;
     webhooks: WebhooksSelect<false> | WebhooksSelect<true>;
+    settings: SettingsSelect<false> | SettingsSelect<true>;
     'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -112,12 +116,8 @@ export interface Config {
   db: {
     defaultIDType: string;
   };
-  globals: {
-    settings: Setting;
-  };
-  globalsSelect: {
-    settings: SettingsSelect<false> | SettingsSelect<true>;
-  };
+  globals: {};
+  globalsSelect: {};
   locale: null;
   user: User & {
     collection: 'users';
@@ -164,6 +164,7 @@ export interface UserAuthOperations {
  */
 export interface Function {
   id: string;
+  project?: (string | null) | Project;
   name: string;
   output?: ('Text' | 'Object' | 'Code' | 'List') | null;
   object?: (string | null) | Noun;
@@ -345,43 +346,43 @@ export interface Function {
         | 'raifle/sorcererlm-8x22b'
         | 'eva-unit-01/eva-qwen-2.5-32b'
         | 'thedrummer/unslopnemo-12b'
-        | 'anthropic/claude-3.5-haiku-20241022'
-        | 'anthropic/claude-3.5-haiku-20241022'
         | 'anthropic/claude-3.5-haiku'
         | 'anthropic/claude-3.5-haiku'
+        | 'anthropic/claude-3.5-haiku-20241022'
+        | 'anthropic/claude-3.5-haiku-20241022'
         | 'neversleep/llama-3.1-lumimaid-70b'
-        | 'anthropic/claude-3.5-sonnet'
-        | 'anthropic/claude-3.5-sonnet'
         | 'anthracite-org/magnum-v4-72b'
+        | 'anthropic/claude-3.5-sonnet'
+        | 'anthropic/claude-3.5-sonnet'
         | 'x-ai/grok-beta'
-        | 'mistralai/ministral-3b'
         | 'mistralai/ministral-8b'
+        | 'mistralai/ministral-3b'
         | 'qwen/qwen-2.5-7b-instruct'
         | 'qwen/qwen-2.5-7b-instruct'
         | 'nvidia/llama-3.1-nemotron-70b-instruct'
-        | 'inflection/inflection-3-pi'
         | 'inflection/inflection-3-productivity'
+        | 'inflection/inflection-3-pi'
         | 'google/gemini-flash-1.5-8b'
-        | 'liquid/lfm-40b'
         | 'thedrummer/rocinante-12b'
         | 'anthracite-org/magnum-v2-72b'
+        | 'liquid/lfm-40b'
         | 'meta-llama/llama-3.2-3b-instruct'
         | 'meta-llama/llama-3.2-3b-instruct'
-        | 'meta-llama/llama-3.2-11b-vision-instruct'
-        | 'meta-llama/llama-3.2-11b-vision-instruct'
+        | 'meta-llama/llama-3.2-1b-instruct'
+        | 'meta-llama/llama-3.2-1b-instruct'
         | 'meta-llama/llama-3.2-90b-vision-instruct'
-        | 'meta-llama/llama-3.2-1b-instruct'
-        | 'meta-llama/llama-3.2-1b-instruct'
+        | 'meta-llama/llama-3.2-11b-vision-instruct'
+        | 'meta-llama/llama-3.2-11b-vision-instruct'
         | 'qwen/qwen-2.5-72b-instruct'
         | 'qwen/qwen-2.5-72b-instruct'
         | 'neversleep/llama-3.1-lumimaid-8b'
-        | 'openai/o1-preview-2024-09-12'
-        | 'openai/o1-mini-2024-09-12'
-        | 'openai/o1-mini'
         | 'openai/o1-preview'
+        | 'openai/o1-preview-2024-09-12'
+        | 'openai/o1-mini'
+        | 'openai/o1-mini-2024-09-12'
         | 'mistralai/pixtral-12b'
-        | 'cohere/command-r-08-2024'
         | 'cohere/command-r-plus-08-2024'
+        | 'cohere/command-r-08-2024'
         | 'qwen/qwen-2.5-vl-7b-instruct'
         | 'qwen/qwen-2.5-vl-7b-instruct'
         | 'sao10k/l3.1-euryale-70b'
@@ -392,20 +393,20 @@ export interface Function {
         | 'sao10k/l3-lunaris-8b'
         | 'aetherwiing/mn-starcannon-12b'
         | 'openai/gpt-4o-2024-08-06'
+        | 'meta-llama/llama-3.1-405b'
+        | 'meta-llama/llama-3.1-405b'
         | 'nothingiisreal/mn-celeste-12b'
-        | 'meta-llama/llama-3.1-405b'
-        | 'meta-llama/llama-3.1-405b'
-        | 'perplexity/llama-3.1-sonar-large-128k-online'
         | 'perplexity/llama-3.1-sonar-small-128k-online'
+        | 'perplexity/llama-3.1-sonar-large-128k-online'
         | 'meta-llama/llama-3.1-8b-instruct'
         | 'meta-llama/llama-3.1-8b-instruct'
-        | 'meta-llama/llama-3.1-70b-instruct'
         | 'meta-llama/llama-3.1-405b-instruct'
+        | 'meta-llama/llama-3.1-70b-instruct'
         | 'mistralai/codestral-mamba'
         | 'mistralai/mistral-nemo'
         | 'mistralai/mistral-nemo'
-        | 'openai/gpt-4o-mini-2024-07-18'
         | 'openai/gpt-4o-mini'
+        | 'openai/gpt-4o-mini-2024-07-18'
         | 'google/gemma-2-27b-it'
         | 'alpindale/magnum-72b'
         | 'google/gemma-2-9b-it'
@@ -417,10 +418,10 @@ export interface Function {
         | 'sao10k/l3-euryale-70b'
         | 'cognitivecomputations/dolphin-mixtral-8x22b'
         | 'qwen/qwen-2-72b-instruct'
-        | 'mistralai/mistral-7b-instruct-v0.3'
+        | 'mistralai/mistral-7b-instruct'
+        | 'mistralai/mistral-7b-instruct'
         | 'nousresearch/hermes-2-pro-llama-3-8b'
-        | 'mistralai/mistral-7b-instruct'
-        | 'mistralai/mistral-7b-instruct'
+        | 'mistralai/mistral-7b-instruct-v0.3'
         | 'microsoft/phi-3-mini-128k-instruct'
         | 'microsoft/phi-3-medium-128k-instruct'
         | 'neversleep/llama-3-lumimaid-70b'
@@ -438,8 +439,8 @@ export interface Function {
         | 'meta-llama/llama-3-70b-instruct'
         | 'mistralai/mixtral-8x22b-instruct'
         | 'microsoft/wizardlm-2-8x22b'
-        | 'openai/gpt-4-turbo'
         | 'google/gemini-pro-1.5'
+        | 'openai/gpt-4-turbo'
         | 'cohere/command-r-plus'
         | 'cohere/command-r-plus-04-2024'
         | 'sophosympatheia/midnight-rose-70b'
@@ -447,32 +448,32 @@ export interface Function {
         | 'cohere/command-r'
         | 'anthropic/claude-3-haiku'
         | 'anthropic/claude-3-haiku'
-        | 'anthropic/claude-3-sonnet'
-        | 'anthropic/claude-3-sonnet'
         | 'anthropic/claude-3-opus'
         | 'anthropic/claude-3-opus'
+        | 'anthropic/claude-3-sonnet'
+        | 'anthropic/claude-3-sonnet'
         | 'cohere/command-r-03-2024'
         | 'mistralai/mistral-large'
-        | 'openai/gpt-4-turbo-preview'
         | 'openai/gpt-3.5-turbo-0613'
+        | 'openai/gpt-4-turbo-preview'
         | 'nousresearch/nous-hermes-2-mixtral-8x7b-dpo'
-        | 'mistralai/mistral-small'
         | 'mistralai/mistral-medium'
+        | 'mistralai/mistral-small'
         | 'mistralai/mistral-tiny'
         | 'mistralai/mistral-7b-instruct-v0.2'
         | 'mistralai/mixtral-8x7b-instruct'
         | 'neversleep/noromaid-20b'
-        | 'anthropic/claude-2'
-        | 'anthropic/claude-2'
         | 'anthropic/claude-2.1'
         | 'anthropic/claude-2.1'
-        | 'alpindale/goliath-120b'
+        | 'anthropic/claude-2'
+        | 'anthropic/claude-2'
         | 'undi95/toppy-m-7b'
-        | 'openai/gpt-4-1106-preview'
+        | 'alpindale/goliath-120b'
         | 'openai/gpt-3.5-turbo-1106'
+        | 'openai/gpt-4-1106-preview'
         | 'jondurbin/airoboros-l2-70b'
-        | 'mistralai/mistral-7b-instruct-v0.1'
         | 'openai/gpt-3.5-turbo-instruct'
+        | 'mistralai/mistral-7b-instruct-v0.1'
         | 'pygmalionai/mythalion-13b'
         | 'openai/gpt-3.5-turbo-16k'
         | 'openai/gpt-4-32k'
@@ -483,10 +484,10 @@ export interface Function {
         | 'undi95/remm-slerp-l2-13b'
         | 'gryphe/mythomax-l2-13b'
         | 'meta-llama/llama-2-70b-chat'
-        | 'openai/gpt-4'
-        | 'openai/gpt-4-0314'
         | 'openai/gpt-3.5-turbo'
         | 'openai/gpt-3.5-turbo-0125'
+        | 'openai/gpt-4'
+        | 'openai/gpt-4-0314'
         | 'openrouter/optimus-alpha'
         | 'nvidia/llama-3.1-nemotron-nano-8b-v1'
         | 'tokyotech-llm/llama-3.1-swallow-8b-instruct-v0.3'
@@ -507,11 +508,11 @@ export interface Function {
         | 'mattshumer/reflection-70b'
         | 'google/gemini-flash-1.5-exp'
         | 'lynn/soliloquy-v3'
-        | 'ai21/jamba-1-5-large'
         | '01-ai/yi-1.5-34b-chat'
         | 'ai21/jamba-1-5-mini'
-        | '01-ai/yi-large-fc'
+        | 'ai21/jamba-1-5-large'
         | '01-ai/yi-large-turbo'
+        | '01-ai/yi-large-fc'
         | '01-ai/yi-vision'
         | 'google/gemini-pro-1.5-exp'
         | 'cognitivecomputations/dolphin-llama-3-70b'
@@ -522,20 +523,20 @@ export interface Function {
         | 'microsoft/phi-3-medium-4k-instruct'
         | 'bigcode/starcoder2-15b-instruct'
         | 'openchat/openchat-8b'
-        | 'perplexity/llama-3-sonar-small-32k-chat'
         | 'perplexity/llama-3-sonar-large-32k-online'
+        | 'deepseek/deepseek-chat-v2.5'
+        | 'perplexity/llama-3-sonar-small-32k-chat'
         | 'perplexity/llama-3-sonar-small-32k-online'
         | 'perplexity/llama-3-sonar-large-32k-chat'
-        | 'deepseek/deepseek-chat-v2.5'
-        | 'meta-llama/llama-3-70b'
         | 'meta-llama/llama-3-8b'
+        | 'meta-llama/llama-3-70b'
         | 'liuhaotian/llava-yi-34b'
-        | 'qwen/qwen-4b-chat'
         | 'qwen/qwen-110b-chat'
-        | 'qwen/qwen-14b-chat'
-        | 'qwen/qwen-7b-chat'
         | 'qwen/qwen-72b-chat'
         | 'qwen/qwen-32b-chat'
+        | 'qwen/qwen-14b-chat'
+        | 'qwen/qwen-7b-chat'
+        | 'qwen/qwen-4b-chat'
         | 'snowflake/snowflake-arctic-instruct'
         | 'fireworks/firellava-13b'
         | 'lynn/soliloquy-l3'
@@ -551,19 +552,19 @@ export interface Function {
         | 'nousresearch/nous-hermes-2-mixtral-8x7b-sft'
         | 'austism/chronos-hermes-13b'
         | 'jondurbin/bagel-34b'
-        | 'neversleep/noromaid-mixtral-8x7b-instruct'
         | 'nousresearch/nous-hermes-yi-34b'
+        | 'neversleep/noromaid-mixtral-8x7b-instruct'
         | 'cognitivecomputations/dolphin-mixtral-8x7b'
         | 'recursal/rwkv-5-3b-ai-town'
         | 'rwkv/rwkv-5-world-3b'
         | 'togethercomputer/stripedhyena-nous-7b'
         | 'togethercomputer/stripedhyena-hessian-7b'
         | 'koboldai/psyfighter-13b-2'
-        | 'nousresearch/nous-hermes-2-vision-7b'
-        | 'gryphe/mythomist-7b'
         | '01-ai/yi-34b'
-        | '01-ai/yi-6b'
         | '01-ai/yi-34b-chat'
+        | '01-ai/yi-6b'
+        | 'gryphe/mythomist-7b'
+        | 'nousresearch/nous-hermes-2-vision-7b'
         | 'openrouter/cinematika-7b'
         | 'nousresearch/nous-capybara-7b'
         | 'jebcarter/psyfighter-13b'
@@ -576,21 +577,21 @@ export interface Function {
         | 'openai/gpt-4-vision-preview'
         | 'lizpreciatior/lzlv-70b-fp16-hf'
         | 'openrouter/auto'
-        | 'google/palm-2-codechat-bison-32k'
         | 'google/palm-2-chat-bison-32k'
+        | 'google/palm-2-codechat-bison-32k'
         | 'teknium/openhermes-2-mistral-7b'
         | 'open-orca/mistral-7b-openorca'
         | 'nousresearch/nous-hermes-llama2-70b'
         | 'xwin-lm/xwin-lm-70b'
         | 'migtissera/synthia-70b'
         | 'meta-llama/codellama-34b-instruct'
-        | 'nousresearch/nous-hermes-llama2-13b'
         | 'phind/phind-codellama-34b'
+        | 'nousresearch/nous-hermes-llama2-13b'
         | 'huggingfaceh4/zephyr-7b-beta'
-        | 'anthropic/claude-1'
-        | 'anthropic/claude-instant-1.0'
-        | 'anthropic/claude-1.2'
         | 'anthropic/claude-instant-1'
+        | 'anthropic/claude-1'
+        | 'anthropic/claude-1.2'
+        | 'anthropic/claude-instant-1.0'
         | 'google/palm-2-chat-bison'
         | 'google/palm-2-codechat-bison'
         | 'meta-llama/llama-2-13b-chat'
@@ -611,10 +612,23 @@ export interface Function {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "projects".
+ */
+export interface Project {
+  id: string;
+  name?: string | null;
+  domain?: string | null;
+  context?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "nouns".
  */
 export interface Noun {
   id: string;
+  project?: (string | null) | Project;
   name: string;
   generate?: (string | null) | Function;
   context?: string | null;
@@ -652,6 +666,7 @@ export interface Noun {
  */
 export interface Thing {
   id: string;
+  project?: (string | null) | Project;
   name?: string | null;
   type: string | Noun;
   context?: string | null;
@@ -688,6 +703,7 @@ export interface Thing {
  */
 export interface Event {
   id: string;
+  project?: (string | null) | Project;
   status?: ('Pending' | 'Processing' | 'Success' | 'Error') | null;
   execution?: (string | null) | Function;
   workflow?: (string | null) | Workflow;
@@ -724,6 +740,7 @@ export interface Event {
  */
 export interface Workflow {
   id: string;
+  project?: (string | null) | Project;
   name: string;
   code?: string | null;
   executions?: {
@@ -740,6 +757,12 @@ export interface Workflow {
  */
 export interface User {
   id: string;
+  tenants?:
+    | {
+        tenant: string | Project;
+        id?: string | null;
+      }[]
+    | null;
   updatedAt: string;
   createdAt: string;
   enableAPIKey?: boolean | null;
@@ -759,6 +782,7 @@ export interface User {
  * via the `definition` "roles".
  */
 export interface Role {
+  project?: (string | null) | Project;
   id: string;
   updatedAt: string;
   createdAt: string;
@@ -769,9 +793,25 @@ export interface Role {
  */
 export interface Webhook {
   id: string;
+  project?: (string | null) | Project;
   type?: ('Incoming' | 'Outgoing') | null;
   events?: ('Create' | 'Update' | 'Delete')[] | null;
   nouns?: (string | Noun)[] | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "settings".
+ */
+export interface Setting {
+  id: string;
+  project?: (string | null) | Project;
+  name?: string | null;
+  domain?: string | null;
+  path?: string | null;
+  defaultModel?: string | null;
+  context?: string | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -902,6 +942,10 @@ export interface PayloadLockedDocument {
         value: string | Event;
       } | null)
     | ({
+        relationTo: 'projects';
+        value: string | Project;
+      } | null)
+    | ({
         relationTo: 'users';
         value: string | User;
       } | null)
@@ -912,6 +956,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'webhooks';
         value: string | Webhook;
+      } | null)
+    | ({
+        relationTo: 'settings';
+        value: string | Setting;
       } | null)
     | ({
         relationTo: 'payload-jobs';
@@ -964,6 +1012,7 @@ export interface PayloadMigration {
  * via the `definition` "functions_select".
  */
 export interface FunctionsSelect<T extends boolean = true> {
+  project?: T;
   name?: T;
   output?: T;
   object?: T;
@@ -981,6 +1030,7 @@ export interface FunctionsSelect<T extends boolean = true> {
  * via the `definition` "workflows_select".
  */
 export interface WorkflowsSelect<T extends boolean = true> {
+  project?: T;
   name?: T;
   code?: T;
   executions?: T;
@@ -992,6 +1042,7 @@ export interface WorkflowsSelect<T extends boolean = true> {
  * via the `definition` "nouns_select".
  */
 export interface NounsSelect<T extends boolean = true> {
+  project?: T;
   name?: T;
   generate?: T;
   context?: T;
@@ -1012,6 +1063,7 @@ export interface NounsSelect<T extends boolean = true> {
  * via the `definition` "things_select".
  */
 export interface ThingsSelect<T extends boolean = true> {
+  project?: T;
   name?: T;
   type?: T;
   context?: T;
@@ -1035,6 +1087,7 @@ export interface ThingsSelect<T extends boolean = true> {
  * via the `definition` "events_select".
  */
 export interface EventsSelect<T extends boolean = true> {
+  project?: T;
   status?: T;
   execution?: T;
   workflow?: T;
@@ -1051,9 +1104,26 @@ export interface EventsSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "projects_select".
+ */
+export interface ProjectsSelect<T extends boolean = true> {
+  name?: T;
+  domain?: T;
+  context?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "users_select".
  */
 export interface UsersSelect<T extends boolean = true> {
+  tenants?:
+    | T
+    | {
+        tenant?: T;
+        id?: T;
+      };
   updatedAt?: T;
   createdAt?: T;
   enableAPIKey?: T;
@@ -1072,6 +1142,7 @@ export interface UsersSelect<T extends boolean = true> {
  * via the `definition` "roles_select".
  */
 export interface RolesSelect<T extends boolean = true> {
+  project?: T;
   id?: T;
   updatedAt?: T;
   createdAt?: T;
@@ -1081,9 +1152,24 @@ export interface RolesSelect<T extends boolean = true> {
  * via the `definition` "webhooks_select".
  */
 export interface WebhooksSelect<T extends boolean = true> {
+  project?: T;
   type?: T;
   events?: T;
   nouns?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "settings_select".
+ */
+export interface SettingsSelect<T extends boolean = true> {
+  project?: T;
+  name?: T;
+  domain?: T;
+  path?: T;
+  defaultModel?: T;
+  context?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -1156,34 +1242,6 @@ export interface PayloadMigrationsSelect<T extends boolean = true> {
   batch?: T;
   updatedAt?: T;
   createdAt?: T;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "settings".
- */
-export interface Setting {
-  id: string;
-  name?: string | null;
-  domain?: string | null;
-  path?: string | null;
-  defaultModel?: string | null;
-  context?: string | null;
-  updatedAt?: string | null;
-  createdAt?: string | null;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "settings_select".
- */
-export interface SettingsSelect<T extends boolean = true> {
-  name?: T;
-  domain?: T;
-  path?: T;
-  defaultModel?: T;
-  context?: T;
-  updatedAt?: T;
-  createdAt?: T;
-  globalType?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1356,6 +1414,7 @@ export interface WorkflowGenerateNoun {
  */
 export interface WorkflowGenerateThing {
   input: {
+    project?: (string | null) | Project;
     name?: string | null;
     type: string | Noun;
     context?: string | null;

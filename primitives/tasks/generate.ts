@@ -1,5 +1,5 @@
-import { TaskConfig, TaskHandlerResult } from 'payload'
-import { waitUntil } from '@vercel/functions'
+import { TaskConfig } from 'payload'
+// import { waitUntil } from '@vercel/functions'
 import { toJsonSchema, toZodSchema } from '../lib/schema'
 
 export const generate: TaskConfig<'generate'> = {
@@ -26,12 +26,12 @@ export const generate: TaskConfig<'generate'> = {
     { name: 'status', type: 'number' },
     { name: 'statusText', type: 'text' },
   ],
-  handler: async ({ job, tasks, req }) => {
+  handler: async ({ job, req }) => {
     let error, data, headers, body, bodyText, text, latency, status, statusText, reasoning, content, citations
     const start = Date.now()
     const { payload } = req
     // TODO: figure out why job.input has an inferred type of string when it should be the input schema object type
-    let { model, prompt, system, format, schema, ...settings } = job.input as any
+    let { model, prompt, system, format, schema, ...settings } = job.input
     if (format === 'Object') {
       if (!system?.toLowerCase().includes('json')) system += '\n\nRespond only in JSON format.'
     }
@@ -111,23 +111,23 @@ export const generate: TaskConfig<'generate'> = {
         }
       }
 
-    if ((job.input as any).event) {
+    if (job.input.event) {
       await payload.update({
         collection: 'events',
-        id: (job.input as any).event,
+        id: job.input.event,
         data: { status: 'Success', content, data, reasoning, citations, error },
       })
     }
 
     // TODO: if function has an object (ie. the associated Noun), create a new Thing of that Noun
 
-    if ((job.input as any).object) {
+    if (job.input.object) {
       const thing = {
-        type: (job.input as any).object,
+        type: job.input.object,
         content,
         data,
         reasoning,
-        context: (job.input as any).context,
+        context: job.input.context,
         citations: citations?.join('\n'),
         // citations,
         // error,
