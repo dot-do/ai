@@ -1,7 +1,3 @@
-export type OnEvent = {
-    
-}
+export type OnEvent = {}
 
-export type Workflow = {
-    
-}
+export type Workflow = {}

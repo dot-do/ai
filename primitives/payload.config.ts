@@ -25,7 +25,6 @@ import { Roles } from './collections/Roles'
 import { Projects } from './collections/Projects'
 import { Settings } from './collections/Settings'
 
-
 // import { Settings } from './globals/Settings'
 
 import { generate } from './tasks/generate'
@@ -108,7 +107,7 @@ export default buildConfig({
         workflows: {},
         settings: {
           isGlobal: true,
-        }
+        },
       },
     }),
     // storage-adapter-placeholder

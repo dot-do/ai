@@ -14,7 +14,6 @@ ideas.forEach(async (idea) => {
   const marketResearch = await ai.research({ idea, leanCanvas })
   await db.ideas.update({ ...idea, leanCanvas, marketResearch })
 })
-
 ```
 
 Or define the Functions & Workflows explicitly:
@@ -75,17 +74,12 @@ Or define the Data Models explicitly:
 import { DB } from 'workflows.do'
 
 const db = DB({
-  leanCanvas: {
-
-  }
+  leanCanvas: {},
 })
 ```
 
 ```ts
 import { every, on } from 'workflows.do'
 
-every('hour during business hours', async (event, { ai, db }) => {
-  
-})
+every('hour during business hours', async (event, { ai, db }) => {})
 ```
-

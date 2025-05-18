@@ -59,115 +59,115 @@ export type SupportedTimezones =
   | 'Pacific/Guam'
   | 'Pacific/Noumea'
   | 'Pacific/Auckland'
-  | 'Pacific/Fiji';
+  | 'Pacific/Fiji'
 
 export interface Config {
   auth: {
-    users: UserAuthOperations;
-  };
-  blocks: {};
+    users: UserAuthOperations
+  }
+  blocks: {}
   collections: {
-    functions: Function;
-    workflows: Workflow;
-    nouns: Noun;
-    things: Thing;
-    events: Event;
-    projects: Project;
-    users: User;
-    roles: Role;
-    webhooks: Webhook;
-    settings: Setting;
-    'payload-jobs': PayloadJob;
-    'payload-locked-documents': PayloadLockedDocument;
-    'payload-preferences': PayloadPreference;
-    'payload-migrations': PayloadMigration;
-  };
+    functions: Function
+    workflows: Workflow
+    nouns: Noun
+    things: Thing
+    events: Event
+    projects: Project
+    users: User
+    roles: Role
+    webhooks: Webhook
+    settings: Setting
+    'payload-jobs': PayloadJob
+    'payload-locked-documents': PayloadLockedDocument
+    'payload-preferences': PayloadPreference
+    'payload-migrations': PayloadMigration
+  }
   collectionsJoins: {
     functions: {
-      executions: 'events';
-    };
+      executions: 'events'
+    }
     workflows: {
-      executions: 'events';
-    };
+      executions: 'events'
+    }
     nouns: {
-      related: 'nouns';
-      things: 'things';
-    };
+      related: 'nouns'
+      things: 'things'
+    }
     things: {
-      events: 'events';
-    };
-  };
+      events: 'events'
+    }
+  }
   collectionsSelect: {
-    functions: FunctionsSelect<false> | FunctionsSelect<true>;
-    workflows: WorkflowsSelect<false> | WorkflowsSelect<true>;
-    nouns: NounsSelect<false> | NounsSelect<true>;
-    things: ThingsSelect<false> | ThingsSelect<true>;
-    events: EventsSelect<false> | EventsSelect<true>;
-    projects: ProjectsSelect<false> | ProjectsSelect<true>;
-    users: UsersSelect<false> | UsersSelect<true>;
-    roles: RolesSelect<false> | RolesSelect<true>;
-    webhooks: WebhooksSelect<false> | WebhooksSelect<true>;
-    settings: SettingsSelect<false> | SettingsSelect<true>;
-    'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>;
-    'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
-    'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
-    'payload-migrations': PayloadMigrationsSelect<false> | PayloadMigrationsSelect<true>;
-  };
+    functions: FunctionsSelect<false> | FunctionsSelect<true>
+    workflows: WorkflowsSelect<false> | WorkflowsSelect<true>
+    nouns: NounsSelect<false> | NounsSelect<true>
+    things: ThingsSelect<false> | ThingsSelect<true>
+    events: EventsSelect<false> | EventsSelect<true>
+    projects: ProjectsSelect<false> | ProjectsSelect<true>
+    users: UsersSelect<false> | UsersSelect<true>
+    roles: RolesSelect<false> | RolesSelect<true>
+    webhooks: WebhooksSelect<false> | WebhooksSelect<true>
+    settings: SettingsSelect<false> | SettingsSelect<true>
+    'payload-jobs': PayloadJobsSelect<false> | PayloadJobsSelect<true>
+    'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>
+    'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>
+    'payload-migrations': PayloadMigrationsSelect<false> | PayloadMigrationsSelect<true>
+  }
   db: {
-    defaultIDType: string;
-  };
-  globals: {};
-  globalsSelect: {};
-  locale: null;
+    defaultIDType: string
+  }
+  globals: {}
+  globalsSelect: {}
+  locale: null
   user: User & {
-    collection: 'users';
-  };
+    collection: 'users'
+  }
   jobs: {
     tasks: {
-      generate: TaskGenerate;
+      generate: TaskGenerate
       inline: {
-        input: unknown;
-        output: unknown;
-      };
-    };
+        input: unknown
+        output: unknown
+      }
+    }
     workflows: {
-      embedData: WorkflowEmbedData;
-      executeFunction: WorkflowExecuteFunction;
-      executeWorkflow: WorkflowExecuteWorkflow;
-      generateDatabase: WorkflowGenerateDatabase;
-      generateNoun: WorkflowGenerateNoun;
-      generateThing: WorkflowGenerateThing;
-    };
-  };
+      embedData: WorkflowEmbedData
+      executeFunction: WorkflowExecuteFunction
+      executeWorkflow: WorkflowExecuteWorkflow
+      generateDatabase: WorkflowGenerateDatabase
+      generateNoun: WorkflowGenerateNoun
+      generateThing: WorkflowGenerateThing
+    }
+  }
 }
 export interface UserAuthOperations {
   forgotPassword: {
-    email: string;
-    password: string;
-  };
+    email: string
+    password: string
+  }
   login: {
-    email: string;
-    password: string;
-  };
+    email: string
+    password: string
+  }
   registerFirstUser: {
-    email: string;
-    password: string;
-  };
+    email: string
+    password: string
+  }
   unlock: {
-    email: string;
-    password: string;
-  };
+    email: string
+    password: string
+  }
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "functions".
  */
 export interface Function {
-  id: string;
-  project?: (string | null) | Project;
-  name: string;
-  output?: ('Text' | 'Object' | 'Code' | 'List') | null;
-  object?: (string | null) | Noun;
+  id: string
+  project?: (string | null) | Project
+  name: string
+  output?: ('Text' | 'Object' | 'Code' | 'List') | null
+  object?: (string | null) | Noun
   model?:
     | (
         | 'openai/codex-mini'
@@ -597,521 +597,519 @@ export interface Function {
         | 'meta-llama/llama-2-13b-chat'
         | 'openai/gpt-3.5-turbo-0301'
       )
-    | null;
-  system?: string | null;
-  prompt?: string | null;
-  schema?: string | null;
-  settings?: string | null;
+    | null
+  system?: string | null
+  prompt?: string | null
+  schema?: string | null
+  settings?: string | null
   executions?: {
-    docs?: (string | Event)[];
-    hasNextPage?: boolean;
-    totalDocs?: number;
-  };
-  updatedAt: string;
-  createdAt: string;
+    docs?: (string | Event)[]
+    hasNextPage?: boolean
+    totalDocs?: number
+  }
+  updatedAt: string
+  createdAt: string
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "projects".
  */
 export interface Project {
-  id: string;
-  name?: string | null;
-  domain?: string | null;
-  context?: string | null;
-  updatedAt: string;
-  createdAt: string;
+  id: string
+  name?: string | null
+  domain?: string | null
+  context?: string | null
+  updatedAt: string
+  createdAt: string
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "nouns".
  */
 export interface Noun {
-  id: string;
-  project?: (string | null) | Project;
-  name: string;
-  generate?: (string | null) | Function;
-  context?: string | null;
+  id: string
+  project?: (string | null) | Project
+  name: string
+  generate?: (string | null) | Function
+  context?: string | null
   relationships?:
     | {
-        predicate?: string | null;
+        predicate?: string | null
         object?:
           | ({
-              relationTo: 'nouns';
-              value: string | Noun;
+              relationTo: 'nouns'
+              value: string | Noun
             } | null)
           | ({
-              relationTo: 'things';
-              value: string | Thing;
-            } | null);
-        id?: string | null;
+              relationTo: 'things'
+              value: string | Thing
+            } | null)
+        id?: string | null
       }[]
-    | null;
+    | null
   related?: {
-    docs?: (string | Noun)[];
-    hasNextPage?: boolean;
-    totalDocs?: number;
-  };
+    docs?: (string | Noun)[]
+    hasNextPage?: boolean
+    totalDocs?: number
+  }
   things?: {
-    docs?: (string | Thing)[];
-    hasNextPage?: boolean;
-    totalDocs?: number;
-  };
-  updatedAt: string;
-  createdAt: string;
+    docs?: (string | Thing)[]
+    hasNextPage?: boolean
+    totalDocs?: number
+  }
+  updatedAt: string
+  createdAt: string
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "things".
  */
 export interface Thing {
-  id: string;
-  project?: (string | null) | Project;
-  name?: string | null;
-  type: string | Noun;
-  context?: string | null;
-  content?: string | null;
+  id: string
+  project?: (string | null) | Project
+  name?: string | null
+  type: string | Noun
+  context?: string | null
+  content?: string | null
   data?:
     | {
-        [k: string]: unknown;
+        [k: string]: unknown
       }
     | unknown[]
     | string
     | number
     | boolean
-    | null;
-  reasoning?: string | null;
-  citations?: string | null;
+    | null
+  reasoning?: string | null
+  citations?: string | null
   relationships?:
     | {
-        predicate?: string | null;
-        object?: (string | null) | Thing;
-        id?: string | null;
+        predicate?: string | null
+        object?: (string | null) | Thing
+        id?: string | null
       }[]
-    | null;
+    | null
   events?: {
-    docs?: (string | Event)[];
-    hasNextPage?: boolean;
-    totalDocs?: number;
-  };
-  updatedAt: string;
-  createdAt: string;
+    docs?: (string | Event)[]
+    hasNextPage?: boolean
+    totalDocs?: number
+  }
+  updatedAt: string
+  createdAt: string
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "events".
  */
 export interface Event {
-  id: string;
-  project?: (string | null) | Project;
-  status?: ('Pending' | 'Processing' | 'Success' | 'Error') | null;
-  execution?: (string | null) | Function;
-  workflow?: (string | null) | Workflow;
-  noun?: (string | null) | Noun;
-  thing?: (string | null) | Thing;
-  input?: string | null;
-  content?: string | null;
-  reasoning?: string | null;
-  citations?: string | null;
+  id: string
+  project?: (string | null) | Project
+  status?: ('Pending' | 'Processing' | 'Success' | 'Error') | null
+  execution?: (string | null) | Function
+  workflow?: (string | null) | Workflow
+  noun?: (string | null) | Noun
+  thing?: (string | null) | Thing
+  input?: string | null
+  content?: string | null
+  reasoning?: string | null
+  citations?: string | null
   data?:
     | {
-        [k: string]: unknown;
+        [k: string]: unknown
       }
     | unknown[]
     | string
     | number
     | boolean
-    | null;
+    | null
   error?:
     | {
-        [k: string]: unknown;
+        [k: string]: unknown
       }
     | unknown[]
     | string
     | number
     | boolean
-    | null;
-  updatedAt: string;
-  createdAt: string;
+    | null
+  updatedAt: string
+  createdAt: string
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "workflows".
  */
 export interface Workflow {
-  id: string;
-  project?: (string | null) | Project;
-  name: string;
-  code?: string | null;
+  id: string
+  project?: (string | null) | Project
+  name: string
+  code?: string | null
   executions?: {
-    docs?: (string | Event)[];
-    hasNextPage?: boolean;
-    totalDocs?: number;
-  };
-  updatedAt: string;
-  createdAt: string;
+    docs?: (string | Event)[]
+    hasNextPage?: boolean
+    totalDocs?: number
+  }
+  updatedAt: string
+  createdAt: string
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "users".
  */
 export interface User {
-  id: string;
+  id: string
   tenants?:
     | {
-        tenant: string | Project;
-        id?: string | null;
+        tenant: string | Project
+        id?: string | null
       }[]
-    | null;
-  updatedAt: string;
-  createdAt: string;
-  enableAPIKey?: boolean | null;
-  apiKey?: string | null;
-  apiKeyIndex?: string | null;
-  email: string;
-  resetPasswordToken?: string | null;
-  resetPasswordExpiration?: string | null;
-  salt?: string | null;
-  hash?: string | null;
-  loginAttempts?: number | null;
-  lockUntil?: string | null;
-  password?: string | null;
+    | null
+  updatedAt: string
+  createdAt: string
+  enableAPIKey?: boolean | null
+  apiKey?: string | null
+  apiKeyIndex?: string | null
+  email: string
+  resetPasswordToken?: string | null
+  resetPasswordExpiration?: string | null
+  salt?: string | null
+  hash?: string | null
+  loginAttempts?: number | null
+  lockUntil?: string | null
+  password?: string | null
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "roles".
  */
 export interface Role {
-  project?: (string | null) | Project;
-  id: string;
-  updatedAt: string;
-  createdAt: string;
+  project?: (string | null) | Project
+  id: string
+  updatedAt: string
+  createdAt: string
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "webhooks".
  */
 export interface Webhook {
-  id: string;
-  project?: (string | null) | Project;
-  type?: ('Incoming' | 'Outgoing') | null;
-  events?: ('Create' | 'Update' | 'Delete')[] | null;
-  nouns?: (string | Noun)[] | null;
-  updatedAt: string;
-  createdAt: string;
+  id: string
+  project?: (string | null) | Project
+  type?: ('Incoming' | 'Outgoing') | null
+  events?: ('Create' | 'Update' | 'Delete')[] | null
+  nouns?: (string | Noun)[] | null
+  updatedAt: string
+  createdAt: string
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "settings".
  */
 export interface Setting {
-  id: string;
-  project?: (string | null) | Project;
-  name?: string | null;
-  domain?: string | null;
-  path?: string | null;
-  defaultModel?: string | null;
-  context?: string | null;
-  updatedAt: string;
-  createdAt: string;
+  id: string
+  project?: (string | null) | Project
+  name?: string | null
+  domain?: string | null
+  path?: string | null
+  defaultModel?: string | null
+  context?: string | null
+  updatedAt: string
+  createdAt: string
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-jobs".
  */
 export interface PayloadJob {
-  id: string;
+  id: string
   /**
    * Input data provided to the job
    */
   input?:
     | {
-        [k: string]: unknown;
+        [k: string]: unknown
       }
     | unknown[]
     | string
     | number
     | boolean
-    | null;
+    | null
   taskStatus?:
     | {
-        [k: string]: unknown;
+        [k: string]: unknown
       }
     | unknown[]
     | string
     | number
     | boolean
-    | null;
-  completedAt?: string | null;
-  totalTried?: number | null;
+    | null
+  completedAt?: string | null
+  totalTried?: number | null
   /**
    * If hasError is true this job will not be retried
    */
-  hasError?: boolean | null;
+  hasError?: boolean | null
   /**
    * If hasError is true, this is the error that caused it
    */
   error?:
     | {
-        [k: string]: unknown;
+        [k: string]: unknown
       }
     | unknown[]
     | string
     | number
     | boolean
-    | null;
+    | null
   /**
    * Task execution log
    */
   log?:
     | {
-        executedAt: string;
-        completedAt: string;
-        taskSlug: 'inline' | 'generate';
-        taskID: string;
+        executedAt: string
+        completedAt: string
+        taskSlug: 'inline' | 'generate'
+        taskID: string
         input?:
           | {
-              [k: string]: unknown;
+              [k: string]: unknown
             }
           | unknown[]
           | string
           | number
           | boolean
-          | null;
+          | null
         output?:
           | {
-              [k: string]: unknown;
+              [k: string]: unknown
             }
           | unknown[]
           | string
           | number
           | boolean
-          | null;
-        state: 'failed' | 'succeeded';
+          | null
+        state: 'failed' | 'succeeded'
         error?:
           | {
-              [k: string]: unknown;
+              [k: string]: unknown
             }
           | unknown[]
           | string
           | number
           | boolean
-          | null;
+          | null
         parent?: {
-          taskSlug?: ('inline' | 'generate') | null;
-          taskID?: string | null;
-        };
-        id?: string | null;
+          taskSlug?: ('inline' | 'generate') | null
+          taskID?: string | null
+        }
+        id?: string | null
       }[]
-    | null;
-  workflowSlug?:
-    | ('embedData' | 'executeFunction' | 'executeWorkflow' | 'generateDatabase' | 'generateNoun' | 'generateThing')
-    | null;
-  taskSlug?: ('inline' | 'generate') | null;
-  queue?: string | null;
-  waitUntil?: string | null;
-  processing?: boolean | null;
-  updatedAt: string;
-  createdAt: string;
+    | null
+  workflowSlug?: ('embedData' | 'executeFunction' | 'executeWorkflow' | 'generateDatabase' | 'generateNoun' | 'generateThing') | null
+  taskSlug?: ('inline' | 'generate') | null
+  queue?: string | null
+  waitUntil?: string | null
+  processing?: boolean | null
+  updatedAt: string
+  createdAt: string
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-locked-documents".
  */
 export interface PayloadLockedDocument {
-  id: string;
+  id: string
   document?:
     | ({
-        relationTo: 'functions';
-        value: string | Function;
+        relationTo: 'functions'
+        value: string | Function
       } | null)
     | ({
-        relationTo: 'workflows';
-        value: string | Workflow;
+        relationTo: 'workflows'
+        value: string | Workflow
       } | null)
     | ({
-        relationTo: 'nouns';
-        value: string | Noun;
+        relationTo: 'nouns'
+        value: string | Noun
       } | null)
     | ({
-        relationTo: 'things';
-        value: string | Thing;
+        relationTo: 'things'
+        value: string | Thing
       } | null)
     | ({
-        relationTo: 'events';
-        value: string | Event;
+        relationTo: 'events'
+        value: string | Event
       } | null)
     | ({
-        relationTo: 'projects';
-        value: string | Project;
+        relationTo: 'projects'
+        value: string | Project
       } | null)
     | ({
-        relationTo: 'users';
-        value: string | User;
+        relationTo: 'users'
+        value: string | User
       } | null)
     | ({
-        relationTo: 'roles';
-        value: string | Role;
+        relationTo: 'roles'
+        value: string | Role
       } | null)
     | ({
-        relationTo: 'webhooks';
-        value: string | Webhook;
+        relationTo: 'webhooks'
+        value: string | Webhook
       } | null)
     | ({
-        relationTo: 'settings';
-        value: string | Setting;
+        relationTo: 'settings'
+        value: string | Setting
       } | null)
     | ({
-        relationTo: 'payload-jobs';
-        value: string | PayloadJob;
-      } | null);
-  globalSlug?: string | null;
+        relationTo: 'payload-jobs'
+        value: string | PayloadJob
+      } | null)
+  globalSlug?: string | null
   user: {
-    relationTo: 'users';
-    value: string | User;
-  };
-  updatedAt: string;
-  createdAt: string;
+    relationTo: 'users'
+    value: string | User
+  }
+  updatedAt: string
+  createdAt: string
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-preferences".
  */
 export interface PayloadPreference {
-  id: string;
+  id: string
   user: {
-    relationTo: 'users';
-    value: string | User;
-  };
-  key?: string | null;
+    relationTo: 'users'
+    value: string | User
+  }
+  key?: string | null
   value?:
     | {
-        [k: string]: unknown;
+        [k: string]: unknown
       }
     | unknown[]
     | string
     | number
     | boolean
-    | null;
-  updatedAt: string;
-  createdAt: string;
+    | null
+  updatedAt: string
+  createdAt: string
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-migrations".
  */
 export interface PayloadMigration {
-  id: string;
-  name?: string | null;
-  batch?: number | null;
-  updatedAt: string;
-  createdAt: string;
+  id: string
+  name?: string | null
+  batch?: number | null
+  updatedAt: string
+  createdAt: string
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "functions_select".
  */
 export interface FunctionsSelect<T extends boolean = true> {
-  project?: T;
-  name?: T;
-  output?: T;
-  object?: T;
-  model?: T;
-  system?: T;
-  prompt?: T;
-  schema?: T;
-  settings?: T;
-  executions?: T;
-  updatedAt?: T;
-  createdAt?: T;
+  project?: T
+  name?: T
+  output?: T
+  object?: T
+  model?: T
+  system?: T
+  prompt?: T
+  schema?: T
+  settings?: T
+  executions?: T
+  updatedAt?: T
+  createdAt?: T
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "workflows_select".
  */
 export interface WorkflowsSelect<T extends boolean = true> {
-  project?: T;
-  name?: T;
-  code?: T;
-  executions?: T;
-  updatedAt?: T;
-  createdAt?: T;
+  project?: T
+  name?: T
+  code?: T
+  executions?: T
+  updatedAt?: T
+  createdAt?: T
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "nouns_select".
  */
 export interface NounsSelect<T extends boolean = true> {
-  project?: T;
-  name?: T;
-  generate?: T;
-  context?: T;
+  project?: T
+  name?: T
+  generate?: T
+  context?: T
   relationships?:
     | T
     | {
-        predicate?: T;
-        object?: T;
-        id?: T;
-      };
-  related?: T;
-  things?: T;
-  updatedAt?: T;
-  createdAt?: T;
+        predicate?: T
+        object?: T
+        id?: T
+      }
+  related?: T
+  things?: T
+  updatedAt?: T
+  createdAt?: T
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "things_select".
  */
 export interface ThingsSelect<T extends boolean = true> {
-  project?: T;
-  name?: T;
-  type?: T;
-  context?: T;
-  content?: T;
-  data?: T;
-  reasoning?: T;
-  citations?: T;
+  project?: T
+  name?: T
+  type?: T
+  context?: T
+  content?: T
+  data?: T
+  reasoning?: T
+  citations?: T
   relationships?:
     | T
     | {
-        predicate?: T;
-        object?: T;
-        id?: T;
-      };
-  events?: T;
-  updatedAt?: T;
-  createdAt?: T;
+        predicate?: T
+        object?: T
+        id?: T
+      }
+  events?: T
+  updatedAt?: T
+  createdAt?: T
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "events_select".
  */
 export interface EventsSelect<T extends boolean = true> {
-  project?: T;
-  status?: T;
-  execution?: T;
-  workflow?: T;
-  noun?: T;
-  thing?: T;
-  input?: T;
-  content?: T;
-  reasoning?: T;
-  citations?: T;
-  data?: T;
-  error?: T;
-  updatedAt?: T;
-  createdAt?: T;
+  project?: T
+  status?: T
+  execution?: T
+  workflow?: T
+  noun?: T
+  thing?: T
+  input?: T
+  content?: T
+  reasoning?: T
+  citations?: T
+  data?: T
+  error?: T
+  updatedAt?: T
+  createdAt?: T
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "projects_select".
  */
 export interface ProjectsSelect<T extends boolean = true> {
-  name?: T;
-  domain?: T;
-  context?: T;
-  updatedAt?: T;
-  createdAt?: T;
+  name?: T
+  domain?: T
+  context?: T
+  updatedAt?: T
+  createdAt?: T
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1121,127 +1119,127 @@ export interface UsersSelect<T extends boolean = true> {
   tenants?:
     | T
     | {
-        tenant?: T;
-        id?: T;
-      };
-  updatedAt?: T;
-  createdAt?: T;
-  enableAPIKey?: T;
-  apiKey?: T;
-  apiKeyIndex?: T;
-  email?: T;
-  resetPasswordToken?: T;
-  resetPasswordExpiration?: T;
-  salt?: T;
-  hash?: T;
-  loginAttempts?: T;
-  lockUntil?: T;
+        tenant?: T
+        id?: T
+      }
+  updatedAt?: T
+  createdAt?: T
+  enableAPIKey?: T
+  apiKey?: T
+  apiKeyIndex?: T
+  email?: T
+  resetPasswordToken?: T
+  resetPasswordExpiration?: T
+  salt?: T
+  hash?: T
+  loginAttempts?: T
+  lockUntil?: T
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "roles_select".
  */
 export interface RolesSelect<T extends boolean = true> {
-  project?: T;
-  id?: T;
-  updatedAt?: T;
-  createdAt?: T;
+  project?: T
+  id?: T
+  updatedAt?: T
+  createdAt?: T
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "webhooks_select".
  */
 export interface WebhooksSelect<T extends boolean = true> {
-  project?: T;
-  type?: T;
-  events?: T;
-  nouns?: T;
-  updatedAt?: T;
-  createdAt?: T;
+  project?: T
+  type?: T
+  events?: T
+  nouns?: T
+  updatedAt?: T
+  createdAt?: T
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "settings_select".
  */
 export interface SettingsSelect<T extends boolean = true> {
-  project?: T;
-  name?: T;
-  domain?: T;
-  path?: T;
-  defaultModel?: T;
-  context?: T;
-  updatedAt?: T;
-  createdAt?: T;
+  project?: T
+  name?: T
+  domain?: T
+  path?: T
+  defaultModel?: T
+  context?: T
+  updatedAt?: T
+  createdAt?: T
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-jobs_select".
  */
 export interface PayloadJobsSelect<T extends boolean = true> {
-  input?: T;
-  taskStatus?: T;
-  completedAt?: T;
-  totalTried?: T;
-  hasError?: T;
-  error?: T;
+  input?: T
+  taskStatus?: T
+  completedAt?: T
+  totalTried?: T
+  hasError?: T
+  error?: T
   log?:
     | T
     | {
-        executedAt?: T;
-        completedAt?: T;
-        taskSlug?: T;
-        taskID?: T;
-        input?: T;
-        output?: T;
-        state?: T;
-        error?: T;
+        executedAt?: T
+        completedAt?: T
+        taskSlug?: T
+        taskID?: T
+        input?: T
+        output?: T
+        state?: T
+        error?: T
         parent?:
           | T
           | {
-              taskSlug?: T;
-              taskID?: T;
-            };
-        id?: T;
-      };
-  workflowSlug?: T;
-  taskSlug?: T;
-  queue?: T;
-  waitUntil?: T;
-  processing?: T;
-  updatedAt?: T;
-  createdAt?: T;
+              taskSlug?: T
+              taskID?: T
+            }
+        id?: T
+      }
+  workflowSlug?: T
+  taskSlug?: T
+  queue?: T
+  waitUntil?: T
+  processing?: T
+  updatedAt?: T
+  createdAt?: T
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-locked-documents_select".
  */
 export interface PayloadLockedDocumentsSelect<T extends boolean = true> {
-  document?: T;
-  globalSlug?: T;
-  user?: T;
-  updatedAt?: T;
-  createdAt?: T;
+  document?: T
+  globalSlug?: T
+  user?: T
+  updatedAt?: T
+  createdAt?: T
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-preferences_select".
  */
 export interface PayloadPreferencesSelect<T extends boolean = true> {
-  user?: T;
-  key?: T;
-  value?: T;
-  updatedAt?: T;
-  createdAt?: T;
+  user?: T
+  key?: T
+  value?: T
+  updatedAt?: T
+  createdAt?: T
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-migrations_select".
  */
 export interface PayloadMigrationsSelect<T extends boolean = true> {
-  name?: T;
-  batch?: T;
-  updatedAt?: T;
-  createdAt?: T;
+  name?: T
+  batch?: T
+  updatedAt?: T
+  createdAt?: T
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1249,82 +1247,82 @@ export interface PayloadMigrationsSelect<T extends boolean = true> {
  */
 export interface TaskGenerate {
   input: {
-    prompt: string;
-    model?: string | null;
-    system?: string | null;
-    format: 'Text' | 'Object' | 'Code' | 'List';
+    prompt: string
+    model?: string | null
+    system?: string | null
+    format: 'Text' | 'Object' | 'Code' | 'List'
     schema?:
       | {
-          [k: string]: unknown;
+          [k: string]: unknown
         }
       | unknown[]
       | string
       | number
       | boolean
-      | null;
+      | null
     settings?:
       | {
-          [k: string]: unknown;
+          [k: string]: unknown
         }
       | unknown[]
       | string
       | number
       | boolean
-      | null;
-    context?: string | null;
-    event?: (string | null) | Event;
-    object?: (string | null) | Noun;
-  };
+      | null
+    context?: string | null
+    event?: (string | null) | Event
+    object?: (string | null) | Noun
+  }
   output: {
-    content?: string | null;
+    content?: string | null
     data?:
       | {
-          [k: string]: unknown;
+          [k: string]: unknown
         }
       | unknown[]
       | string
       | number
       | boolean
-      | null;
+      | null
     citations?:
       | {
-          [k: string]: unknown;
+          [k: string]: unknown
         }
       | unknown[]
       | string
       | number
       | boolean
-      | null;
-    reasoning?: string | null;
+      | null
+    reasoning?: string | null
     headers?:
       | {
-          [k: string]: unknown;
+          [k: string]: unknown
         }
       | unknown[]
       | string
       | number
       | boolean
-      | null;
+      | null
     body?:
       | {
-          [k: string]: unknown;
+          [k: string]: unknown
         }
       | unknown[]
       | string
       | number
       | boolean
-      | null;
-    latency?: number | null;
-    status?: number | null;
-    statusText?: string | null;
-  };
+      | null
+    latency?: number | null
+    status?: number | null
+    statusText?: string | null
+  }
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "WorkflowEmbedData".
  */
 export interface WorkflowEmbedData {
-  input?: unknown;
+  input?: unknown
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1332,35 +1330,35 @@ export interface WorkflowEmbedData {
  */
 export interface WorkflowExecuteFunction {
   input: {
-    status?: ('Pending' | 'Processing' | 'Success' | 'Error') | null;
-    execution?: (string | null) | Function;
-    workflow?: (string | null) | Workflow;
-    noun?: (string | null) | Noun;
-    thing?: (string | null) | Thing;
-    input?: string | null;
-    content?: string | null;
-    reasoning?: string | null;
-    citations?: string | null;
+    status?: ('Pending' | 'Processing' | 'Success' | 'Error') | null
+    execution?: (string | null) | Function
+    workflow?: (string | null) | Workflow
+    noun?: (string | null) | Noun
+    thing?: (string | null) | Thing
+    input?: string | null
+    content?: string | null
+    reasoning?: string | null
+    citations?: string | null
     data?:
       | {
-          [k: string]: unknown;
+          [k: string]: unknown
         }
       | unknown[]
       | string
       | number
       | boolean
-      | null;
+      | null
     error?:
       | {
-          [k: string]: unknown;
+          [k: string]: unknown
         }
       | unknown[]
       | string
       | number
       | boolean
-      | null;
-    id: string;
-  };
+      | null
+    id: string
+  }
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1368,27 +1366,27 @@ export interface WorkflowExecuteFunction {
  */
 export interface WorkflowExecuteWorkflow {
   input: {
-    workflowId: string;
+    workflowId: string
     input:
       | {
-          [k: string]: unknown;
+          [k: string]: unknown
         }
       | unknown[]
       | string
       | number
       | boolean
-      | null;
-    timeout: number;
-    memoryLimit: number;
-    eventId?: string | null;
-  };
+      | null
+    timeout: number
+    memoryLimit: number
+    eventId?: string | null
+  }
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "WorkflowGenerateDatabase".
  */
 export interface WorkflowGenerateDatabase {
-  input?: unknown;
+  input?: unknown
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1396,17 +1394,17 @@ export interface WorkflowGenerateDatabase {
  */
 export interface WorkflowGenerateNoun {
   input: {
-    id: string;
+    id: string
     queryContext?:
       | {
-          [k: string]: unknown;
+          [k: string]: unknown
         }
       | unknown[]
       | string
       | number
       | boolean
-      | null;
-  };
+      | null
+  }
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -1414,42 +1412,42 @@ export interface WorkflowGenerateNoun {
  */
 export interface WorkflowGenerateThing {
   input: {
-    project?: (string | null) | Project;
-    name?: string | null;
-    type: string | Noun;
-    context?: string | null;
-    content?: string | null;
+    project?: (string | null) | Project
+    name?: string | null
+    type: string | Noun
+    context?: string | null
+    content?: string | null
     data?:
       | {
-          [k: string]: unknown;
+          [k: string]: unknown
         }
       | unknown[]
       | string
       | number
       | boolean
-      | null;
-    reasoning?: string | null;
-    citations?: string | null;
+      | null
+    reasoning?: string | null
+    citations?: string | null
     relationships?:
       | {
-          predicate?: string | null;
-          object?: (string | null) | Thing;
-          id?: string | null;
+          predicate?: string | null
+          object?: (string | null) | Thing
+          id?: string | null
         }[]
-      | null;
+      | null
     events?: {
-      docs?: (string | Event)[];
-      hasNextPage?: boolean;
-      totalDocs?: number;
-    };
-    updatedAt?: string | null;
-    createdAt?: string | null;
-  };
+      docs?: (string | Event)[]
+      hasNextPage?: boolean
+      totalDocs?: number
+    }
+    updatedAt?: string | null
+    createdAt?: string | null
+  }
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "auth".
  */
 export interface Auth {
-  [k: string]: unknown;
+  [k: string]: unknown
 }

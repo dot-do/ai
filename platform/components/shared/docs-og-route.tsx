@@ -38,7 +38,8 @@ export async function GET(request: NextRequest) {
           alignItems: 'center',
           justifyContent: 'center',
           height: '100%',
-        }}>
+        }}
+      >
         {/* @ts-expect-error the buffer has to be assigned to the string type */}
         <img src={backgroundSrc} height='630' alt='logo' />
         <div style={{ fontFamily: 'IBM-med' }} tw='absolute left-[90px] top-[87px] text-[47.25px] leading-normal'>
@@ -69,6 +70,6 @@ export async function GET(request: NextRequest) {
           weight: 500,
         },
       ],
-    },
+    }
   )
 }

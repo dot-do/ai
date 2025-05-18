@@ -14,4 +14,3 @@ describe('LLMs Type', () => {
     expect(model).toBeDefined()
   })
 })
-  

@@ -12,10 +12,10 @@ export const onEventCreate: CollectionAfterOperationHook<'events'> = async ({ re
     const fn = await payload.findByID({ collection: 'functions', id: result.execution as string, depth: 0 })
     const input = {
       model: fn.model,
-      prompt: fn.prompt 
-        ? fn.prompt.includes('{input}') 
-          ? fn.prompt.replace('{input}', result.input || '') 
-          : fn.prompt + '\n\n' + (result.input || '') 
+      prompt: fn.prompt
+        ? fn.prompt.includes('{input}')
+          ? fn.prompt.replace('{input}', result.input || '')
+          : fn.prompt + '\n\n' + (result.input || '')
         : result.input || '',
       system: fn.system,
       format: fn.output || 'Text',

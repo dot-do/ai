@@ -7,7 +7,7 @@ import { zodToJsonSchema } from 'zod-to-json-schema'
  * - Pipe-separated values become enums
  */
 export function toZodSchema<T extends Record<string, string>>(
-  template: T,
+  template: T
 ): z.ZodObject<{
   [K in keyof T]: z.ZodString | z.ZodEnum<[string, ...string[]]> | z.ZodEffects<z.ZodString>
 }> {
