@@ -84,6 +84,9 @@ export interface Config {
     functions: {
       executions: 'events';
     };
+    workflows: {
+      executions: 'events';
+    };
     nouns: {
       related: 'nouns';
       things: 'things';
@@ -723,6 +726,11 @@ export interface Workflow {
   id: string;
   name: string;
   code?: string | null;
+  executions?: {
+    docs?: (string | Event)[];
+    hasNextPage?: boolean;
+    totalDocs?: number;
+  };
   updatedAt: string;
   createdAt: string;
 }
@@ -763,7 +771,7 @@ export interface Webhook {
   id: string;
   type?: ('Incoming' | 'Outgoing') | null;
   events?: ('Create' | 'Update' | 'Delete')[] | null;
-  things?: (string | Thing)[] | null;
+  nouns?: (string | Noun)[] | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -975,6 +983,7 @@ export interface FunctionsSelect<T extends boolean = true> {
 export interface WorkflowsSelect<T extends boolean = true> {
   name?: T;
   code?: T;
+  executions?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -1074,7 +1083,7 @@ export interface RolesSelect<T extends boolean = true> {
 export interface WebhooksSelect<T extends boolean = true> {
   type?: T;
   events?: T;
-  things?: T;
+  nouns?: T;
   updatedAt?: T;
   createdAt?: T;
 }
