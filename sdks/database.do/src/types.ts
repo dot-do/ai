@@ -1,3 +1,5 @@
+import { Noun, Thing } from 'ai-primitives';
+
 /**
  * Schema definition for a Noun
  */
@@ -21,9 +23,7 @@ export interface DBDefinition {
     schema: T,
     options?: DBOptions
   ): {
-    [K in keyof T]: {
-      id: string;
-      name: string;
+    [K in keyof T]: Noun & {
       schema: T[K];
     };
   };
@@ -36,12 +36,12 @@ export interface ThingOperations<T = any> {
   /**
    * Create a new Thing
    */
-  create: (data: Partial<T>) => Promise<any>;
+  create: (data: Partial<T>) => Promise<Thing>;
   
   /**
    * Get a Thing by ID
    */
-  get: (id: string) => Promise<any>;
+  get: (id: string) => Promise<Thing>;
   
   /**
    * List Things of this type
@@ -52,7 +52,7 @@ export interface ThingOperations<T = any> {
     sort?: string;
     where?: Record<string, any>;
   }) => Promise<{
-    docs: any[];
+    docs: Thing[];
     totalDocs: number;
     page: number;
     totalPages: number;
@@ -63,7 +63,7 @@ export interface ThingOperations<T = any> {
   /**
    * Update a Thing
    */
-  update: (id: string, data: Partial<T>) => Promise<any>;
+  update: (id: string, data: Partial<T>) => Promise<Thing>;
   
   /**
    * Delete a Thing
