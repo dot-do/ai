@@ -27,12 +27,11 @@ export const generate: TaskConfig<'generate'> = {
     { name: 'statusText', type: 'text' },
   ],
   handler: async ({ job, req }) => {
-    let error, data, body
+    let error, data, headers, body, bodyText, text, latency, status, statusText, reasoning, content, citations
     const start = Date.now()
     const { payload } = req
     // TODO: figure out why job.input has an inferred type of string when it should be the input schema object type
-    const { model, prompt, format, schema, ...settings } = job.input
-    let { system } = job.input
+    let { model, prompt, system, format, schema, ...settings } = job.input
     if (format === 'Object') {
       if (!system?.toLowerCase().includes('json')) system += '\n\nRespond only in JSON format.'
     }
@@ -66,22 +65,22 @@ export const generate: TaskConfig<'generate'> = {
       },
       body: JSON.stringify(request),
     })
-    const latency = Date.now() - start
-    const headers = Object.fromEntries(response.headers)
-    const status = response.status
-    const statusText = response.statusText
+    latency = Date.now() - start
+    headers = Object.fromEntries(response.headers)
+    status = response.status
+    statusText = response.statusText
 
-    const text = await response.text()
-    console.log(text.trim().slice(0, 1000))
+    bodyText = await response.text()
+    console.log(bodyText.trim().slice(0, 1000))
     try {
-      body = JSON.parse(text)
+      body = JSON.parse(bodyText)
     } catch (e) {
       error = String(e)
       console.error(e)
     }
-    const content = body?.choices?.[0]?.text || body?.choices?.[0]?.message?.content
-    const reasoning = body?.choices?.[0]?.reasoning
-    const citations = body?.citations
+    content = body?.choices?.[0]?.text || body?.choices?.[0]?.message?.content
+    reasoning = body?.choices?.[0]?.reasoning
+    citations = body?.citations
     // console.log({ content, citations, reasoning })
     if (format === 'Object') {
       try {
