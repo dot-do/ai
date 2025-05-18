@@ -9303,7 +9303,7 @@ You can find a few examples of using OpenRouter with other frameworks in [this G
   You can also use
   [Grit](https://app.grit.io/studio?key=RKC0n7ikOiTGTNVkI8uRS) to
   automatically migrate your code. Simply run `npx @getgrit/launcher
-  openrouter`.
+openrouter`.
   </Tip>
 
 <CodeGroup>
