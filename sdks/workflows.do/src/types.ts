@@ -80,6 +80,33 @@ export interface AIInstance {
 }
 
 /**
+ * AI instance type generated from a specific configuration.
+ *
+ * Each entry in the configuration becomes a callable function where:
+ *  - event handlers are exposed as functions receiving the event payload and
+ *    returning the handler result.
+ *  - function schemas are exposed as functions receiving the schema input and
+ *    returning the expected output defined by the schema.
+ */
+export type AIInstanceFromConfig<T extends AIConfig> = {
+  [K in keyof T]: T[K] extends AIEventHandler<infer E, infer R>
+    ? (event: E) => Promise<R>
+    : T[K] extends AIFunctionSchema<infer O>
+      ? (input: Record<string, any>) => Promise<O>
+      : never
+}
+
+/**
+ * Remote workflow executor used by the {@link ai} proxy.
+ *
+ * Keys represent workflow names and values are functions executing the remote
+ * workflow with the provided input.
+ */
+export interface RemoteAIInstance {
+  [workflowName: string]: AIFunction
+}
+
+/**
  * Workflow step configuration
  */
 export interface WorkflowStep {

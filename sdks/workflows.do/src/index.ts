@@ -32,6 +32,8 @@ import type {
   AIContext,
   AIEventHandler,
   AIInstance,
+  AIInstanceFromConfig,
+  RemoteAIInstance,
   DatabaseAccess,
   APIAccess,
 } from './types'
@@ -42,7 +44,7 @@ import { API } from './client.js'
  * @param config Object containing event handlers and function schemas
  * @returns AI instance with typed methods
  */
-export function AI<T extends AIConfig>(config: T): AIInstance {
+export function AI<T extends AIConfig>(config: T): AIInstanceFromConfig<T> {
   const instance: Record<string, AIFunction> = {}
 
   const workflowConfig: Record<string, any> = {}
@@ -150,7 +152,7 @@ export function AI<T extends AIConfig>(config: T): AIInstance {
     },
   })
 
-  return proxy as AIInstance
+  return proxy as AIInstanceFromConfig<T>
 }
 
 /**
@@ -343,7 +345,7 @@ export function every(cronExpression: string, handler: AIEventHandler, options?:
 /**
  * AI instance with typed methods
  */
-export const ai = new Proxy({} as AIInstance, {
+export const ai = new Proxy({} as RemoteAIInstance, {
   get: (target, prop: string) => {
     if (typeof prop === 'string' && !prop.startsWith('_')) {
       return async (input: any) => {
@@ -401,6 +403,8 @@ export type {
   AIContext,
   AIEventHandler,
   AIInstance,
+  AIInstanceFromConfig,
+  RemoteAIInstance,
   DatabaseAccess,
   APIAccess,
 }
