@@ -1,3 +1,4 @@
+import { describe, it, expect } from 'vitest';
 import { DB, db } from '../src/index.js';
 
 describe('Database SDK', () => {
