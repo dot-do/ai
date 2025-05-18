@@ -378,9 +378,32 @@ export const db = createDatabaseAccess()
 /**
  * External API integrations
  */
-import { API as ApisDoAPI } from 'apis.do'
+interface QueryParams {
+  [key: string]: string | number | boolean;
+}
 
-export const client = new ApisDoAPI()
+export const client = {
+  get: async <T = any>(path: string, params?: QueryParams): Promise<T> => {
+    const url = new URL(`${getBaseUrl()}/${path}`);
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        url.searchParams.append(key, String(value));
+      });
+    }
+    const response = await fetch(url.toString());
+    return response.json();
+  },
+  post: async <T = any>(path: string, data?: Record<string, unknown>): Promise<T> => {
+    const response = await fetch(`${getBaseUrl()}/${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data || {}),
+    });
+    return response.json();
+  }
+}
 
 /**
  * Durable Objects access
