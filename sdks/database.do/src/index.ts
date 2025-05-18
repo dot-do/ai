@@ -1,9 +1,9 @@
-import { DBClient, DBDefinition } from './types';
+import { DBClient, DBDefinition, SchemaDefinition, DBOptions } from './types.js';
 
 /**
  * DB function for defining Nouns and Schema to be generated
  */
-export const DB: DBDefinition = (schema, options = {}) => {
+export const DB: DBDefinition = (schema: Record<string, SchemaDefinition>, options: DBOptions = {}) => {
   return {} as any;
 };
 
@@ -25,4 +25,4 @@ export const db: DBClient = new Proxy({} as DBClient, {
   }
 });
 
-export * from './types';
+export * from './types.js';
