@@ -1,4 +1,3 @@
-import { embed, embedMany, generateObject, generateText } from 'ai'
 import { createOpenAI } from '@ai-sdk/openai'
 
 export const model = createOpenAI({

@@ -9,13 +9,11 @@ export const executeWorkflow: WorkflowConfig<'executeWorkflow'> = {
     { name: 'memoryLimit', type: 'number', defaultValue: 128, required: true },
     { name: 'eventId', type: 'text' },
   ],
-  handler: async function ({ job, tasks, req }) {
+  handler: async function ({ job, req }) {
     const { payload } = req
 
     const input = job.input
-    const { workflowId, timeout, memoryLimit, eventId } = input
-
-    let event
+    const { workflowId, timeout, memoryLimit } = input
     try {
       // if (eventId) {
       //   event = await payload.findByID({

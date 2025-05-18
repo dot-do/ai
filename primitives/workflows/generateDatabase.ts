@@ -1,9 +1,9 @@
 import { WorkflowConfig } from 'payload'
-import { waitUntil } from '@vercel/functions'
 
 export const generateDatabase: WorkflowConfig<'generateDatabase'> = {
   slug: 'generateDatabase',
-  handler: async ({ job, tasks, req }) => {
+  handler: async ({ req }) => {
     const { payload } = req
+    return payload
   },
 }

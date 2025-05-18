@@ -7,9 +7,7 @@ import { model } from '../lib/ai'
 export const generateThing: WorkflowConfig<'generateThing'> = {
   slug: 'generateThing',
   inputSchema: Things.fields,
-  handler: async ({ job, tasks, req }) => {
-    const { payload } = req
-    const settings = await payload.findGlobal({ slug: 'settings' })
+  handler: async ({ job }) => {
 
     const type = job.input.type || 'JSON Object'
 
@@ -32,8 +30,8 @@ export const generateThing: WorkflowConfig<'generateThing'> = {
             content: matter.stringify('', { data: { $id: job.input.name, $type: job.input.type, ...(results.object as object) } }),
             request: results.request,
             response: results.response,
-            usage: results.usage,
-          }))
+          usage: results.usage,
+        }))
         : await generateText({
             model: model('google/gemini-2.5-pro-preview', { structuredOutputs: true }),
             prompt: `Generate a ${type} with an @id of ${job.input.name}`,
@@ -48,8 +46,10 @@ export const generateThing: WorkflowConfig<'generateThing'> = {
             content: matter.stringify(results.text, { data: { $id: job.input.name, $type: job.input.type } }),
             request: results.request,
             response: results.response,
-            usage: results.usage,
-          }))
+          usage: results.usage,
+        }))
+
+    console.log(results)
 
     // const generation = await payload.create({
     //   collection: 'generations',

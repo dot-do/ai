@@ -29,7 +29,7 @@ export const onEventCreate: CollectionAfterOperationHook<'events'> = async ({ re
     waitUntil(payload.jobs.run())
   }
 
-  const workflowId = (result as any).workflow
+  const { workflow: workflowId } = result as { workflow?: string }
   if (workflowId) {
     const job = await payload.jobs.queue({
       workflow: 'executeWorkflow',

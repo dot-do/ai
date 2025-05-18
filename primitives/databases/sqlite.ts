@@ -1,6 +1,6 @@
 import { sqliteAdapter } from '@payloadcms/db-sqlite'
 import { sql } from '@payloadcms/db-sqlite/drizzle'
-import { customType, index, integer, sqliteTable } from '@payloadcms/db-sqlite/drizzle/sqlite-core'
+import { customType, index } from '@payloadcms/db-sqlite/drizzle/sqlite-core'
 
 const float32Array = customType<{
   data: number[]

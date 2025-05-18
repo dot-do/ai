@@ -1,14 +1,10 @@
 import { WorkflowConfig } from 'payload'
-import { waitUntil } from '@vercel/functions'
 import { Events } from '../collections/Events'
-import yaml from 'yaml'
-import { generateText } from 'ai'
 
 export const executeFunction: WorkflowConfig<'executeFunction'> = {
   slug: 'executeFunction',
   inputSchema: [...Events.fields, { name: 'id', type: 'text', required: true }],
-  handler: async ({ job, tasks, req }) => {
-    const { payload } = req
+  handler: async ({ job }) => {
     const { input } = job
 
     if (input.id) {
