@@ -6,6 +6,9 @@ import 'nextra-theme-docs/style.css'
 // import './styles.css'
 // import '@code-hike/mdx/dist/index.css'
 
+import { Analytics } from '@vercel/analytics/next'
+import { SpeedInsights } from '@vercel/speed-insights/next'
+
 import type { Metadata } from 'next'
 // import { Providers } from '../providers'
 import { siteConfig } from 'components/site-config'
@@ -60,6 +63,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           {children}
         </Layout>
         {/* </Providers> */}
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   )

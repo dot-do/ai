@@ -1,11 +1,13 @@
 import { describe, it, expect, beforeAll } from 'vitest'
-import { config } from 'ai-primitives'
+import { config as configPromise } from 'ai-primitives'
 import { getPayload } from 'payload'
 
 let payload: Awaited<ReturnType<typeof getPayload>>
 
+const config = await configPromise
+if (!config.secret) config.secret = 'test-secret-key-for-payload'
+
 beforeAll(async () => {
-  if (!config.secret) config.secret = 'test-secret-key-for-payload'
   payload = await getPayload({ config })
 })
 

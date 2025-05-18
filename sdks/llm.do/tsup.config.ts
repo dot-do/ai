@@ -1,8 +1,8 @@
 import { defineConfig } from 'tsup'
 
 export default defineConfig({
-  entry: ['src/index.ts', 'src/types.ts'],
-  format: ['esm'],
+  entry: ['src/index.ts'],
+  format: ['esm', 'cjs'],
   dts: true,
   clean: true,
   skipNodeModulesBundle: true,
@@ -12,11 +12,4 @@ export default defineConfig({
   treeshake: true,
   splitting: true,
   sourcemap: true,
-  minify: false,
-  esbuildOptions(options) {
-    options.banner = {
-      js: '// apis.do SDK - https://apis.do',
-    }
-  },
-  onSuccess: 'echo APIs.do SDK built successfully!',
 })
