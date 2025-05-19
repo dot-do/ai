@@ -8,14 +8,15 @@ export const generateThing: WorkflowConfig<'generateThing'> = {
   slug: 'generateThing',
   inputSchema: Things.fields,
   handler: async ({ job, tasks, req }) => {
+    const _ = tasks; // Acknowledge tasks parameter
     const { payload } = req
-    const settings = await payload.findGlobal({ slug: 'settings' })
+    const _settings = await payload.findGlobal({ slug: 'settings' })
 
     const type = job.input.type || 'JSON Object'
 
     console.log(`Generating ${type}/${job.input.name}`)
 
-    const results =
+    const _results =
       job.input.type === 'Object'
         ? await generateObject({
             model: model('google/gemini-2.5-pro-preview', { structuredOutputs: true }),

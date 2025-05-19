@@ -1,7 +1,7 @@
 import { TaskConfig } from 'payload'
 import { generateText, generateObject } from 'ai'
 import { model } from '../lib/ai'
-import { toJsonSchema, toZodSchema } from '../lib/schema'
+import { toZodSchema } from '../lib/schema'
 
 export const generate: TaskConfig<'generate'> = {
   slug: 'generate',
@@ -33,7 +33,8 @@ export const generate: TaskConfig<'generate'> = {
     const start = Date.now()
     const { payload } = req
     // TODO: figure out why job.input has an inferred type of string when it should be the input schema object type
-    let { model: modelName, prompt, system, format, schema, ...settings } = job.input
+    const { model: modelName, prompt, format, schema, ...settings } = job.input
+    let system = job.input.system
     if (format === 'Object') {
       if (!system?.toLowerCase().includes('json')) system += '\n\nRespond only in JSON format.'
     }

@@ -1,4 +1,5 @@
 /* eslint-disable @next/next/no-img-element */
+/* eslint-disable react/no-unknown-property */
 import { ImageResponse } from 'next/og'
 import { NextRequest } from 'next/server'
 import { readFile } from 'node:fs/promises'

@@ -1,4 +1,4 @@
-import type { CollectionConfig, Condition } from 'payload'
+import type { CollectionConfig } from 'payload'
 import { editorOptions } from '../lib/collections'
 import { getModels } from '../lib/ai'
 
