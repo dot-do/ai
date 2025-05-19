@@ -9,12 +9,21 @@ Workflows are triggered by events or timers. Use `on()` for event-driven tasks a
 ```ts
 import { every, on } from 'workflows.do'
 
+// run hourly to enrich new ideas in the database
 every('hour during business hours', async (_, { ai, db }) => {
-  // perform periodic work
+  const drafts = await db.ideas.search('status:draft')
+  for (const idea of drafts) {
+    const leanCanvas = await ai.defineLeanCanvas({ idea })
+    const research = await ai.research({ idea, leanCanvas })
+    await db.ideas.update({ ...idea, leanCanvas, research })
+  }
 })
 
-on('CreditApp.Submitted', async (event, { ai, db }) => {
-  // react to external events
+// react to external events from other systems
+on('CreditApp.Submitted', async ({ creditApp }, { ai, db }) => {
+  const score = await ai.call('riskScore', { creditReport: creditApp.creditReport, income: creditApp.income })
+  const terms = await ai.call('priceLoan', { score, amount: creditApp.amount, term: creditApp.term })
+  await db.creditApps.update({ ...creditApp, score, terms })
 })
 ```
 
