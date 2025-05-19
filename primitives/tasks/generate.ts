@@ -1,7 +1,7 @@
 import { TaskConfig } from 'payload'
 import { generateText, generateObject } from 'ai'
 import { model } from '../lib/ai'
-import { toJsonSchema, toZodSchema } from '../lib/schema'
+import { toZodSchema } from '../lib/schema'
 
 export const generate: TaskConfig<'generate'> = {
   slug: 'generate',

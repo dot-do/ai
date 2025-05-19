@@ -1,7 +1,6 @@
 import { Layout, Navbar } from 'nextra-theme-docs'
-import { Banner, Head } from 'nextra/components'
+// import { Banner } from 'nextra/components'
 import { getPageMap } from 'nextra/page-map'
-import { RiDiscordFill, RiGithubFill, RiNpmjsFill, RiTwitterXFill } from '@remixicon/react'
 import 'nextra-theme-docs/style.css'
 // import './styles.css'
 // import '@code-hike/mdx/dist/index.css'
@@ -30,7 +29,7 @@ export const metadata = {
   keywords: ['business-as-code', 'AI workflows', 'functions', 'agents', 'services', 'business automation'],
 } satisfies Metadata
 
-const banner = <Banner storageKey='some-key'>Functions.do is released 🎉</Banner>
+// const banner = <Banner storageKey='some-key'>Functions.do is released 🎉</Banner>
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const pageMap = await getPageMap('/docs')
