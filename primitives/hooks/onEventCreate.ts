@@ -23,6 +23,7 @@ export const onEventCreate: CollectionAfterOperationHook<'events'> = async ({ re
       settings: fn.settings,
       context: result.input,
       object: fn.object,
+      project: result.project, // Add project field from the event
     }
     const job = await payload.jobs.queue({ task: 'generate', input })
     console.log(job)
