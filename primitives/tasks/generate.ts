@@ -1,3 +1,4 @@
+/* eslint-disable prefer-const */
 import { TaskConfig } from 'payload'
 import { generateText, generateObject } from 'ai'
 import { model } from '../lib/ai'
