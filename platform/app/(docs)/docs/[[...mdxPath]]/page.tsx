@@ -8,7 +8,7 @@ type Props = {
   params: Promise<{ mdxPath: string[] }>
 }
 
-export async function generateMetadata(props: Props, _parent: ResolvingMetadata) {
+export async function generateMetadata(props: Props) {
   const { mdxPath } = await props.params
   const { metadata } = await importPage(mdxPath)
 
