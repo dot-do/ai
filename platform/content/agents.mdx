@@ -8,8 +8,24 @@ Agents are autonomous workers that execute your workflows. They can be human-ass
 
 ```ts
 import { Agent } from 'agents.do'
+import { every } from 'workflows.do'
 
-const marketingBot = Agent({ name: 'Marketing Bot' })
+const marketingBot = Agent({
+  name: 'Marketing Bot',
+  objective: 'Keep users engaged',
+
+  sendNewsletter: async ({ to, topic }, { ai, email }) => {
+    const content = await ai.call('writeNewsletter', { topic })
+    await email.to(to, 'Weekly Update', content)
+  },
+})
+
+every('week on Mon', async () => {
+  await marketingBot.sendNewsletter({
+    to: 'subscribers@turboloans.co',
+    topic: 'loan tips',
+  })
+})
 ```
 
 Agents receive tasks from workflows and can interact with functions, APIs, or humans to complete them.
