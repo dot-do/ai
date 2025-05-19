@@ -7,10 +7,9 @@ import { model } from '../lib/ai'
 export const generateThing: WorkflowConfig<'generateThing'> = {
   slug: 'generateThing',
   inputSchema: Things.fields,
-  handler: async ({ job, tasks, req }) => {
-    const _ = tasks; // Acknowledge tasks parameter
+  handler: async ({ job, req }) => {
     const { payload } = req
-    const _settings = await payload.findGlobal({ slug: 'settings' })
+    // const settings = await payload.findGlobal({ slug: 'settings' })
 
     const type = job.input.type || 'JSON Object'
 
