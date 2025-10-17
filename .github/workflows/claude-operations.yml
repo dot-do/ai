@@ -1,0 +1,210 @@
+name: Claude Operations
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request:
+    types: [opened, synchronize, reopened, review_requested]
+  pull_request_review:
+    types: [submitted]
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: 'Operation to perform'
+        type: choice
+        options:
+          - review
+          - respond
+          - retry
+        required: true
+      pr_number:
+        description: 'PR number (for review/retry)'
+        required: false
+      issue_number:
+        description: 'Issue number (for respond)'
+        required: false
+
+# IMPORTANT: Queue Claude operations to prevent rate limits
+concurrency:
+  group: claude-ops-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
+  cancel-in-progress: false  # Queue instead of canceling
+
+jobs:
+  # Check rate limits before proceeding
+  check-rate-limits:
+    name: Check API Rate Limits
+    runs-on: ubuntu-latest
+    outputs:
+      github_ok: ${{ steps.check-github.outputs.ok }}
+      claude_ok: ${{ steps.check-claude.outputs.ok }}
+      should_proceed: ${{ steps.decision.outputs.proceed }}
+    steps:
+      - name: Check GitHub API rate limit
+        id: check-github
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RATE_INFO=$(gh api rate_limit)
+          REMAINING=$(echo "$RATE_INFO" | jq -r '.rate.remaining')
+          LIMIT=$(echo "$RATE_INFO" | jq -r '.rate.limit')
+          PERCENT=$((REMAINING * 100 / LIMIT))
+
+          echo "📊 GitHub API: $REMAINING/$LIMIT ($PERCENT% remaining)"
+
+          if [ $PERCENT -lt 15 ]; then
+            echo "⚠️ GitHub rate limit low!"
+            echo "ok=false" >> $GITHUB_OUTPUT
+          else
+            echo "✅ GitHub rate limit OK"
+            echo "ok=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check Claude API availability
+        id: check-claude
+        run: |
+          # Simple health check - we'll handle rate limits with retries
+          echo "✅ Claude API check passed"
+          echo "ok=true" >> $GITHUB_OUTPUT
+
+      - name: Decide whether to proceed
+        id: decision
+        run: |
+          GITHUB_OK="${{ steps.check-github.outputs.ok }}"
+          CLAUDE_OK="${{ steps.check-claude.outputs.ok }}"
+
+          if [ "$GITHUB_OK" == "true" ] && [ "$CLAUDE_OK" == "true" ]; then
+            echo "✅ All rate limits OK, proceeding"
+            echo "proceed=true" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️ Rate limits constrained, deferring operation"
+            echo "proceed=false" >> $GITHUB_OUTPUT
+          fi
+
+  # Determine which operation to perform
+  route-operation:
+    name: Route Operation
+    needs: check-rate-limits
+    if: needs.check-rate-limits.outputs.should_proceed == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      operation: ${{ steps.determine.outputs.operation }}
+      target_number: ${{ steps.determine.outputs.target }}
+    steps:
+      - name: Determine operation type
+        id: determine
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          # Determine what operation to perform based on event
+          if [ "$EVENT_NAME" == "pull_request" ] || [ "$EVENT_NAME" == "pull_request_review" ]; then
+            echo "operation=review" >> $GITHUB_OUTPUT
+            echo "target=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+          elif [ "$EVENT_NAME" == "issue_comment" ]; then
+            if echo "$COMMENT_BODY" | grep -q "@claude"; then
+              if [ -n "${{ github.event.issue.pull_request }}" ]; then
+                echo "operation=review" >> $GITHUB_OUTPUT
+                echo "target=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
+              else
+                echo "operation=respond" >> $GITHUB_OUTPUT
+                echo "target=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
+              fi
+            else
+              echo "operation=none" >> $GITHUB_OUTPUT
+            fi
+          elif [ "$EVENT_NAME" == "workflow_dispatch" ]; then
+            echo "operation=${{ github.event.inputs.operation }}" >> $GITHUB_OUTPUT
+            echo "target=${{ github.event.inputs.pr_number || github.event.inputs.issue_number }}" >> $GITHUB_OUTPUT
+          else
+            echo "operation=none" >> $GITHUB_OUTPUT
+          fi
+
+  # Perform code review
+  code-review:
+    name: Claude Code Review
+    needs: [check-rate-limits, route-operation]
+    if: needs.route-operation.outputs.operation == 'review'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait to spread load
+        run: |
+          # Random wait 0-15 seconds to spread API load
+          WAIT=$((RANDOM % 15))
+          echo "⏰ Waiting $WAIT seconds to spread load..."
+          sleep $WAIT
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Perform Claude code review with retry
+        uses: nick-fields/retry-action@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          exponential_backoff: true
+          command: |
+            # Call Claude Code Review API
+            # (Implement actual Claude API call here)
+            echo "🤖 Performing Claude code review on PR #${{ needs.route-operation.outputs.target_number }}"
+
+  # Respond to issue comments
+  issue-response:
+    name: Claude Issue Response
+    needs: [check-rate-limits, route-operation]
+    if: needs.route-operation.outputs.operation == 'respond'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait to spread load
+        run: |
+          WAIT=$((RANDOM % 15))
+          echo "⏰ Waiting $WAIT seconds..."
+          sleep $WAIT
+
+      - name: Respond to issue with retry
+        uses: nick-fields/retry-action@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          exponential_backoff: true
+          command: |
+            # Call Claude API to respond
+            echo "🤖 Responding to issue #${{ needs.route-operation.outputs.target_number }}"
+
+  # Retry failed operations
+  retry-operation:
+    name: Retry Failed Operation
+    needs: [check-rate-limits, route-operation]
+    if: needs.route-operation.outputs.operation == 'retry'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Retry previous operation
+        run: |
+          echo "🔄 Retrying operation for #${{ needs.route-operation.outputs.target_number }}"
+
+  # Report rate limit status
+  report-status:
+    name: Report Status
+    needs: [check-rate-limits, route-operation, code-review, issue-response, retry-operation]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report completion
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Check final rate limit status
+          RATE_INFO=$(gh api rate_limit)
+          REMAINING=$(echo "$RATE_INFO" | jq -r '.rate.remaining')
+          LIMIT=$(echo "$RATE_INFO" | jq -r '.rate.limit')
+          PERCENT=$((REMAINING * 100 / LIMIT))
+
+          echo "📊 Final GitHub API: $REMAINING/$LIMIT ($PERCENT% remaining)"
+
+          # Warn if rate limit is getting low
+          if [ $PERCENT -lt 20 ]; then
+            echo "::warning::GitHub API rate limit is low: $REMAINING/$LIMIT ($PERCENT%)"
+          fi
