@@ -1,0 +1,99 @@
+---
+$id: https://integrations.do/lastpass
+$type: Integration
+name: Lastpass
+service: lastpass
+description: LastPass is a password manager that securely stores credentials, autofills logins, and offers multi-factor authentication for personal and enterprise users
+category: productivity
+sdkBased: false
+baseUrl: https://api.lastpass.com
+
+auth:
+  type: oauth2
+  authorizationUrl: https://lastpass.com/login/oauth/authorize
+  tokenUrl: https://lastpass.com/login/oauth/access_token
+  scopes:
+    - read
+    - write
+    - delete
+    - user
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Lastpass actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: false
+  events: []
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://www.lastpass.com
+  apiDocs: https://www.lastpass.com
+---
+
+# Lastpass Integration
+
+LastPass is a password manager that securely stores credentials, autofills logins, and offers multi-factor authentication for personal and enterprise users
+
+## Quick Start
+
+```typescript
+import { LastpassClient } from '@dotdo/sdk.do/integrations/lastpass'
+
+const lastpass = new LastpassClient({
+  apiKey: process.env.LASTPASS_API_KEY,
+})
+
+const result = await lastpass.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Lastpass provides 0 actions through the Composio API.
+
+## License
+
+MIT

@@ -1,0 +1,447 @@
+---
+$id: https://ari.do/docs/best-practices
+$type: TechArticle
+title: Recruiting AI Agent Best Practices
+description: Best practices for building effective Recruiting AI Agent
+keywords: [best practices, ari.do, optimization, patterns]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Best Practices
+
+Follow these best practices to build effective Recruiting AI Agent that deliver consistent, high-quality results.
+
+## Agent Design Principles
+
+### 1. Single Responsibility
+
+Each agent should have a clear, focused purpose:
+
+```typescript
+// Good: Focused agent
+const recruitingAgent = await agent.create({
+  $role: $.RecrutingAgent,
+  capabilities: [',  // Limited, focused capabilities
+  model: 'claude-sonnet-4.5'
+})
+
+// Avoid: Over-generalized agent
+const overloadedAgent = await agent.create({
+  $role: $.GenericAgent,
+  capabilities: ['everything'],  // Too broad
+  model: 'claude-sonnet-4.5'
+})
+```
+
+### 2. Rich Context
+
+Provide comprehensive context:
+
+```typescript
+// Good: Rich context
+const result = await recruitingAgent.execute({
+  task: 'Specific task',
+  context: {
+    background: 'Relevant background',
+    constraints: ['Constraint 1', 'Constraint 2'],
+    goals: 'Specific goals',
+    data: {
+      /* relevant data */
+    },
+  },
+})
+
+// Avoid: Minimal context
+const result = await recruitingAgent.execute({
+  task: 'Do something', // Too vague
+})
+```
+
+### 3. Iterative Improvement
+
+Use feedback loops:
+
+```typescript
+const recruitingAgent = await agent.create({
+  $role: $.RecrutingAgent,
+  learning: {
+    enabled: true,
+    feedback_loop: true,
+  },
+})
+
+// Provide feedback
+await recruitingAgent.feedback({
+  task_id: result.id,
+  outcome: 'success',
+  metrics: { quality: 0.95 },
+  notes: 'Excellent results',
+})
+```
+
+## Implementation Patterns
+
+### Event-Driven Architecture
+
+React to business events:
+
+```typescript
+import $, { agent, on, send } from 'sdk.do'
+
+const recruitingAgent = await agent.create({
+  $role: $.RecrutingAgent,
+  model: 'claude-sonnet-4.5',
+})
+
+// React to events
+await on($.Event.triggered, async (event) => {
+  const result = await recruitingAgent.execute({
+    task: 'Handle event',
+    context: event,
+  })
+
+  await send($.Result.completed, result)
+})
+```
+
+### Scheduled Workflows
+
+Automate recurring tasks:
+
+```typescript
+import $, { agent, every } from 'sdk.do'
+
+const recruitingAgent = await agent.create({
+  $role: $.RecrutingAgent,
+  model: 'claude-sonnet-4.5',
+})
+
+// Daily automation
+await every($.Daily, async () => {
+  const report = await recruitingAgent.generateReport({
+    period: 'yesterday',
+    format: 'summary',
+  })
+
+  await send($.Report.daily, report)
+})
+
+// Weekly planning
+await every($.Weekly, async () => {
+  const plan = await recruitingAgent.planWeek({
+    goals: await db.get($.Goals, 'current'),
+    resources: await db.get($.Resources, 'available'),
+  })
+
+  await db.create($.WeeklyPlan, plan)
+})
+```
+
+### Multi-Agent Collaboration
+
+Combine specialized agents:
+
+```typescript
+// Specialized agents
+const agent1 = await agent.create({
+  $role: $.RecrutingAgent,
+  capabilities: ['c
+})
+
+const agent2 = await agent.create({
+  $role: $.RecrutingAgent,
+  capabilities: and
+})
+
+// Collaborative workflow
+const result1 = await agent1.execute(task1)
+const result2 = await agent2.execute({
+  task: task2,
+  context: { previous_result: result1 }
+})
+```
+
+## Performance Optimization
+
+### Model Selection
+
+Choose the right model:
+
+```typescript
+// For creative tasks
+const creativeAgent = await agent.create({
+  model: 'claude-sonnet-4.5',
+  temperature: 0.8,
+})
+
+// For analytical tasks
+const analyticalAgent = await agent.create({
+  model: 'gpt-5',
+  temperature: 0.3,
+})
+```
+
+### Caching Strategy
+
+Implement smart caching:
+
+```typescript
+const recruitingAgent = await agent.create({
+  $role: $.RecrutingAgent,
+  cache: {
+    enabled: true,
+    ttl: 3600,
+    strategy: 'semantic_similarity',
+    threshold: 0.9,
+  },
+})
+```
+
+### Batch Processing
+
+Process multiple items efficiently:
+
+```typescript
+// Efficient batch processing
+const results = await recruitingAgent.batch({
+  items: Array.from({ length: 100 }, (_, i) => ({ task: `Task ${i}` })),
+  parallel: 10,
+  batch_size: 20,
+})
+```
+
+## Error Handling
+
+### Graceful Degradation
+
+Handle errors gracefully:
+
+```typescript
+try {
+  const result = await recruitingAgent.execute(task)
+  return result
+} catch (error) {
+  if (error.code === 'RATE_LIMIT') {
+    // Wait and retry
+    await sleep(error.retry_after)
+    return await recruitingAgent.execute(task)
+  } else if (error.code === 'TIMEOUT') {
+    // Return partial result
+    return error.partial_result
+  } else {
+    // Log and escalate
+    await log.error(error)
+    throw error
+  }
+}
+```
+
+### Retry Logic
+
+Implement exponential backoff:
+
+```typescript
+const recruitingAgent = await agent.create({
+  $role: $.RecrutingAgent,
+  retry_config: {
+    max_retries: 3,
+    backoff: 'exponential',
+    initial_delay: 1000,
+    max_delay: 10000,
+  },
+})
+```
+
+## Testing Strategy
+
+### Unit Testing
+
+Test individual capabilities:
+
+```typescript
+import { describe, it, expect } from 'vitest'
+
+describe('RecrutingAgent', () => {
+  it('should execute basic task', async () => {
+    const result = await recruitingAgent.execute({
+      task: 'Test task',
+      context: { test: true },
+    })
+
+    expect(result).toBeDefined()
+    expect(result.success).toBe(true)
+  })
+})
+```
+
+### Integration Testing
+
+Test with real systems:
+
+```typescript
+import { describe, it } from 'vitest'
+
+describe('Integration Tests', () => {
+  it('should integrate with external APIs', async () => {
+    const result = await recruitingAgent.execute({
+      task: 'Integration test',
+      use_real_apis: true,
+    })
+
+    expect(result.external_data).toBeDefined()
+  })
+})
+```
+
+## Monitoring and Analytics
+
+### Performance Monitoring
+
+Track agent performance:
+
+```typescript
+import $, { agent, monitor } from 'sdk.do'
+
+const recruitingAgent = await agent.create({
+  $role: $.RecrutingAgent,
+  monitoring: {
+    enabled: true,
+    metrics: ['latency', 'success_rate', 'token_usage'],
+    alerts: {
+      latency_threshold: 5000,
+      error_rate_threshold: 0.05,
+    },
+  },
+})
+
+// Query metrics
+const metrics = await monitor.getMetrics({
+  agent: recruitingAgent,
+  period: 'last_24_hours',
+})
+```
+
+### Usage Analytics
+
+Track usage patterns:
+
+```typescript
+// Analytics tracking
+const analytics = await recruitingAgent.getAnalytics({
+  period: 'last_week',
+  metrics: ['total_executions', 'average_latency', 'success_rate', 'most_common_tasks'],
+})
+```
+
+## Security Best Practices
+
+### API Key Management
+
+Secure API key storage:
+
+```typescript
+// Use environment variables
+const recruitingAgent = await agent.create({
+  $role: $.RecrutingAgent,
+  api_keys: {
+    anthropic: process.env.ANTHROPIC_API_KEY,
+    openai: process.env.OPENAI_API_KEY,
+  },
+})
+
+// Never hardcode keys
+// Bad: api_key: 'sk-...'  // Don't do this!
+```
+
+### Input Validation
+
+Validate all inputs:
+
+```typescript
+// Input validation
+function validateTask(task: any) {
+  if (!task.task) throw new Error('Task is required')
+  if (!task.context) throw new Error('Context is required')
+  if (task.task.length > 10000) throw new Error('Task too long')
+  return true
+}
+
+const task = validateTask(userInput)
+const result = await recruitingAgent.execute(task)
+```
+
+## Common Pitfalls
+
+### 1. Insufficient Context
+
+**Problem**: Agent produces poor results
+
+**Solution**: Provide comprehensive context
+
+### 2. Over-Reliance on Single Model
+
+**Problem**: Not optimal for all tasks
+
+**Solution**: Use different models for different tasks
+
+### 3. No Error Handling
+
+**Problem**: Application crashes on errors
+
+**Solution**: Implement comprehensive error handling
+
+### 4. Ignoring Rate Limits
+
+**Problem**: API errors due to rate limiting
+
+**Solution**: Implement rate limiting and retry logic
+
+## Production Readiness Checklist
+
+Before deploying to production:
+
+- [ ] Error handling implemented
+- [ ] Retry logic configured
+- [ ] Monitoring and alerts set up
+- [ ] API keys secured
+- [ ] Performance optimized
+- [ ] Tests written and passing
+- [ ] Documentation complete
+- [ ] Rate limiting configured
+- [ ] Caching strategy implemented
+- [ ] Backup and recovery plan
+
+## Related Documentation
+
+- [Getting Started](./getting-started) - Setup guide
+- [Architecture](./architecture) - System architecture
+- [Troubleshooting](./troubleshooting) - Common issues
+- [API Reference](../api/reference) - Complete API
+
+// Additional best practices
+
+// Additional best practices
+
+// Additional best practices
+
+// Additional best practices
+
+// Additional best practices
+
+// Additional best practices
+
+// Additional best practices
+
+// Additional best practices
+
+// Additional best practices
+
+// Additional best practices
+
+// Additional best practices
+
+// Additional best practices
+
+// Additional best practices

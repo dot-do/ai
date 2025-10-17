@@ -1,0 +1,627 @@
+---
+$id: https://functions.do/docs/creating-functions
+$type: TechArticle
+title: Creating Functions
+description: Comprehensive guide to creating typesafe, composable functions with functions.do
+keywords: [functions, creation, type-safe, semantic, metadata]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Creating Functions
+
+This guide covers everything you need to know about creating functions in functions.do, from basic definitions to advanced patterns.
+
+## Basic Function Definition
+
+The simplest way to create a function:
+
+```typescript
+import $, { fn } from 'sdk.do'
+
+const greet = fn($.Greet, (name: string) => `Hello, ${name}!`)
+
+const message = greet('Alice')
+console.log(message) // "Hello, Alice!"
+```
+
+## Function Signature
+
+The `fn()` function has two main forms:
+
+### Simple Form
+
+```typescript
+fn(semanticType, implementation)
+```
+
+```typescript
+const add = fn($.Add, (a: number, b: number) => a + b)
+```
+
+### Extended Form with Metadata
+
+```typescript
+fn(metadata, implementation)
+```
+
+```typescript
+const add = fn(
+  {
+    $type: 'Function',
+    $id: 'https://example.com/functions/add',
+    name: 'Add',
+    description: 'Adds two numbers together',
+    version: '1.0.0',
+  },
+  (a: number, b: number) => a + b
+)
+```
+
+## Synchronous Functions
+
+For operations that don't require async/await:
+
+```typescript
+import $, { fn } from 'sdk.do'
+
+// Simple calculation
+const calculateDiscount = fn($.CalculateDiscount, (price: number, percentage: number): number => {
+  return price * (percentage / 100)
+})
+
+// String manipulation
+const slugify = fn($.Slugify, (text: string): string => {
+  return text
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, '')
+    .replace(/[\s_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+})
+
+// Array operations
+const filterActive = fn($.FilterActive, (items: Array<{ active: boolean }>) => {
+  return items.filter((item) => item.active)
+})
+```
+
+## Asynchronous Functions
+
+For operations that involve I/O, external APIs, or databases:
+
+```typescript
+import $, { fn, db, api } from 'sdk.do'
+
+// Database operation
+const fetchUser = fn($.FetchUser, async (userId: string): Promise<$.Person> => {
+  const user = await db.get($.Person, userId)
+  if (!user) {
+    throw new Error(`User ${userId} not found`)
+  }
+  return user
+})
+
+// External API call
+const fetchWeather = fn($.FetchWeather, async (city: string) => {
+  const response = await api.get('https://api.weather.com/current', {
+    params: { city },
+  })
+  return response.data
+})
+
+// Multiple async operations
+const createOrder = fn($.CreateOrder, async (orderData: Partial<$.Order>): Promise<$.Order> => {
+  // Validate customer
+  const customer = await db.get($.Person, orderData.customer)
+
+  // Check inventory
+  const inventory = await checkInventory(orderData.items)
+
+  // Create order
+  const order = await db.create($.Order, {
+    ...orderData,
+    status: 'pending',
+    createdAt: new Date(),
+  })
+
+  return order
+})
+```
+
+## Type Safety
+
+### Using TypeScript Interfaces
+
+Define clear types for inputs and outputs:
+
+```typescript
+import $, { fn } from 'sdk.do'
+
+interface OrderInput {
+  customerId: string
+  items: Array<{
+    productId: string
+    quantity: number
+  }>
+  shippingAddress: string
+}
+
+interface OrderOutput {
+  $type: 'Order'
+  $id: string
+  orderId: string
+  total: number
+  status: string
+  createdAt: Date
+}
+
+const processOrder = fn($.ProcessOrder, async (input: OrderInput): Promise<OrderOutput> => {
+  // Type-safe implementation
+  const total = await calculateOrderTotal(input.items)
+
+  return {
+    $type: 'Order',
+    $id: `order-${Date.now()}`,
+    orderId: generateOrderId(),
+    total,
+    status: 'processing',
+    createdAt: new Date(),
+  }
+})
+```
+
+### Using Schema.org Types
+
+Leverage semantic types from Schema.org:
+
+```typescript
+import $, { fn } from 'sdk.do'
+import type { Person, Organization, Order } from 'schema.org.ai'
+
+const createBusinessOrder = fn($.CreateBusinessOrder, async (customer: Person, seller: Organization): Promise<Order> => {
+  return {
+    $type: 'Order',
+    customer,
+    seller,
+    orderDate: new Date(),
+    orderStatus: 'OrderProcessing',
+  }
+})
+```
+
+## Semantic Naming
+
+Use the `$.Subject.predicate.Object` pattern for semantic clarity:
+
+```typescript
+import $, { fn } from 'sdk.do'
+
+// Subject-focused naming
+const $.Order.create = fn($.CreateOrder, createOrderImpl)
+const $.Order.validate = fn($.ValidateOrder, validateOrderImpl)
+const $.Order.process = fn($.ProcessOrder, processOrderImpl)
+const $.Order.cancel = fn($.CancelOrder, cancelOrderImpl)
+
+// Predicate-focused naming
+const $.validate.order = fn($.ValidateOrder, validateOrderImpl)
+const $.process.payment = fn($.ProcessPayment, processPaymentImpl)
+const $.send.email = fn($.SendEmail, sendEmailImpl)
+
+// Object-focused naming
+const $.create.Order = fn($.CreateOrder, createOrderImpl)
+const $.update.Product = fn($.UpdateProduct, updateProductImpl)
+const $.delete.Customer = fn($.DeleteCustomer, deleteCustomerImpl)
+```
+
+## Function Metadata
+
+### Basic Metadata
+
+```typescript
+const myFunction = fn(
+  {
+    $type: 'Function',
+    name: 'MyFunction',
+    description: 'Does something useful',
+  },
+  implementation
+)
+```
+
+### Complete Metadata
+
+```typescript
+const processPayment = fn(
+  {
+    $type: 'Function',
+    $id: 'https://example.com/functions/processPayment',
+    name: 'ProcessPayment',
+    description: 'Processes a payment transaction through payment gateway',
+    version: '2.1.0',
+    author: {
+      $type: 'Person',
+      name: 'Alice Developer',
+      email: 'alice@example.com',
+    },
+    tags: ['payments', 'critical', 'pci-compliant'],
+    input: {
+      $type: 'PaymentRequest',
+      required: ['amount', 'currency', 'paymentMethod'],
+      properties: {
+        amount: { type: 'number', minimum: 0 },
+        currency: { type: 'string', pattern: '^[A-Z]{3}$' },
+        paymentMethod: { type: 'string' },
+      },
+    },
+    output: {
+      $type: 'PaymentResult',
+      properties: {
+        transactionId: { type: 'string' },
+        status: { type: 'string', enum: ['success', 'failed', 'pending'] },
+        amount: { type: 'number' },
+      },
+    },
+    dependencies: ['stripe', 'logger'],
+    rateLimits: {
+      perMinute: 60,
+      perHour: 1000,
+    },
+  },
+  async (payment) => {
+    // Implementation
+  }
+)
+```
+
+## Pure vs Impure Functions
+
+### Pure Functions
+
+Functions with no side effects (preferred when possible):
+
+```typescript
+// Pure - same input always gives same output
+const calculateTax = fn($.CalculateTax, (amount: number, rate: number): number => {
+  return amount * rate
+})
+
+// Pure - no external state
+const formatDate = fn($.FormatDate, (date: Date): string => {
+  return date.toISOString().split('T')[0]
+})
+
+// Pure - deterministic transformation
+const normalizeData = fn($.NormalizeData, (data: any[]): any[] => {
+  return data.map((item) => ({
+    ...item,
+    normalized: true,
+  }))
+})
+```
+
+### Impure Functions
+
+Functions with side effects (clearly documented):
+
+```typescript
+// Impure - database operation (side effect)
+const saveUser = fn(
+  {
+    $type: 'Function',
+    name: 'SaveUser',
+    description: 'Saves user to database',
+    sideEffects: ['database-write'],
+  },
+  async (user: $.Person) => {
+    return await db.create($.Person, user)
+  }
+)
+
+// Impure - external API call (side effect)
+const sendEmail = fn(
+  {
+    $type: 'Function',
+    name: 'SendEmail',
+    description: 'Sends email via external service',
+    sideEffects: ['email-send', 'external-api'],
+  },
+  async (email: $.EmailMessage) => {
+    return await emailService.send(email)
+  }
+)
+
+// Impure - logging (side effect)
+const logEvent = fn(
+  {
+    $type: 'Function',
+    name: 'LogEvent',
+    description: 'Logs event to monitoring system',
+    sideEffects: ['logging'],
+  },
+  (event: any) => {
+    console.log('[EVENT]', event)
+    logger.info(event)
+  }
+)
+```
+
+## Higher-Order Functions
+
+Functions that take or return other functions:
+
+```typescript
+import $, { fn } from 'sdk.do'
+
+// Function that returns a function
+const createMultiplier = fn($.CreateMultiplier, (factor: number) => {
+  return fn($.Multiply, (value: number) => value * factor)
+})
+
+const double = createMultiplier(2)
+const triple = createMultiplier(3)
+
+console.log(double(5)) // 10
+console.log(triple(5)) // 15
+
+// Function that takes a function
+const applyOperation = fn($.ApplyOperation, (operation: Function, value: number) => {
+  return operation(value)
+})
+
+const result = applyOperation(double, 10) // 20
+```
+
+## Currying
+
+Create partially applied functions:
+
+```typescript
+import $, { fn, curry } from 'sdk.do'
+
+// Standard function
+const addThreeNumbers = fn($.AddThreeNumbers, (a: number, b: number, c: number) => a + b + c)
+
+// Curried version
+const curriedAdd = curry(addThreeNumbers)
+
+// Partial application
+const add5 = curriedAdd(5)
+const add5And10 = add5(10)
+
+console.log(add5And10(2)) // 17
+```
+
+## Generic Functions
+
+Create reusable functions with type parameters:
+
+```typescript
+import $, { fn } from 'sdk.do'
+
+// Generic filter function
+const filterBy = <T>(predicate: (item: T) => boolean) => {
+  return fn($.FilterBy, (items: T[]): T[] => {
+    return items.filter(predicate)
+  })
+}
+
+// Use with different types
+const filterNumbers = filterBy<number>((n) => n > 10)
+const filterStrings = filterBy<string>((s) => s.length > 5)
+
+console.log(filterNumbers([5, 15, 8, 20])) // [15, 20]
+console.log(filterStrings(['hi', 'hello', 'goodbye'])) // ['goodbye']
+```
+
+## Validation Functions
+
+Add input validation to functions:
+
+```typescript
+import $, { fn } from 'sdk.do'
+
+const createUser = fn($.CreateUser, async (userData: { email: string; name: string; age: number }): Promise<$.Person> => {
+  // Validate inputs
+  if (!userData.email.includes('@')) {
+    throw new Error('Invalid email address')
+  }
+
+  if (userData.name.length < 2) {
+    throw new Error('Name must be at least 2 characters')
+  }
+
+  if (userData.age < 0 || userData.age > 150) {
+    throw new Error('Invalid age')
+  }
+
+  // Create user
+  return await db.create($.Person, {
+    $type: 'Person',
+    email: userData.email,
+    name: userData.name,
+    age: userData.age,
+  })
+})
+```
+
+## Using External Libraries
+
+Integrate external libraries in functions:
+
+```typescript
+import $, { fn } from 'sdk.do'
+import * as z from 'zod'
+import { format, parseISO } from 'date-fns'
+
+// Using Zod for validation
+const userSchema = z.object({
+  email: z.string().email(),
+  name: z.string().min(2),
+  age: z.number().min(0).max(150),
+})
+
+const validateUser = fn($.ValidateUser, (userData: unknown) => {
+  return userSchema.parse(userData)
+})
+
+// Using date-fns
+const formatTimestamp = fn($.FormatTimestamp, (isoString: string): string => {
+  return format(parseISO(isoString), 'PPP')
+})
+```
+
+## Memoization
+
+Cache function results for performance:
+
+```typescript
+import $, { fn, memoize } from 'sdk.do'
+
+// Expensive calculation
+const fibonacci = fn($.Fibonacci, (n: number): number => {
+  if (n <= 1) return n
+  return fibonacci(n - 1) + fibonacci(n - 2)
+})
+
+// Memoized version
+const fastFibonacci = memoize(fibonacci)
+
+console.time('First call')
+fastFibonacci(40) // Slow
+console.timeEnd('First call')
+
+console.time('Cached call')
+fastFibonacci(40) // Fast - returns cached result
+console.timeEnd('Cached call')
+```
+
+## Function Decorators
+
+Add functionality to functions using decorators:
+
+```typescript
+import $, { fn, withLogging, withRetry, withTimeout } from 'sdk.do'
+
+// Add logging
+const fetchDataWithLogging = withLogging(
+  fn($.FetchData, async (url) => {
+    return await fetch(url).then((r) => r.json())
+  })
+)
+
+// Add retry logic
+const fetchDataWithRetry = withRetry(fn($.FetchData, fetchDataImpl), { attempts: 3, backoff: 'exponential' })
+
+// Add timeout
+const fetchDataWithTimeout = withTimeout(
+  fn($.FetchData, fetchDataImpl),
+  5000 // 5 second timeout
+)
+
+// Combine multiple decorators
+const robustFetch = withLogging(withRetry(withTimeout(fn($.FetchData, fetchDataImpl), 5000), { attempts: 3 }))
+```
+
+## Best Practices
+
+### 1. Single Responsibility
+
+Each function should do one thing well:
+
+```typescript
+// Good - single responsibility
+const validateEmail = fn($.ValidateEmail, (email) => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+})
+
+const sendEmail = fn($.SendEmail, async (email) => {
+  return await emailService.send(email)
+})
+
+// Avoid - multiple responsibilities
+const validateAndSendEmail = fn($.ValidateAndSendEmail, async (email) => {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.to)) {
+    throw new Error('Invalid email')
+  }
+  return await emailService.send(email)
+})
+```
+
+### 2. Descriptive Names
+
+Use clear, descriptive names:
+
+```typescript
+// Good
+const calculateOrderTotalWithTax = fn($.CalculateOrderTotalWithTax, ...)
+const validateCustomerEmailAddress = fn($.ValidateCustomerEmail, ...)
+const sendPaymentConfirmationEmail = fn($.SendPaymentConfirmation, ...)
+
+// Avoid
+const calc = fn($.Calculate, ...)
+const validate = fn($.Validate, ...)
+const send = fn($.Send, ...)
+```
+
+### 3. Type Everything
+
+Add TypeScript types for better safety:
+
+```typescript
+// Good
+const processOrder = fn($.ProcessOrder, async (order: $.Order): Promise<$.ProcessedOrder> => {
+  // Implementation
+})
+
+// Avoid
+const processOrder = fn($.ProcessOrder, async (order) => {
+  // Implementation
+})
+```
+
+### 4. Handle Errors
+
+Always handle errors explicitly:
+
+```typescript
+const safeProcessOrder = fn($.SafeProcessOrder, async (order: $.Order) => {
+  try {
+    return await processOrder(order)
+  } catch (error) {
+    // Log error
+    console.error('Order processing failed:', error)
+
+    // Return error result
+    return {
+      $type: 'OrderError',
+      error: error.message,
+      orderId: order.$id,
+    }
+  }
+})
+```
+
+### 5. Document Complex Logic
+
+Add comments for complex business logic:
+
+```typescript
+const calculateShipping = fn($.CalculateShipping, (order: $.Order): number => {
+  // Free shipping for orders over $50
+  if (order.total > 50) {
+    return 0
+  }
+
+  // Express shipping: $15
+  // Standard shipping: $5
+  return order.shippingMethod === 'express' ? 15 : 5
+})
+```
+
+## Next Steps
+
+- [Composition Patterns](./composition) - Learn how to compose functions
+- [Error Handling Examples](../examples/error-handling) - Error handling patterns
+- [API Reference](../api/) - Complete function API
+- [Examples](../examples/) - More real-world examples

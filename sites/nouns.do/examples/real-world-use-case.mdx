@@ -1,0 +1,348 @@
+---
+$id: https://nouns.do/examples/real-world-use-case
+$type: HowTo
+title: Real-World Use Case - CRM System
+description: Complete CRM system example using semantic entity types
+keywords: [crm, real-world, application, complete example]
+---
+
+# Real-World Use Case: CRM System
+
+Complete example of building a CRM system using nouns.do.
+
+## Overview
+
+This example demonstrates a full CRM (Customer Relationship Management) system using semantic entity types.
+
+## Entity Definitions
+
+### Custom Types
+
+```typescript
+import { registry } from 'nouns.do/core'
+
+// Lead type
+registry.registerType({
+  $type: 'Lead',
+  parent: 'Person',
+  properties: [
+    { name: 'leadSource', type: 'string' },
+    { name: 'leadScore', type: 'number' },
+    { name: 'leadStatus', type: 'string' },
+    { name: 'assignedTo', type: 'string' },
+  ],
+})
+
+// Account type
+registry.registerType({
+  $type: 'Account',
+  parent: 'Organization',
+  properties: [
+    { name: 'accountStatus', type: 'string' },
+    { name: 'contractValue', type: 'number' },
+    { name: 'accountManager', type: 'string' },
+  ],
+})
+```
+
+## Core CRM Functions
+
+### Lead Management
+
+```typescript
+async function createLead(data: { name: string; email: string; source: string; phone?: string }) {
+  const lead = await db.create($.Lead, {
+    $type: 'Lead',
+    name: data.name,
+    email: data.email,
+    telephone: data.phone,
+    leadSource: data.source,
+    leadScore: 50, // Initial score
+    leadStatus: 'New',
+  })
+
+  // Send notification
+  send($.Lead.created, lead)
+
+  return lead
+}
+
+async function scoreLead(leadId: string): Promise<number> {
+  const lead = await db.get($.Lead, leadId)
+
+  // AI-powered lead scoring
+  const analysis = await ai.generate(`Analyze this lead and provide a score (0-100): ${JSON.stringify(lead)}`, {
+    schema: { score: 'number', reasoning: 'string' },
+  })
+
+  await db.update(lead, {
+    leadScore: analysis.score,
+  })
+
+  return analysis.score
+}
+
+async function qualifyLead(leadId: string, assignedTo: string) {
+  const lead = await db.get($.Lead, leadId)
+
+  await db.update(lead, {
+    leadStatus: 'Qualified',
+    assignedTo,
+  })
+
+  send($.Lead.qualified, lead)
+}
+```
+
+### Account Management
+
+```typescript
+async function convertLeadToAccount(leadId: string) {
+  const lead = await db.get($.Lead, leadId)
+
+  // Create account from lead
+  const account = await db.create($.Account, {
+    $type: 'Account',
+    name: lead.name || 'Unknown Company',
+    accountStatus: 'Active',
+    accountManager: lead.assignedTo,
+  })
+
+  // Create person record
+  const person = await db.create($.Person, {
+    $type: 'Person',
+    name: lead.name,
+    email: lead.email,
+    telephone: lead.telephone,
+    jobTitle: lead.jobTitle,
+  })
+
+  // Link person to account
+  await db.relate(person, $.worksFor, account)
+
+  // Update lead status
+  await db.update(lead, {
+    leadStatus: 'Converted',
+  })
+
+  send($.Lead.converted, { lead, account, person })
+
+  return { account, person }
+}
+
+async function getAccountDetails(accountId: string) {
+  const account = await db.get($.Account, accountId)
+
+  // Get all contacts
+  const contacts = await db.related(account, $.employs, $.Person)
+
+  // Get all opportunities
+  const opportunities = await db.list($.Offer, {
+    where: { seller: accountId },
+  })
+
+  return {
+    account,
+    contacts,
+    opportunities,
+    totalValue: opportunities.reduce((sum, opp) => sum + (opp.price || 0), 0),
+  }
+}
+```
+
+### Contact Management
+
+```typescript
+async function createContact(
+  accountId: string,
+  data: {
+    name: string
+    email: string
+    jobTitle?: string
+    phone?: string
+  }
+) {
+  const account = await db.get($.Account, accountId)
+
+  const person = await db.create($.Person, {
+    $type: 'Person',
+    name: data.name,
+    email: data.email,
+    jobTitle: data.jobTitle,
+    telephone: data.phone,
+  })
+
+  await db.relate(person, $.worksFor, account)
+
+  return person
+}
+
+async function getContactsByAccount(accountId: string) {
+  const account = await db.get($.Account, accountId)
+  return await db.related(account, $.employs, $.Person)
+}
+```
+
+### Opportunity Tracking
+
+```typescript
+async function createOpportunity(data: { accountId: string; name: string; value: number; closeDate: string }) {
+  const account = await db.get($.Account, data.accountId)
+
+  const opportunity = await db.create($.Offer, {
+    $type: 'Offer',
+    name: data.name,
+    price: data.value,
+    priceCurrency: 'USD',
+    priceValidUntil: data.closeDate,
+    seller: { $id: account.$id, $type: 'Account' },
+    itemOffered: {
+      $type: 'Service',
+      name: data.name,
+    },
+  })
+
+  return opportunity
+}
+
+async function getOpportunityPipeline() {
+  const opportunities = await db.list($.Offer)
+
+  return {
+    total: opportunities.length,
+    totalValue: opportunities.reduce((sum, opp) => sum + (opp.price || 0), 0),
+    byStage: groupBy(opportunities, 'availabilityStarts'),
+  }
+}
+```
+
+## Event Handlers
+
+```typescript
+import { on } from 'sdk.do'
+
+// Auto-score new leads
+on($.Lead.created, async (lead) => {
+  await scoreLead(lead.$id)
+})
+
+// Send welcome email to new contacts
+on($.Person.created, async (person) => {
+  if (person.email) {
+    await send($.Email.send, {
+      to: person.email,
+      subject: 'Welcome!',
+      template: 'welcome',
+    })
+  }
+})
+
+// Notify on high-value opportunity
+on($.Offer.created, async (offer) => {
+  if (offer.price && offer.price > 100000) {
+    await send($.Notification.send, {
+      message: `High-value opportunity: ${offer.name} - $${offer.price}`,
+    })
+  }
+})
+```
+
+## Dashboard Queries
+
+```typescript
+async function getCRMDashboard() {
+  const [leads, accounts, opportunities] = await Promise.all([db.list($.Lead), db.list($.Account), db.list($.Offer)])
+
+  const newLeads = leads.filter((l) => l.leadStatus === 'New')
+  const qualifiedLeads = leads.filter((l) => l.leadStatus === 'Qualified')
+
+  const activeAccounts = accounts.filter((a) => a.accountStatus === 'Active')
+
+  const pipelineValue = opportunities.reduce((sum, opp) => sum + (opp.price || 0), 0)
+
+  return {
+    leads: {
+      total: leads.length,
+      new: newLeads.length,
+      qualified: qualifiedLeads.length,
+      conversionRate: leads.filter((l) => l.leadStatus === 'Converted').length / leads.length,
+    },
+    accounts: {
+      total: accounts.length,
+      active: activeAccounts.length,
+    },
+    opportunities: {
+      total: opportunities.length,
+      pipelineValue,
+    },
+  }
+}
+```
+
+## Usage Example
+
+```typescript
+async function main() {
+  // Create a new lead
+  const lead = await createLead({
+    name: 'John Smith',
+    email: 'john@acme.com',
+    source: 'Website',
+    phone: '+1-555-0123',
+  })
+
+  // Score the lead
+  const score = await scoreLead(lead.$id)
+  console.log('Lead score:', score)
+
+  // Qualify if score is high
+  if (score > 70) {
+    await qualifyLead(lead.$id, 'sales-rep-123')
+
+    // Convert to account
+    const { account, person } = await convertLeadToAccount(lead.$id)
+
+    // Create opportunity
+    await createOpportunity({
+      accountId: account.$id,
+      name: 'Enterprise License',
+      value: 50000,
+      closeDate: '2025-12-31',
+    })
+
+    // Get dashboard
+    const dashboard = await getCRMDashboard()
+    console.log('Dashboard:', dashboard)
+  }
+}
+
+main()
+```
+
+## Summary
+
+This CRM example demonstrates:
+
+- Custom type registration (Lead, Account)
+- CRUD operations on semantic entities
+- Entity relationships (Person-Account)
+- Event-driven workflows
+- AI-powered lead scoring
+- Business logic implementation
+- Dashboard aggregation
+
+The semantic types provide:
+
+- Type safety across the application
+- Clear entity relationships
+- Self-documenting code
+- Easy integration with other platform components
+
+---
+
+**Next Steps**:
+
+- Extend with custom reports
+- Add pipeline visualization
+- Integrate with email/calendar
+- Build mobile app using same entities

@@ -1,0 +1,420 @@
+---
+$id: https://mcp.do
+$type: WebSite
+name: mcp.do
+description: Model Context Protocol server exposing sdk.do as the 'do' tool for secure TypeScript execution by AI assistants
+license: MIT
+---
+
+# mcp.do
+
+**Model Context Protocol server for secure TypeScript execution with sdk.do**
+
+mcp.do exposes the `.do` platform SDK as a Model Context Protocol (MCP) server, enabling Claude Desktop and other AI assistants to securely execute TypeScript code using the full power of `sdk.do`. Through the `do` tool, AI assistants can interact with databases, AI services, APIs, and the entire Business-as-Code ecosystem.
+
+## Quick Start
+
+```bash
+# Install MCP server
+npm install -g mcp.do
+
+# Or use npx without installing
+npx mcp.do
+```
+
+Add to your Claude Desktop config (`~/.config/claude/config.json`):
+
+```json
+{
+  "mcpServers": {
+    "do": {
+      "command": "npx",
+      "args": ["-y", "mcp.do"]
+    }
+  }
+}
+```
+
+Restart Claude Desktop, and the `do` tool will be available for executing TypeScript.
+
+## Key Features
+
+### TypeScript Execution
+
+Claude can execute TypeScript code using the complete `sdk.do` API:
+
+```typescript
+import $, { ai, db } from 'sdk.do'
+
+// Query database
+const businesses = await db.list($.Business, {
+  where: { industry: 'Technology' },
+})
+
+// Generate AI content
+const description = await ai.generate({
+  prompt: `Write a description for ${businesses[0].name}`,
+  schema: $.Text,
+})
+
+// Return results
+return { businesses, description }
+```
+
+### Secure Execution Environment
+
+- **Sandboxed execution**: Code runs in isolated environment
+- **Permission-based access**: Control what resources are accessible
+- **Rate limiting**: Prevent abuse and runaway executions
+- **Audit logging**: Track all code execution for compliance
+
+### Full SDK Access
+
+Access all `sdk.do` functions through MCP:
+
+- **`$`** - Semantic context proxy for creating `$.Subject.predicate.Object` patterns
+- **`ai`** - AI services (generate, embed, batch processing)
+- **`api`** - External API integration with semantic context
+- **`db`** - Database operations (list, get, create, update, delete)
+- **`on`** - Event listeners with semantic patterns
+- **`send`** - Event publishing to queues/streams
+- **`every`** - Scheduled workflows (cron, intervals)
+- **`user`** - User context (current user, session, permissions)
+
+### Integration with AI Assistants
+
+mcp.do works with any MCP-compatible AI assistant:
+
+- **Claude Desktop** - Primary integration (Anthropic)
+- **OpenAI ChatGPT** - Via MCP plugin
+- **Custom assistants** - Any tool supporting MCP protocol
+
+## Core Concepts
+
+### The `do` Tool
+
+The primary interface exposed by mcp.do is the `do` tool, which accepts TypeScript code:
+
+```typescript
+// Claude uses the 'do' tool like this:
+do(`
+  import { db } from 'sdk.do'
+  const users = await db.list('users')
+  return users
+`)
+```
+
+From Claude's perspective, this executes TypeScript and returns the result.
+
+### Semantic Patterns
+
+Use semantic `$.Subject.predicate.Object` patterns in your code:
+
+```typescript
+import $ from 'sdk.do'
+
+// Create semantic entities
+const business = await db.create($.Business, {
+  name: 'Acme Corp',
+  industry: 'Technology',
+})
+
+// Query with semantic types
+const brands = await db.related(business, $.owns, $.Brand)
+
+// Listen to semantic events
+on($.Order.created, async (order) => {
+  await db.create($.Invoice, {
+    order: order.$id,
+    amount: order.total,
+  })
+})
+```
+
+### Business-as-Code Integration
+
+mcp.do enables AI assistants to build autonomous Business-as-Code applications:
+
+```typescript
+import $, { db, ai, every } from 'sdk.do'
+
+// Schedule daily business intelligence report
+every($.Daily, async () => {
+  const metrics = await db.query(`
+    SELECT category, SUM(revenue) as total
+    FROM sales
+    WHERE date >= DATE('now', '-7 days')
+    GROUP BY category
+  `)
+
+  const insights = await ai.generate({
+    prompt: `Analyze these sales metrics and provide insights: ${JSON.stringify(metrics)}`,
+    schema: $.Report,
+  })
+
+  await db.create($.Report, {
+    type: 'weekly-sales',
+    content: insights,
+    metrics,
+  })
+})
+```
+
+## Use Cases
+
+### Database Operations
+
+Enable Claude to query and manipulate data:
+
+```typescript
+import { db } from 'sdk.do'
+
+// List all businesses in a specific industry
+const techCompanies = await db.list($.Business, {
+  where: { industry: 'Technology' },
+  limit: 10,
+})
+
+// Create a new business
+const newBusiness = await db.create($.Business, {
+  name: 'StartupCo',
+  industry: 'SaaS',
+  foundedDate: '2025-01-01',
+})
+
+// Update existing business
+await db.update($.Business, newBusiness.$id, {
+  employees: 50,
+})
+```
+
+### AI-Powered Content Generation
+
+Let Claude generate content using AI services:
+
+```typescript
+import { ai, db } from 'sdk.do'
+
+// Generate product descriptions
+const products = await db.list($.Product)
+
+for (const product of products) {
+  const description = await ai.generate({
+    prompt: `Write a compelling product description for: ${product.name}`,
+    schema: $.Text,
+    model: 'gpt-5',
+  })
+
+  await db.update($.Product, product.$id, {
+    description: description.text,
+  })
+}
+```
+
+### Event-Driven Workflows
+
+Build reactive workflows with event listeners:
+
+```typescript
+import $, { on, send, db } from 'sdk.do'
+
+// Listen for new orders
+on($.Order.created, async (order) => {
+  // Create invoice
+  const invoice = await db.create($.Invoice, {
+    order: order.$id,
+    amount: order.total,
+    dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+  })
+
+  // Send notification
+  await send($.Invoice.created, invoice)
+
+  // Update order status
+  await db.update($.Order, order.$id, {
+    status: 'invoiced',
+  })
+})
+```
+
+### Scheduled Tasks
+
+Create recurring business processes:
+
+```typescript
+import $, { every, db, ai } from 'sdk.do'
+
+// Daily customer engagement report
+every('0 9 * * *', async () => {
+  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000)
+
+  const newCustomers = await db.list($.Customer, {
+    where: { createdDate: { $gte: yesterday } },
+  })
+
+  const report = await ai.generate({
+    prompt: `Create a summary of ${newCustomers.length} new customers`,
+    schema: $.Report,
+  })
+
+  await db.create($.DailyReport, {
+    date: new Date(),
+    type: 'customer-engagement',
+    content: report,
+  })
+})
+```
+
+## Documentation
+
+- [Getting Started](./docs/getting-started) - Set up mcp.do in 5 minutes
+- [Installation](./docs/installation) - Installation and configuration options
+- [Claude Integration](./docs/claude-integration) - Configure Claude Desktop
+- [API Reference](./api/) - Complete tool and method reference
+- [Examples](./examples/) - Code examples and patterns
+
+## Examples
+
+- [Basic Usage](./examples/basic) - Simple database and AI operations
+- [Execute TypeScript](./examples/execute-typescript) - Advanced TypeScript patterns
+- [Claude Workflow](./examples/claude-workflow) - Complete workflow examples
+
+## Architecture
+
+mcp.do consists of three main components:
+
+### 1. MCP Server
+
+The Model Context Protocol server that exposes the `do` tool to AI assistants:
+
+- Implements MCP specification
+- Handles tool invocation
+- Manages execution context
+- Returns results to AI assistant
+
+### 2. TypeScript Runtime
+
+Secure TypeScript execution environment:
+
+- Isolated V8 contexts
+- Import resolution for `sdk.do`
+- Type checking (optional)
+- Error handling and reporting
+
+### 3. SDK.do Integration
+
+Full integration with the `.do` platform SDK:
+
+- All SDK functions available
+- Semantic type support
+- Database and API access
+- Event system integration
+
+## Security
+
+mcp.do implements multiple security layers:
+
+### Code Sandboxing
+
+- Isolated execution contexts
+- No filesystem access
+- Limited network access
+- Resource quotas (CPU, memory, time)
+
+### Permission System
+
+Control what code can access:
+
+```typescript
+{
+  "permissions": {
+    "db": ["read", "write"],
+    "ai": ["generate"],
+    "api": ["fetch"],
+    "events": ["listen", "send"]
+  }
+}
+```
+
+### Rate Limiting
+
+Prevent abuse and runaway executions:
+
+- Max executions per minute
+- Max execution time per request
+- Memory limits
+- API call quotas
+
+### Audit Logging
+
+All executions are logged:
+
+- Code executed
+- User/session
+- Results returned
+- Errors encountered
+- Resource usage
+
+## Integration with `.do` Platform
+
+mcp.do integrates seamlessly with the `.do` Business-as-Code platform:
+
+- **[sdk.do](https://sdk.do)** - TypeScript SDK with semantic patterns
+- **[cli.do](https://cli.do)** - Command-line interface to SDK
+- **[schema.org.ai](https://schema.org.ai)** - 800+ Schema.org types
+- **[graphdl](https://graphdl.do)** - Semantic graph patterns
+- **[agents.org.ai](https://agents.org.ai)** - AI agent ontology
+
+## MCP Protocol
+
+mcp.do implements the Model Context Protocol specification:
+
+- **Protocol**: JSON-RPC 2.0 over stdio/HTTP
+- **Tools**: Exposes `do` tool for TypeScript execution
+- **Resources**: Access to platform resources
+- **Prompts**: Pre-built prompt templates
+- **Sampling**: Context sampling for AI assistants
+
+Learn more: [Model Context Protocol](https://modelcontextprotocol.io/)
+
+## License
+
+MIT (Open Source)
+
+mcp.do is free and open-source software. Use it in your projects, modify it, and distribute it freely.
+
+## Resources
+
+- [Model Context Protocol](https://modelcontextprotocol.io/)
+- [Claude Desktop](https://claude.ai/desktop)
+- [sdk.do](https://sdk.do)
+- [`.do` Platform](https://do)
+- [GitHub Repository](https://github.com/dot-do/platform)
+
+## Contributing
+
+mcp.do is part of the [`.do` platform](https://do) ecosystem. Contributions are welcome!
+
+See [CONTRIBUTING.md](https://github.com/dot-do/platform/blob/main/CONTRIBUTING.md) for guidelines.
+
+## Related Projects
+
+- **sdk.do** - Core TypeScript SDK
+- **cli.do** - Command-line interface
+- **agents.org.ai** - AI agent ontology
+- **actions.org.ai** - Actions and triggers ontology
+
+## Support
+
+- **Documentation**: [mcp.do](https://mcp.do)
+- **Issues**: [GitHub Issues](https://github.com/dot-do/platform/issues)
+- **Community**: [Discord](https://discord.gg/dotdo)
+
+## Acknowledgments
+
+mcp.do builds upon:
+
+- [Model Context Protocol](https://modelcontextprotocol.io/) by Anthropic
+- [TypeScript](https://www.typescriptlang.org/) by Microsoft
+- [Cloudflare Workers](https://workers.cloudflare.com/) for serverless execution
+- Business-as-Code principles from the `.do` platform

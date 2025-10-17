@@ -1,0 +1,645 @@
+---
+$id: https://cto.do/docs/best-practices
+$type: TechArticle
+title: CTO Agent Best Practices
+description: Best practices for deploying and managing autonomous CTO agents effectively
+keywords: [best practices, CTO agent patterns, technical leadership, decision-making]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# CTO Agent Best Practices
+
+Proven patterns for effective CTO agent deployment.
+
+## Decision-Making Practices
+
+### 1. Provide Comprehensive Context
+
+**Good:**
+
+```typescript
+await cto.execute({
+  task: 'Evaluate database migration',
+  context: {
+    current: { db: 'PostgreSQL 12', size: '2TB', qps: '50K' },
+    problem: 'Read latency p95 > 200ms, write bottleneck',
+    growth: '3x traffic expected in 6 months',
+    team: { expertise: 'PostgreSQL expert, MySQL proficient', size: 15 },
+    budget: '$50K migration, $20K/month operational',
+    constraints: ['Zero downtime', 'GDPR compliant'],
+  },
+})
+```
+
+**Avoid:**
+
+```typescript
+await cto.execute({
+  task: 'Fix database',
+  context: { problem: 'Slow' },
+})
+```
+
+### 2. Start Strategic, Then Tactical
+
+Use CTO agents for strategy, specialized agents for execution:
+
+```typescript
+// CTO: Strategic decision
+const strategy = await cto.execute({
+  task: 'Define microservices migration strategy',
+})
+
+// SWE agents: Tactical implementation
+for (const service of strategy.services_to_extract) {
+  await sweAgent.execute({
+    task: 'Extract service from monolith',
+    service: service,
+  })
+}
+```
+
+### 3. Document Decisions
+
+Always create Architecture Decision Records:
+
+```typescript
+const decision = await cto.execute({ task: 'Choose message queue' })
+
+await db.create($.ArchitectureDecisionRecord, {
+  $id: `adr-${Date.now()}`,
+  title: decision.title,
+  status: 'accepted',
+  context: decision.context,
+  decision: decision.recommendation,
+  consequences: decision.trade_offs,
+  date: new Date(),
+})
+```
+
+## Team Integration Practices
+
+### 1. Human-in-the-Loop for Major Decisions
+
+```typescript
+await cto.configure({
+  approval_required: ['architecture_changes', 'vendor_contracts', 'team_restructuring', 'technology_adoption'],
+})
+
+cto.on('approval_required', async (decision) => {
+  const stakeholders = await getStakeholders(decision.category)
+  const approval = await requestApproval(stakeholders, decision)
+
+  if (approval.approved) {
+    await cto.approveDecision(decision.id)
+  } else {
+    await cto.reviseDecision(decision.id, approval.feedback)
+  }
+})
+```
+
+### 2. Regular Review Cycles
+
+```typescript
+// Weekly CTO agent review
+await every($.Weekly, async () => {
+  const decisions = await db.list($.Decision, {
+    where: { created_at: { gte: oneWeekAgo() } },
+  })
+
+  // Review with human CTO
+  const review = await humanCTO.review(decisions)
+
+  // Provide feedback to agent
+  for (const decision of decisions) {
+    await cto.provideFeedback({
+      decision_id: decision.$id,
+      quality: review.quality_scores[decision.$id],
+      improvements: review.suggestions[decision.$id],
+    })
+  }
+})
+```
+
+### 3. Collaborative Decision-Making
+
+```typescript
+// Multi-stakeholder decision process
+const decision = await cto.execute({
+  task: 'Choose cloud provider for expansion',
+  collaboration: {
+    stakeholders: [
+      { role: 'CEO', priorities: ['cost', 'time_to_market'] },
+      { role: 'CFO', priorities: ['cost_optimization', 'predictable_pricing'] },
+      { role: 'VP_Eng', priorities: ['team_expertise', 'developer_experience'] },
+    ],
+    process: 'consensus', // 'consensus' | 'cto_decision' | 'voting'
+    required_agreement: 0.75,
+  },
+})
+```
+
+## Architecture Practices
+
+### 1. Incremental Architecture Evolution
+
+```typescript
+// Phase architecture changes
+const migrationPlan = await cto.execute({
+  task: 'Plan monolith to microservices migration',
+  approach: 'strangler_fig', // Incremental extraction
+  phases: {
+    max_phases: 6,
+    phase_duration: '6-8 weeks',
+    risk_tolerance: 'low',
+    parallel_development: true,
+  },
+})
+```
+
+### 2. Technology Radar Maintenance
+
+```typescript
+// Maintain technology radar
+await every($.Quarterly, async () => {
+  const radar = await cto.execute({
+    task: 'Update technology radar',
+    categories: ['languages', 'frameworks', 'platforms', 'tools'],
+    rings: ['adopt', 'trial', 'assess', 'hold'],
+    context: {
+      current_stack: await getCurrentStack(),
+      team_interests: await getTeamTechInterests(),
+      industry_trends: await getIndustryTrends(),
+    },
+  })
+
+  await db.update($.TechnologyRadar, 'current', radar)
+  await send($.TechnologyRadar.updated, radar)
+})
+```
+
+### 3. Architecture Fitness Functions
+
+```typescript
+// Define and monitor architecture fitness
+const fitnessFunction s = await cto.execute({
+  task: 'Define architecture fitness functions',
+  architecture_characteristics: [
+    'performance',
+    'scalability',
+    'security',
+    'maintainability',
+    'deployability'
+  ]
+})
+
+// Continuous monitoring
+await every($.Daily, async () => {
+  const health = await evaluateFitnessFunctions(fitnessFunctions)
+
+  if (health.score < 0.7) {
+    await send($.Alert.architecture_health, {
+      score: health.score,
+      failing_metrics: health.failures,
+      recommendation: await cto.execute({
+        task: 'Recommend architecture improvements',
+        health: health
+      })
+    })
+  }
+})
+```
+
+## Technology Evaluation Practices
+
+### 1. Structured Evaluation Process
+
+```typescript
+// Comprehensive tech evaluation
+const evaluation = await cto.execute({
+  task: 'Evaluate adopting GraphQL',
+  evaluation_framework: {
+    criteria: {
+      technical_fit: { weight: 0.3 },
+      team_capability: { weight: 0.25 },
+      ecosystem_maturity: { weight: 0.2 },
+      cost_impact: { weight: 0.15 },
+      migration_effort: { weight: 0.1 },
+    },
+    process: {
+      research: true,
+      poc: { duration: '2 weeks', team_size: 2 },
+      benchmarking: true,
+      team_feedback: true,
+    },
+  },
+})
+```
+
+### 2. Proof of Concept Before Adoption
+
+```typescript
+// Mandate POC for new technologies
+await cto.configure({
+  technology_adoption: {
+    require_poc: true,
+    poc_duration: '2-4 weeks',
+    poc_team_size: '2-3 engineers',
+    success_criteria: ['Meets performance requirements', 'Team can learn in timeframe', 'Integrates with existing stack', 'Cost within budget'],
+  },
+})
+```
+
+### 3. Build vs Buy Framework
+
+```typescript
+// Standardized build vs buy analysis
+const buildVsBuy = await cto.execute({
+  task: 'Build vs buy decision framework',
+  factors: {
+    build: {
+      consider_when: ['Core competitive advantage', 'Unique requirements', 'No suitable vendors', 'Cost-effective at scale'],
+      risks: ['Development time', 'Maintenance burden', 'Team distraction from core product'],
+    },
+    buy: {
+      consider_when: ['Commodity functionality', 'Mature vendor ecosystem', 'Faster time to market', 'Not core differentiator'],
+      risks: ['Vendor lock-in', 'Integration challenges', 'Recurring costs', 'Less customization'],
+    },
+  },
+})
+```
+
+## Team Management Practices
+
+### 1. Data-Driven Team Health Monitoring
+
+```typescript
+// Monitor team health metrics
+await every($.Weekly, async () => {
+  const teamHealth = await cto.execute({
+    task: 'Analyze team health',
+    metrics: {
+      velocity: await getVelocity(),
+      cycle_time: await getCycleTime(),
+      pr_review_time: await getPRReviewTime(),
+      deployment_frequency: await getDeploymentFrequency(),
+      incident_rate: await getIncidentRate(),
+      on_call_load: await getOnCallLoad(),
+      surveys: await getEngagementSurveys(),
+    },
+  })
+
+  if (teamHealth.alerts.length > 0) {
+    // Proactive intervention
+    for (const alert of teamHealth.alerts) {
+      await send($.TeamHealth.alert, {
+        type: alert.type,
+        severity: alert.severity,
+        recommendation: alert.action_plan,
+      })
+    }
+  }
+})
+```
+
+### 2. Career Development Automation
+
+```typescript
+// Automated career development planning
+await on($.Engineer.annual_review, async (engineer) => {
+  const plan = await cto.execute({
+    task: 'Create career development plan',
+    engineer: {
+      current_level: engineer.level,
+      tenure: engineer.tenure,
+      skills: engineer.skills,
+      interests: engineer.career_interests,
+      performance: engineer.performance_history,
+    },
+    context: {
+      team_needs: await getTeamSkillGaps(),
+      promotion_criteria: await getPromotionCriteria(engineer.level),
+      available_projects: await getAvailableProjects(),
+    },
+  })
+
+  await db.update($.Engineer, engineer.$id, {
+    career_plan: plan,
+  })
+})
+```
+
+### 3. Knowledge Sharing Infrastructure
+
+```typescript
+// Maintain knowledge sharing systems
+await cto.configure({
+  knowledge_sharing: {
+    documentation: {
+      architecture_docs: 'Required for all services',
+      runbooks: 'Required for production services',
+      adrs: 'Required for architecture decisions',
+    },
+    rituals: {
+      tech_talks: 'Monthly',
+      architecture_reviews: 'Quarterly',
+      post_mortems: 'After incidents',
+      knowledge_transfer: 'Before employee departure',
+    },
+    tools: {
+      wiki: 'Confluence',
+      code_docs: 'In-repo Markdown',
+      diagrams: 'Mermaid / draw.io',
+    },
+  },
+})
+```
+
+## Incident Response Practices
+
+### 1. Automated Incident Leadership
+
+```typescript
+await on($.Incident.critical, async (incident) => {
+  const response = await cto.execute({
+    task: 'Lead incident response',
+    incident: incident,
+    playbook: await getIncidentPlaybook(incident.type),
+    context: {
+      on_call: await getOnCallEngineers(),
+      expertise_map: await getExpertiseMap(),
+      similar_incidents: await getSimilarIncidents(incident),
+    },
+  })
+
+  // Mobilize response team
+  await send($.Team.mobilize, {
+    team: response.team_assignment,
+    strategy: response.response_strategy,
+    communication: response.communication_plan,
+  })
+
+  // Stakeholder updates
+  await every(
+    $.Every15Minutes,
+    async () => {
+      const status = await getIncidentStatus(incident.$id)
+      await send($.Stakeholders.update, status)
+    },
+    { until: () => incident.resolved }
+  )
+})
+```
+
+### 2. Post-Incident Learning
+
+```typescript
+// Automated post-mortem facilitation
+await on($.Incident.resolved, async (incident) => {
+  // Schedule post-mortem
+  const postMortem = await cto.execute({
+    task: 'Facilitate post-mortem',
+    incident: incident,
+    template: 'blameless',
+    participants: incident.responders,
+    questions: ['What happened?', 'What was the impact?', 'What were the root causes?', 'What went well?', 'What can we improve?', 'Action items and owners'],
+  })
+
+  await db.create($.PostMortem, postMortem)
+
+  // Track action items
+  for (const action of postMortem.action_items) {
+    await db.create($.ActionItem, {
+      ...action,
+      incident: incident.$id,
+      due_date: calculateDueDate(action.priority),
+      status: 'open',
+    })
+  }
+})
+```
+
+## Security and Compliance Practices
+
+### 1. Continuous Security Assessment
+
+```typescript
+await every($.Monthly, async () => {
+  const securityReview = await cto.execute({
+    task: 'Security posture assessment',
+    scope: {
+      infrastructure: true,
+      applications: true,
+      access_controls: true,
+      data_protection: true,
+      third_party_risks: true,
+    },
+    frameworks: ['OWASP Top 10', 'CIS Benchmarks', 'SOC 2'],
+  })
+
+  if (securityReview.critical_findings.length > 0) {
+    await send($.SecurityAlert.critical, {
+      findings: securityReview.critical_findings,
+      remediation_plan: securityReview.remediation_plan,
+    })
+  }
+})
+```
+
+### 2. Compliance Automation
+
+```typescript
+// Automate compliance checking
+const complianceAgent = await cto.createSpecializedAgent({
+  specialization: 'compliance_and_security',
+  frameworks: ['SOC 2', 'GDPR', 'HIPAA', 'ISO 27001'],
+})
+
+await every($.Quarterly, async () => {
+  const compliance = await complianceAgent.execute({
+    task: 'Assess compliance posture',
+    audit_date: getNextAuditDate(),
+  })
+
+  await db.create($.ComplianceReport, compliance)
+})
+```
+
+## Cost Optimization Practices
+
+### 1. Infrastructure Cost Monitoring
+
+```typescript
+await every($.Daily, async () => {
+  const costAnalysis = await cto.execute({
+    task: 'Analyze infrastructure costs',
+    data: {
+      aws_cost: await api.aws.getCosts(),
+      datadog_cost: await api.datadog.getBilling(),
+      github_cost: await api.github.getBilling(),
+      usage_metrics: await getUsageMetrics(),
+    },
+  })
+
+  if (costAnalysis.anomalies.length > 0) {
+    await send($.CostAlert, {
+      anomalies: costAnalysis.anomalies,
+      recommendations: costAnalysis.optimization_recommendations,
+    })
+  }
+})
+```
+
+### 2. ROI Tracking for Initiatives
+
+```typescript
+// Track ROI of technology initiatives
+await on($.TechnologyInitiative.completed, async (initiative) => {
+  const roi = await cto.execute({
+    task: 'Calculate initiative ROI',
+    initiative: initiative,
+    metrics: {
+      investment: initiative.total_cost,
+      benefits: {
+        productivity: await measureProductivityGain(initiative),
+        quality: await measureQualityImprovement(initiative),
+        cost_savings: await measureCostSavings(initiative),
+        revenue_impact: await measureRevenueImpact(initiative),
+      },
+      timeframe: '12 months',
+    },
+  })
+
+  await db.update($.TechnologyInitiative, initiative.$id, { roi })
+})
+```
+
+## Communication Practices
+
+### 1. Stakeholder-Specific Communication
+
+```typescript
+// Adapt communication to audience
+const technicalReport = await cto.execute({
+  task: 'Create quarterly tech report',
+  audiences: {
+    board: {
+      focus: ['Strategic initiatives', 'Risk management', 'Budget vs actuals'],
+      format: 'Executive summary with charts',
+      length: '2 pages',
+    },
+    engineering: {
+      focus: ['Tech stack evolution', 'Team growth', 'Technical challenges'],
+      format: 'Detailed technical writeup',
+      length: 'Comprehensive',
+    },
+    product: {
+      focus: ['Technical capabilities', 'Platform roadmap', 'Engineering velocity'],
+      format: 'Product-engineering alignment doc',
+      length: '3-4 pages',
+    },
+  },
+})
+```
+
+### 2. Regular Tech Updates
+
+```typescript
+// Automated tech newsletter
+await every($.Weekly, async () => {
+  const newsletter = await cto.execute({
+    task: 'Create weekly tech newsletter',
+    content: {
+      highlights: await getWeeklyHighlights(),
+      metrics: await getEngineeringMetrics(),
+      tech_radar_updates: await getTechRadarChanges(),
+      team_shoutouts: await getTeamAchievements(),
+      learning_resources: await getCuratedLearningResources(),
+    },
+  })
+
+  await send($.Newsletter.tech_weekly, newsletter)
+})
+```
+
+## Continuous Improvement
+
+### 1. Retrospectives
+
+```typescript
+await every($.Quarterly, async () => {
+  const retrospective = await cto.execute({
+    task: 'Facilitate engineering retrospective',
+    scope: {
+      decisions: await getQuarterlyDecisions(),
+      initiatives: await getQuarterlyInitiatives(),
+      metrics: await getQuarterlyMetrics(),
+      feedback: await getTeamFeedback(),
+    },
+    format: 'Start-Stop-Continue',
+  })
+
+  // Implement improvements
+  for (const improvement of retrospective.action_items) {
+    await db.create($.ImprovementInitiative, improvement)
+  }
+})
+```
+
+### 2. Decision Quality Metrics
+
+```typescript
+// Track decision quality over time
+const decisionMetrics = await cto.getMetrics({
+  type: 'decision_quality',
+  timeframe: 'last_year',
+  metrics: [
+    'accuracy', // Did decisions achieve expected outcomes?
+    'timeliness', // Were decisions made fast enough?
+    'stakeholder_satisfaction', // Were stakeholders happy?
+    'cost_effectiveness', // Were decisions cost-effective?
+  ],
+})
+
+// Use insights to improve
+await cto.improveDecisionMaking(decisionMetrics.insights)
+```
+
+## Anti-Patterns to Avoid
+
+### 1. Over-Automation
+
+**Avoid:** Removing human judgment entirely
+**Instead:** Use CTO agent for analysis, humans for final decisions on critical matters
+
+### 2. Insufficient Context
+
+**Avoid:** Asking for decisions without full context
+**Instead:** Provide comprehensive technical, business, and organizational context
+
+### 3. Ignoring Agent Confidence
+
+**Avoid:** Blindly following low-confidence recommendations
+**Instead:** Require human review when confidence < 0.7
+
+### 4. No Feedback Loop
+
+**Avoid:** Never tracking outcomes of decisions
+**Instead:** Systematically track outcomes and provide feedback
+
+### 5. Siloed Decision-Making
+
+**Avoid:** CTO agent working in isolation
+**Instead:** Integrate with other agents (CEO, CFO, CPO) for holistic decisions
+
+## Next Steps
+
+- [Troubleshooting](./troubleshooting) - Common issues and solutions
+- [API Reference](../api/) - Complete API documentation
+- [Examples](../examples/) - Real-world implementations
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) agent framework.

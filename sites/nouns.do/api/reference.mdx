@@ -1,0 +1,482 @@
+---
+$id: https://nouns.do/api/reference
+$type: APIReference
+title: nouns.do API Reference
+description: Complete API reference for nouns.do semantic entity types
+keywords: [api, reference, types, functions, interfaces]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# nouns.do API Reference
+
+Complete API reference for working with semantic entity types.
+
+## Core Types
+
+### Thing
+
+Base type for all Schema.org entities.
+
+```typescript
+interface Thing {
+  $id?: string
+  $type: string
+  name?: string
+  description?: string
+  url?: string
+  image?: string | ImageObject
+  identifier?: string
+  alternateName?: string
+  sameAs?: string
+}
+```
+
+### Person
+
+Represents an individual person.
+
+```typescript
+interface Person extends Thing {
+  $type: 'Person'
+  givenName?: string
+  familyName?: string
+  additionalName?: string
+  email?: string
+  telephone?: string
+  jobTitle?: string
+  worksFor?: Organization
+  address?: PostalAddress
+  birthDate?: string
+  nationality?: string
+}
+```
+
+### Organization
+
+Represents a company or organization.
+
+```typescript
+interface Organization extends Thing {
+  $type: 'Organization'
+  legalName?: string
+  taxID?: string
+  industry?: string
+  foundingDate?: string
+  numberOfEmployees?: number
+  address?: PostalAddress
+  founder?: Person
+  parentOrganization?: Organization
+  subOrganization?: Organization[]
+}
+```
+
+### Product
+
+Represents a product or service.
+
+```typescript
+interface Product extends Thing {
+  $type: 'Product'
+  brand?: string | Brand
+  model?: string
+  sku?: string
+  gtin?: string
+  price?: number
+  priceCurrency?: string
+  availability?: 'InStock' | 'OutOfStock' | 'PreOrder'
+  category?: string
+  manufacturer?: Organization
+  offers?: Offer
+}
+```
+
+### Place
+
+Represents a physical location.
+
+```typescript
+interface Place extends Thing {
+  $type: 'Place'
+  address?: PostalAddress
+  geo?: GeoCoordinates
+  telephone?: string
+  openingHours?: string
+  containedInPlace?: Place
+  hasMap?: string
+}
+```
+
+## $ Semantic Proxy
+
+### Type Access
+
+```typescript
+import $ from 'sdk.do'
+
+// Access entity types
+const PersonType = $.Person
+const OrgType = $.Organization
+const ProductType = $.Product
+
+// Type properties
+PersonType.$type // 'Person'
+PersonType.$$url // 'https://schema.org/Person'
+```
+
+### Type Methods
+
+```typescript
+// Check if type exists
+$.hasType('Person') // true
+$.hasType('InvalidType') // false
+
+// Get type hierarchy
+$.getParent('Person') // 'Thing'
+$.getAncestors('Person') // ['Thing']
+$.getSubtypes('Organization') // ['Corporation', 'LocalBusiness', ...]
+```
+
+## Validation Functions
+
+### validate()
+
+Validates an entity against its type schema.
+
+```typescript
+function validate(entity: any, type: TypeReference): ValidationResult
+
+interface ValidationResult {
+  valid: boolean
+  errors: ValidationError[]
+}
+
+interface ValidationError {
+  path: string
+  message: string
+  value?: any
+}
+```
+
+**Example**:
+
+```typescript
+import { validate } from 'sdk.do'
+
+const person = {
+  $type: 'Person',
+  name: 'John',
+  email: 'invalid-email',
+}
+
+const result = validate(person, $.Person)
+console.log(result.valid) // false
+console.log(result.errors) // [{ path: 'email', message: 'Invalid email format' }]
+```
+
+### validateProperty()
+
+Validates a single property value.
+
+```typescript
+function validateProperty(value: any, property: PropertyDefinition): boolean
+```
+
+**Example**:
+
+```typescript
+import { validateProperty } from 'sdk.do'
+
+const emailValid = validateProperty('john@example.com', {
+  name: 'email',
+  type: 'string',
+  format: 'email',
+})
+console.log(emailValid) // true
+```
+
+## Type Registry
+
+### registry.getType()
+
+Gets a type definition.
+
+```typescript
+function getType(typeName: string): TypeDefinition
+
+interface TypeDefinition {
+  $type: string
+  $id: string
+  label: string
+  description: string
+  parent: string
+  properties: Property[]
+  subtypes: string[]
+}
+```
+
+**Example**:
+
+```typescript
+import { registry } from 'nouns.do/core'
+
+const personType = registry.getType('Person')
+console.log(personType.parent) // 'Thing'
+console.log(personType.properties) // Array of property definitions
+```
+
+### registry.registerType()
+
+Registers a custom type.
+
+```typescript
+function registerType(definition: TypeDefinition): void
+```
+
+**Example**:
+
+```typescript
+import { registry } from 'nouns.do/core'
+
+registry.registerType({
+  $type: 'Lead',
+  $id: 'https://example.com/types/Lead',
+  label: 'Sales Lead',
+  description: 'A potential customer',
+  parent: 'Person',
+  properties: [
+    { name: 'leadSource', type: 'string' },
+    { name: 'leadScore', type: 'number' },
+    { name: 'leadStatus', type: 'string', enum: ['New', 'Qualified', 'Converted', 'Lost'] },
+  ],
+  subtypes: [],
+})
+```
+
+### registry.hasType()
+
+Checks if a type exists.
+
+```typescript
+function hasType(typeName: string): boolean
+```
+
+**Example**:
+
+```typescript
+registry.hasType('Person') // true
+registry.hasType('InvalidType') // false
+```
+
+## Type Utilities
+
+### isSubtypeOf()
+
+Checks if one type is a subtype of another.
+
+```typescript
+function isSubtypeOf(subtype: string, supertype: string): boolean
+```
+
+**Example**:
+
+```typescript
+import { isSubtypeOf } from 'nouns.do/core'
+
+isSubtypeOf('Corporation', 'Organization') // true
+isSubtypeOf('Person', 'Organization') // false
+```
+
+### getTypeHierarchy()
+
+Gets the complete type hierarchy.
+
+```typescript
+function getTypeHierarchy(type: string): string[]
+```
+
+**Example**:
+
+```typescript
+import { getTypeHierarchy } from 'nouns.do/core'
+
+const hierarchy = getTypeHierarchy('Corporation')
+console.log(hierarchy) // ['Thing', 'Organization', 'Corporation']
+```
+
+### normalizeType()
+
+Normalizes a type reference.
+
+```typescript
+function normalizeType(type: string | TypeReference): TypeReference
+```
+
+**Example**:
+
+```typescript
+import { normalizeType } from 'nouns.do/core'
+
+const typeRef = normalizeType('Person')
+console.log(typeRef.$type) // 'Person'
+```
+
+## Schema Mapper
+
+### toJsonLD()
+
+Converts entity to JSON-LD format.
+
+```typescript
+function toJsonLD(entity: any): object
+```
+
+**Example**:
+
+```typescript
+import { mapper } from 'nouns.do/core'
+
+const person = { $type: 'Person', name: 'John' }
+const jsonld = mapper.toJsonLD(person)
+console.log(jsonld)
+// {
+//   '@context': 'https://schema.org',
+//   '@type': 'Person',
+//   'name': 'John'
+// }
+```
+
+### fromJsonLD()
+
+Converts JSON-LD to entity format.
+
+```typescript
+function fromJsonLD(jsonld: any): object
+```
+
+**Example**:
+
+```typescript
+const jsonld = {
+  '@context': 'https://schema.org',
+  '@type': 'Person',
+  name: 'John',
+}
+
+const entity = mapper.fromJsonLD(jsonld)
+console.log(entity) // { $type: 'Person', name: 'John' }
+```
+
+## Type Guards
+
+### isPerson()
+
+Type guard for Person entities.
+
+```typescript
+function isPerson(entity: Thing): entity is Person {
+  return entity.$type === 'Person'
+}
+```
+
+### isOrganization()
+
+Type guard for Organization entities.
+
+```typescript
+function isOrganization(entity: Thing): entity is Organization {
+  return entity.$type === 'Organization'
+}
+```
+
+### isProduct()
+
+Type guard for Product entities.
+
+```typescript
+function isProduct(entity: Thing): entity is Product {
+  return entity.$type === 'Product'
+}
+```
+
+**Example**:
+
+```typescript
+function processEntity(entity: Thing) {
+  if (isPerson(entity)) {
+    console.log('Person:', entity.name, entity.email)
+  } else if (isOrganization(entity)) {
+    console.log('Organization:', entity.legalName || entity.name)
+  } else if (isProduct(entity)) {
+    console.log('Product:', entity.name, entity.price)
+  }
+}
+```
+
+## Constants
+
+### SCHEMA_ORG_URL
+
+Base URL for Schema.org types.
+
+```typescript
+const SCHEMA_ORG_URL = 'https://schema.org'
+```
+
+### BASE_TYPES
+
+Core Schema.org base types.
+
+```typescript
+const BASE_TYPES = ['Thing', 'Person', 'Organization', 'Place', 'Product', 'CreativeWork', 'Event', 'Action', 'Intangible']
+```
+
+## Type Aliases
+
+### TypeReference
+
+Reference to a type.
+
+```typescript
+type TypeReference = {
+  $type: string
+  $$typeof: symbol
+  $$name: string
+  $$url: string
+}
+```
+
+### EntityData
+
+Generic entity data.
+
+```typescript
+type EntityData<T extends Thing = Thing> = T & {
+  $id?: string
+  $type: string
+}
+```
+
+### QueryOptions
+
+Options for querying entities.
+
+```typescript
+interface QueryOptions {
+  where?: Record<string, any>
+  limit?: number
+  offset?: number
+  orderBy?: Record<string, 'asc' | 'desc'>
+}
+```
+
+## Related APIs
+
+- [sdk.do](https://sdk.do/api) - Core SDK API
+- [db.do](https://db.do/api) - Database operations
+- [graphdl.do](https://graphdl.do/api) - Graph patterns
+
+---
+
+For more examples, see the [Examples](../examples/) section.

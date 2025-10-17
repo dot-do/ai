@@ -1,0 +1,556 @@
+---
+$id: https://experiments.do
+$type: WebSite
+title: experiments.do - A/B Testing and Experimentation Framework
+description: Run A/B tests, multivariate experiments, and feature flags with statistical rigor. Optimize conversions, features, and user experiences with data-driven experimentation.
+keywords: [experiments, a/b testing, multivariate testing, feature flags, experimentation, statistical analysis, conversion optimization]
+author:
+  $type: Organization
+  name: .do Platform
+license: MIT
+---
+
+# experiments.do
+
+**A/B Testing and Experimentation Framework**
+
+experiments.do provides comprehensive experimentation capabilities for the `.do` platform. Run A/B tests, multivariate experiments, and feature flags with statistical rigor to optimize your products, features, and workflows.
+
+## What is experiments.do?
+
+experiments.do is the experimentation framework for data-driven optimization:
+
+- **A/B Testing**: Test two or more variants against each other
+- **Multivariate Testing**: Test multiple variables simultaneously
+- **Feature Flags**: Control feature rollouts and experiments
+- **Statistical Analysis**: Rigorous statistical significance testing
+- **Segmentation**: Target specific user segments
+- **Sequential Testing**: Continuous monitoring with early stopping
+- **Factorial Design**: Test interactions between variables
+
+## Quick Start
+
+```bash
+pnpm add sdk.do
+```
+
+```typescript
+import $, { experiments } from 'sdk.do'
+
+// Create A/B test
+const experiment = await experiments.create({
+  name: 'Pricing Page Redesign',
+  description: 'Test new pricing page layout',
+
+  variants: [
+    { name: 'Control', weight: 0.5 },
+    { name: 'New Design', weight: 0.5 },
+  ],
+
+  metrics: [
+    {
+      name: 'conversion_rate',
+      type: 'conversion',
+      goal: 'increase',
+    },
+    {
+      name: 'revenue',
+      type: 'continuous',
+      goal: 'increase',
+    },
+  ],
+
+  targeting: {
+    segments: ['new_visitors'],
+    sampleRate: 0.2, // 20% of traffic
+  },
+})
+
+// Assign variant to user
+const assignment = await experiments.assign(experiment.id, {
+  userId: 'user-123',
+  context: { device: 'desktop' },
+})
+
+console.log('Assigned variant:', assignment.variant)
+
+// Track conversion
+await experiments.track(experiment.id, {
+  userId: 'user-123',
+  variant: assignment.variant,
+  metric: 'conversion_rate',
+  value: 1, // Converted
+})
+
+// Get results
+const results = await experiments.results(experiment.id)
+console.log('Experiment Results:')
+console.log('- Status:', results.status)
+console.log('- Winner:', results.winner?.name)
+console.log('- Confidence:', results.confidence)
+console.log('- Lift:', results.lift)
+```
+
+## Key Features
+
+### A/B Testing
+
+Run simple or multi-variant tests:
+
+```typescript
+// Simple A/B test
+const abTest = await experiments.create({
+  name: 'Call-to-Action Button',
+  type: 'ab',
+
+  variants: [
+    { name: 'Control', config: { text: 'Sign Up' } },
+    { name: 'Variant A', config: { text: 'Get Started' } },
+    { name: 'Variant B', config: { text: 'Try Free' } },
+  ],
+
+  metrics: [
+    {
+      name: 'click_through_rate',
+      type: 'proportion',
+      goal: 'increase',
+    },
+  ],
+
+  traffic: {
+    allocation: 'equal', // Equal traffic split
+    rampup: true, // Gradually increase traffic
+  },
+})
+
+// Assign users
+const variant = await experiments.assign(abTest.id, {
+  userId: 'user-456',
+})
+
+// Show appropriate variant
+if (variant.name === 'Control') {
+  buttonText = 'Sign Up'
+} else if (variant.name === 'Variant A') {
+  buttonText = 'Get Started'
+} else {
+  buttonText = 'Try Free'
+}
+
+// Track clicks
+on($.Button.clicked, async (event) => {
+  await experiments.track(abTest.id, {
+    userId: event.userId,
+    metric: 'click_through_rate',
+    value: 1,
+  })
+})
+```
+
+### Multivariate Testing
+
+Test multiple variables simultaneously:
+
+```typescript
+// Multivariate experiment
+const mvt = await experiments.create({
+  name: 'Landing Page Optimization',
+  type: 'multivariate',
+
+  variables: [
+    {
+      name: 'headline',
+      variants: ['Transform Your Business', 'Grow Faster with AI', 'Automate Everything'],
+    },
+    {
+      name: 'cta_button',
+      variants: ['Sign Up', 'Get Started', 'Try Free'],
+    },
+    {
+      name: 'hero_image',
+      variants: ['product_screenshot', 'happy_customers', 'dashboard'],
+    },
+  ],
+
+  metrics: [
+    { name: 'conversion_rate', type: 'conversion' },
+    { name: 'time_on_page', type: 'continuous' },
+  ],
+
+  // Full factorial design: 3 * 3 * 3 = 27 combinations
+  design: 'full_factorial',
+})
+
+// Get combination for user
+const combination = await experiments.assign(mvt.id, {
+  userId: 'user-789',
+})
+
+console.log('Assigned combination:')
+console.log('- Headline:', combination.variables.headline)
+console.log('- CTA:', combination.variables.cta_button)
+console.log('- Hero:', combination.variables.hero_image)
+```
+
+### Feature Flags
+
+Control feature rollouts:
+
+```typescript
+// Create feature flag
+const featureFlag = await experiments.feature({
+  name: 'new_dashboard',
+  description: 'New dashboard UI',
+
+  rollout: {
+    type: 'gradual',
+    stages: [{ percent: 10, duration: '1_day' }, { percent: 25, duration: '2_days' }, { percent: 50, duration: '3_days' }, { percent: 100 }],
+  },
+
+  targeting: {
+    segments: ['beta_users', 'power_users'],
+    override: {
+      users: ['admin@company.com'], // Always enabled
+      percentage: 5, // Plus 5% random users
+    },
+  },
+})
+
+// Check if feature enabled for user
+const enabled = await experiments.isEnabled('new_dashboard', {
+  userId: 'user-123',
+  segment: 'beta_users',
+})
+
+if (enabled) {
+  // Show new dashboard
+  renderNewDashboard()
+} else {
+  // Show old dashboard
+  renderOldDashboard()
+}
+
+// Track feature usage
+await experiments.trackFeature('new_dashboard', {
+  userId: 'user-123',
+  event: 'feature_used',
+  properties: { screen: 'dashboard' },
+})
+```
+
+### Statistical Analysis
+
+Rigorous statistical testing:
+
+```typescript
+// Configure statistical parameters
+const experiment = await experiments.create({
+  name: 'Pricing Test',
+
+  variants: [
+    { name: 'Control', config: { price: 99 } },
+    { name: 'Treatment', config: { price: 79 } },
+  ],
+
+  metrics: [
+    {
+      name: 'revenue_per_user',
+      type: 'continuous',
+    },
+  ],
+
+  statistics: {
+    // Confidence level
+    confidence: 0.95, // 95% confidence
+
+    // Minimum detectable effect
+    mde: 0.05, // 5% relative lift
+
+    // Statistical power
+    power: 0.8, // 80% power
+
+    // Testing methodology
+    method: 'sequential', // Sequential or fixed-sample
+
+    // False positive rate
+    alpha: 0.05,
+
+    // Multiple testing correction
+    correction: 'bonferroni',
+  },
+})
+
+// Get statistical results
+const stats = await experiments.statistics(experiment.id)
+
+console.log('Statistical Analysis:')
+console.log('- Sample Size:', stats.sampleSize)
+console.log('- P-Value:', stats.pValue)
+console.log('- Significant:', stats.significant)
+console.log('- Confidence Interval:', stats.confidenceInterval)
+console.log('- Effect Size:', stats.effectSize)
+console.log('- Statistical Power:', stats.power)
+```
+
+### Segmentation and Targeting
+
+Target specific user segments:
+
+```typescript
+// Create targeted experiment
+const segmentedExperiment = await experiments.create({
+  name: 'Enterprise Features Test',
+
+  variants: [{ name: 'Control' }, { name: 'Enhanced Features' }],
+
+  targeting: {
+    // User segments
+    segments: [
+      {
+        name: 'enterprise_customers',
+        conditions: [
+          { attribute: 'plan', operator: 'equals', value: 'enterprise' },
+          { attribute: 'mrr', operator: 'gte', value: 1000 },
+        ],
+      },
+    ],
+
+    // Geographic targeting
+    geography: {
+      countries: ['US', 'CA', 'GB'],
+      regions: ['North America', 'Europe'],
+    },
+
+    // Device targeting
+    devices: ['desktop'],
+
+    // Time-based targeting
+    schedule: {
+      start: '2025-10-15T00:00:00Z',
+      end: '2025-11-15T00:00:00Z',
+      timezone: 'America/Los_Angeles',
+    },
+  },
+})
+```
+
+### Sequential Testing
+
+Continuous monitoring with early stopping:
+
+```typescript
+// Sequential experiment
+const sequentialTest = await experiments.create({
+  name: 'Sequential Pricing Test',
+
+  variants: [
+    { name: 'Control', config: { price: 99 } },
+    { name: 'Treatment', config: { price: 89 } },
+  ],
+
+  metrics: [
+    {
+      name: 'conversion_rate',
+      type: 'conversion',
+    },
+  ],
+
+  sequential: {
+    enabled: true,
+
+    // Check every N observations
+    checkInterval: 100,
+
+    // Minimum runtime before stopping
+    minRuntime: '7_days',
+
+    // Maximum runtime
+    maxRuntime: '30_days',
+
+    // Early stopping for futility
+    futilityStopping: true,
+
+    // Early stopping for success
+    successStopping: true,
+  },
+})
+
+// Automatically monitors and stops when:
+// 1. Significant result detected
+// 2. Futility detected (unlikely to find effect)
+// 3. Maximum runtime reached
+```
+
+### Holdout Groups
+
+Measure long-term effects:
+
+```typescript
+// Create holdout group
+const holdout = await experiments.holdout({
+  name: 'Feature Rollout Holdout',
+  description: 'Hold back users to measure long-term impact',
+
+  feature: 'ai_recommendations',
+
+  holdoutPercent: 10, // 10% never get feature
+
+  duration: '90_days',
+
+  metrics: [
+    { name: 'engagement', type: 'continuous' },
+    { name: 'retention', type: 'proportion' },
+    { name: 'revenue', type: 'continuous' },
+  ],
+})
+
+// Users in holdout never see feature
+const inHoldout = await experiments.isInHoldout('ai_recommendations', {
+  userId: 'user-123',
+})
+
+if (!inHoldout) {
+  // Show AI recommendations
+  showAIRecommendations()
+}
+
+// Compare holdout vs treatment over time
+const longTermImpact = await experiments.analyzeHoldout(holdout.id)
+```
+
+## Semantic Patterns
+
+experiments.do uses semantic `$.Subject.predicate.Object` patterns:
+
+```typescript
+import $ from 'sdk.do'
+
+// Experiment types
+$.Experiment
+$.ABTest
+$.MultivariteTest
+$.FeatureFlag
+$.Variant
+$.Metric
+
+// Experiment operations
+$.Experiment.assigns.Variant
+$.User.receives.Variant
+$.Metric.measures.Outcome
+$.Experiment.concludes.with.Winner
+
+// Experiment patterns
+$.User.participates.in.Experiment
+$.Variant.performs.better.than.Variant
+$.Metric.shows.significant.Lift
+```
+
+## Integration with .do Platform
+
+experiments.do integrates with all platform services:
+
+```typescript
+import $, { experiments, analytics, db, on } from 'sdk.do'
+
+// Track experiment events in analytics
+on($.Experiment.variant.assigned, async (event) => {
+  await analytics.track($.Experiment.variant.assigned, {
+    experimentId: event.experimentId,
+    userId: event.userId,
+    variant: event.variant,
+  })
+})
+
+// Store experiment results
+on($.Experiment.concluded, async (event) => {
+  await db.create($.ExperimentResult, {
+    experimentId: event.experimentId,
+    winner: event.winner,
+    lift: event.lift,
+    confidence: event.confidence,
+    sampleSize: event.sampleSize,
+  })
+})
+
+// Automated experiment lifecycle
+await every($.Hourly, async () => {
+  // Check running experiments
+  const running = await db.list($.Experiment, {
+    where: { status: 'running' },
+  })
+
+  for (const exp of running) {
+    // Update results
+    const results = await experiments.results(exp.id)
+
+    // Auto-conclude if significant
+    if (results.significant && results.sampleSize >= exp.minSampleSize) {
+      await experiments.conclude(exp.id, {
+        winner: results.winner,
+        reason: 'statistical_significance',
+      })
+    }
+  }
+})
+```
+
+## Documentation
+
+- [Getting Started](./docs/getting-started.mdx) - Setup and first experiment
+- [Architecture](./docs/architecture.mdx) - System design
+- [Best Practices](./docs/best-practices.mdx) - Recommended patterns
+- [Troubleshooting](./docs/troubleshooting.mdx) - Common issues
+- [API Reference](./api/reference.mdx) - Complete API
+
+## Examples
+
+- [Basic Usage](./examples/basic-usage.mdx) - Simple A/B tests
+- [Advanced Patterns](./examples/advanced-patterns.mdx) - Complex experiments
+- [Integration](./examples/integration.mdx) - Platform integration
+- [Real-World Use Case](./examples/real-world-use-case.mdx) - Production setup
+
+## Use Cases
+
+### Conversion Optimization
+
+Test landing pages, CTAs, and user flows to maximize conversions.
+
+### Pricing Optimization
+
+Find the optimal price point through systematic testing.
+
+### Feature Development
+
+Validate features with users before full rollout.
+
+### UI/UX Improvement
+
+Test design changes and measure impact on engagement.
+
+### Algorithm Optimization
+
+Compare ML models and algorithms in production.
+
+## Best Practices
+
+1. **Define Clear Hypotheses**: Know what you're testing and why
+2. **Choose Primary Metrics**: Focus on one primary metric per experiment
+3. **Sufficient Sample Size**: Run experiments long enough for statistical power
+4. **Avoid Peeking**: Don't stop experiments prematurely
+5. **Document Everything**: Record hypotheses, results, and learnings
+6. **Segment Analysis**: Analyze results across user segments
+
+## Related Projects
+
+- [analytics.do](https://analytics.do) - Analytics and tracking
+- [evals.do](https://evals.do) - AI evaluation framework
+- [benchmarks.do](https://benchmarks.do) - Performance benchmarking
+- [sdk.do](https://sdk.do) - Core SDK
+
+## License
+
+MIT (Open Source)
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

@@ -1,0 +1,277 @@
+---
+$id: https://resources.do/api/reference
+$type: APIReference
+title: resources.do API Reference
+description: Complete API reference for working with data records and resources
+keywords: [api, reference, resources, data, crud, querying]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# resources.do API Reference
+
+Complete API reference for working with data records and entity instances.
+
+## db.create()
+
+Creates a new resource.
+
+```typescript
+function create<T>(type: TypeReference, data: Partial<T>): Promise<T>
+```
+
+**Example**:
+
+```typescript
+const person = await db.create($.Person, {
+  $type: 'Person',
+  name: 'Jane Smith',
+  email: 'jane@example.com',
+})
+```
+
+## db.get()
+
+Retrieves a resource by ID.
+
+```typescript
+function get<T>(type: TypeReference, id: string): Promise<T>
+```
+
+**Example**:
+
+```typescript
+const person = await db.get($.Person, 'person-123')
+```
+
+## db.list()
+
+Lists resources with optional filtering.
+
+```typescript
+function list<T>(type: TypeReference, options?: QueryOptions): Promise<T[]>
+
+interface QueryOptions {
+  where?: Record<string, any>
+  limit?: number
+  offset?: number
+  orderBy?: Record<string, 'asc' | 'desc'>
+}
+```
+
+**Example**:
+
+```typescript
+const engineers = await db.list($.Person, {
+  where: { jobTitle: { $contains: 'Engineer' } },
+  limit: 10,
+  orderBy: { name: 'asc' },
+})
+```
+
+## db.update()
+
+Updates a resource.
+
+```typescript
+function update<T>(entity: T, data: Partial<T>): Promise<T>
+function update<T>(type: TypeReference, id: string, data: Partial<T>): Promise<T>
+```
+
+**Example**:
+
+```typescript
+await db.update(person, { jobTitle: 'Senior Engineer' })
+```
+
+## db.delete()
+
+Deletes a resource.
+
+```typescript
+function delete<T>(entity: T): Promise<void>
+function delete<T>(type: TypeReference, id: string): Promise<void>
+```
+
+**Example**:
+
+```typescript
+await db.delete(person)
+await db.delete($.Person, 'person-123')
+```
+
+## db.count()
+
+Counts resources of a type.
+
+```typescript
+function count(type: TypeReference, where?: Record<string, any>): Promise<number>
+```
+
+**Example**:
+
+```typescript
+const total = await db.count($.Person)
+const engineers = await db.count($.Person, {
+  jobTitle: { $contains: 'Engineer' },
+})
+```
+
+## db.exists()
+
+Checks if a resource exists.
+
+```typescript
+function exists(type: TypeReference, id: string): Promise<boolean>
+```
+
+**Example**:
+
+```typescript
+const exists = await db.exists($.Person, 'person-123')
+if (exists) {
+  const person = await db.get($.Person, 'person-123')
+}
+```
+
+## db.relate()
+
+Creates a relationship between resources.
+
+```typescript
+function relate(subject: any, predicate: string, object: any): Promise<void>
+```
+
+**Example**:
+
+```typescript
+await db.relate(person, $.worksFor, organization)
+```
+
+## db.related()
+
+Gets related resources.
+
+```typescript
+function related(subject: any, predicate: string, type?: TypeReference): Promise<any[]>
+```
+
+**Example**:
+
+```typescript
+const employer = await db.related(person, $.worksFor, $.Organization)
+const employees = await db.related(organization, $.employs, $.Person)
+```
+
+## Query Operators
+
+### Comparison Operators
+
+```typescript
+// Equals
+{
+  field: value
+}
+{
+  field: {
+    $eq: value
+  }
+}
+
+// Not equals
+{
+  field: {
+    $ne: value
+  }
+}
+
+// Greater than
+{
+  field: {
+    $gt: value
+  }
+}
+
+// Greater than or equal
+{
+  field: {
+    $gte: value
+  }
+}
+
+// Less than
+{
+  field: {
+    $lt: value
+  }
+}
+
+// Less than or equal
+{
+  field: {
+    $lte: value
+  }
+}
+
+// In array
+{
+  field: {
+    $in: [value1, value2]
+  }
+}
+
+// Not in array
+{
+  field: {
+    $nin: [value1, value2]
+  }
+}
+
+// Contains (string)
+{
+  field: {
+    $contains: 'substring'
+  }
+}
+
+// Starts with
+{
+  field: {
+    $like: 'prefix%'
+  }
+}
+```
+
+### Logical Operators
+
+```typescript
+// AND (default)
+{
+  field1: value1,
+  field2: value2
+}
+
+// OR
+{
+  $or: [
+    { field1: value1 },
+    { field2: value2 }
+  ]
+}
+
+// NOT
+{
+  field: { $not: value }
+}
+```
+
+## Related APIs
+
+- [nouns.do](https://nouns.do/api) - Entity types
+- [verbs.do](https://verbs.do/api) - Operations
+- [sdk.do](https://sdk.do/api) - Core SDK
+
+---
+
+For more examples, see the [Examples](../examples/) section.

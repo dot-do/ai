@@ -1,0 +1,756 @@
+---
+$id: https://data.do/examples/integration
+$type: https://schema.org/TechArticle
+name: data.do Integration Examples
+description: Integration patterns with db.do, api.do, event-driven processing, and batch operations
+author:
+  $type: https://schema.org/Organization
+  name: .do
+  url: https://do.inc
+license:
+  documentation: CC-BY-4.0
+  code: MIT
+---
+
+# Integration Examples
+
+This guide demonstrates how to integrate data.do with other SDK components including db.do, api.do, event-driven processing, and batch operations.
+
+## Integration with db.do
+
+### Basic Database Operations
+
+Combine data.do transformations with db.do storage.
+
+```typescript
+import { $, data, db } from 'sdk.do'
+
+// Create with validation and store in database
+async function createCustomer(customerData: any) {
+  // Validate with data.do
+  const validated = await data.validate(customerData, $.Customer, {
+    detailed: true,
+  })
+
+  if (!validated.valid) {
+    throw new ValidationError(validated.errors)
+  }
+
+  // Normalize with data.do
+  const normalized = await data.transform(customerData, $.Customer.normalize)
+
+  // Store in database with db.do
+  const customer = await db.create($.Customer, normalized)
+
+  return customer
+}
+
+// Retrieve and enrich
+async function getCustomerWithDetails(customerId: string) {
+  // Get from database
+  const customer = await db.get($.Customer, customerId)
+
+  // Enrich with data.do
+  const enriched = await data.transform(customer, $.Customer.enrich, {
+    sources: ['orders', 'preferences', 'analytics'],
+  })
+
+  return enriched
+}
+
+// Update with validation
+async function updateCustomer(customerId: string, changes: any) {
+  // Get current data
+  const current = await db.get($.Customer, customerId)
+
+  // Merge changes
+  const updated = { ...current, ...changes }
+
+  // Validate merged data
+  const validated = await data.validate(updated, $.Customer)
+
+  if (!validated) {
+    throw new ValidationError('Invalid customer data')
+  }
+
+  // Update in database
+  await db.update($.Customer, customerId, changes)
+}
+```
+
+### Query and Transform
+
+Query with db.do and transform results with data.do.
+
+```typescript
+import { $, data, db } from 'sdk.do'
+
+// Query and transform results
+async function getActiveCustomersReport() {
+  // Query with db.do
+  const customers = await db.list($.Customer, {
+    where: { status: 'active' },
+    orderBy: { createdAt: 'desc' },
+  })
+
+  // Transform with data.do
+  const report = await data.transform(customers, async (customers) => {
+    return await Promise.all(
+      customers.map(async (customer) => {
+        const orders = await db.list($.Order, {
+          where: { customerId: customer.$id },
+        })
+
+        return {
+          id: customer.$id,
+          name: customer.name,
+          email: customer.email,
+          totalOrders: orders.length,
+          totalSpent: orders.reduce((sum, order) => sum + order.total, 0),
+          avgOrderValue: orders.length > 0 ? orders.reduce((sum, order) => sum + order.total, 0) / orders.length : 0,
+          lastOrderDate: orders.length > 0 ? orders[0].createdAt : null,
+        }
+      })
+    )
+  })
+
+  return report
+}
+```
+
+### Batch Database Operations
+
+Combine batch operations from both data.do and db.do.
+
+```typescript
+import { $, data, db, batch } from 'sdk.do'
+
+// Batch import with validation
+async function importCustomers(customers: any[]) {
+  // Validate and normalize with data.do
+  const validated = await batch.transform(
+    customers,
+    async (customer) => {
+      const normalized = await data.transform(customer, $.Customer.normalize)
+      const isValid = await data.validate(normalized, $.Customer)
+      return isValid ? normalized : null
+    },
+    {
+      concurrency: 10,
+    }
+  )
+
+  // Filter out invalid records
+  const validCustomers = validated.filter((c) => c !== null)
+
+  // Batch create in database
+  await db.createMany($.Customer, validCustomers)
+
+  return {
+    total: customers.length,
+    successful: validCustomers.length,
+    failed: customers.length - validCustomers.length,
+  }
+}
+```
+
+## Integration with api.do
+
+### Fetch and Transform
+
+Fetch data from APIs and transform with data.do.
+
+```typescript
+import { $, data, api } from 'sdk.do'
+
+// Fetch external data and transform
+async function syncExternalCustomers() {
+  // Fetch from external API
+  const response = await api.fetch('https://api.example.com/customers', {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${process.env.API_KEY}`,
+    },
+  })
+
+  const externalCustomers = await response.json()
+
+  // Transform to internal format
+  const normalized = await data.transform(externalCustomers, async (customers) => {
+    return await Promise.all(
+      customers.map(async (external) => {
+        // Map external format to internal format
+        const internal = {
+          $type: $.Customer,
+          name: `${external.first_name} ${external.last_name}`,
+          email: external.email_address,
+          phone: external.phone_number,
+          externalId: external.id,
+          address: {
+            streetAddress: external.address?.street,
+            addressLocality: external.address?.city,
+            addressRegion: external.address?.state,
+            postalCode: external.address?.zip,
+            addressCountry: external.address?.country || 'US',
+          },
+        }
+
+        // Validate
+        const validated = await data.validate(internal, $.Customer)
+        return validated ? internal : null
+      })
+    )
+  })
+
+  // Filter valid records
+  const validCustomers = normalized.filter((c) => c !== null)
+
+  // Store in database
+  for (const customer of validCustomers) {
+    await db.upsert($.Customer, customer, { key: 'externalId' })
+  }
+
+  return {
+    fetched: externalCustomers.length,
+    imported: validCustomers.length,
+  }
+}
+```
+
+### API ETL Pipeline
+
+Build an ETL pipeline that fetches from APIs, transforms, and loads to database.
+
+```typescript
+import { $, data, api, db, pipeline } from 'sdk.do'
+
+await pipeline()
+  // Extract from multiple APIs
+  .extract([
+    {
+      source: 'api',
+      url: 'https://api.crm.com/customers',
+      auth: { bearer: process.env.CRM_API_KEY },
+    },
+    {
+      source: 'api',
+      url: 'https://api.payments.com/transactions',
+      auth: { bearer: process.env.PAYMENT_API_KEY },
+    },
+  ])
+
+  // Transform external formats to internal
+  .transform({
+    customers: [
+      data.transform(async (external) => ({
+        $type: $.Customer,
+        name: `${external.first_name} ${external.last_name}`,
+        email: external.email,
+        externalId: external.id,
+      })),
+      data.normalize($.Customer),
+      data.validate($.Customer),
+    ],
+    transactions: [
+      data.transform(async (external) => ({
+        $type: $.Payment,
+        amount: external.amount_cents / 100,
+        currency: external.currency,
+        customerId: external.customer_id,
+        externalId: external.id,
+      })),
+      data.normalize($.Payment),
+      data.validate($.Payment),
+    ],
+  })
+
+  // Load to database
+  .load({
+    destination: 'database',
+    customers: async (customers) => {
+      for (const customer of customers) {
+        await db.upsert($.Customer, customer, { key: 'externalId' })
+      }
+    },
+    transactions: async (transactions) => {
+      await db.createMany($.Payment, transactions)
+    },
+  })
+
+  // Execute pipeline
+  .execute()
+```
+
+### Webhook Processing
+
+Process incoming webhooks with validation and storage.
+
+```typescript
+import { $, data, db, on } from 'sdk.do'
+
+// Handle webhook events
+on('webhook.received', async (event) => {
+  const { provider, type, payload } = event.data
+
+  switch (type) {
+    case 'customer.created':
+      await handleCustomerCreated(payload)
+      break
+    case 'customer.updated':
+      await handleCustomerUpdated(payload)
+      break
+    case 'order.created':
+      await handleOrderCreated(payload)
+      break
+  }
+})
+
+async function handleCustomerCreated(payload: any) {
+  // Transform webhook payload
+  const customer = await data.transform(payload, {
+    $type: $.Customer,
+    name: payload.name,
+    email: payload.email,
+    externalId: payload.id,
+  })
+
+  // Validate
+  const validated = await data.validate(customer, $.Customer)
+
+  if (!validated) {
+    console.error('Invalid customer data:', payload)
+    return
+  }
+
+  // Store in database
+  await db.create($.Customer, customer)
+
+  console.log('Customer created from webhook:', customer.$id)
+}
+```
+
+## Event-Driven Data Processing
+
+### React to Data Changes
+
+Listen to data changes and trigger processing.
+
+```typescript
+import { $, data, db, on, send } from 'sdk.do'
+
+// Listen to customer creation
+on($.Customer.created, async (event) => {
+  const customer = event.data
+
+  // Enrich customer data
+  const enriched = await data.transform(customer, $.Customer.enrich, {
+    sources: ['geocode', 'creditScore'],
+  })
+
+  // Update with enriched data
+  await db.update($.Customer, customer.$id, enriched)
+
+  // Send welcome email
+  await send($.Email.send, {
+    to: customer.email,
+    template: 'welcome',
+    data: { name: customer.name },
+  })
+})
+
+// Listen to order creation
+on($.Order.created, async (event) => {
+  const order = event.data
+
+  // Validate order
+  const validated = await data.validate(order, $.Order)
+
+  if (!validated) {
+    await send($.Alert, {
+      type: 'validation-error',
+      order: order.$id,
+    })
+    return
+  }
+
+  // Update inventory
+  for (const item of order.items) {
+    await db.update($.Product, item.productId, {
+      inventory: { $increment: -item.quantity },
+    })
+  }
+
+  // Send order confirmation
+  await send($.Order.confirm, order)
+})
+```
+
+### Event-Driven Pipeline
+
+Build pipelines triggered by events.
+
+```typescript
+import { $, data, db, on, pipeline } from 'sdk.do'
+
+// Pipeline triggered by data import event
+on($.Data.imported, async (event) => {
+  const { source, records } = event.data
+
+  await pipeline()
+    // Start with imported records
+    .from(records)
+
+    // Transform
+    .transform([data.normalize($.Customer), data.validate($.Customer), data.enrich(['geocode'])])
+
+    // Load to database
+    .load({
+      destination: 'database',
+      handler: async (customers) => {
+        await db.createMany($.Customer, customers)
+      },
+    })
+
+    // Send completion notification
+    .onComplete(async (result) => {
+      await send($.Notification, {
+        type: 'import-complete',
+        source,
+        total: records.length,
+        successful: result.successful,
+        failed: result.failed,
+      })
+    })
+
+    // Execute
+    .execute()
+})
+```
+
+## Batch Operations
+
+### Large Dataset Processing
+
+Process large datasets efficiently with progress tracking.
+
+```typescript
+import { $, data, db, batch } from 'sdk.do'
+
+async function processLargeDataset(records: any[]) {
+  console.log(`Processing ${records.length} records...`)
+
+  const results = {
+    successful: 0,
+    failed: 0,
+    errors: [],
+  }
+
+  // Process in batches
+  await batch.transform(
+    records,
+    async (record) => {
+      try {
+        // Normalize
+        const normalized = await data.transform(record, $.Customer.normalize)
+
+        // Validate
+        const validated = await data.validate(normalized, $.Customer)
+        if (!validated) {
+          results.failed++
+          return null
+        }
+
+        // Enrich
+        const enriched = await data.transform(normalized, $.Customer.enrich, {
+          sources: ['geocode'],
+        })
+
+        // Store
+        await db.create($.Customer, enriched)
+
+        results.successful++
+        return enriched
+      } catch (error) {
+        results.failed++
+        results.errors.push({ record, error: error.message })
+        return null
+      }
+    },
+    {
+      batchSize: 1000,
+      concurrency: 10,
+      onProgress: (processed, total) => {
+        const percent = ((processed / total) * 100).toFixed(2)
+        console.log(`Progress: ${processed}/${total} (${percent}%)`)
+      },
+    }
+  )
+
+  return results
+}
+```
+
+### Batch Sync Between Systems
+
+Synchronize data between systems in batches.
+
+```typescript
+import { $, data, db, api, batch } from 'sdk.do'
+
+async function syncCustomersToExternal() {
+  // Get customers from database
+  const customers = await db.list($.Customer, {
+    where: { syncStatus: 'pending' },
+  })
+
+  console.log(`Syncing ${customers.length} customers to external system...`)
+
+  // Batch sync
+  await batch.transform(
+    customers,
+    async (customer) => {
+      try {
+        // Transform to external format
+        const external = await data.transform(customer, {
+          id: customer.externalId,
+          first_name: customer.name.split(' ')[0],
+          last_name: customer.name.split(' ').slice(1).join(' '),
+          email_address: customer.email,
+          phone_number: customer.phone,
+        })
+
+        // Send to external API
+        await api.fetch('https://api.example.com/customers', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${process.env.API_KEY}`,
+          },
+          body: JSON.stringify(external),
+        })
+
+        // Update sync status
+        await db.update($.Customer, customer.$id, {
+          syncStatus: 'synced',
+          lastSyncAt: new Date(),
+        })
+
+        return true
+      } catch (error) {
+        // Mark as failed
+        await db.update($.Customer, customer.$id, {
+          syncStatus: 'failed',
+          syncError: error.message,
+        })
+
+        return false
+      }
+    },
+    {
+      batchSize: 100,
+      concurrency: 5,
+      onProgress: (processed, total) => {
+        console.log(`Synced: ${processed}/${total}`)
+      },
+    }
+  )
+}
+```
+
+## Complete Integration Example
+
+### E-commerce Order Processing System
+
+A complete example integrating multiple SDK components.
+
+```typescript
+import { $, data, db, api, on, send, batch } from 'sdk.do'
+
+// 1. Order Creation Handler
+on($.Order.created, async (event) => {
+  const order = event.data
+
+  // Validate order
+  const validated = await data.validate(order, $.Order, { detailed: true })
+
+  if (!validated.valid) {
+    await send($.Alert, {
+      type: 'invalid-order',
+      orderId: order.$id,
+      errors: validated.errors,
+    })
+    return
+  }
+
+  // Enrich with customer and product data
+  const enriched = await data.transform(order, async (order) => {
+    const customer = await db.get($.Customer, order.customerId)
+    const items = await Promise.all(
+      order.items.map(async (item) => {
+        const product = await db.get($.Product, item.productId)
+        return { ...item, product }
+      })
+    )
+
+    return {
+      ...order,
+      customer,
+      items,
+    }
+  })
+
+  // Process payment
+  const payment = await api.fetch('https://api.payments.com/charge', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${process.env.PAYMENT_API_KEY}`,
+    },
+    body: JSON.stringify({
+      amount: enriched.total,
+      currency: 'USD',
+      customer: enriched.customer.externalId,
+    }),
+  })
+
+  const paymentResult = await payment.json()
+
+  if (paymentResult.status === 'succeeded') {
+    // Update order status
+    await db.update($.Order, order.$id, {
+      status: 'paid',
+      paymentId: paymentResult.id,
+    })
+
+    // Update inventory
+    await batch.update(
+      $.Product,
+      enriched.items.map((item) => ({
+        id: item.productId,
+        changes: {
+          inventory: { $increment: -item.quantity },
+          soldCount: { $increment: item.quantity },
+        },
+      }))
+    )
+
+    // Create shipment
+    await send($.Shipment.create, {
+      orderId: order.$id,
+      customerId: order.customerId,
+      items: enriched.items,
+    })
+
+    // Send confirmation email
+    await send($.Email.send, {
+      to: enriched.customer.email,
+      template: 'order-confirmation',
+      data: {
+        orderNumber: order.orderNumber,
+        items: enriched.items,
+        total: enriched.total,
+      },
+    })
+  } else {
+    // Payment failed
+    await db.update($.Order, order.$id, {
+      status: 'payment-failed',
+      paymentError: paymentResult.error,
+    })
+
+    await send($.Alert, {
+      type: 'payment-failed',
+      orderId: order.$id,
+      error: paymentResult.error,
+    })
+  }
+})
+
+// 2. Inventory Sync Job
+export async function syncInventory() {
+  // Get products from external system
+  const response = await api.fetch('https://api.warehouse.com/inventory', {
+    headers: {
+      Authorization: `Bearer ${process.env.WAREHOUSE_API_KEY}`,
+    },
+  })
+
+  const externalInventory = await response.json()
+
+  // Transform and sync
+  await batch.transform(
+    externalInventory,
+    async (item) => {
+      // Find matching product
+      const products = await db.list($.Product, {
+        where: { sku: item.sku },
+      })
+
+      if (products.length === 0) return null
+
+      // Update inventory
+      await db.update($.Product, products[0].$id, {
+        inventory: item.quantity,
+        lastSyncAt: new Date(),
+      })
+
+      return products[0].$id
+    },
+    {
+      batchSize: 500,
+      concurrency: 10,
+    }
+  )
+}
+
+// 3. Customer Analytics Pipeline
+export async function generateCustomerAnalytics() {
+  const customers = await db.list($.Customer)
+
+  await pipeline()
+    .from(customers)
+
+    // Enrich with order data
+    .transform(async (customer) => {
+      const orders = await db.list($.Order, {
+        where: { customerId: customer.$id },
+      })
+
+      return {
+        ...customer,
+        orderCount: orders.length,
+        totalSpent: orders.reduce((sum, order) => sum + order.total, 0),
+        avgOrderValue: orders.length > 0 ? orders.reduce((sum, order) => sum + order.total, 0) / orders.length : 0,
+        lastOrderDate: orders.length > 0 ? orders[0].createdAt : null,
+      }
+    })
+
+    // Calculate segment
+    .transform((customer) => ({
+      ...customer,
+      segment: customer.totalSpent > 10000 ? 'vip' : customer.totalSpent > 1000 ? 'premium' : customer.orderCount > 0 ? 'active' : 'inactive',
+    }))
+
+    // Store analytics
+    .load(async (customers) => {
+      await db.createMany(
+        $.CustomerAnalytics,
+        customers.map((c) => ({
+          customerId: c.$id,
+          orderCount: c.orderCount,
+          totalSpent: c.totalSpent,
+          avgOrderValue: c.avgOrderValue,
+          segment: c.segment,
+          updatedAt: new Date(),
+        }))
+      )
+    })
+
+    .execute()
+}
+```
+
+## License
+
+- Documentation: [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/)
+- Code Examples: [MIT](https://opensource.org/licenses/MIT)

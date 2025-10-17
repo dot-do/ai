@@ -1,0 +1,845 @@
+---
+$id: https://on.do/docs/filtering
+$type: TechArticle
+title: Event Filtering
+description: Filter events based on data properties, conditions, and business logic
+keywords: [filtering, event-filtering, conditions, predicates, selective-listening]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Event Filtering
+
+Learn how to filter events based on data properties, conditions, and business logic to create selective, efficient event handlers.
+
+## Basic Filtering
+
+Filter events using simple conditions:
+
+```typescript
+import { on } from 'sdk.do'
+
+// Only process high-value orders
+on(
+  'Order.created',
+  {
+    filter: (event) => event.data.total > 1000,
+  },
+  async (event) => {
+    await flagForManualReview(event.data)
+  }
+)
+
+// Only process express shipments
+on(
+  'Order.shipped',
+  {
+    filter: (event) => event.data.priority === 'express',
+  },
+  async (event) => {
+    await trackExpressShipment(event.data)
+  }
+)
+
+// Only process failed payments
+on(
+  'Payment.completed',
+  {
+    filter: (event) => event.data.status === 'failed',
+  },
+  async (event) => {
+    await retryPayment(event.data)
+  }
+)
+```
+
+## Property Filters
+
+### Simple Property Checks
+
+Filter by specific property values:
+
+```typescript
+// Only enterprise customers
+on(
+  'Order.created',
+  {
+    filter: (event) => event.data.customer.tier === 'enterprise',
+  },
+  async (event) => {
+    await priorityProcessing(event.data)
+  }
+)
+
+// Only US orders
+on(
+  'Order.created',
+  {
+    filter: (event) => event.data.shippingAddress.country === 'US',
+  },
+  async (event) => {
+    await processDomesticOrder(event.data)
+  }
+)
+
+// Only digital products
+on(
+  'Order.created',
+  {
+    filter: (event) => event.data.items.every((item) => item.type === 'digital'),
+  },
+  async (event) => {
+    await instantDelivery(event.data)
+  }
+)
+```
+
+### Nested Property Access
+
+Filter using nested properties:
+
+```typescript
+// Orders from California
+on(
+  'Order.created',
+  {
+    filter: (event) => event.data.shippingAddress.state === 'CA',
+  },
+  async (event) => {
+    await calculateCaliforniaTax(event.data)
+  }
+)
+
+// High-priority customer support tickets
+on(
+  'Support.ticketCreated',
+  {
+    filter: (event) => {
+      return event.data.customer.vipStatus && event.data.issue.severity === 'critical'
+    },
+  },
+  async (event) => {
+    await escalateToVIPSupport(event.data)
+  }
+)
+```
+
+### Array Property Checks
+
+Filter based on array properties:
+
+```typescript
+// Orders with multiple items
+on(
+  'Order.created',
+  {
+    filter: (event) => event.data.items.length > 1,
+  },
+  async (event) => {
+    await offerBulkDiscount(event.data)
+  }
+)
+
+// Orders containing specific products
+on(
+  'Order.created',
+  {
+    filter: (event) => {
+      return event.data.items.some((item) => item.category === 'electronics')
+    },
+  },
+  async (event) => {
+    await offerExtendedWarranty(event.data)
+  }
+)
+
+// Orders with all items in stock
+on(
+  'Order.created',
+  {
+    filter: (event) => {
+      return event.data.items.every((item) => item.inStock)
+    },
+  },
+  async (event) => {
+    await fastTrackOrder(event.data)
+  }
+)
+```
+
+## Numeric Filters
+
+### Range Checks
+
+Filter by numeric ranges:
+
+```typescript
+// High-value orders
+on(
+  'Order.created',
+  {
+    filter: (event) => event.data.total >= 1000 && event.data.total < 5000,
+  },
+  async (event) => {
+    await offerPremiumShipping(event.data)
+  }
+)
+
+// Very high-value orders
+on(
+  'Order.created',
+  {
+    filter: (event) => event.data.total >= 5000,
+  },
+  async (event) => {
+    await assignAccountManager(event.data)
+  }
+)
+
+// Low-stock products
+on(
+  'Product.updated',
+  {
+    filter: (event) => event.data.stock > 0 && event.data.stock <= 10,
+  },
+  async (event) => {
+    await sendLowStockAlert(event.data)
+  }
+)
+
+// Out of stock products
+on(
+  'Product.updated',
+  {
+    filter: (event) => event.data.stock === 0,
+  },
+  async (event) => {
+    await triggerReorder(event.data)
+  }
+)
+```
+
+### Percentage Checks
+
+Filter by percentages and ratios:
+
+```typescript
+// Large discounts
+on(
+  'Order.created',
+  {
+    filter: (event) => {
+      const discount = event.data.discount / event.data.subtotal
+      return discount > 0.25 // More than 25% discount
+    },
+  },
+  async (event) => {
+    await validateDiscountCode(event.data)
+  }
+)
+
+// High refund rate
+on(
+  'Payment.refunded',
+  {
+    filter: (event) => {
+      const refundRate = event.data.refundAmount / event.data.originalAmount
+      return refundRate > 0.5 // More than 50% refunded
+    },
+  },
+  async (event) => {
+    await investigateRefund(event.data)
+  }
+)
+```
+
+## Date and Time Filters
+
+### Date Range Checks
+
+Filter by date ranges:
+
+```typescript
+// Recent orders (last 24 hours)
+on(
+  'Order.created',
+  {
+    filter: (event) => {
+      const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
+      return new Date(event.data.createdAt) > dayAgo
+    },
+  },
+  async (event) => {
+    await processRecentOrder(event.data)
+  }
+)
+
+// Old pending orders (more than 7 days)
+on(
+  'Order.statusChecked',
+  {
+    filter: (event) => {
+      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+      return event.data.status === 'pending' && new Date(event.data.createdAt) < weekAgo
+    },
+  },
+  async (event) => {
+    await sendReminderEmail(event.data)
+  }
+)
+```
+
+### Time-of-Day Filters
+
+Filter by time of day:
+
+```typescript
+// Business hours only (9 AM - 5 PM)
+on(
+  'Support.ticketCreated',
+  {
+    filter: (event) => {
+      const hour = new Date(event.metadata.timestamp).getHours()
+      return hour >= 9 && hour < 17
+    },
+  },
+  async (event) => {
+    await assignToLiveAgent(event.data)
+  }
+)
+
+// After hours
+on(
+  'Support.ticketCreated',
+  {
+    filter: (event) => {
+      const hour = new Date(event.metadata.timestamp).getHours()
+      return hour < 9 || hour >= 17
+    },
+  },
+  async (event) => {
+    await queueForNextBusinessDay(event.data)
+  }
+)
+```
+
+### Day-of-Week Filters
+
+Filter by day of week:
+
+```typescript
+// Weekend orders
+on(
+  'Order.created',
+  {
+    filter: (event) => {
+      const day = new Date(event.data.createdAt).getDay()
+      return day === 0 || day === 6 // Sunday or Saturday
+    },
+  },
+  async (event) => {
+    await scheduleWeekendProcessing(event.data)
+  }
+)
+
+// Weekday orders
+on(
+  'Order.created',
+  {
+    filter: (event) => {
+      const day = new Date(event.data.createdAt).getDay()
+      return day >= 1 && day <= 5 // Monday-Friday
+    },
+  },
+  async (event) => {
+    await processSameDay(event.data)
+  }
+)
+```
+
+## String Filters
+
+### String Matching
+
+Filter using string operations:
+
+```typescript
+// Email domains
+on(
+  'User.registered',
+  {
+    filter: (event) => event.data.email.endsWith('@company.com'),
+  },
+  async (event) => {
+    await setupEnterpriseAccount(event.data)
+  }
+)
+
+// Product codes
+on(
+  'Order.created',
+  {
+    filter: (event) => {
+      return event.data.items.some((item) => item.sku.startsWith('PROMO-'))
+    },
+  },
+  async (event) => {
+    await validatePromoCode(event.data)
+  }
+)
+
+// Keywords
+on(
+  'Support.ticketCreated',
+  {
+    filter: (event) => {
+      return event.data.description.toLowerCase().includes('urgent')
+    },
+  },
+  async (event) => {
+    await prioritizeTicket(event.data)
+  }
+)
+```
+
+### Regular Expression Matching
+
+Filter using regex patterns:
+
+```typescript
+// Phone number validation
+on(
+  'User.registered',
+  {
+    filter: (event) => {
+      const phoneRegex = /^\+1-\d{3}-\d{3}-\d{4}$/
+      return phoneRegex.test(event.data.phone)
+    },
+  },
+  async (event) => {
+    await sendSMSVerification(event.data)
+  }
+)
+
+// Product SKU pattern
+on(
+  'Product.created',
+  {
+    filter: (event) => {
+      const skuRegex = /^[A-Z]{3}-\d{6}$/
+      return skuRegex.test(event.data.sku)
+    },
+  },
+  async (event) => {
+    await validateSKUFormat(event.data)
+  }
+)
+```
+
+## Complex Filters
+
+### Multiple Conditions (AND)
+
+Combine multiple conditions:
+
+```typescript
+// High-value enterprise orders
+on(
+  'Order.created',
+  {
+    filter: (event) => {
+      return event.data.total > 1000 && event.data.customer.tier === 'enterprise' && event.data.items.length > 5
+    },
+  },
+  async (event) => {
+    await assignDedicatedSupport(event.data)
+  }
+)
+
+// Urgent international shipments
+on(
+  'Order.created',
+  {
+    filter: (event) => {
+      return event.data.priority === 'urgent' && event.data.shippingAddress.country !== 'US' && event.data.items.every((item) => item.inStock)
+    },
+  },
+  async (event) => {
+    await expediteInternationalShipping(event.data)
+  }
+)
+```
+
+### Multiple Conditions (OR)
+
+Filter with OR logic:
+
+```typescript
+// Premium customers (VIP or high lifetime value)
+on(
+  'Order.created',
+  {
+    filter: (event) => {
+      return event.data.customer.vipStatus || event.data.customer.lifetimeValue > 10000
+    },
+  },
+  async (event) => {
+    await offerPremiumPerks(event.data)
+  }
+)
+
+// Problematic orders (fraud risk or payment issues)
+on(
+  'Order.created',
+  {
+    filter: (event) => {
+      return event.data.fraudScore > 0.8 || event.data.paymentIssues || event.data.customer.previousChargebacks > 0
+    },
+  },
+  async (event) => {
+    await reviewManually(event.data)
+  }
+)
+```
+
+### Nested Conditions
+
+Complex nested logic:
+
+```typescript
+on(
+  'Order.created',
+  {
+    filter: (event) => {
+      const isHighValue = event.data.total > 1000
+      const isEnterprise = event.data.customer.tier === 'enterprise'
+      const hasExpressShipping = event.data.shipping.method === 'express'
+      const isInternational = event.data.shippingAddress.country !== 'US'
+
+      // High-value enterprise orders OR international express orders
+      return (isHighValue && isEnterprise) || (isInternational && hasExpressShipping)
+    },
+  },
+  async (event) => {
+    await specialHandling(event.data)
+  }
+)
+```
+
+## Metadata Filters
+
+### Filter by Event Source
+
+Filter events by their source:
+
+```typescript
+// Only events from checkout service
+on(
+  'Order.created',
+  {
+    filter: (event) => event.metadata.source === 'checkout-service',
+  },
+  async (event) => {
+    await processCheckoutOrder(event.data)
+  }
+)
+
+// Only events from mobile app
+on(
+  'User.registered',
+  {
+    filter: (event) => event.metadata.source === 'mobile-app',
+  },
+  async (event) => {
+    await sendMobileWelcome(event.data)
+  }
+)
+```
+
+### Filter by User
+
+Filter events by user:
+
+```typescript
+// Only admin actions
+on(
+  'Product.*',
+  {
+    filter: (event) => event.metadata.userId?.startsWith('admin-'),
+  },
+  async (event) => {
+    await auditAdminAction(event)
+  }
+)
+
+// Specific user actions
+on(
+  'Order.*',
+  {
+    filter: (event) => event.metadata.userId === 'user-12345',
+  },
+  async (event) => {
+    await trackUserActivity(event)
+  }
+)
+```
+
+### Filter by Correlation ID
+
+Filter related events:
+
+```typescript
+// Track events in a specific workflow
+const workflowId = 'workflow-abc123'
+
+on(
+  '*',
+  {
+    filter: (event) => event.metadata.correlationId === workflowId,
+  },
+  async (event) => {
+    await trackWorkflowProgress(event)
+  }
+)
+```
+
+## Custom Filter Functions
+
+### Reusable Filter Functions
+
+Create reusable filter functions:
+
+```typescript
+// Filter factory
+function createValueFilter(minValue: number) {
+  return (event) => event.data.total >= minValue
+}
+
+// Use filter factory
+on(
+  'Order.created',
+  {
+    filter: createValueFilter(1000),
+  },
+  handleHighValueOrder
+)
+
+on(
+  'Order.created',
+  {
+    filter: createValueFilter(5000),
+  },
+  handleVeryHighValueOrder
+)
+
+// Composable filters
+function isEnterprise(event) {
+  return event.data.customer.tier === 'enterprise'
+}
+
+function isHighValue(event) {
+  return event.data.total > 1000
+}
+
+function and(...filters) {
+  return (event) => filters.every((filter) => filter(event))
+}
+
+function or(...filters) {
+  return (event) => filters.some((filter) => filter(event))
+}
+
+// Compose filters
+on(
+  'Order.created',
+  {
+    filter: and(isEnterprise, isHighValue),
+  },
+  handlePremiumOrder
+)
+
+on(
+  'Order.created',
+  {
+    filter: or(isEnterprise, isHighValue),
+  },
+  handleSpecialOrder
+)
+```
+
+### Async Filters
+
+Use async operations in filters (advanced):
+
+```typescript
+// Note: Some implementations may not support async filters
+// Check your SDK version documentation
+
+on(
+  'Order.created',
+  {
+    filter: async (event) => {
+      // Check inventory asynchronously
+      const hasStock = await checkInventory(event.data.items)
+      return hasStock
+    },
+  },
+  async (event) => {
+    await processOrder(event.data)
+  }
+)
+```
+
+## Filter Performance
+
+### Optimize Filter Logic
+
+Keep filters efficient:
+
+```typescript
+// Good - fast check first
+on(
+  'Order.created',
+  {
+    filter: (event) => {
+      // Quick checks first
+      if (event.data.total < 1000) return false
+      if (event.data.customer.tier !== 'enterprise') return false
+
+      // Expensive checks last
+      return event.data.items.every((item) => validateComplexCondition(item))
+    },
+  },
+  handler
+)
+
+// Bad - expensive check first
+on(
+  'Order.created',
+  {
+    filter: (event) => {
+      // Expensive check runs on every event
+      const valid = event.data.items.every((item) => validateComplexCondition(item))
+      return valid && event.data.total > 1000
+    },
+  },
+  handler
+)
+```
+
+### Cache Filter Results
+
+Cache expensive filter computations:
+
+```typescript
+const customerTierCache = new Map()
+
+on(
+  'Order.created',
+  {
+    filter: (event) => {
+      const customerId = event.data.customer.id
+
+      // Check cache first
+      if (customerTierCache.has(customerId)) {
+        return customerTierCache.get(customerId) === 'enterprise'
+      }
+
+      // Compute and cache
+      const tier = event.data.customer.tier
+      customerTierCache.set(customerId, tier)
+
+      return tier === 'enterprise'
+    },
+  },
+  handler
+)
+```
+
+## Filter Examples
+
+### E-commerce Filters
+
+```typescript
+// Abandoned cart (no purchase after 24 hours)
+on(
+  'Cart.updated',
+  {
+    filter: (event) => {
+      const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
+      return new Date(event.data.updatedAt) < dayAgo && !event.data.purchased
+    },
+  },
+  async (event) => {
+    await sendAbandonedCartEmail(event.data)
+  }
+)
+
+// Flash sale orders
+on(
+  'Order.created',
+  {
+    filter: (event) => {
+      return event.data.items.some((item) => item.flashSale)
+    },
+  },
+  async (event) => {
+    await prioritizeFlashSaleOrder(event.data)
+  }
+)
+```
+
+### SaaS Filters
+
+```typescript
+// Trial expiring soon
+on(
+  'User.updated',
+  {
+    filter: (event) => {
+      const threeDaysFromNow = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
+      const trialEnd = new Date(event.data.trialEndsAt)
+      return trialEnd <= threeDaysFromNow && !event.data.subscriptionId
+    },
+  },
+  async (event) => {
+    await sendTrialExpiringEmail(event.data)
+  }
+)
+
+// Usage limits exceeded
+on(
+  'Usage.recorded',
+  {
+    filter: (event) => {
+      return event.data.current > event.data.limit * 0.9 // 90% of limit
+    },
+  },
+  async (event) => {
+    await sendUsageWarning(event.data)
+  }
+)
+```
+
+## Best Practices
+
+1. **Keep filters simple**: Filters should be fast and readable
+2. **Fail fast**: Put quick checks first in filter logic
+3. **Use typed filters**: Leverage TypeScript for filter parameters
+4. **Test filters**: Write tests for filter conditions
+5. **Document complex filters**: Add comments explaining filter logic
+6. **Avoid side effects**: Filters should be pure functions
+7. **Cache when appropriate**: Cache expensive filter computations
+8. **Consider alternatives**: Sometimes separate events are clearer than filters
+
+## Resources
+
+- [Getting Started](./getting-started)
+- [Event Patterns](./patterns)
+- [API Reference](../api/)
+- [Examples](../examples/)
+
+---
+
+Ready to see real-world examples? Continue to [Basic Listeners Examples](../examples/basic-listeners).

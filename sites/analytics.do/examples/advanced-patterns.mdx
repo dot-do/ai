@@ -1,0 +1,424 @@
+---
+$id: https://analytics.do/examples/advanced-patterns
+$type: HowTo
+title: Advanced Patterns - analytics.do
+description: Advanced analytics patterns including cohort analysis, funnel tracking, and real-time aggregation
+keywords: [advanced patterns, cohort analysis, funnels, real-time, aggregation, analytics]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Advanced Patterns
+
+Complex analytics patterns for sophisticated use cases.
+
+## Cohort Analysis
+
+Track user cohorts over time:
+
+```typescript
+import $, { analytics } from 'sdk.do'
+
+// Define cohort
+const createCohort = async (month: string) => {
+  const users = await analytics.query({
+    metric: $.User.signed_up,
+    timeframe: {
+      start: `${month}-01`,
+      end: `${month}-31`,
+    },
+    aggregation: 'count',
+  })
+
+  return {
+    month,
+    size: users.value,
+  }
+}
+
+// Track cohort retention
+const trackCohortRetention = async (cohortMonth: string, checkMonth: string) => {
+  const activeUsers = await analytics.query({
+    metric: $.User.active,
+    timeframe: {
+      start: `${checkMonth}-01`,
+      end: `${checkMonth}-31`,
+    },
+    where: {
+      cohort: cohortMonth,
+    },
+    aggregation: 'count',
+  })
+
+  const cohort = await createCohort(cohortMonth)
+  const retention = activeUsers.value / cohort.size
+
+  await analytics.metric($.CohortRetention, {
+    value: retention,
+    dimensions: {
+      cohort: cohortMonth,
+      period: checkMonth,
+    },
+  })
+
+  return retention
+}
+
+// Generate cohort table
+const generateCohortTable = async (startMonth: string, months: number) => {
+  const cohorts = []
+
+  for (let i = 0; i < months; i++) {
+    const cohortMonth = addMonths(startMonth, i)
+    const retentionData = []
+
+    for (let j = 0; j <= i; j++) {
+      const checkMonth = addMonths(startMonth, j)
+      const retention = await trackCohortRetention(cohortMonth, checkMonth)
+      retentionData.push(retention)
+    }
+
+    cohorts.push({
+      month: cohortMonth,
+      retention: retentionData,
+    })
+  }
+
+  return cohorts
+}
+```
+
+## Funnel Analysis
+
+Track conversion funnels:
+
+```typescript
+// Define funnel
+const salesFunnel = {
+  $type: 'ConversionFunnel',
+  name: 'Sales Funnel',
+  stages: [
+    { name: 'Visitor', event: $.Page.viewed },
+    { name: 'Sign-up', event: $.User.signed_up },
+    { name: 'Trial Started', event: $.Trial.started },
+    { name: 'Trial Completed', event: $.Trial.completed },
+    { name: 'Paid', event: $.Subscription.created },
+  ],
+}
+
+// Track funnel conversion
+const trackFunnel = async (funnel, userId: string, timeframe = '30_days') => {
+  const conversions = []
+
+  for (const stage of funnel.stages) {
+    const count = await analytics.query({
+      metric: stage.event,
+      timeframe,
+      where: { userId },
+      aggregation: 'count',
+    })
+
+    conversions.push({
+      stage: stage.name,
+      converted: count.value > 0,
+      count: count.value,
+    })
+  }
+
+  return conversions
+}
+
+// Calculate funnel metrics
+const calculateFunnelMetrics = async (funnel, timeframe = 'last_30_days') => {
+  const stageCounts = []
+
+  for (const stage of funnel.stages) {
+    const count = await analytics.query({
+      metric: stage.event,
+      timeframe,
+      aggregation: 'count',
+    })
+
+    stageCounts.push({
+      stage: stage.name,
+      count: count.value,
+    })
+  }
+
+  // Calculate conversion rates
+  const metrics = stageCounts.map((stage, index) => {
+    const previous = index > 0 ? stageCounts[index - 1].count : stage.count
+    const conversionRate = stage.count / previous
+
+    return {
+      stage: stage.name,
+      count: stage.count,
+      conversionRate,
+      dropOff: 1 - conversionRate,
+    }
+  })
+
+  return metrics
+}
+```
+
+## Real-Time Aggregation
+
+Aggregate metrics in real-time:
+
+```typescript
+import $, { analytics, on } from 'sdk.do'
+
+// Real-time window aggregation
+class RealtimeAggregator {
+  private windows = new Map<string, number[]>()
+
+  async aggregate(metric: string, value: number, windowSize = 60000) {
+    const now = Date.now()
+    const windowKey = `${metric}:${Math.floor(now / windowSize)}`
+
+    if (!this.windows.has(windowKey)) {
+      this.windows.set(windowKey, [])
+    }
+
+    this.windows.get(windowKey)!.push(value)
+
+    // Calculate aggregates
+    const values = this.windows.get(windowKey)!
+    const sum = values.reduce((a, b) => a + b, 0)
+    const avg = sum / values.length
+    const min = Math.min(...values)
+    const max = Math.max(...values)
+
+    // Record aggregated metrics
+    await analytics.metric(metric, {
+      value: avg,
+      dimensions: {
+        window: windowKey,
+        aggregation: 'avg',
+      },
+    })
+
+    return { sum, avg, min, max, count: values.length }
+  }
+
+  cleanup(ttl = 3600000) {
+    const cutoff = Date.now() - ttl
+    for (const [key] of this.windows) {
+      const [, timestamp] = key.split(':')
+      if (parseInt(timestamp) < cutoff) {
+        this.windows.delete(key)
+      }
+    }
+  }
+}
+
+const aggregator = new RealtimeAggregator()
+
+// Track and aggregate in real-time
+on($.Request.completed, async (request) => {
+  await analytics.track($.Request.completed, request)
+
+  const stats = await aggregator.aggregate(
+    '$.ResponseTime',
+    request.duration,
+    60000 // 1-minute windows
+  )
+
+  console.log('Real-time stats:', stats)
+})
+```
+
+## Multi-Dimensional Analysis
+
+Analyze across multiple dimensions:
+
+```typescript
+// Pivot table analysis
+const pivotAnalysis = async (metric: string, rows: string[], columns: string[], timeframe: string) => {
+  const data = await analytics.query({
+    metric,
+    timeframe,
+    groupBy: [...rows, ...columns],
+    aggregation: 'sum',
+  })
+
+  // Pivot data
+  const pivot = {}
+  for (const point of data.data) {
+    const rowKey = rows.map((r) => point.dimensions[r]).join('|')
+    const colKey = columns.map((c) => point.dimensions[c]).join('|')
+
+    if (!pivot[rowKey]) pivot[rowKey] = {}
+    pivot[rowKey][colKey] = point.value
+  }
+
+  return pivot
+}
+
+// Example: Revenue by product and region
+const revenueAnalysis = await pivotAnalysis('$.Revenue', ['product'], ['region'], 'last_30_days')
+
+console.log(revenueAnalysis)
+// {
+//   'enterprise': { 'us-west': 45000, 'us-east': 38000, 'eu': 22000 },
+//   'professional': { 'us-west': 28000, 'us-east': 31000, 'eu': 15000 }
+// }
+```
+
+## Anomaly Detection
+
+Detect anomalies in metrics:
+
+```typescript
+// Statistical anomaly detection
+class AnomalyDetector {
+  async detect(metric: string, timeframe = 'last_30_days') {
+    // Get historical data
+    const data = await analytics.query({
+      metric,
+      timeframe,
+      interval: 'hour',
+      aggregation: 'avg',
+    })
+
+    const values = data.timeseries.map((p) => p.value)
+
+    // Calculate statistics
+    const mean = values.reduce((a, b) => a + b, 0) / values.length
+    const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length
+    const stdDev = Math.sqrt(variance)
+
+    // Detect anomalies (values > 3 standard deviations from mean)
+    const anomalies = data.timeseries.filter((point) => {
+      const zScore = Math.abs(point.value - mean) / stdDev
+      return zScore > 3
+    })
+
+    // Record anomalies
+    for (const anomaly of anomalies) {
+      await analytics.track($.Anomaly.detected, {
+        metric,
+        value: anomaly.value,
+        expected: mean,
+        deviation: Math.abs(anomaly.value - mean),
+        timestamp: anomaly.timestamp,
+      })
+    }
+
+    return {
+      mean,
+      stdDev,
+      anomalies,
+    }
+  }
+}
+
+const detector = new AnomalyDetector()
+const result = await detector.detect('$.ResponseTime')
+console.log('Anomalies detected:', result.anomalies.length)
+```
+
+## Custom Aggregation Functions
+
+Create custom aggregation logic:
+
+```typescript
+// Custom percentile aggregation
+const percentile = async (metric: string, p: number, timeframe: string) => {
+  const data = await analytics.query({
+    metric,
+    timeframe,
+    aggregation: 'none', // Get raw values
+  })
+
+  const sorted = data.data.map((d) => d.value).sort((a, b) => a - b)
+  const index = Math.ceil((p / 100) * sorted.length) - 1
+
+  return sorted[index]
+}
+
+// Custom weighted average
+const weightedAverage = async (valueMetric: string, weightMetric: string, timeframe: string, dimensions: Record<string, any>) => {
+  const [values, weights] = await Promise.all([
+    analytics.query({
+      metric: valueMetric,
+      timeframe,
+      where: dimensions,
+      groupBy: Object.keys(dimensions),
+    }),
+    analytics.query({
+      metric: weightMetric,
+      timeframe,
+      where: dimensions,
+      groupBy: Object.keys(dimensions),
+    }),
+  ])
+
+  let totalWeight = 0
+  let weightedSum = 0
+
+  for (let i = 0; i < values.data.length; i++) {
+    const value = values.data[i].value
+    const weight = weights.data[i].value
+    weightedSum += value * weight
+    totalWeight += weight
+  }
+
+  return weightedSum / totalWeight
+}
+```
+
+## Time-Series Forecasting
+
+Simple forecasting with moving averages:
+
+```typescript
+// Moving average forecast
+const forecast = async (metric: string, periods: number, window = 7) => {
+  // Get historical data
+  const history = await analytics.query({
+    metric,
+    timeframe: 'last_90_days',
+    interval: 'day',
+    aggregation: 'sum',
+  })
+
+  const values = history.timeseries.map((p) => p.value)
+
+  // Calculate moving average
+  const ma = []
+  for (let i = window - 1; i < values.length; i++) {
+    const windowValues = values.slice(i - window + 1, i + 1)
+    const avg = windowValues.reduce((a, b) => a + b, 0) / window
+    ma.push(avg)
+  }
+
+  // Forecast next periods
+  const forecasts = []
+  let lastMA = ma[ma.length - 1]
+
+  for (let i = 0; i < periods; i++) {
+    forecasts.push({
+      period: i + 1,
+      value: lastMA,
+    })
+  }
+
+  return forecasts
+}
+
+const predictions = await forecast('$.Revenue', 7, 7)
+console.log('7-day forecast:', predictions)
+```
+
+## See Also
+
+- [Basic Usage](./basic-usage.mdx) - Simple examples
+- [Integration](./integration.mdx) - Integration patterns
+- [Real-World Use Case](./real-world-use-case.mdx) - Complete implementation
+
+---
+
+These advanced patterns enable sophisticated analytics use cases. For integration examples, see [Integration](./integration.mdx).

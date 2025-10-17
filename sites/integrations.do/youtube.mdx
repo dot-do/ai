@@ -1,0 +1,104 @@
+---
+$id: https://integrations.do/youtube
+$type: Integration
+name: Youtube
+service: youtube
+description: YouTube is a video-sharing platform with user-generated content, live streaming, and monetization opportunities, widely used for marketing, education, and entertainment
+category: social-media
+sdkBased: false
+baseUrl: https://api.youtube.com
+
+auth:
+  type: oauth2
+  authorizationUrl: https://accounts.google.com/o/oauth2/auth
+  tokenUrl: https://oauth2.googleapis.com/token
+  scopes:
+    - https://www.googleapis.com/auth/youtube https://www.googleapis.com/auth/youtube.channel-memberships.creator https://www.googleapis.com/auth/youtube.force-ssl https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtubepartner https://www.googleapis.com/auth/youtubepartner-channel-audit
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Youtube actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: true
+  verificationMethod: none
+  events:
+    - name: generic_trigger
+      type: trigger
+      description: Generic webhook trigger
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://www.youtube.com
+  apiDocs: https://www.youtube.com
+---
+
+# Youtube Integration
+
+YouTube is a video-sharing platform with user-generated content, live streaming, and monetization opportunities, widely used for marketing, education, and entertainment
+
+## Quick Start
+
+```typescript
+import { YoutubeClient } from '@dotdo/sdk.do/integrations/youtube'
+
+const youtube = new YoutubeClient({
+  apiKey: process.env.YOUTUBE_API_KEY,
+})
+
+const result = await youtube.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Youtube provides 14 actions through the Composio API.
+
+## Webhooks
+
+Youtube supports 4 webhook triggers for real-time event notifications.
+
+## License
+
+MIT

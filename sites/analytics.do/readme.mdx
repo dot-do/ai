@@ -1,0 +1,797 @@
+---
+$id: https://analytics.do
+$type: WebSite
+title: analytics.do - Workflow Measurement and Analytics Framework
+description: Track, measure, and analyze Business-as-Code workflows with semantic analytics patterns. Real-time metrics, dashboards, and reporting for autonomous agents and services.
+keywords: [analytics, workflow analytics, metrics tracking, dashboards, reporting, time-series data, Business-as-Code analytics, observability]
+author:
+  $type: Organization
+  name: .do Platform
+license: MIT
+---
+
+# analytics.do
+
+**Workflow Measurement and Analytics Framework**
+
+analytics.do provides comprehensive analytics capabilities for the `.do` platform, enabling you to track, measure, and analyze Business-as-Code workflows with semantic patterns. Build real-time dashboards, generate reports, and gain insights into agent performance, service health, and business outcomes.
+
+## What is analytics.do?
+
+analytics.do is the analytics framework for tracking and measuring Business-as-Code workflows:
+
+- **Event Tracking**: Capture semantic events from workflows, agents, and services
+- **Metrics Collection**: Gather time-series metrics with semantic context
+- **Dashboards**: Build real-time dashboards with customizable visualizations
+- **Reporting**: Generate automated reports with insights and trends
+- **Time-Series Data**: Store and query time-series data efficiently
+- **Custom Dimensions**: Track metrics across custom business dimensions
+- **Alerting**: Set up intelligent alerts based on metric thresholds
+
+## Quick Start
+
+```bash
+pnpm add sdk.do
+```
+
+```typescript
+import $, { analytics } from 'sdk.do'
+
+// Track an event
+await analytics.track($.Order.created, {
+  orderId: 'order-123',
+  amount: 1299.99,
+  customer: 'customer-456',
+  timestamp: new Date(),
+})
+
+// Record a metric
+await analytics.metric($.Revenue, {
+  value: 1299.99,
+  dimensions: {
+    product: 'enterprise-plan',
+    region: 'us-west',
+    channel: 'direct',
+  },
+})
+
+// Query metrics
+const revenue = await analytics.query({
+  metric: $.Revenue,
+  timeframe: 'last_30_days',
+  groupBy: ['product', 'region'],
+})
+
+// Create dashboard
+const dashboard = await analytics.dashboard({
+  name: 'Sales Performance',
+  widgets: [
+    { type: 'timeseries', metric: $.Revenue },
+    { type: 'counter', metric: $.Orders.count },
+    { type: 'gauge', metric: $.ConversionRate },
+  ],
+})
+```
+
+## Key Features
+
+### Semantic Event Tracking
+
+Track events using `$.Subject.predicate.Object` patterns:
+
+```typescript
+import $, { analytics } from 'sdk.do'
+
+// Track business events
+await analytics.track($.Lead.created, {
+  leadId: 'lead-123',
+  source: 'website',
+  campaign: 'spring-2025',
+})
+
+await analytics.track($.Lead.qualified, {
+  leadId: 'lead-123',
+  score: 85,
+  qualifiedBy: 'agent-sarah',
+})
+
+await analytics.track($.Meeting.booked, {
+  leadId: 'lead-123',
+  meetingDate: '2025-10-15',
+  bookedBy: 'agent-sarah',
+})
+
+// Track with semantic relationships
+await analytics.track($.Agent.completed.Task, {
+  agent: 'agent-sarah',
+  task: 'qualify-lead',
+  duration: 45000,
+  success: true,
+})
+```
+
+### Time-Series Metrics
+
+Collect and analyze metrics over time:
+
+```typescript
+// Counter metrics
+await analytics.counter($.Orders, 1)
+await analytics.counter($.PageViews, 1)
+
+// Gauge metrics (current value)
+await analytics.gauge($.ActiveUsers, 1250)
+await analytics.gauge($.QueueDepth, 42)
+
+// Histogram metrics (value distribution)
+await analytics.histogram($.ResponseTime, 235, {
+  buckets: [50, 100, 250, 500, 1000, 5000],
+})
+
+// Summary metrics (percentiles)
+await analytics.summary($.RequestDuration, 150, {
+  quantiles: [0.5, 0.9, 0.95, 0.99],
+})
+
+// Time-series with dimensions
+await analytics.metric($.Revenue, {
+  value: 1299.99,
+  dimensions: {
+    product: 'enterprise',
+    region: 'us-west',
+    channel: 'direct',
+    agent: 'agent-sarah',
+  },
+  timestamp: new Date(),
+})
+```
+
+### Real-Time Dashboards
+
+Build customizable dashboards:
+
+```typescript
+const salesDashboard = await analytics.dashboard({
+  $type: 'Dashboard',
+  name: 'Sales Performance',
+  description: 'Real-time sales metrics and KPIs',
+  refresh_interval: 30000, // 30 seconds
+
+  widgets: [
+    // Revenue time-series
+    {
+      type: 'timeseries',
+      title: 'Revenue (30 days)',
+      metric: $.Revenue,
+      timeframe: 'last_30_days',
+      interval: 'day',
+      aggregation: 'sum',
+    },
+
+    // Orders counter
+    {
+      type: 'counter',
+      title: 'Total Orders',
+      metric: $.Orders.count,
+      timeframe: 'last_30_days',
+    },
+
+    // Conversion funnel
+    {
+      type: 'funnel',
+      title: 'Sales Funnel',
+      stages: [
+        { name: 'Leads', metric: $.Leads.count },
+        { name: 'Qualified', metric: $.Leads.qualified.count },
+        { name: 'Meetings', metric: $.Meetings.booked.count },
+        { name: 'Opportunities', metric: $.Opportunities.created.count },
+        { name: 'Closed Won', metric: $.Deals.won.count },
+      ],
+    },
+
+    // Conversion rate gauge
+    {
+      type: 'gauge',
+      title: 'Conversion Rate',
+      metric: $.ConversionRate,
+      min: 0,
+      max: 1,
+      thresholds: [
+        { value: 0.15, color: 'red' },
+        { value: 0.25, color: 'yellow' },
+        { value: 0.35, color: 'green' },
+      ],
+    },
+
+    // Top performing agents
+    {
+      type: 'table',
+      title: 'Top Agents',
+      query: {
+        metric: $.Deals.won,
+        groupBy: ['agent'],
+        orderBy: { value: 'desc' },
+        limit: 10,
+      },
+    },
+
+    // Regional breakdown
+    {
+      type: 'pie',
+      title: 'Revenue by Region',
+      metric: $.Revenue,
+      groupBy: 'region',
+      timeframe: 'last_30_days',
+    },
+  ],
+})
+
+// Access dashboard
+const url = await analytics.getDashboardUrl(salesDashboard.id)
+console.log(`Dashboard: ${url}`)
+```
+
+### Advanced Querying
+
+Query metrics with powerful filters and aggregations:
+
+```typescript
+// Simple query
+const totalRevenue = await analytics.query({
+  metric: $.Revenue,
+  timeframe: 'last_30_days',
+  aggregation: 'sum',
+})
+
+// Query with grouping
+const revenueByProduct = await analytics.query({
+  metric: $.Revenue,
+  timeframe: 'last_30_days',
+  groupBy: ['product'],
+  aggregation: 'sum',
+  orderBy: { value: 'desc' },
+})
+
+// Query with filters
+const enterpriseRevenue = await analytics.query({
+  metric: $.Revenue,
+  timeframe: 'last_30_days',
+  where: {
+    product: 'enterprise',
+    region: { in: ['us-west', 'us-east'] },
+  },
+  aggregation: 'sum',
+})
+
+// Time-series query
+const dailyRevenue = await analytics.query({
+  metric: $.Revenue,
+  timeframe: { start: '2025-09-01', end: '2025-09-30' },
+  interval: 'day',
+  aggregation: 'sum',
+  fillMissing: 0,
+})
+
+// Multi-dimensional query
+const revenueBreakdown = await analytics.query({
+  metric: $.Revenue,
+  timeframe: 'last_30_days',
+  groupBy: ['product', 'region', 'channel'],
+  aggregation: 'sum',
+  having: {
+    value: { gt: 10000 }, // Only groups with >$10k revenue
+  },
+})
+
+// Percentile query
+const responseTimePercentiles = await analytics.query({
+  metric: $.ResponseTime,
+  timeframe: 'last_24_hours',
+  aggregations: ['p50', 'p90', 'p95', 'p99'],
+})
+```
+
+### Automated Reporting
+
+Generate scheduled reports:
+
+```typescript
+import $, { analytics, every } from 'sdk.do'
+
+// Create report template
+const weeklyReport = await analytics.report({
+  $type: 'Report',
+  name: 'Weekly Sales Report',
+  description: 'Comprehensive weekly sales performance',
+
+  sections: [
+    // Executive summary
+    {
+      title: 'Executive Summary',
+      type: 'summary',
+      metrics: [
+        { name: 'Total Revenue', metric: $.Revenue, aggregation: 'sum' },
+        { name: 'New Customers', metric: $.Customers.new.count },
+        { name: 'Avg Deal Size', metric: $.DealSize, aggregation: 'avg' },
+        { name: 'Win Rate', metric: $.WinRate, aggregation: 'avg' },
+      ],
+      comparison: 'previous_period',
+    },
+
+    // Detailed metrics
+    {
+      title: 'Revenue Analysis',
+      type: 'timeseries',
+      metric: $.Revenue,
+      interval: 'day',
+      groupBy: ['product'],
+    },
+
+    // Agent performance
+    {
+      title: 'Agent Performance',
+      type: 'table',
+      query: {
+        metrics: [$.Leads.qualified.count, $.Meetings.booked.count, $.Deals.won.count, $.Revenue],
+        groupBy: ['agent'],
+        orderBy: { metric: $.Revenue, direction: 'desc' },
+      },
+    },
+
+    // Insights
+    {
+      title: 'Key Insights',
+      type: 'insights',
+      analyze: [$.Revenue, $.ConversionRate, $.AverageDealSize, $.SalesCycleLength],
+      detect: ['trends', 'anomalies', 'opportunities', 'risks'],
+    },
+  ],
+
+  format: 'pdf',
+  delivery: {
+    email: ['team@company.com'],
+    slack: '#sales-team',
+  },
+})
+
+// Schedule report
+await every($.Weekly.Monday.at('9:00'), async () => {
+  const report = await analytics.generateReport(weeklyReport.id, {
+    timeframe: 'last_7_days',
+  })
+
+  await analytics.deliverReport(report)
+})
+```
+
+### Intelligent Alerting
+
+Set up alerts based on metric thresholds:
+
+```typescript
+// Simple threshold alert
+await analytics.alert({
+  $type: 'Alert',
+  name: 'High Error Rate',
+  metric: $.ErrorRate,
+  condition: { gt: 0.05 }, // > 5%
+  timeframe: 'last_5_minutes',
+  severity: 'critical',
+  notifications: ['email', 'slack', 'pagerduty'],
+})
+
+// Complex alert with multiple conditions
+await analytics.alert({
+  name: 'Revenue Drop Alert',
+  conditions: [
+    {
+      metric: $.Revenue,
+      timeframe: 'today',
+      aggregation: 'sum',
+      compare: 'same_day_last_week',
+      threshold: { decrease: 0.2 }, // 20% drop
+    },
+    {
+      metric: $.Orders.count,
+      timeframe: 'last_hour',
+      compare: 'previous_hour',
+      threshold: { decrease: 0.3 }, // 30% drop
+    },
+  ],
+  operator: 'OR',
+  severity: 'high',
+  notifications: {
+    email: ['sales-team@company.com'],
+    slack: {
+      channel: '#alerts-sales',
+      mentions: ['@sales-lead'],
+    },
+  },
+  actions: ['trigger_investigation_workflow', 'pause_ad_campaigns'],
+})
+
+// Anomaly detection alert
+await analytics.alert({
+  name: 'Response Time Anomaly',
+  metric: $.ResponseTime,
+  detection: 'anomaly',
+  sensitivity: 'medium',
+  baseline_period: 'last_7_days',
+  evaluation_period: 'last_15_minutes',
+  severity: 'medium',
+  notifications: ['slack'],
+})
+
+// Rate of change alert
+await analytics.alert({
+  name: 'Rapid User Growth',
+  metric: $.ActiveUsers,
+  condition: {
+    rate_of_change: { gt: 0.5 }, // > 50% increase
+  },
+  timeframe: 'last_hour',
+  severity: 'info',
+  notifications: ['slack'],
+})
+```
+
+## Semantic Patterns
+
+analytics.do uses semantic `$.Subject.predicate.Object` patterns:
+
+```typescript
+import $ from 'sdk.do'
+
+// Analytics types
+$.Analytics
+$.Metric
+$.Event
+$.Dashboard
+$.Report
+$.Alert
+
+// Metric operations
+$.Analytics.tracks.Event
+$.Analytics.records.Metric
+$.Analytics.creates.Dashboard
+$.Analytics.generates.Report
+$.Analytics.triggers.Alert
+
+// Event patterns
+$.Order.created
+$.Lead.qualified
+$.Meeting.booked
+$.Deal.won
+$.Agent.completed.Task
+
+// Metric patterns
+$.Revenue
+$.ConversionRate
+$.ResponseTime
+$.ErrorRate
+$.ActiveUsers
+
+// Aggregation patterns
+$.Metric.sum
+$.Metric.avg
+$.Metric.min
+$.Metric.max
+$.Metric.count
+$.Metric.percentile
+
+// Relationships
+$.Dashboard.displays.Metric
+$.Report.contains.Section
+$.Alert.monitors.Metric
+$.Metric.has.Dimension
+```
+
+## Agent Analytics
+
+Track agent performance and behavior:
+
+```typescript
+import $, { analytics, agent } from 'sdk.do'
+
+// Track agent events
+await analytics.track($.Agent.started.Task, {
+  agent: 'agent-sarah',
+  task: 'qualify-lead',
+  taskId: 'task-123',
+  timestamp: new Date(),
+})
+
+await analytics.track($.Agent.completed.Task, {
+  agent: 'agent-sarah',
+  task: 'qualify-lead',
+  taskId: 'task-123',
+  duration: 45000,
+  success: true,
+  result: { qualified: true, score: 85 },
+})
+
+// Agent performance metrics
+await analytics.metric($.Agent.TaskSuccessRate, {
+  value: 0.92,
+  dimensions: {
+    agent: 'agent-sarah',
+    taskType: 'qualify-lead',
+  },
+})
+
+await analytics.metric($.Agent.TaskDuration, {
+  value: 45000,
+  dimensions: {
+    agent: 'agent-sarah',
+    taskType: 'qualify-lead',
+    complexity: 'medium',
+  },
+})
+
+// Agent dashboard
+const agentDashboard = await analytics.dashboard({
+  name: 'Agent Performance',
+  widgets: [
+    {
+      type: 'table',
+      title: 'Agent Metrics',
+      query: {
+        metrics: [$.Agent.Tasks.completed.count, $.Agent.TaskSuccessRate, $.Agent.AverageTaskDuration, $.Agent.Tools.used.count],
+        groupBy: ['agent'],
+        timeframe: 'last_7_days',
+      },
+    },
+    {
+      type: 'timeseries',
+      title: 'Tasks Completed Over Time',
+      metric: $.Agent.Tasks.completed.count,
+      groupBy: ['agent'],
+      interval: 'day',
+    },
+  ],
+})
+```
+
+## Integration with .do Platform
+
+analytics.do integrates seamlessly with all platform services:
+
+```typescript
+import $, { analytics, db, on, every } from 'sdk.do'
+
+// Track database operations
+on($.Record.created, async (record) => {
+  await analytics.track($.Database.record.created, {
+    collection: record.$type,
+    recordId: record.$id,
+  })
+})
+
+// Track workflow executions
+on($.Workflow.completed, async (workflow) => {
+  await analytics.track($.Workflow.completed, {
+    workflowId: workflow.id,
+    duration: workflow.duration,
+    success: workflow.success,
+  })
+
+  await analytics.metric($.WorkflowDuration, {
+    value: workflow.duration,
+    dimensions: {
+      workflow: workflow.name,
+      status: workflow.success ? 'success' : 'failed',
+    },
+  })
+})
+
+// Scheduled analytics aggregation
+await every($.Hourly, async () => {
+  // Aggregate metrics
+  const hourlyMetrics = await analytics.aggregate({
+    metrics: [$.Revenue, $.Orders.count, $.ConversionRate],
+    timeframe: 'last_hour',
+    interval: 'hour',
+  })
+
+  // Store aggregated data
+  await db.create($.HourlyMetrics, hourlyMetrics)
+})
+
+// Real-time analytics pipeline
+on($.Event.tracked, async (event) => {
+  // Update real-time metrics
+  await analytics.updateRealtime(event)
+
+  // Check for alert conditions
+  await analytics.evaluateAlerts(event)
+
+  // Update dashboards
+  await analytics.refreshDashboards(event)
+})
+```
+
+## Documentation
+
+- [Getting Started](./docs/getting-started.mdx) - Setup and first analytics
+- [Architecture](./docs/architecture.mdx) - System design and components
+- [Best Practices](./docs/best-practices.mdx) - Recommended patterns
+- [Troubleshooting](./docs/troubleshooting.mdx) - Common issues and solutions
+- [API Reference](./api/reference.mdx) - Complete API documentation
+
+## Examples
+
+- [Basic Usage](./examples/basic-usage.mdx) - Simple analytics tracking
+- [Advanced Patterns](./examples/advanced-patterns.mdx) - Complex analytics scenarios
+- [Integration](./examples/integration.mdx) - Integration with other services
+- [Real-World Use Case](./examples/real-world-use-case.mdx) - Complete implementation
+
+## Use Cases
+
+### Sales Analytics
+
+Track sales performance and pipeline metrics:
+
+```typescript
+// Track sales events
+await analytics.track($.Lead.created, leadData)
+await analytics.track($.Lead.qualified, qualificationData)
+await analytics.track($.Meeting.booked, meetingData)
+await analytics.track($.Deal.won, dealData)
+
+// Sales metrics
+await analytics.metric($.Revenue, { value: dealValue })
+await analytics.metric($.DealSize, { value: dealSize })
+await analytics.metric($.SalesCycleLength, { value: cycleLength })
+
+// Sales dashboard
+const salesDashboard = await analytics.dashboard({
+  name: 'Sales Dashboard',
+  widgets: [
+    { type: 'funnel', stages: salesStages },
+    { type: 'timeseries', metric: $.Revenue },
+    { type: 'table', query: { groupBy: ['agent'] } },
+  ],
+})
+```
+
+### Customer Analytics
+
+Understand customer behavior and engagement:
+
+```typescript
+// Track customer events
+await analytics.track($.Customer.signed_up, customerData)
+await analytics.track($.Customer.activated, activationData)
+await analytics.track($.Customer.feature.used, usageData)
+
+// Customer metrics
+await analytics.metric($.ActiveUsers, { value: activeCount })
+await analytics.metric($.EngagementScore, { value: score })
+await analytics.metric($.ChurnRisk, { value: risk })
+
+// Cohort analysis
+const cohorts = await analytics.query({
+  metric: $.Retention,
+  groupBy: ['signup_month'],
+  timeframe: 'last_12_months',
+})
+```
+
+### Service Analytics
+
+Monitor service health and performance:
+
+```typescript
+// Track service metrics
+await analytics.metric($.ResponseTime, { value: duration })
+await analytics.metric($.ErrorRate, { value: errorRate })
+await analytics.metric($.Throughput, { value: requestsPerSecond })
+
+// Service health dashboard
+const healthDashboard = await analytics.dashboard({
+  name: 'Service Health',
+  widgets: [
+    { type: 'gauge', metric: $.ErrorRate },
+    { type: 'timeseries', metric: $.ResponseTime },
+    { type: 'counter', metric: $.RequestCount },
+  ],
+})
+
+// Performance alert
+await analytics.alert({
+  name: 'High Response Time',
+  metric: $.ResponseTime,
+  condition: { p95: { gt: 1000 } }, // p95 > 1s
+  severity: 'high',
+})
+```
+
+## Best Practices
+
+### 1. Use Semantic Patterns
+
+Always use semantic event and metric names:
+
+```typescript
+// Good: Semantic patterns
+await analytics.track($.Order.created, data)
+await analytics.metric($.Revenue, { value })
+
+// Avoid: Generic names
+await analytics.track('event', data)
+await analytics.metric('metric', { value })
+```
+
+### 2. Add Dimensions
+
+Include relevant dimensions for detailed analysis:
+
+```typescript
+await analytics.metric($.Revenue, {
+  value: 1299.99,
+  dimensions: {
+    product: 'enterprise',
+    region: 'us-west',
+    channel: 'direct',
+    agent: 'agent-sarah',
+    campaign: 'spring-2025',
+  },
+})
+```
+
+### 3. Set Up Alerts Early
+
+Configure alerts to catch issues proactively:
+
+```typescript
+await analytics.alert({
+  name: 'Critical Error Rate',
+  metric: $.ErrorRate,
+  condition: { gt: 0.05 },
+  severity: 'critical',
+  notifications: ['pagerduty'],
+})
+```
+
+### 4. Build Dashboards
+
+Create dashboards for visibility:
+
+```typescript
+const dashboard = await analytics.dashboard({
+  name: 'Operations Dashboard',
+  widgets: [
+    { type: 'gauge', metric: $.ServiceHealth },
+    { type: 'timeseries', metric: $.RequestRate },
+    { type: 'table', query: { groupBy: ['service'] } },
+  ],
+})
+```
+
+### 5. Regular Reporting
+
+Generate automated reports:
+
+```typescript
+await every($.Daily, async () => {
+  await analytics.generateReport('daily-metrics', {
+    timeframe: 'yesterday',
+  })
+})
+```
+
+## Related Projects
+
+- [evals.do](https://evals.do) - Performance evaluation framework
+- [experiments.do](https://experiments.do) - A/B testing and experimentation
+- [benchmarks.do](https://benchmarks.do) - Benchmarking and performance testing
+- [sdk.do](https://sdk.do) - Core SDK with analytics support
+- [database.do](https://database.do) - Database for storing analytics data
+
+## License
+
+MIT (Open Source)
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

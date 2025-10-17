@@ -1,0 +1,896 @@
+---
+$id: https://db.do/examples/crud
+$type: HowTo
+title: CRUD Operations Examples
+description: Practical examples of create, read, update, and delete operations
+keywords: [database, crud, examples, create, read, update, delete, queries]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# CRUD Operations Examples
+
+Practical examples demonstrating create, read, update, and delete operations with the `db` SDK function.
+
+## Business Management
+
+Complete example of managing business entities.
+
+### Create Business
+
+```typescript
+import { $, db } from 'sdk.do'
+
+const business = await db.create($.Business, {
+  name: 'TechCorp',
+  industry: 'Technology',
+  foundingDate: '2025-01-01',
+  numberOfEmployees: 50,
+  address: {
+    $type: 'PostalAddress',
+    streetAddress: '123 Tech Street',
+    addressLocality: 'San Francisco',
+    addressRegion: 'CA',
+    postalCode: '94102',
+    addressCountry: 'US',
+  },
+  contactPoint: {
+    $type: 'ContactPoint',
+    telephone: '+1-415-555-0100',
+    email: 'contact@techcorp.com',
+  },
+})
+
+console.log('Created business:', business.$id)
+```
+
+### Read Business
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Get by ID
+const business = await db.get($.Business, 'biz_123')
+
+console.log('Business:', business.name)
+console.log('Industry:', business.industry)
+console.log('Location:', business.address.addressLocality)
+
+// Get with relationships
+const fullBusiness = await db.get($.Business, 'biz_123', {
+  include: ['brands', 'employees', 'address'],
+})
+
+console.log('Brands:', fullBusiness.brands.length)
+console.log('Employees:', fullBusiness.employees.length)
+```
+
+### Update Business
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Update specific fields
+await db.update($.Business, 'biz_123', {
+  industry: 'Software',
+  numberOfEmployees: 75,
+  url: 'https://techcorp.com',
+})
+
+console.log('Business updated')
+
+// Update nested objects
+await db.update($.Business, 'biz_123', {
+  address: {
+    $type: 'PostalAddress',
+    streetAddress: '456 New Street',
+    addressLocality: 'San Francisco',
+    addressRegion: 'CA',
+    postalCode: '94103',
+    addressCountry: 'US',
+  },
+})
+
+console.log('Address updated')
+```
+
+### Delete Business
+
+```typescript
+import { $, db } from 'sdk.do'
+
+await db.delete($.Business, 'biz_123')
+
+console.log('Business deleted')
+
+// Verify deletion
+try {
+  await db.get($.Business, 'biz_123')
+} catch (error) {
+  if (error.code === 'NOT_FOUND') {
+    console.log('Business no longer exists')
+  }
+}
+```
+
+### List Businesses
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// List all businesses
+const all = await db.list($.Business)
+console.log(`Total businesses: ${all.length}`)
+
+// List with filter
+const techBiz = await db.list($.Business, {
+  where: { industry: 'Technology' },
+})
+console.log(`Technology businesses: ${techBiz.length}`)
+
+// List with sorting
+const sorted = await db.list($.Business, {
+  orderBy: { name: 'asc' },
+})
+console.log('First business:', sorted[0].name)
+
+// List with pagination
+const page1 = await db.list($.Business, {
+  limit: 10,
+  offset: 0,
+  orderBy: { foundingDate: 'desc' },
+})
+console.log('Newest 10 businesses:', page1.length)
+```
+
+## Product Catalog
+
+Managing products with full CRUD operations.
+
+### Create Product
+
+```typescript
+import { $, db } from 'sdk.do'
+
+const product = await db.create($.Product, {
+  name: 'Wireless Headphones',
+  description: 'Premium noise-cancelling wireless headphones',
+  brand: {
+    $type: 'Brand',
+    name: 'TechBrand',
+  },
+  offers: {
+    $type: 'Offer',
+    price: 299.99,
+    priceCurrency: 'USD',
+    availability: 'InStock',
+  },
+  category: 'Electronics',
+  sku: 'WH-1000XM5',
+  gtin: '1234567890123',
+  image: 'https://example.com/headphones.jpg',
+  aggregateRating: {
+    $type: 'AggregateRating',
+    ratingValue: 4.7,
+    reviewCount: 1523,
+  },
+})
+
+console.log('Created product:', product.$id)
+```
+
+### Read Product
+
+```typescript
+import { $, db } from 'sdk.do'
+
+const product = await db.get($.Product, 'prod_456')
+
+console.log('Product:', product.name)
+console.log('Price:', product.offers.price)
+console.log('Rating:', product.aggregateRating.ratingValue)
+console.log('Reviews:', product.aggregateRating.reviewCount)
+```
+
+### Update Product
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Update price
+await db.update($.Product, 'prod_456', {
+  offers: {
+    $type: 'Offer',
+    price: 279.99,
+    priceCurrency: 'USD',
+    availability: 'InStock',
+    priceValidUntil: '2025-12-31',
+  },
+})
+
+// Update rating
+await db.update($.Product, 'prod_456', {
+  aggregateRating: {
+    $type: 'AggregateRating',
+    ratingValue: 4.8,
+    reviewCount: 1750,
+  },
+})
+
+console.log('Product updated')
+```
+
+### Delete Product
+
+```typescript
+import { $, db } from 'sdk.do'
+
+await db.delete($.Product, 'prod_456')
+
+console.log('Product deleted')
+```
+
+### Search Products
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Search by category
+const electronics = await db.list($.Product, {
+  where: { category: 'Electronics' },
+})
+
+// Search by price range
+const affordable = await db.list($.Product, {
+  where: {
+    'offers.price': {
+      $gte: 100,
+      $lte: 300,
+    },
+  },
+})
+
+// Search by availability
+const inStock = await db.list($.Product, {
+  where: {
+    'offers.availability': 'InStock',
+  },
+})
+
+// Search by rating
+const topRated = await db.list($.Product, {
+  where: {
+    'aggregateRating.ratingValue': { $gte: 4.5 },
+  },
+  orderBy: { 'aggregateRating.ratingValue': 'desc' },
+})
+
+console.log('Top rated products:', topRated.length)
+```
+
+## Employee Management
+
+Managing people and employees.
+
+### Create Employee
+
+```typescript
+import { $, db } from 'sdk.do'
+
+const employee = await db.create($.Person, {
+  givenName: 'Jane',
+  familyName: 'Smith',
+  email: 'jane.smith@techcorp.com',
+  telephone: '+1-415-555-0123',
+  jobTitle: 'Senior Software Engineer',
+  worksFor: {
+    $id: 'biz_123',
+  },
+  hasOccupation: {
+    $type: 'Occupation',
+    name: 'Software Developer',
+    occupationalCategory: '15-1252.00',
+  },
+  address: {
+    $type: 'PostalAddress',
+    addressLocality: 'San Francisco',
+    addressRegion: 'CA',
+    addressCountry: 'US',
+  },
+})
+
+console.log('Created employee:', employee.$id)
+```
+
+### Read Employee
+
+```typescript
+import { $, db } from 'sdk.do'
+
+const employee = await db.get($.Person, 'person_789')
+
+console.log('Name:', `${employee.givenName} ${employee.familyName}`)
+console.log('Title:', employee.jobTitle)
+console.log('Email:', employee.email)
+
+// Get with employer
+const full = await db.get($.Person, 'person_789', {
+  include: ['worksFor'],
+})
+
+console.log('Works for:', full.worksFor.name)
+```
+
+### Update Employee
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Promote employee
+await db.update($.Person, 'person_789', {
+  jobTitle: 'Lead Software Engineer',
+  salary: {
+    $type: 'MonetaryAmount',
+    value: 150000,
+    currency: 'USD',
+  },
+})
+
+// Update contact info
+await db.update($.Person, 'person_789', {
+  email: 'jane.smith@newemail.com',
+  telephone: '+1-415-555-9999',
+})
+
+console.log('Employee updated')
+```
+
+### Delete Employee
+
+```typescript
+import { $, db } from 'sdk.do'
+
+await db.delete($.Person, 'person_789')
+
+console.log('Employee removed')
+```
+
+### List Employees
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// List all employees
+const employees = await db.list($.Person, {
+  where: {
+    worksFor: { $exists: true },
+  },
+})
+
+// List by company
+const companyEmployees = await db.list($.Person, {
+  where: {
+    'worksFor.$id': 'biz_123',
+  },
+})
+
+// List by job title
+const engineers = await db.list($.Person, {
+  where: {
+    jobTitle: { $contains: 'Engineer' },
+  },
+})
+
+// List by location
+const sfEmployees = await db.list($.Person, {
+  where: {
+    'address.addressLocality': 'San Francisco',
+  },
+})
+
+console.log('Engineers:', engineers.length)
+```
+
+## Order Processing
+
+E-commerce order management.
+
+### Create Order
+
+```typescript
+import { $, db } from 'sdk.do'
+
+const order = await db.create($.Order, {
+  orderNumber: 'ORD-2025-001',
+  orderDate: '2025-10-10T10:30:00Z',
+  orderStatus: 'Processing',
+  customer: {
+    $id: 'customer_123',
+  },
+  orderItems: [
+    {
+      $type: 'OrderItem',
+      orderedItem: { $id: 'product_456' },
+      orderQuantity: 2,
+      price: 299.99,
+    },
+    {
+      $type: 'OrderItem',
+      orderedItem: { $id: 'product_789' },
+      orderQuantity: 1,
+      price: 149.99,
+    },
+  ],
+  priceSpecification: {
+    $type: 'PriceSpecification',
+    price: 749.97,
+    priceCurrency: 'USD',
+  },
+  billingAddress: {
+    $type: 'PostalAddress',
+    streetAddress: '789 Customer Ln',
+    addressLocality: 'Oakland',
+    addressRegion: 'CA',
+    postalCode: '94612',
+    addressCountry: 'US',
+  },
+})
+
+console.log('Created order:', order.orderNumber)
+```
+
+### Read Order
+
+```typescript
+import { $, db } from 'sdk.do'
+
+const order = await db.get($.Order, 'order_123', {
+  include: ['customer', 'orderItems'],
+})
+
+console.log('Order:', order.orderNumber)
+console.log('Status:', order.orderStatus)
+console.log('Total:', order.priceSpecification.price)
+console.log('Items:', order.orderItems.length)
+console.log('Customer:', order.customer.email)
+```
+
+### Update Order
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Update order status
+await db.update($.Order, 'order_123', {
+  orderStatus: 'Shipped',
+  orderDelivery: {
+    $type: 'ParcelDelivery',
+    trackingNumber: '1Z999AA10123456784',
+    expectedArrivalFrom: '2025-10-15',
+    expectedArrivalUntil: '2025-10-17',
+  },
+})
+
+// Add tracking info
+await db.update($.Order, 'order_123', {
+  orderStatus: 'InTransit',
+  'orderDelivery.deliveryAddress': {
+    $type: 'PostalAddress',
+    streetAddress: '789 Customer Ln',
+    addressLocality: 'Oakland',
+    addressRegion: 'CA',
+    postalCode: '94612',
+    addressCountry: 'US',
+  },
+})
+
+console.log('Order updated')
+```
+
+### Cancel Order
+
+```typescript
+import { $, db } from 'sdk.do'
+
+await db.update($.Order, 'order_123', {
+  orderStatus: 'Cancelled',
+  cancellationReason: 'Customer request',
+})
+
+// Or delete completely
+// await db.delete($.Order, 'order_123')
+
+console.log('Order cancelled')
+```
+
+### Query Orders
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Recent orders
+const recent = await db.list($.Order, {
+  orderBy: { orderDate: 'desc' },
+  limit: 10,
+})
+
+// Orders by customer
+const customerOrders = await db.list($.Order, {
+  where: {
+    'customer.$id': 'customer_123',
+  },
+})
+
+// Orders by status
+const processing = await db.list($.Order, {
+  where: { orderStatus: 'Processing' },
+})
+
+// Orders in date range
+const rangeOrders = await db.list($.Order, {
+  where: {
+    orderDate: {
+      $gte: '2025-10-01',
+      $lte: '2025-10-31',
+    },
+  },
+})
+
+// High-value orders
+const premium = await db.list($.Order, {
+  where: {
+    'priceSpecification.price': { $gte: 500 },
+  },
+  orderBy: { 'priceSpecification.price': 'desc' },
+})
+
+console.log('Premium orders:', premium.length)
+```
+
+## Article Management
+
+Content management with articles and blog posts.
+
+### Create Article
+
+```typescript
+import { $, db } from 'sdk.do'
+
+const article = await db.create($.Article, {
+  headline: 'Getting Started with Business-as-Code',
+  alternativeHeadline: 'Build Autonomous Business Applications',
+  author: {
+    $id: 'person_123',
+  },
+  datePublished: '2025-10-10',
+  dateModified: '2025-10-10',
+  articleBody: 'Business-as-Code is a revolutionary approach...',
+  articleSection: 'Technology',
+  keywords: ['business-as-code', 'automation', 'ai'],
+  image: 'https://example.com/article-image.jpg',
+  publisher: {
+    $type: 'Organization',
+    name: 'TechCorp Blog',
+    logo: 'https://example.com/logo.png',
+  },
+})
+
+console.log('Created article:', article.$id)
+```
+
+### Read Article
+
+```typescript
+import { $, db } from 'sdk.do'
+
+const article = await db.get($.Article, 'article_123', {
+  include: ['author', 'publisher'],
+})
+
+console.log('Title:', article.headline)
+console.log('Author:', article.author.givenName)
+console.log('Published:', article.datePublished)
+console.log('Section:', article.articleSection)
+```
+
+### Update Article
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Update content
+await db.update($.Article, 'article_123', {
+  articleBody: 'Updated article content...',
+  dateModified: new Date().toISOString(),
+})
+
+// Add keywords
+const article = await db.get($.Article, 'article_123')
+await db.update($.Article, 'article_123', {
+  keywords: [...article.keywords, 'semantic-web', 'linked-data'],
+})
+
+console.log('Article updated')
+```
+
+### Delete Article
+
+```typescript
+import { $, db } from 'sdk.do'
+
+await db.delete($.Article, 'article_123')
+
+console.log('Article deleted')
+```
+
+### Search Articles
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Recent articles
+const recent = await db.list($.Article, {
+  orderBy: { datePublished: 'desc' },
+  limit: 10,
+})
+
+// Articles by author
+const authorArticles = await db.list($.Article, {
+  where: {
+    'author.$id': 'person_123',
+  },
+})
+
+// Articles by section
+const techArticles = await db.list($.Article, {
+  where: { articleSection: 'Technology' },
+})
+
+// Articles by keyword
+const tagged = await db.list($.Article, {
+  where: {
+    keywords: { $in: ['ai', 'automation'] },
+  },
+})
+
+// Published articles only
+const published = await db.list($.Article, {
+  where: {
+    datePublished: { $lte: new Date().toISOString() },
+  },
+})
+
+console.log('Published articles:', published.length)
+```
+
+## Batch Operations
+
+Efficient bulk operations.
+
+### Batch Create
+
+```typescript
+import { $, db } from 'sdk.do'
+
+const businesses = await db.createMany($.Business, [
+  {
+    name: 'TechCorp',
+    industry: 'Technology',
+  },
+  {
+    name: 'Globex Inc',
+    industry: 'Manufacturing',
+  },
+  {
+    name: 'Initech',
+    industry: 'Software',
+  },
+])
+
+console.log(`Created ${businesses.length} businesses`)
+```
+
+### Batch Update
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Update all technology businesses
+await db.updateMany($.Business, {
+  where: { industry: 'Technology' },
+  data: { verified: true },
+})
+
+// Update all products in category
+await db.updateMany($.Product, {
+  where: { category: 'Electronics' },
+  data: {
+    'offers.priceValidUntil': '2025-12-31',
+  },
+})
+
+console.log('Batch update complete')
+```
+
+### Batch Delete
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Delete old articles
+await db.deleteMany($.Article, {
+  where: {
+    datePublished: { $lt: '2020-01-01' },
+  },
+})
+
+// Delete inactive users
+await db.deleteMany($.Person, {
+  where: { status: 'inactive' },
+})
+
+console.log('Batch delete complete')
+```
+
+## Error Handling Examples
+
+### Handle Not Found
+
+```typescript
+import { $, db } from 'sdk.do'
+
+try {
+  const business = await db.get($.Business, 'biz_999')
+} catch (error) {
+  if (error.code === 'NOT_FOUND') {
+    console.log('Business does not exist')
+    // Create a new one or show error to user
+  }
+}
+```
+
+### Handle Validation Errors
+
+```typescript
+import { $, db } from 'sdk.do'
+
+try {
+  const business = await db.create($.Business, {
+    name: 'Test',
+    invalidField: 'value',
+  })
+} catch (error) {
+  if (error.code === 'VALIDATION_ERROR') {
+    console.error('Validation failed:', error.details)
+    // Show validation errors to user
+  }
+}
+```
+
+### Handle Duplicate Keys
+
+```typescript
+import { $, db } from 'sdk.do'
+
+try {
+  const product = await db.create($.Product, {
+    name: 'Widget',
+    sku: 'WGT-001', // Already exists
+  })
+} catch (error) {
+  if (error.code === 'DUPLICATE_KEY') {
+    console.error('SKU already exists')
+    // Prompt user to use different SKU
+  }
+}
+```
+
+## Complete Application Example
+
+Full CRUD application for business management:
+
+```typescript
+import { $, db } from 'sdk.do'
+
+class BusinessManager {
+  // Create business with validation
+  async createBusiness(data) {
+    try {
+      const business = await db.create($.Business, data)
+      console.log('Created:', business.$id)
+      return business
+    } catch (error) {
+      console.error('Create failed:', error.message)
+      throw error
+    }
+  }
+
+  // Get business with relationships
+  async getBusiness(id) {
+    try {
+      return await db.get($.Business, id, {
+        include: ['brands', 'employees', 'address'],
+      })
+    } catch (error) {
+      if (error.code === 'NOT_FOUND') {
+        console.error('Business not found')
+      }
+      throw error
+    }
+  }
+
+  // Update business safely
+  async updateBusiness(id, updates) {
+    try {
+      await db.update($.Business, id, updates)
+      console.log('Updated:', id)
+      return await this.getBusiness(id)
+    } catch (error) {
+      console.error('Update failed:', error.message)
+      throw error
+    }
+  }
+
+  // Delete business with confirmation
+  async deleteBusiness(id) {
+    try {
+      // Check if business has dependencies
+      const brands = await db.relate(id, $.owns, $.Brand)
+      if (brands.length > 0) {
+        throw new Error('Cannot delete: business has brands')
+      }
+
+      await db.delete($.Business, id)
+      console.log('Deleted:', id)
+    } catch (error) {
+      console.error('Delete failed:', error.message)
+      throw error
+    }
+  }
+
+  // Search businesses
+  async searchBusinesses(filters = {}) {
+    return await db.list($.Business, {
+      where: filters,
+      orderBy: { name: 'asc' },
+    })
+  }
+}
+
+// Usage
+const manager = new BusinessManager()
+
+// Create
+const biz = await manager.createBusiness({
+  name: 'TechCorp',
+  industry: 'Technology',
+})
+
+// Read
+const full = await manager.getBusiness(biz.$id)
+
+// Update
+await manager.updateBusiness(biz.$id, {
+  numberOfEmployees: 100,
+})
+
+// Search
+const techBiz = await manager.searchBusinesses({
+  industry: 'Technology',
+})
+
+// Delete
+await manager.deleteBusiness(biz.$id)
+```
+
+## See Also
+
+- [Getting Started](../docs/getting-started) - Basic setup
+- [Operations Reference](../docs/operations) - Detailed operation docs
+- [Relationships Examples](./relationships) - Relationship examples
+- [API Reference](../api/) - Complete API docs
+
+## License
+
+MIT (Open Source)

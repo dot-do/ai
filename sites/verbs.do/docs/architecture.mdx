@@ -1,0 +1,114 @@
+---
+$id: https://verbs.do/docs/architecture
+$type: TechArticle
+title: verbs.do Architecture
+description: System design and technical architecture of the verbs.do semantic verb system
+keywords: [architecture, design, graphdl, predicates, operations]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# verbs.do Architecture
+
+Technical architecture of the semantic verb and operation system.
+
+## System Overview
+
+```
+┌─────────────────────────────────────┐
+│     Application Layer                │
+│  (Business-as-Code Application)      │
+└──────────────┬──────────────────────┘
+               │
+┌──────────────▼──────────────────────┐
+│     verbs.do (Operations)            │
+│  $.create, $.update, $.relate, ...  │
+└──────────────┬──────────────────────┘
+               │
+┌──────────────▼──────────────────────┐
+│     Verb Registry                    │
+│  • CRUD operations                   │
+│  • GraphDL predicates                │
+│  • Schema.org Actions                │
+│  • Custom verbs                      │
+└─────────────────────────────────────┘
+```
+
+## Core Components
+
+### 1. Verb Registry
+
+Maintains all verb definitions:
+
+```typescript
+interface VerbRegistry {
+  verbs: Map<string, VerbDefinition>
+  predicates: Map<string, PredicateDefinition>
+  actions: Map<string, ActionDefinition>
+}
+
+interface VerbDefinition {
+  name: string
+  description: string
+  params: ParameterDefinition[]
+  returns: TypeReference
+  implementation: Function
+}
+```
+
+### 2. GraphDL Predicates
+
+Semantic relationship predicates:
+
+```typescript
+const predicates = {
+  worksFor: { domain: $.Person, range: $.Organization },
+  employs: { domain: $.Organization, range: $.Person },
+  owns: { domain: $.Thing, range: $.Thing },
+  manages: { domain: $.Person, range: $.Thing },
+  produces: { domain: $.Organization, range: $.Product },
+}
+```
+
+### 3. Operation Executor
+
+Executes verb operations:
+
+```typescript
+class OperationExecutor {
+  async execute(verb: string, params: any[]): Promise<any> {
+    const definition = registry.getVerb(verb)
+    return await definition.implementation(...params)
+  }
+}
+```
+
+## Performance Optimizations
+
+### Verb Caching
+
+```typescript
+const verbCache = new Map<string, VerbDefinition>()
+
+function getCachedVerb(name: string): VerbDefinition {
+  if (!verbCache.has(name)) {
+    verbCache.set(name, registry.getVerb(name))
+  }
+  return verbCache.get(name)!
+}
+```
+
+### Batch Operations
+
+```typescript
+async function batchCreate(type: TypeReference, items: any[]) {
+  return await Promise.all(items.map((item) => $.create(type, item)))
+}
+```
+
+## Related Documentation
+
+- [Getting Started](./getting-started)
+- [Best Practices](./best-practices)
+- [API Reference](../api/reference)

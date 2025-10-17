@@ -1,0 +1,733 @@
+---
+$id: https://orders.do/docs/best-practices
+$type: TechArticle
+title: Order Management Best Practices
+description: Best practices for building robust, scalable order management systems with semantic patterns, error handling, and performance optimization.
+keywords: [best practices, order management, patterns, error handling, performance, optimization]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Order Management Best Practices
+
+This guide covers best practices for building robust, scalable order management systems with orders.do.
+
+## Data Modeling
+
+### Always Use Semantic Types
+
+Use Schema.org types consistently:
+
+```typescript
+// Good: Explicit types
+const order = await db.create($.Order, {
+  $type: 'Order',
+  customer: {
+    $type: 'Person',
+    name: 'Jane Smith',
+  },
+  orderedItem: [
+    {
+      $type: 'OrderItem',
+      orderedItem: {
+        $type: 'Product',
+        name: 'Laptop',
+      },
+    },
+  ],
+})
+
+// Bad: Missing types
+const order = await db.create($.Order, {
+  customer: { name: 'Jane Smith' },
+  items: [{ product: 'Laptop' }],
+})
+```
+
+### Include Required Fields
+
+Always include essential order information:
+
+```typescript
+const requiredFields = {
+  orderNumber: 'ORD-2025-001', // Unique identifier
+  orderDate: new Date().toISOString(), // When placed
+  orderStatus: 'OrderProcessing', // Current state
+  customer: customerData, // Who ordered
+  orderedItem: items, // What was ordered
+  paymentMethod: paymentInfo, // How to pay
+  billingAddress: billingAddr, // Billing location
+  orderDelivery: deliveryInfo, // Where to ship
+}
+```
+
+### Use Unique Order Numbers
+
+Generate unique, sequential order numbers:
+
+```typescript
+async function generateOrderNumber(): Promise<string> {
+  const date = new Date()
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+
+  // Get last order number for this month
+  const lastOrder = await db.list($.Order, {
+    where: {
+      orderNumber: { $regex: `^ORD-${year}${month}` },
+    },
+    sort: { orderNumber: -1 },
+    limit: 1,
+  })
+
+  const lastNum = lastOrder[0] ? parseInt(lastOrder[0].orderNumber.split('-').pop()) : 0
+
+  const nextNum = String(lastNum + 1).padStart(6, '0')
+  return `ORD-${year}${month}-${nextNum}`
+}
+
+// Usage
+const orderNumber = await generateOrderNumber()
+// → "ORD-202510-000001"
+```
+
+## State Management
+
+### Validate State Transitions
+
+Enforce valid status transitions:
+
+```typescript
+const validTransitions: Record<OrderStatus, OrderStatus[]> = {
+  OrderPending: ['OrderProcessing', 'OrderCancelled'],
+  OrderProcessing: ['OrderInTransit', 'OrderProblem', 'OrderCancelled'],
+  OrderInTransit: ['OrderDelivered', 'OrderProblem'],
+  OrderDelivered: ['OrderReturned'],
+  OrderProblem: ['OrderProcessing', 'OrderCancelled'],
+  OrderCancelled: [],
+  OrderReturned: [],
+}
+
+async function updateOrderStatus(order: Order, newStatus: OrderStatus): Promise<Order> {
+  const currentStatus = order.orderStatus
+
+  if (!validTransitions[currentStatus]?.includes(newStatus)) {
+    throw new Error(`Cannot transition from ${currentStatus} to ${newStatus}`)
+  }
+
+  return await db.update(order, {
+    orderStatus: newStatus,
+    statusHistory: [
+      ...(order.statusHistory || []),
+      {
+        status: newStatus,
+        timestamp: new Date().toISOString(),
+        changedBy: 'system',
+      },
+    ],
+  })
+}
+```
+
+### Track Status History
+
+Maintain a complete history of status changes:
+
+```typescript
+interface StatusHistoryEntry {
+  status: OrderStatus
+  timestamp: string
+  changedBy: string
+  reason?: string
+  metadata?: Record<string, any>
+}
+
+const order = await db.create($.Order, {
+  $type: 'Order',
+  // ... other fields
+  statusHistory: [
+    {
+      status: 'OrderPending',
+      timestamp: new Date().toISOString(),
+      changedBy: 'customer',
+    },
+  ],
+})
+
+// When updating status
+await db.update(order, {
+  orderStatus: newStatus,
+  statusHistory: [
+    ...order.statusHistory,
+    {
+      status: newStatus,
+      timestamp: new Date().toISOString(),
+      changedBy: userId,
+      reason: 'Payment processed successfully',
+    },
+  ],
+})
+```
+
+## Validation
+
+### Validate Before Processing
+
+Always validate orders before processing:
+
+```typescript
+async function validateOrder(order: Order): Promise<ValidationResult> {
+  const errors: string[] = []
+
+  // Validate customer
+  if (!order.customer?.$id) {
+    errors.push('Customer is required')
+  }
+
+  // Validate items
+  if (!order.orderedItem?.length) {
+    errors.push('Order must have at least one item')
+  }
+
+  // Validate inventory
+  for (const item of order.orderedItem) {
+    const product = await db.get($.Product, item.orderedItem.$id)
+    if (!product) {
+      errors.push(`Product ${item.orderedItem.name} not found`)
+    } else if (product.quantityAvailable < item.orderQuantity) {
+      errors.push(`Insufficient inventory for ${item.orderedItem.name}. ` + `Available: ${product.quantityAvailable}, ` + `Requested: ${item.orderQuantity}`)
+    }
+  }
+
+  // Validate payment method
+  if (!order.paymentMethod) {
+    errors.push('Payment method is required')
+  }
+
+  // Validate addresses
+  if (!order.billingAddress) {
+    errors.push('Billing address is required')
+  }
+  if (!order.orderDelivery?.deliveryAddress) {
+    errors.push('Delivery address is required')
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+  }
+}
+
+// Use in order creation
+await on($.Order.created, async (order) => {
+  const validation = await validateOrder(order)
+
+  if (!validation.valid) {
+    await db.update(order, {
+      orderStatus: 'OrderProblem',
+      orderProblem: validation.errors.join('; '),
+    })
+    return
+  }
+
+  // Continue processing...
+})
+```
+
+### Validate Price Calculations
+
+Ensure pricing is correct:
+
+```typescript
+function validateOrderPricing(order: Order): boolean {
+  // Calculate expected subtotal
+  const calculatedSubtotal = order.orderedItem.reduce((sum, item) => {
+    return sum + item.price.price * item.orderQuantity
+  }, 0)
+
+  // Calculate expected tax
+  const taxRate = 0.08
+  const calculatedTax = calculatedSubtotal * taxRate
+
+  // Get shipping cost
+  const shippingCost = order.orderDelivery?.shippingCost || 0
+
+  // Calculate expected total
+  const calculatedTotal = calculatedSubtotal + calculatedTax + shippingCost
+
+  // Compare with order total
+  const orderTotal = order.priceSpecification?.price || 0
+  const difference = Math.abs(calculatedTotal - orderTotal)
+
+  // Allow for small rounding differences
+  return difference < 0.01
+}
+```
+
+## Error Handling
+
+### Implement Retry Logic
+
+Handle transient failures with retries:
+
+```typescript
+async function processOrderWithRetry(order: Order, maxRetries = 3): Promise<void> {
+  let attempts = 0
+  let lastError: Error
+
+  while (attempts < maxRetries) {
+    try {
+      await processOrder(order)
+      return // Success
+    } catch (error) {
+      attempts++
+      lastError = error
+
+      if (attempts < maxRetries) {
+        // Exponential backoff
+        const delay = Math.pow(2, attempts) * 1000
+        await new Promise((resolve) => setTimeout(resolve, delay))
+      }
+    }
+  }
+
+  // All retries failed
+  await db.update(order, {
+    orderStatus: 'OrderProblem',
+    orderProblem: `Failed after ${maxRetries} attempts: ${lastError.message}`,
+  })
+
+  throw lastError
+}
+```
+
+### Handle Payment Failures
+
+Gracefully handle payment issues:
+
+```typescript
+async function processPaymentSafely(order: Order): Promise<void> {
+  try {
+    const result = await processPayment(order)
+
+    if (!result.success) {
+      await db.update(order, {
+        orderStatus: 'OrderProblem',
+        orderProblem: 'Payment declined',
+        paymentStatus: 'PaymentDeclined',
+      })
+
+      await send({
+        $type: 'EmailMessage',
+        recipient: order.customer.email,
+        subject: 'Payment Issue',
+        text: 'There was a problem processing your payment.',
+      })
+    }
+  } catch (error) {
+    await db.update(order, {
+      orderStatus: 'OrderProblem',
+      orderProblem: `Payment error: ${error.message}`,
+      paymentStatus: 'PaymentFailed',
+    })
+
+    // Notify support team
+    await send({
+      $type: 'Alert',
+      severity: 'high',
+      message: `Payment processing failed for order ${order.orderNumber}`,
+      error: error.message,
+    })
+  }
+}
+```
+
+### Log Important Events
+
+Maintain comprehensive order logs:
+
+```typescript
+interface OrderLog {
+  timestamp: string
+  level: 'info' | 'warn' | 'error'
+  event: string
+  details: Record<string, any>
+}
+
+async function logOrderEvent(order: Order, level: OrderLog['level'], event: string, details: Record<string, any> = {}): Promise<void> {
+  const log: OrderLog = {
+    timestamp: new Date().toISOString(),
+    level,
+    event,
+    details,
+  }
+
+  await db.update(order, {
+    logs: [...(order.logs || []), log],
+  })
+
+  // Also log to centralized logging
+  console.log(`[${level.toUpperCase()}] Order ${order.orderNumber}: ${event}`, details)
+}
+
+// Usage
+await logOrderEvent(order, 'info', 'Order created', {
+  items: order.orderedItem.length,
+  total: calculateOrderTotal(order).total,
+})
+
+await logOrderEvent(order, 'error', 'Payment failed', {
+  reason: 'Card declined',
+  attemptNumber: 1,
+})
+```
+
+## Performance Optimization
+
+### Use Batch Operations
+
+Process multiple orders efficiently:
+
+```typescript
+// Bad: Process one at a time
+for (const order of orders) {
+  await processOrder(order)
+}
+
+// Good: Batch process
+await Promise.all(orders.map((order) => processOrder(order)))
+
+// Better: Batch with concurrency limit
+import pLimit from 'p-limit'
+
+const limit = pLimit(10) // Max 10 concurrent
+await Promise.all(orders.map((order) => limit(() => processOrder(order))))
+```
+
+### Cache Frequently Accessed Data
+
+Cache product information:
+
+```typescript
+const productCache = new Map()
+
+async function getProduct(productId: string): Promise<Product> {
+  // Check cache first
+  if (productCache.has(productId)) {
+    return productCache.get(productId)
+  }
+
+  // Fetch from database
+  const product = await db.get($.Product, productId)
+
+  // Cache for 5 minutes
+  productCache.set(productId, product)
+  setTimeout(() => productCache.delete(productId), 5 * 60 * 1000)
+
+  return product
+}
+```
+
+### Optimize Database Queries
+
+Use efficient query patterns:
+
+```typescript
+// Bad: Multiple queries
+const orders = await db.list($.Order)
+for (const order of orders) {
+  order.customer = await db.get($.Person, order.customer.$id)
+  for (const item of order.orderedItem) {
+    item.product = await db.get($.Product, item.orderedItem.$id)
+  }
+}
+
+// Good: Use relationships
+const orders = await db.list($.Order, {
+  include: ['customer', 'orderedItem.orderedItem'],
+})
+```
+
+## Security
+
+### Validate User Permissions
+
+Check permissions before operations:
+
+```typescript
+async function cancelOrder(orderId: string, userId: string): Promise<Order> {
+  const order = await db.get($.Order, orderId)
+
+  // Check if user owns the order
+  if (order.customer.$id !== userId) {
+    const user = await db.get($.Person, userId)
+    // Check if user is admin
+    if (!user.roles?.includes('admin')) {
+      throw new Error('Unauthorized: Cannot cancel this order')
+    }
+  }
+
+  // Proceed with cancellation
+  return await cancelOrderInternal(order)
+}
+```
+
+### Sanitize Input Data
+
+Clean user-provided data:
+
+```typescript
+function sanitizeOrderInput(input: any): Partial<Order> {
+  return {
+    customer: {
+      $type: 'Person',
+      name: sanitizeString(input.customer?.name),
+      email: sanitizeEmail(input.customer?.email),
+    },
+    billingAddress: sanitizeAddress(input.billingAddress),
+    orderDelivery: {
+      $type: 'ParcelDelivery',
+      deliveryAddress: sanitizeAddress(input.deliveryAddress),
+    },
+  }
+}
+```
+
+### Protect Sensitive Data
+
+Redact sensitive information in logs:
+
+```typescript
+function redactSensitiveData(order: Order): Order {
+  return {
+    ...order,
+    paymentMethod: {
+      ...order.paymentMethod,
+      cardNumber: '****', // Redact card number
+    },
+    customer: {
+      ...order.customer,
+      ssn: undefined, // Remove SSN
+    },
+  }
+}
+
+// Use when logging
+console.log('Order created:', redactSensitiveData(order))
+```
+
+## Testing
+
+### Write Unit Tests
+
+Test order processing logic:
+
+```typescript
+import { describe, it, expect } from 'vitest'
+
+describe('Order Processing', () => {
+  it('should calculate order total correctly', () => {
+    const order = createTestOrder()
+    const total = calculateOrderTotal(order)
+
+    expect(total.subtotal).toBe(100)
+    expect(total.tax).toBe(8)
+    expect(total.shipping).toBe(9.99)
+    expect(total.total).toBe(117.99)
+  })
+
+  it('should validate order before processing', async () => {
+    const invalidOrder = createTestOrder({ orderedItem: [] })
+    const result = await validateOrder(invalidOrder)
+
+    expect(result.valid).toBe(false)
+    expect(result.errors).toContain('Order must have at least one item')
+  })
+})
+```
+
+### Test Event Handlers
+
+Test order event workflows:
+
+```typescript
+describe('Order Events', () => {
+  it('should send confirmation email on order creation', async () => {
+    const emailsSent = []
+
+    // Mock email sending
+    const originalSend = send
+    send = async (message) => {
+      emailsSent.push(message)
+    }
+
+    // Create order
+    const order = await db.create($.Order, testOrderData)
+
+    // Trigger event handler
+    await triggerEvent($.Order.created, order)
+
+    // Verify email was sent
+    expect(emailsSent).toHaveLength(1)
+    expect(emailsSent[0].$type).toBe('EmailMessage')
+    expect(emailsSent[0].recipient).toBe(order.customer.email)
+
+    // Restore original send
+    send = originalSend
+  })
+})
+```
+
+## Monitoring
+
+### Track Key Metrics
+
+Monitor order processing performance:
+
+```typescript
+const orderMetrics = {
+  ordersCreated: 0,
+  ordersProcessed: 0,
+  ordersFulfilled: 0,
+  ordersDelivered: 0,
+  ordersCancelled: 0,
+  averageProcessingTime: 0,
+  orderValue: 0,
+}
+
+await on($.Order.created, async (order) => {
+  orderMetrics.ordersCreated++
+  orderMetrics.orderValue += calculateOrderTotal(order).total
+})
+
+await on($.Order.delivered, async (order) => {
+  orderMetrics.ordersDelivered++
+
+  const processingTime = new Date(order.deliveredAt).getTime() - new Date(order.orderDate).getTime()
+
+  orderMetrics.averageProcessingTime = (orderMetrics.averageProcessingTime * (orderMetrics.ordersDelivered - 1) + processingTime) / orderMetrics.ordersDelivered
+})
+```
+
+### Set Up Alerts
+
+Alert on critical issues:
+
+```typescript
+await on($.Order.updated, async (order) => {
+  // Alert on failed payments
+  if (order.paymentStatus === 'PaymentFailed') {
+    await send({
+      $type: 'Alert',
+      severity: 'high',
+      message: `Payment failed for order ${order.orderNumber}`,
+      order: order.$id,
+    })
+  }
+
+  // Alert on stuck orders
+  const hoursSinceCreation = (Date.now() - new Date(order.orderDate).getTime()) / (1000 * 60 * 60)
+
+  if (order.orderStatus === 'OrderProcessing' && hoursSinceCreation > 24) {
+    await send({
+      $type: 'Alert',
+      severity: 'medium',
+      message: `Order ${order.orderNumber} stuck in processing for 24+ hours`,
+      order: order.$id,
+    })
+  }
+})
+```
+
+## Documentation
+
+### Document Order Schemas
+
+Provide clear schema documentation:
+
+````typescript
+/**
+ * Order entity representing a customer purchase
+ *
+ * @example
+ * ```typescript
+ * const order = await db.create($.Order, {
+ *   $type: 'Order',
+ *   orderNumber: 'ORD-2025-001',
+ *   customer: customerData,
+ *   orderedItem: items
+ * })
+ * ```
+ */
+interface Order {
+  /** Unique order identifier */
+  $id: string
+
+  /** Schema.org type */
+  $type: 'Order'
+
+  /** Unique order number */
+  orderNumber: string
+
+  /** ISO 8601 date when order was placed */
+  orderDate: string
+
+  /** Current order status */
+  orderStatus: OrderStatus
+
+  // ... more fields
+}
+````
+
+### Provide Usage Examples
+
+Include comprehensive examples:
+
+```typescript
+// examples/basic-order.ts
+import $, { db } from 'sdk.do'
+
+// Create a basic order
+const order = await db.create($.Order, {
+  $type: 'Order',
+  orderNumber: await generateOrderNumber(),
+  orderDate: new Date().toISOString(),
+  customer: {
+    $id: 'customer-123',
+    $type: 'Person',
+  },
+  orderedItem: [
+    {
+      $type: 'OrderItem',
+      orderItemNumber: '1',
+      orderedItem: {
+        $id: 'product-456',
+        $type: 'Product',
+      },
+      orderQuantity: 1,
+      price: {
+        $type: 'PriceSpecification',
+        price: 99.99,
+        priceCurrency: 'USD',
+      },
+    },
+  ],
+  orderStatus: 'OrderProcessing',
+})
+```
+
+## See Also
+
+- [Getting Started](./getting-started)
+- [Architecture](./architecture)
+- [Troubleshooting](./troubleshooting)
+- [API Reference](../api/)
+
+## License
+
+MIT (Open Source)
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

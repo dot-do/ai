@@ -1,0 +1,103 @@
+---
+$id: https://integrations.do/fireflies
+$type: Integration
+name: Fireflies
+service: fireflies
+description: Fireflies.ai helps your team transcribe, summarize, search, and analyze voice conversations.
+category: analytics
+sdkBased: false
+baseUrl: https://api.fireflies.com
+
+auth:
+  type: api-key
+  location: header
+  headerName: Authorization
+  scheme: Bearer
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Fireflies actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: true
+  verificationMethod: none
+  events:
+    - name: generic_trigger
+      type: trigger
+      description: Generic webhook trigger
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://www.fireflies.ai
+  apiDocs: https://www.fireflies.ai
+---
+
+# Fireflies Integration
+
+Fireflies.ai helps your team transcribe, summarize, search, and analyze voice conversations.
+
+## Quick Start
+
+```typescript
+import { FirefliesClient } from '@dotdo/sdk.do/integrations/fireflies'
+
+const fireflies = new FirefliesClient({
+  apiKey: process.env.FIREFLIES_API_KEY,
+})
+
+const result = await fireflies.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Fireflies provides 10 actions through the Composio API.
+
+## Webhooks
+
+Fireflies supports 1 webhook triggers for real-time event notifications.
+
+## License
+
+MIT

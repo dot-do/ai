@@ -1,0 +1,866 @@
+---
+$id: https://auth.do
+$type: WebSite
+name: auth.do
+description: Comprehensive authentication framework for Business-as-Code applications with JWT, API keys, multi-factor auth, RBAC, and permissions
+license: CC-BY-4.0
+keywords: [authentication, auth, jwt, api-keys, mfa, multi-factor, rbac, permissions, security, business-as-code]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# auth.do
+
+**Comprehensive authentication framework for Business-as-Code applications**
+
+auth.do provides the authentication infrastructure in the `.do` platform's Business-as-Code SDK. It enables secure user authentication with JWT tokens, API keys, multi-factor authentication (MFA), role-based access control (RBAC), and fine-grained permissions using semantic patterns that are both human-readable and AI-understandable.
+
+## Quick Start
+
+```bash
+pnpm add sdk.do
+```
+
+```typescript
+import { auth } from 'sdk.do'
+
+// Authenticate with email/password
+const session = await auth.login({
+  email: 'user@example.com',
+  password: 'secure-password',
+})
+
+console.log(session.token) // JWT token
+console.log(session.userId) // "user_123"
+console.log(session.expiresAt) // Token expiration
+
+// Verify JWT token
+const payload = await auth.verifyToken(session.token)
+console.log(payload.userId) // "user_123"
+console.log(payload.role) // "admin"
+
+// Check permissions
+const canEdit = await auth.authorize('edit', 'Product')
+if (canEdit) {
+  console.log('User can edit products')
+}
+
+// Generate API key
+const apiKey = await auth.createApiKey({
+  name: 'Production API',
+  scopes: ['read', 'write'],
+})
+console.log(apiKey.key) // "sk_live_abc123..."
+```
+
+## Key Features
+
+### JWT Authentication
+
+Secure token-based authentication with JSON Web Tokens:
+
+```typescript
+import { auth } from 'sdk.do'
+
+// Login with email/password
+const session = await auth.login({
+  email: 'user@example.com',
+  password: 'secure-password',
+})
+
+console.log(session)
+// {
+//   token: "eyJhbGciOiJIUzI1NiIs...",
+//   userId: "user_123",
+//   expiresAt: "2025-10-11T12:00:00Z",
+//   refreshToken: "rt_abc123..."
+// }
+
+// Verify token
+const payload = await auth.verifyToken(session.token)
+console.log(payload)
+// {
+//   userId: "user_123",
+//   email: "user@example.com",
+//   role: "admin",
+//   iat: 1728475200,
+//   exp: 1728561600
+// }
+
+// Refresh token
+const newSession = await auth.refreshToken(session.refreshToken)
+console.log(newSession.token) // New JWT token
+```
+
+### API Key Authentication
+
+Generate and manage API keys for programmatic access:
+
+```typescript
+import { auth } from 'sdk.do'
+
+// Generate API key
+const apiKey = await auth.createApiKey({
+  name: 'Production API',
+  scopes: ['read:products', 'write:products', 'delete:orders'],
+})
+
+console.log(apiKey)
+// {
+//   key: "sk_live_abc123...",
+//   name: "Production API",
+//   scopes: ["read:products", "write:products", "delete:orders"],
+//   createdAt: "2025-10-10T12:00:00Z"
+// }
+
+// Authenticate with API key
+await auth.authenticateApiKey('sk_live_abc123...')
+
+// List API keys for user
+const keys = await auth.listApiKeys()
+
+// Revoke API key
+await auth.revokeApiKey('sk_live_abc123...')
+```
+
+### Multi-Factor Authentication (MFA)
+
+Add an extra layer of security with MFA:
+
+```typescript
+import { auth } from 'sdk.do'
+
+// Enable MFA for user
+const mfaSetup = await auth.enableMFA({
+  method: 'totp', // Time-based One-Time Password
+  userId: 'user_123',
+})
+
+console.log(mfaSetup)
+// {
+//   secret: "JBSWY3DPEHPK3PXP",
+//   qrCode: "data:image/png;base64,...",
+//   backupCodes: ["123456", "789012", ...]
+// }
+
+// Verify MFA code during login
+const session = await auth.login({
+  email: 'user@example.com',
+  password: 'secure-password',
+  mfaCode: '123456',
+})
+
+// Verify MFA code
+const isValid = await auth.verifyMFA({
+  userId: 'user_123',
+  code: '123456',
+})
+
+// Disable MFA
+await auth.disableMFA({ userId: 'user_123' })
+```
+
+### Role-Based Access Control (RBAC)
+
+Define and enforce role-based permissions:
+
+```typescript
+import { $, auth } from 'sdk.do'
+
+// Define roles with permissions
+await auth.defineRole({
+  name: 'admin',
+  permissions: ['*'], // All permissions
+})
+
+await auth.defineRole({
+  name: 'editor',
+  permissions: ['create:Product', 'read:Product', 'update:Product', 'read:Order', 'update:Order'],
+})
+
+await auth.defineRole({
+  name: 'viewer',
+  permissions: ['read:Product', 'read:Order'],
+})
+
+// Assign role to user
+await auth.assignRole('user_123', 'editor')
+
+// Check if user has role
+const hasRole = await auth.hasRole('user_123', 'editor')
+console.log(hasRole) // true
+
+// Get user roles
+const roles = await auth.getUserRoles('user_123')
+console.log(roles) // ["editor"]
+
+// Remove role from user
+await auth.removeRole('user_123', 'editor')
+```
+
+### Fine-Grained Permissions
+
+Check specific permissions for authorization:
+
+```typescript
+import { $, auth } from 'sdk.do'
+
+// Check if user can perform action
+const canEdit = await auth.authorize('edit', $.Product)
+const canDelete = await auth.authorize('delete', $.Order)
+const canCreate = await auth.authorize('create', $.Business)
+
+// Check permission on specific entity
+const product = await db.get($.Product, 'prod_123')
+const canEditProduct = await auth.authorize('edit', product)
+
+// Check multiple permissions
+const permissions = await auth.checkPermissions([
+  { action: 'read', resource: $.Product },
+  { action: 'write', resource: $.Product },
+  { action: 'delete', resource: $.Order },
+])
+
+console.log(permissions)
+// {
+//   'read:Product': true,
+//   'write:Product': true,
+//   'delete:Order': false
+// }
+```
+
+### OAuth 2.0 Integration
+
+Integrate with OAuth 2.0 providers:
+
+```typescript
+import { auth } from 'sdk.do'
+
+// Start OAuth flow
+const authUrl = await auth.oauth({
+  provider: 'google',
+  redirectUri: 'https://app.example.com/auth/callback',
+  scopes: ['email', 'profile'],
+})
+
+// Redirect user to authUrl
+console.log(authUrl)
+// "https://accounts.google.com/o/oauth2/v2/auth?..."
+
+// Handle OAuth callback
+const session = await auth.oauthCallback({
+  code: 'auth_code_from_provider',
+  state: 'state_token',
+})
+
+console.log(session.userId) // "user_123"
+console.log(session.token) // JWT token
+```
+
+## Features
+
+- **JWT Authentication**: Secure token-based authentication with access and refresh tokens
+- **API Key Management**: Generate, list, and revoke API keys for programmatic access
+- **Multi-Factor Authentication**: TOTP-based MFA with QR codes and backup codes
+- **Role-Based Access Control**: Define roles and assign permissions
+- **Fine-Grained Permissions**: Check specific action permissions on resources
+- **OAuth 2.0 Support**: Integrate with Google, GitHub, Microsoft, and custom providers
+- **Session Management**: Create, refresh, and revoke user sessions
+- **Password Hashing**: Secure password storage with bcrypt
+- **Magic Links**: Passwordless authentication via email
+- **Type Safety**: Full TypeScript support with Schema.org types
+- **Semantic Patterns**: Use `$.Subject.predicate.Object` patterns for permissions
+- **AI-Native**: Designed for AI agents to understand and execute
+
+## Documentation
+
+- [Getting Started](./docs/getting-started) - Installation and basic setup
+- [Architecture](./docs/architecture) - Authentication architecture and flows
+- [Best Practices](./docs/best-practices) - Security best practices
+- [Troubleshooting](./docs/troubleshooting) - Common issues and solutions
+- [API Reference](./api/) - Complete API documentation
+
+## Examples
+
+- [Basic Usage](./examples/basic-usage) - Simple authentication flow
+- [Advanced Patterns](./examples/advanced-patterns) - Complex auth scenarios
+- [Integration](./examples/integration) - Integration with other services
+- [Real-World Use Case](./examples/real-world-use-case) - Production implementation
+
+## Use Cases
+
+### Protected API Endpoints
+
+Secure your API endpoints with authentication:
+
+```typescript
+import { auth } from 'sdk.do'
+
+export async function protectedEndpoint(request: Request) {
+  // Extract token from Authorization header
+  const authHeader = request.headers.get('Authorization')
+  const token = authHeader?.replace('Bearer ', '')
+
+  if (!token) {
+    return new Response('Unauthorized', { status: 401 })
+  }
+
+  try {
+    // Verify token
+    const payload = await auth.verifyToken(token)
+
+    // Check permission
+    if (!(await auth.authorize('read', 'Product'))) {
+      return new Response('Forbidden', { status: 403 })
+    }
+
+    // Process request
+    return new Response(JSON.stringify({ message: 'Success' }))
+  } catch (error) {
+    return new Response('Unauthorized', { status: 401 })
+  }
+}
+```
+
+### User Registration with Email Verification
+
+Create secure user registration flow:
+
+```typescript
+import { $, auth, db, send } from 'sdk.do'
+
+export async function registerUser(data: any) {
+  // Create user account
+  const user = await db.create($.Person, {
+    email: data.email,
+    name: data.name,
+    emailVerified: false,
+  })
+
+  // Hash password
+  const hashedPassword = await auth.hashPassword(data.password)
+
+  // Store credentials
+  await db.create($.Credentials, {
+    userId: user.$id,
+    passwordHash: hashedPassword,
+  })
+
+  // Send verification email
+  const verificationToken = await auth.createVerificationToken(user.$id)
+
+  await send($.Email.send, {
+    to: user.email,
+    subject: 'Verify your email',
+    body: `Click here to verify: https://app.example.com/verify?token=${verificationToken}`,
+  })
+
+  return { userId: user.$id, message: 'Verification email sent' }
+}
+
+export async function verifyEmail(token: string) {
+  const userId = await auth.verifyVerificationToken(token)
+
+  await db.update($.Person, userId, {
+    emailVerified: true,
+  })
+
+  return { success: true }
+}
+```
+
+### API Key Authentication for Third-Party Integrations
+
+Enable third-party access with API keys:
+
+```typescript
+import { auth } from 'sdk.do'
+
+export async function apiKeyMiddleware(request: Request) {
+  // Extract API key from header
+  const apiKey = request.headers.get('X-API-Key')
+
+  if (!apiKey) {
+    return new Response('API key required', { status: 401 })
+  }
+
+  try {
+    // Authenticate with API key
+    const keyData = await auth.authenticateApiKey(apiKey)
+
+    // Check scopes
+    const requiredScope = 'read:products'
+    if (!keyData.scopes.includes(requiredScope) && !keyData.scopes.includes('*')) {
+      return new Response('Insufficient permissions', { status: 403 })
+    }
+
+    // Add key data to request context
+    return { userId: keyData.userId, scopes: keyData.scopes }
+  } catch (error) {
+    return new Response('Invalid API key', { status: 401 })
+  }
+}
+```
+
+### Multi-Tenant Authentication
+
+Isolate authentication by organization:
+
+```typescript
+import { $, auth, db } from 'sdk.do'
+
+export async function loginWithOrganization(credentials: any) {
+  // Authenticate user
+  const session = await auth.login({
+    email: credentials.email,
+    password: credentials.password,
+  })
+
+  // Get user
+  const user = await db.get($.Person, session.userId)
+
+  // Verify organization access
+  if (user.organization?.$id !== credentials.organizationId) {
+    throw new Error('User does not belong to this organization')
+  }
+
+  // Add organization context to token
+  const token = await auth.generateToken({
+    userId: user.$id,
+    organizationId: user.organization.$id,
+    role: user.role,
+  })
+
+  return { token, userId: user.$id, organizationId: user.organization.$id }
+}
+
+export async function verifyOrganizationAccess(token: string, organizationId: string) {
+  const payload = await auth.verifyToken(token)
+
+  if (payload.organizationId !== organizationId) {
+    throw new Error('Token does not have access to this organization')
+  }
+
+  return true
+}
+```
+
+### Social Login with OAuth
+
+Implement social login with multiple providers:
+
+```typescript
+import { $, auth, db } from 'sdk.do'
+
+export async function socialLogin(provider: string) {
+  // Start OAuth flow
+  const authUrl = await auth.oauth({
+    provider, // 'google', 'github', 'microsoft'
+    redirectUri: 'https://app.example.com/auth/callback',
+    scopes: ['email', 'profile'],
+  })
+
+  return { authUrl }
+}
+
+export async function handleOAuthCallback(code: string, state: string) {
+  // Exchange code for tokens
+  const oauthData = await auth.oauthCallback({ code, state })
+
+  // Check if user exists
+  let user = await db
+    .list($.Person, {
+      where: { email: oauthData.email },
+    })
+    .then((users) => users[0])
+
+  if (!user) {
+    // Create new user
+    user = await db.create($.Person, {
+      email: oauthData.email,
+      name: oauthData.name,
+      image: oauthData.picture,
+      emailVerified: true,
+    })
+  }
+
+  // Generate JWT token
+  const token = await auth.generateToken({
+    userId: user.$id,
+    email: user.email,
+    role: user.role,
+  })
+
+  return { token, userId: user.$id }
+}
+```
+
+## Integration with `.do` Platform
+
+auth.do integrates seamlessly with other `.do` platform services:
+
+```typescript
+import { $, auth, db, on, send, user } from 'sdk.do'
+
+// Database operations with auth context
+const token = await auth.verifyToken(request.headers.get('Authorization'))
+const products = await db.list($.Product, {
+  where: {
+    owner: token.userId,
+  },
+})
+
+// Event listeners with permission checks
+on($.Product.created, async (event) => {
+  const canView = await auth.authorize('view', event.data)
+  if (canView) {
+    console.log('Product created:', event.data)
+  }
+})
+
+// Conditional event publishing
+const payload = await auth.verifyToken(token)
+if (await auth.authorize('send', $.Notification)) {
+  await send($.Notification.sent, {
+    recipient: payload.userId,
+    message: 'Your order has shipped!',
+  })
+}
+```
+
+## Semantic Patterns
+
+auth.do uses `$.Subject.predicate.Object` patterns for semantic operations:
+
+```typescript
+import { $, auth } from 'sdk.do'
+
+// Permission patterns
+await auth.authorize('create', $.Product)
+await auth.authorize('read', $.Order)
+await auth.authorize('update', $.Business)
+await auth.authorize('delete', $.Report)
+
+// Role patterns
+await auth.hasRole(userId, 'admin')
+await auth.hasRole(userId, 'editor')
+await auth.hasRole(userId, 'viewer')
+
+// Authentication patterns
+await auth.login($.Person, credentials)
+await auth.logout($.Session, sessionId)
+await auth.refresh($.Token, refreshToken)
+```
+
+## Configuration
+
+### Environment Variables
+
+```bash
+# JWT configuration
+JWT_SECRET=your-secret-key-at-least-32-characters-long
+JWT_ALGORITHM=HS256
+JWT_ACCESS_TOKEN_EXPIRY=15m
+JWT_REFRESH_TOKEN_EXPIRY=7d
+
+# Password hashing
+PASSWORD_HASH_ROUNDS=12
+
+# MFA configuration
+MFA_ISSUER=MyApp
+MFA_ALGORITHM=SHA1
+MFA_DIGITS=6
+MFA_PERIOD=30
+
+# OAuth configuration
+OAUTH_GOOGLE_CLIENT_ID=your-google-client-id
+OAUTH_GOOGLE_CLIENT_SECRET=your-google-client-secret
+OAUTH_GITHUB_CLIENT_ID=your-github-client-id
+OAUTH_GITHUB_CLIENT_SECRET=your-github-client-secret
+
+# API key configuration
+API_KEY_PREFIX=sk_live_
+API_KEY_LENGTH=32
+
+# Session configuration
+SESSION_DURATION=86400000  # 24 hours in milliseconds
+SESSION_IDLE_TIMEOUT=3600000  # 1 hour
+
+# Email verification
+EMAIL_VERIFICATION_EXPIRY=86400000  # 24 hours
+```
+
+## Authentication Methods
+
+auth.do supports multiple authentication methods:
+
+### Email/Password
+
+Traditional email and password authentication:
+
+```typescript
+import { auth } from 'sdk.do'
+
+// Register
+await auth.register({
+  email: 'user@example.com',
+  password: 'secure-password',
+  name: 'John Smith',
+})
+
+// Login
+const session = await auth.login({
+  email: 'user@example.com',
+  password: 'secure-password',
+})
+```
+
+### OAuth 2.0
+
+Social login with OAuth providers:
+
+```typescript
+import { auth } from 'sdk.do'
+
+// Google OAuth
+const googleAuth = await auth.oauth({
+  provider: 'google',
+  redirectUri: 'https://app.example.com/auth/callback',
+})
+
+// GitHub OAuth
+const githubAuth = await auth.oauth({
+  provider: 'github',
+  redirectUri: 'https://app.example.com/auth/callback',
+})
+```
+
+### Magic Links
+
+Passwordless authentication via email:
+
+```typescript
+import { auth } from 'sdk.do'
+
+// Send magic link
+await auth.sendMagicLink({
+  email: 'user@example.com',
+  redirectUri: 'https://app.example.com/auth/verify',
+})
+
+// Verify magic link
+const session = await auth.verifyMagicLink(token)
+```
+
+### API Keys
+
+Programmatic authentication:
+
+```typescript
+import { auth } from 'sdk.do'
+
+// Generate API key
+const apiKey = await auth.createApiKey({
+  name: 'Production API',
+  scopes: ['read', 'write'],
+})
+
+// Authenticate
+await auth.authenticateApiKey(apiKey.key)
+```
+
+## Best Practices
+
+### 1. Always Use HTTPS
+
+Never transmit tokens or credentials over HTTP:
+
+```typescript
+// Good: HTTPS endpoint
+const token = await auth.login({ email, password })
+// Send to: https://api.example.com
+
+// Bad: HTTP endpoint (insecure)
+// Send to: http://api.example.com
+```
+
+### 2. Validate Token on Every Request
+
+Always verify tokens before processing requests:
+
+```typescript
+// Good: Verify token
+export async function handler(request: Request) {
+  const token = request.headers.get('Authorization')?.replace('Bearer ', '')
+  const payload = await auth.verifyToken(token)
+  // Proceed with authenticated request
+}
+
+// Bad: Trust token without verification
+export async function handler(request: Request) {
+  // Process request without verification
+}
+```
+
+### 3. Use Short-Lived Access Tokens
+
+Keep access tokens short-lived and use refresh tokens:
+
+```typescript
+// Good: 15-minute access token, 7-day refresh token
+const session = await auth.login({ email, password })
+// session.token expires in 15 minutes
+// session.refreshToken expires in 7 days
+
+// Bad: Long-lived access token
+// token expires in 30 days (too long)
+```
+
+### 4. Hash Passwords Securely
+
+Always hash passwords with bcrypt:
+
+```typescript
+// Good: Hash password before storing
+const hashedPassword = await auth.hashPassword(password)
+await db.create($.Credentials, { userId, passwordHash: hashedPassword })
+
+// Bad: Store plain text password
+await db.create($.Credentials, { userId, password }) // NEVER DO THIS
+```
+
+### 5. Implement Rate Limiting
+
+Protect against brute force attacks:
+
+```typescript
+import { auth } from 'sdk.do'
+
+// Implement rate limiting on login
+const rateLimiter = {
+  attempts: new Map(),
+  maxAttempts: 5,
+  window: 15 * 60 * 1000, // 15 minutes
+}
+
+export async function login(email: string, password: string) {
+  const key = email
+  const attempts = rateLimiter.attempts.get(key) || []
+
+  // Check rate limit
+  const recentAttempts = attempts.filter((time) => Date.now() - time < rateLimiter.window)
+
+  if (recentAttempts.length >= rateLimiter.maxAttempts) {
+    throw new Error('Too many login attempts. Please try again later.')
+  }
+
+  // Record attempt
+  attempts.push(Date.now())
+  rateLimiter.attempts.set(key, attempts)
+
+  // Attempt login
+  return await auth.login({ email, password })
+}
+```
+
+### 6. Use MFA for Sensitive Operations
+
+Require MFA for administrative actions:
+
+```typescript
+import { auth } from 'sdk.do'
+
+export async function deleteUser(userId: string, mfaCode: string) {
+  // Verify MFA code
+  const isValid = await auth.verifyMFA({
+    userId: (await auth.getCurrentUser()).id,
+    code: mfaCode,
+  })
+
+  if (!isValid) {
+    throw new Error('Invalid MFA code')
+  }
+
+  // Proceed with deletion
+  await db.delete($.Person, userId)
+}
+```
+
+### 7. Rotate API Keys Regularly
+
+Implement API key rotation:
+
+```typescript
+import { auth } from 'sdk.do'
+
+export async function rotateApiKey(oldKeyId: string) {
+  // Create new API key
+  const newKey = await auth.createApiKey({
+    name: 'Production API (Rotated)',
+    scopes: ['read', 'write'],
+  })
+
+  // Give grace period for migration
+  setTimeout(
+    async () => {
+      // Revoke old key after 30 days
+      await auth.revokeApiKey(oldKeyId)
+    },
+    30 * 24 * 60 * 60 * 1000
+  )
+
+  return newKey
+}
+```
+
+## License
+
+auth.do is released under the [Creative Commons Attribution 4.0 International License (CC-BY-4.0)](https://creativecommons.org/licenses/by/4.0/).
+
+This means you are free to:
+
+- **Share**: Copy and redistribute the material in any medium or format
+- **Adapt**: Remix, transform, and build upon the material for any purpose, even commercially
+
+Under the following terms:
+
+- **Attribution**: You must give appropriate credit, provide a link to the license, and indicate if changes were made
+
+## Resources
+
+- [sdk.do](https://sdk.do) - Core SDK documentation
+- [user.do](https://user.do) - User context and authentication
+- [session.do](https://session.do) - Session management
+- [identity.do](https://identity.do) - Identity management
+- [oauth.do](https://oauth.do) - OAuth 2.0 authentication
+- [`.do` Platform](https://do)
+
+## Related Domains
+
+- **[sdk.do](https://sdk.do)** - Core SDK with `auth` service
+- **[user.do](https://user.do)** - User context and permissions
+- **[session.do](https://session.do)** - Session management
+- **[identity.do](https://identity.do)** - Identity providers
+- **[oauth.do](https://oauth.do)** - OAuth 2.0 flows
+- **[db.do](https://db.do)** - Database operations
+
+## Contributing
+
+auth.do is part of the [`.do` platform](https://do) ecosystem. Contributions are welcome!
+
+See the [ai repository](https://github.com/dot-do/ai) for contribution guidelines.
+
+## Acknowledgments
+
+auth.do builds upon:
+
+- [JSON Web Tokens (JWT)](https://jwt.io/) - Token-based authentication
+- [OAuth 2.0](https://oauth.net/2/) - Authorization framework
+- [bcrypt](https://en.wikipedia.org/wiki/Bcrypt) - Password hashing
+- [TOTP](https://tools.ietf.org/html/rfc6238) - Time-based One-Time Password
+- [Schema.org](https://schema.org/) - Semantic types
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

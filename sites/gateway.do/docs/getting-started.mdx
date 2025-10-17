@@ -1,0 +1,132 @@
+---
+$id: https://gateway.do/docs/getting-started
+$type: TechArticle
+title: Getting Started with gateway.do
+description: Quick start guide for the API gateway
+keywords: [gateway, api, getting started, setup, configuration]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Getting Started
+
+Get started with gateway.do in under 5 minutes.
+
+## Installation
+
+```bash
+pnpm add sdk.do
+```
+
+## Basic Usage
+
+### Simple GET Request
+
+```typescript
+import { gateway } from 'sdk.do'
+
+const data = await gateway.get('https://api.example.com/users')
+console.log(data)
+```
+
+### POST Request
+
+```typescript
+const user = await gateway.post('https://api.example.com/users', {
+  data: { name: 'John', email: 'john@example.com' },
+})
+```
+
+### With Authentication
+
+```typescript
+const data = await gateway.get('https://api.example.com/data', {
+  auth: {
+    type: 'bearer',
+    token: process.env.API_TOKEN,
+  },
+})
+```
+
+## Configuration
+
+```typescript
+import { gateway } from 'sdk.do'
+
+gateway.config({
+  timeout: 30000,
+  cache: { enabled: true, ttl: 3600 },
+  rateLimit: { requests: 100, window: 60000 },
+  retry: { max: 3, delay: 1000 },
+})
+```
+
+## Authentication Methods
+
+```typescript
+// Bearer Token
+await gateway.get(url, {
+  auth: { type: 'bearer', token: process.env.TOKEN },
+})
+
+// Basic Auth
+await gateway.get(url, {
+  auth: { type: 'basic', username: 'user', password: 'pass' },
+})
+
+// API Key
+await gateway.get(url, {
+  auth: { type: 'apiKey', key: 'X-API-Key', value: process.env.KEY, in: 'header' },
+})
+```
+
+## Caching
+
+```typescript
+const data = await gateway.get(url, {
+  cache: {
+    enabled: true,
+    ttl: 3600, // 1 hour
+    key: 'custom-key',
+  },
+})
+```
+
+## Rate Limiting
+
+```typescript
+const data = await gateway.get(url, {
+  rateLimit: {
+    requests: 100,
+    window: 60000, // 1 minute
+    strategy: 'sliding-window',
+  },
+})
+```
+
+## Error Handling
+
+```typescript
+try {
+  const data = await gateway.get(url)
+} catch (error) {
+  if (error.status === 429) {
+    console.error('Rate limit exceeded')
+  } else if (error.status >= 500) {
+    console.error('Server error')
+  } else {
+    console.error('Request failed:', error.message)
+  }
+}
+```
+
+## Next Steps
+
+- [Architecture](./architecture) - Gateway design
+- [Best Practices](./best-practices) - Optimization tips
+- [API Reference](../api/reference) - Complete API docs
+
+## License
+
+MIT (Open Source)

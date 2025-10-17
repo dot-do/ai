@@ -1,0 +1,98 @@
+---
+$id: https://integrations.do/freshbooks
+$type: Integration
+name: Freshbooks
+service: freshbooks
+description: FreshBooks is a cloud-based accounting software service designed for small and medium-sized businesses, offering features like invoicing, expense tracking, and time management.
+category: productivity
+sdkBased: false
+baseUrl: https://api.freshbooks.com
+
+auth:
+  type: oauth2
+  authorizationUrl: https://auth.freshbooks.com/oauth/authorize
+  tokenUrl: https://api.freshbooks.com/auth/oauth/token
+  scopes:
+    - user:profile:read
+    - user:projects:read
+    - user:clients:read
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Freshbooks actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: false
+  events: []
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://www.freshbooks.com/signup
+  apiDocs: https://www.freshbooks.com/signup
+---
+
+# Freshbooks Integration
+
+FreshBooks is a cloud-based accounting software service designed for small and medium-sized businesses, offering features like invoicing, expense tracking, and time management.
+
+## Quick Start
+
+```typescript
+import { FreshbooksClient } from '@dotdo/sdk.do/integrations/freshbooks'
+
+const freshbooks = new FreshbooksClient({
+  apiKey: process.env.FRESHBOOKS_API_KEY,
+})
+
+const result = await freshbooks.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Freshbooks provides 2 actions through the Composio API.
+
+## License
+
+MIT

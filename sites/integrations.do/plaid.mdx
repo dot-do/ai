@@ -1,0 +1,384 @@
+---
+$id: https://integrations.do/plaid
+$type: Integration
+name: Plaid
+service: plaid
+description: Banking data platform for account linking and transaction data
+category: payments
+sdkBased: true
+sdkPackage: 'plaid'
+sdkVersion: ^30.0.0
+sdkImport: PlaidApi
+
+auth:
+  type: api-key
+  location: header
+  headerName: PLAID-CLIENT-ID
+  scheme: Bearer
+
+resources:
+  - name: Account
+    plural: Accounts
+    description: Retrieve bank account information
+    operations:
+      - name: list
+        method: POST
+        path: /accounts/get
+        params:
+          - name: access_token
+            type: string
+            required: true
+            description: Access token for bank account
+        returns: Account[]
+
+      - name: balance
+        method: POST
+        path: /accounts/balance/get
+        params:
+          - name: access_token
+            type: string
+            required: true
+            description: Access token
+        returns: Account[]
+
+  - name: Transaction
+    plural: Transactions
+    description: Retrieve transaction history
+    operations:
+      - name: list
+        method: POST
+        path: /transactions/get
+        params:
+          - name: access_token
+            type: string
+            required: true
+            description: Access token
+          - name: start_date
+            type: string
+            required: true
+            description: Start date (YYYY-MM-DD)
+          - name: end_date
+            type: string
+            required: true
+            description: End date (YYYY-MM-DD)
+        returns: Transaction[]
+        pagination:
+          type: offset
+          offsetField: offset
+          limitField: count
+          defaultLimit: 100
+          maxLimit: 500
+
+      - name: sync
+        method: POST
+        path: /transactions/sync
+        params:
+          - name: access_token
+            type: string
+            required: true
+            description: Access token
+          - name: cursor
+            type: string
+            required: false
+            description: Cursor for pagination
+        returns: Transaction[]
+
+  - name: Balance
+    plural: Balances
+    description: Get real-time balance information
+    operations:
+      - name: get
+        method: POST
+        path: /accounts/balance/get
+        params:
+          - name: access_token
+            type: string
+            required: true
+            description: Access token
+        returns: Balance
+
+  - name: Identity
+    plural: Identities
+    description: Retrieve identity information
+    operations:
+      - name: get
+        method: POST
+        path: /identity/get
+        params:
+          - name: access_token
+            type: string
+            required: true
+            description: Access token
+        returns: Identity
+
+webhooks:
+  enabled: true
+  signatureHeader: Plaid-Verification
+  signatureAlgorithm: sha256
+  verificationMethod: signature
+  events:
+    - name: transactions.default_update
+      type: TRANSACTIONS_DEFAULT_UPDATE
+      description: New transaction data available
+    - name: transactions.removed
+      type: TRANSACTIONS_REMOVED
+      description: Transactions removed
+    - name: item.error
+      type: ITEM_ERROR
+      description: Item encountered an error
+    - name: item.login_required
+      type: ITEM_LOGIN_REQUIRED
+      description: Item requires user login
+    - name: item.pending_expiration
+      type: ITEM_PENDING_EXPIRATION
+      description: Item access token expiring soon
+    - name: item.webhook_update_acknowledged
+      type: ITEM_WEBHOOK_UPDATE_ACKNOWLEDGED
+      description: Webhook update acknowledged
+
+errors:
+  mapping:
+    - code: INVALID_API_KEYS
+      type: authentication
+      statusCode: 401
+      message: Invalid API keys
+      retryable: false
+    - code: UNAUTHORIZED_ENVIRONMENT
+      type: authorization
+      statusCode: 403
+      message: Unauthorized environment
+      retryable: false
+    - code: ITEM_NOT_FOUND
+      type: not_found
+      statusCode: 404
+      message: Item not found
+      retryable: false
+    - code: INVALID_REQUEST
+      type: validation
+      statusCode: 400
+      message: Invalid request
+      retryable: false
+    - code: RATE_LIMIT_EXCEEDED
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+    - code: INTERNAL_SERVER_ERROR
+      type: server
+      statusCode: 500
+      message: Internal server error
+      retryable: true
+  retryable: [RATE_LIMIT_EXCEEDED, INTERNAL_SERVER_ERROR, 429, 500, 503]
+  nonRetryable: [INVALID_API_KEYS, UNAUTHORIZED_ENVIRONMENT, ITEM_NOT_FOUND, INVALID_REQUEST, 401, 403, 404, 400]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Account Operations
+      description: Test account retrieval
+      steps:
+        - action: list
+          resource: Account
+        - action: custom
+          resource: Account
+
+    - name: Transaction Operations
+      description: Test transaction retrieval
+      steps:
+        - action: list
+          resource: Transaction
+        - action: custom
+          resource: Transaction
+
+    - name: Balance Operations
+      description: Test balance retrieval
+      steps:
+        - action: retrieve
+          resource: Balance
+
+    - name: Identity Operations
+      description: Test identity retrieval
+      steps:
+        - action: retrieve
+          resource: Identity
+
+    - name: Webhook Verification
+      description: Test webhook signature verification
+      steps:
+        - action: assert
+          expects:
+            status: 200
+
+docs:
+  homepage: https://plaid.com
+  apiDocs: https://plaid.com/docs/api/
+  sdkDocs: https://github.com/plaid/plaid-node
+  guides:
+    quickstart: https://plaid.com/docs/quickstart/
+    webhooks: https://plaid.com/docs/api/webhooks/
+    authentication: https://plaid.com/docs/api/tokens/
+---
+
+# Plaid Integration
+
+Plaid is a data network that powers fintech and digital finance products by connecting users' bank accounts to apps.
+
+## Features
+
+- **Accounts**: Retrieve bank account information
+- **Transactions**: Access transaction history
+- **Balance**: Get real-time balance data
+- **Identity**: Retrieve account holder identity info
+- **Auth**: Verify account and routing numbers
+- **Webhooks**: Real-time notifications for data updates
+
+## Quick Start
+
+```typescript
+import { PlaidClient } from '@dotdo/sdk.do/integrations/plaid'
+
+const plaid = new PlaidClient({
+  clientId: process.env.PLAID_CLIENT_ID,
+  secret: process.env.PLAID_SECRET,
+  environment: 'sandbox', // sandbox, development, or production
+})
+
+// Get accounts
+const accounts = await plaid.account.list({
+  access_token: 'access-token',
+})
+
+// Get transactions
+const transactions = await plaid.transaction.list({
+  access_token: 'access-token',
+  start_date: '2025-01-01',
+  end_date: '2025-12-31',
+})
+```
+
+## Authentication
+
+Plaid uses API key authentication with client ID and secret:
+
+```bash
+export PLAID_CLIENT_ID=your_client_id
+export PLAID_SECRET=your_secret
+```
+
+## Resources
+
+### Accounts
+
+Retrieve account information:
+
+```typescript
+// List accounts
+const accounts = await plaid.account.list({
+  access_token: 'access-token',
+})
+
+// Get account balances
+const balances = await plaid.account.balance({
+  access_token: 'access-token',
+})
+```
+
+### Transactions
+
+Get transaction history:
+
+```typescript
+// List transactions
+const transactions = await plaid.transaction.list({
+  access_token: 'access-token',
+  start_date: '2025-01-01',
+  end_date: '2025-01-31',
+})
+
+// Sync transactions (incremental updates)
+const sync = await plaid.transaction.sync({
+  access_token: 'access-token',
+  cursor: 'cursor-token',
+})
+```
+
+### Balance
+
+Get real-time balance:
+
+```typescript
+// Get balance
+const balance = await plaid.balance.get({
+  access_token: 'access-token',
+})
+```
+
+### Identity
+
+Retrieve identity information:
+
+```typescript
+// Get identity
+const identity = await plaid.identity.get({
+  access_token: 'access-token',
+})
+```
+
+## Webhooks
+
+Plaid supports webhooks with JWT signature verification:
+
+```typescript
+import { PlaidWebhookHandler, WebhookEventRouter } from '@dotdo/sdk.do/integrations/plaid'
+
+const handler = new PlaidWebhookHandler(process.env.PLAID_CLIENT_ID, process.env.PLAID_SECRET)
+const event = await handler.handleRequest(request)
+
+const router = new WebhookEventRouter()
+router.onTransactionsDefaultUpdate(async (event) => {
+  console.log('New transactions available:', event.data)
+})
+
+router.onItemError(async (event) => {
+  console.log('Item error:', event.data)
+})
+
+await router.route(event)
+```
+
+## Error Handling
+
+```typescript
+import { PlaidError } from '@dotdo/sdk.do/integrations/plaid'
+
+try {
+  await plaid.account.list({
+    /* ... */
+  })
+} catch (error) {
+  if (error instanceof PlaidError) {
+    console.error('Plaid Error:', error.code, error.message)
+    if (error.isRetriable()) {
+      // Retry logic
+    }
+  }
+}
+```
+
+## Best Practices
+
+1. **Link Token**: Use Link to connect user accounts securely
+2. **Access Tokens**: Store access tokens securely
+3. **Webhooks**: Use webhooks for transaction updates instead of polling
+4. **Environments**: Use sandbox for testing, production for live data
+5. **Error Handling**: Handle ITEM_LOGIN_REQUIRED errors gracefully
+6. **Rate Limits**: Implement exponential backoff for rate limits
+
+## API Reference
+
+Full API documentation: https://plaid.com/docs/api/
+
+## License
+
+MIT

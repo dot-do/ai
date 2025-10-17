@@ -1,0 +1,806 @@
+---
+$id: https://functions.do/docs/integration
+$type: TechArticle
+title: SDK Integration Guide
+description: Learn how to integrate functions.do with other SDK primitives and platform features
+keywords: [integration, sdk, database, ai, events, workflows]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# SDK Integration Guide
+
+Learn how to integrate functions.do with other SDK primitives including database operations, AI services, event handling, and workflows.
+
+## Overview
+
+functions.do integrates seamlessly with all SDK primitives:
+
+- **`db`** - Database operations within functions
+- **`ai`** - AI generation and processing
+- **`api`** - External API integration
+- **`on`** - Event-driven function execution
+- **`send`** - Event publishing from functions
+- **`every`** - Scheduled function execution
+- **`user`** - User context and permissions
+
+## Database Integration
+
+### Read Operations
+
+Query data from functions:
+
+```typescript
+import { registerFunction } from 'ai-functions'
+import { db } from 'sdk.do'
+
+const getUserOrders = registerFunction({
+  metadata: {
+    id: 'get-user-orders',
+    name: 'Get User Orders',
+    version: '1.0.0',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  source: {
+    code: `
+      export default async function handler(input) {
+        const { userId } = input.params
+
+        // Query orders from database
+        const orders = await db.list($.Order, {
+          where: { userId },
+          orderBy: { createdAt: 'desc' },
+          limit: 10,
+        })
+
+        return { orders, count: orders.length }
+      }
+    `,
+    language: 'typescript',
+  },
+})
+```
+
+### Write Operations
+
+Create and update records:
+
+```typescript
+const createOrder = registerFunction({
+  metadata: {
+    id: 'create-order',
+    name: 'Create Order',
+    version: '1.0.0',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  source: {
+    code: `
+      export default async function handler(input) {
+        const { order } = input.params
+
+        // Create order in database
+        const created = await db.create($.Order, {
+          ...order,
+          status: 'pending',
+          createdAt: new Date(),
+        })
+
+        return created
+      }
+    `,
+    language: 'typescript',
+  },
+})
+```
+
+### Transactions
+
+Use database transactions in functions:
+
+```typescript
+const processPayment = registerFunction({
+  metadata: {
+    id: 'process-payment',
+    name: 'Process Payment',
+    version: '1.0.0',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  source: {
+    code: `
+      export default async function handler(input) {
+        const { orderId, paymentDetails } = input.params
+
+        // Use transaction for atomic operations
+        return await db.transaction(async (tx) => {
+          // Get order
+          const order = await tx.get($.Order, orderId)
+
+          // Process payment
+          const payment = await processStripePayment(paymentDetails)
+
+          // Update order
+          await tx.update($.Order, orderId, {
+            status: 'paid',
+            paymentId: payment.id,
+          })
+
+          // Create payment record
+          await tx.create($.Payment, {
+            orderId,
+            amount: order.total,
+            status: 'completed',
+          })
+
+          return { order, payment }
+        })
+      }
+    `,
+    language: 'typescript',
+  },
+})
+```
+
+## AI Integration
+
+### Text Generation
+
+Generate text using AI:
+
+```typescript
+const generateDescription = registerFunction({
+  metadata: {
+    id: 'generate-description',
+    name: 'Generate Description',
+    version: '1.0.0',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  source: {
+    code: `
+      export default async function handler(input) {
+        const { product } = input.params
+
+        // Generate product description with AI
+        const description = await ai.generate({
+          model: 'gpt-5',
+          prompt: \`Write a compelling product description for: \${product.name}\`,
+          schema: {
+            type: 'object',
+            properties: {
+              description: { type: 'string', maxLength: 500 },
+              highlights: { type: 'array', items: { type: 'string' } },
+            },
+          },
+        })
+
+        return description
+      }
+    `,
+    language: 'typescript',
+  },
+})
+```
+
+### Embeddings
+
+Generate and use embeddings:
+
+```typescript
+const searchSimilar = registerFunction({
+  metadata: {
+    id: 'search-similar',
+    name: 'Search Similar',
+    version: '1.0.0',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  source: {
+    code: `
+      export default async function handler(input) {
+        const { query } = input.params
+
+        // Generate embedding for query
+        const embedding = await ai.embed({
+          text: query,
+          model: 'text-embedding-3-small',
+        })
+
+        // Search for similar items
+        const results = await db.vectorSearch($.Product, {
+          vector: embedding,
+          limit: 10,
+        })
+
+        return results
+      }
+    `,
+    language: 'typescript',
+  },
+})
+```
+
+### Batch Processing
+
+Process multiple AI requests:
+
+```typescript
+const batchClassify = registerFunction({
+  metadata: {
+    id: 'batch-classify',
+    name: 'Batch Classify',
+    version: '1.0.0',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  source: {
+    code: `
+      export default async function handler(input) {
+        const { items } = input.params
+
+        // Batch AI classification
+        const results = await ai.batch({
+          model: 'gpt-5',
+          requests: items.map((item) => ({
+            prompt: \`Classify this item: \${item.text}\`,
+            schema: {
+              type: 'object',
+              properties: {
+                category: { type: 'string' },
+                confidence: { type: 'number' },
+              },
+            },
+          })),
+        })
+
+        return results
+      }
+    `,
+    language: 'typescript',
+  },
+})
+```
+
+## Event Integration
+
+### Event Handlers
+
+Functions as event handlers:
+
+```typescript
+import { on } from 'sdk.do'
+
+// Register function as event handler
+const handleOrderCreated = registerFunction({
+  metadata: {
+    id: 'handle-order-created',
+    name: 'Handle Order Created',
+    version: '1.0.0',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  source: {
+    code: `
+      export default async function handler(input) {
+        const { order } = input.params
+
+        // Process new order
+        await validateOrder(order)
+        await sendConfirmationEmail(order)
+        await updateInventory(order)
+
+        return { processed: true }
+      }
+    `,
+    language: 'typescript',
+  },
+})
+
+// Subscribe to event
+on($.Order.created, async (event) => {
+  await executeFunction('handle-order-created', {
+    params: { order: event.data },
+  })
+})
+```
+
+### Event Publishing
+
+Publish events from functions:
+
+```typescript
+const processOrder = registerFunction({
+  metadata: {
+    id: 'process-order',
+    name: 'Process Order',
+    version: '1.0.0',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  source: {
+    code: `
+      export default async function handler(input) {
+        const { order } = input.params
+
+        // Process order
+        const processed = await processOrderLogic(order)
+
+        // Publish event
+        await send($.Order.processed, {
+          orderId: processed.id,
+          status: processed.status,
+        })
+
+        return processed
+      }
+    `,
+    language: 'typescript',
+  },
+})
+```
+
+### Event Chains
+
+Chain functions via events:
+
+```typescript
+// Step 1: Validate
+const validateOrder = registerFunction({
+  metadata: {
+    id: 'validate-order',
+    name: 'Validate Order',
+    version: '1.0.0',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  source: {
+    code: `
+      export default async function handler(input) {
+        const { order } = input.params
+        const validated = await validate(order)
+
+        // Trigger next step
+        await send($.Order.validated, validated)
+
+        return validated
+      }
+    `,
+    language: 'typescript',
+  },
+})
+
+// Step 2: Process
+const processValidatedOrder = registerFunction({
+  metadata: {
+    id: 'process-validated-order',
+    name: 'Process Validated Order',
+    version: '1.0.0',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  source: {
+    code: `
+      export default async function handler(input) {
+        const { order } = input.params
+        const processed = await process(order)
+
+        // Trigger next step
+        await send($.Order.processed, processed)
+
+        return processed
+      }
+    `,
+    language: 'typescript',
+  },
+})
+
+// Wire up event chain
+on($.Order.created, async (event) => {
+  await executeFunction('validate-order', { params: { order: event.data } })
+})
+
+on($.Order.validated, async (event) => {
+  await executeFunction('process-validated-order', { params: { order: event.data } })
+})
+```
+
+## Workflow Integration
+
+### Scheduled Functions
+
+Integrate with workflow scheduling:
+
+```typescript
+import { every } from 'sdk.do'
+
+const dailyReport = registerFunction({
+  metadata: {
+    id: 'daily-report',
+    name: 'Daily Report',
+    version: '1.0.0',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  source: {
+    code: `
+      export default async function handler(input) {
+        // Generate report
+        const data = await fetchDailyData()
+        const report = await generateReport(data)
+
+        // Send report
+        await send($.Report.generated, report)
+
+        return report
+      }
+    `,
+    language: 'typescript',
+  },
+})
+
+// Schedule daily at 9 AM
+every('0 9 * * *', async () => {
+  await executeFunction('daily-report', { params: {} })
+})
+```
+
+### Workflow Steps
+
+Functions as workflow steps:
+
+```typescript
+import { workflow } from 'sdk.do'
+
+// Define workflow with function steps
+const orderFulfillment = workflow($.OrderFulfillment, {
+  steps: [
+    {
+      name: 'validate',
+      function: 'validate-order',
+    },
+    {
+      name: 'processPayment',
+      function: 'process-payment',
+    },
+    {
+      name: 'updateInventory',
+      function: 'update-inventory',
+    },
+    {
+      name: 'shipOrder',
+      function: 'ship-order',
+    },
+  ],
+})
+
+// Execute workflow
+const result = await orderFulfillment.execute({
+  orderId: 'order-123',
+})
+```
+
+## API Integration
+
+### External APIs
+
+Call external APIs from functions:
+
+```typescript
+const fetchWeather = registerFunction({
+  metadata: {
+    id: 'fetch-weather',
+    name: 'Fetch Weather',
+    version: '1.0.0',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  source: {
+    code: `
+      export default async function handler(input) {
+        const { city } = input.params
+
+        // Call external API
+        const response = await api.get('https://api.weather.com/v1/current', {
+          params: { city },
+          headers: {
+            'Authorization': \`Bearer \${input.context.env.WEATHER_API_KEY}\`,
+          },
+        })
+
+        return response.data
+      }
+    `,
+    language: 'typescript',
+  },
+})
+```
+
+### API Composition
+
+Combine multiple API calls:
+
+```typescript
+const enrichUserData = registerFunction({
+  metadata: {
+    id: 'enrich-user-data',
+    name: 'Enrich User Data',
+    version: '1.0.0',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  source: {
+    code: `
+      export default async function handler(input) {
+        const { userId } = input.params
+
+        // Parallel API calls
+        const [profile, orders, preferences] = await Promise.all([
+          api.get(\`/users/\${userId}/profile\`),
+          api.get(\`/users/\${userId}/orders\`),
+          api.get(\`/users/\${userId}/preferences\`),
+        ])
+
+        return {
+          ...profile.data,
+          orders: orders.data,
+          preferences: preferences.data,
+        }
+      }
+    `,
+    language: 'typescript',
+  },
+})
+```
+
+## User Context
+
+### Access User Information
+
+Use user context in functions:
+
+```typescript
+const getUserDashboard = registerFunction({
+  metadata: {
+    id: 'get-user-dashboard',
+    name: 'Get User Dashboard',
+    version: '1.0.0',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  source: {
+    code: `
+      export default async function handler(input) {
+        // Access current user
+        const currentUser = await user.current()
+
+        // Get user-specific data
+        const orders = await db.list($.Order, {
+          where: { userId: currentUser.id },
+        })
+
+        const preferences = await db.get($.UserPreferences, currentUser.id)
+
+        return {
+          user: currentUser,
+          orders,
+          preferences,
+        }
+      }
+    `,
+    language: 'typescript',
+  },
+})
+```
+
+### Permission Checks
+
+Enforce permissions in functions:
+
+```typescript
+const deleteOrder = registerFunction({
+  metadata: {
+    id: 'delete-order',
+    name: 'Delete Order',
+    version: '1.0.0',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  source: {
+    code: `
+      export default async function handler(input) {
+        const { orderId } = input.params
+        const currentUser = await user.current()
+
+        // Check permissions
+        if (!user.hasPermission(currentUser, 'orders:delete')) {
+          throw new Error('Unauthorized: Missing orders:delete permission')
+        }
+
+        // Get order
+        const order = await db.get($.Order, orderId)
+
+        // Check ownership
+        if (order.userId !== currentUser.id && !user.hasRole(currentUser, 'admin')) {
+          throw new Error('Unauthorized: Can only delete own orders')
+        }
+
+        // Delete order
+        await db.delete($.Order, orderId)
+
+        return { deleted: true }
+      }
+    `,
+    language: 'typescript',
+  },
+})
+```
+
+## Complete Integration Example
+
+### E-commerce Order Processing
+
+Complete example integrating multiple SDK features:
+
+```typescript
+const processEcommerceOrder = registerFunction({
+  metadata: {
+    id: 'process-ecommerce-order',
+    name: 'Process E-commerce Order',
+    description: 'Complete order processing with all integrations',
+    version: '1.0.0',
+    tags: ['ecommerce', 'orders', 'payments'],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  source: {
+    code: `
+      export default async function handler(input) {
+        const { order } = input.params
+
+        // 1. Database: Get user and product details
+        const [user, products] = await Promise.all([
+          db.get($.User, order.userId),
+          Promise.all(
+            order.items.map((item) => db.get($.Product, item.productId))
+          ),
+        ])
+
+        // 2. AI: Generate personalized thank you message
+        const message = await ai.generate({
+          model: 'gpt-5',
+          prompt: \`Generate a personalized thank you message for \${user.name} who just ordered \${products.map((p) => p.name).join(', ')}\`,
+        })
+
+        // 3. API: Process payment via Stripe
+        const payment = await api.post('https://api.stripe.com/v1/charges', {
+          amount: order.total,
+          currency: 'usd',
+          source: order.paymentToken,
+        }, {
+          headers: {
+            'Authorization': \`Bearer \${input.context.env.STRIPE_KEY}\`,
+          },
+        })
+
+        // 4. Database Transaction: Update order and inventory
+        await db.transaction(async (tx) => {
+          // Update order
+          await tx.update($.Order, order.id, {
+            status: 'paid',
+            paymentId: payment.data.id,
+          })
+
+          // Update inventory
+          for (const item of order.items) {
+            await tx.decrement($.Product, item.productId, 'inventory', item.quantity)
+          }
+        })
+
+        // 5. Events: Publish order processed event
+        await send($.Order.processed, {
+          orderId: order.id,
+          userId: user.id,
+          total: order.total,
+        })
+
+        // 6. Email: Send confirmation
+        await send($.Email.send, {
+          to: user.email,
+          subject: 'Order Confirmation',
+          body: message,
+        })
+
+        return {
+          success: true,
+          orderId: order.id,
+          message,
+        }
+      }
+    `,
+    language: 'typescript',
+    dependencies: {
+      stripe: '^14.0.0',
+    },
+  },
+})
+
+// Wire up as event handler
+on($.Order.created, async (event) => {
+  await executeFunction('process-ecommerce-order', {
+    params: { order: event.data },
+  })
+})
+
+// Schedule daily report
+every('0 9 * * *', async () => {
+  await executeFunction('generate-daily-sales-report', { params: {} })
+})
+```
+
+## Best Practices
+
+### 1. Use Database Transactions
+
+```typescript
+// Good - Atomic operations
+await db.transaction(async (tx) => {
+  await tx.create($.Order, order)
+  await tx.update($.User, userId, { orderCount: { $inc: 1 } })
+})
+```
+
+### 2. Handle AI Errors
+
+```typescript
+try {
+  const result = await ai.generate({ prompt })
+} catch (error) {
+  // Fallback logic
+  console.error('AI generation failed:', error)
+  return defaultResponse
+}
+```
+
+### 3. Batch API Calls
+
+```typescript
+// Good - Parallel execution
+const [data1, data2, data3] = await Promise.all([api.get('/endpoint1'), api.get('/endpoint2'), api.get('/endpoint3')])
+```
+
+### 4. Validate Event Data
+
+```typescript
+on($.Order.created, async (event) => {
+  // Validate event data
+  const validated = OrderSchema.parse(event.data)
+
+  await executeFunction('process-order', {
+    params: { order: validated },
+  })
+})
+```
+
+### 5. Use Context for Configuration
+
+```typescript
+await executeFunction('my-function', {
+  params: {},
+  context: {
+    env: {
+      API_KEY: process.env.API_KEY,
+      DATABASE_URL: process.env.DATABASE_URL,
+    },
+  },
+})
+```
+
+## Next Steps
+
+- [Best Practices](./best-practices) - Production integration patterns
+- [Monitoring](./monitoring) - Monitor integrated functions
+- [API Reference](./api-reference) - Complete API documentation
+- [Examples](../examples/) - Real-world integration examples

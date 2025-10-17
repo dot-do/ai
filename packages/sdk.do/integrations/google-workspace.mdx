@@ -1,0 +1,2195 @@
+---
+$id: https://integrations.do/google-workspace
+$type: Integration
+name: Google Workspace
+service: google-workspace
+description: Comprehensive Google Workspace integration for Gmail, Calendar, Drive, Docs, Sheets, and Contacts
+category: productivity
+sdkBased: true
+sdkPackage: googleapis
+sdkVersion: ^144.0.0
+sdkImport: google
+
+auth:
+  type: oauth2
+  oauth2:
+    authorizationUrl: https://accounts.google.com/o/oauth2/v2/auth
+    tokenUrl: https://oauth2.googleapis.com/token
+    scopes:
+      - https://mail.google.com/
+      - https://www.googleapis.com/auth/gmail.readonly
+      - https://www.googleapis.com/auth/gmail.send
+      - https://www.googleapis.com/auth/gmail.modify
+      - https://www.googleapis.com/auth/calendar
+      - https://www.googleapis.com/auth/calendar.readonly
+      - https://www.googleapis.com/auth/calendar.events
+      - https://www.googleapis.com/auth/drive
+      - https://www.googleapis.com/auth/drive.readonly
+      - https://www.googleapis.com/auth/drive.file
+      - https://www.googleapis.com/auth/documents
+      - https://www.googleapis.com/auth/documents.readonly
+      - https://www.googleapis.com/auth/spreadsheets
+      - https://www.googleapis.com/auth/spreadsheets.readonly
+      - https://www.googleapis.com/auth/contacts
+      - https://www.googleapis.com/auth/contacts.readonly
+    grantType: authorization_code
+
+resources:
+  # ============================================================================
+  # Gmail Resources
+  # ============================================================================
+  - name: GmailMessage
+    plural: GmailMessages
+    sdkPath: gmail.users.messages
+    description: Gmail email messages
+    operations:
+      - name: send
+        method: send
+        params:
+          - name: userId
+            type: string
+            required: true
+            description: User's email address (use 'me' for authenticated user)
+            default: me
+          - name: requestBody
+            type: object
+            required: true
+            description: Message to send (raw RFC 2822 format)
+        returns: gmail_v1.Schema$Message
+
+      - name: get
+        method: get
+        params:
+          - name: userId
+            type: string
+            required: true
+            description: User's email address
+            default: me
+          - name: id
+            type: string
+            required: true
+            description: Message ID
+          - name: format
+            type: string
+            required: false
+            description: Message format (minimal, full, raw, metadata)
+            default: full
+        returns: gmail_v1.Schema$Message
+
+      - name: list
+        method: list
+        params:
+          - name: userId
+            type: string
+            required: true
+            description: User's email address
+            default: me
+          - name: q
+            type: string
+            required: false
+            description: Gmail search query
+          - name: labelIds
+            type: string[]
+            required: false
+            description: Filter by label IDs
+          - name: maxResults
+            type: number
+            required: false
+            description: Maximum results per page
+            default: 100
+          - name: pageToken
+            type: string
+            required: false
+            description: Page token for pagination
+        returns: gmail_v1.Schema$ListMessagesResponse
+        pagination:
+          type: cursor
+          cursorField: pageToken
+          limitField: maxResults
+
+      - name: delete
+        method: delete
+        params:
+          - name: userId
+            type: string
+            required: true
+            description: User's email address
+            default: me
+          - name: id
+            type: string
+            required: true
+            description: Message ID
+        returns: void
+
+      - name: modify
+        method: modify
+        params:
+          - name: userId
+            type: string
+            required: true
+            description: User's email address
+            default: me
+          - name: id
+            type: string
+            required: true
+            description: Message ID
+          - name: requestBody
+            type: object
+            required: true
+            description: Label modifications
+        returns: gmail_v1.Schema$Message
+
+      - name: batchDelete
+        method: batchDelete
+        params:
+          - name: userId
+            type: string
+            required: true
+            description: User's email address
+            default: me
+          - name: requestBody
+            type: object
+            required: true
+            description: Batch delete request with message IDs
+        returns: void
+
+  - name: GmailLabel
+    plural: GmailLabels
+    sdkPath: gmail.users.labels
+    description: Gmail labels for organizing messages
+    operations:
+      - name: get
+        method: get
+        params:
+          - name: userId
+            type: string
+            required: true
+            description: User's email address
+            default: me
+          - name: id
+            type: string
+            required: true
+            description: Label ID
+        returns: gmail_v1.Schema$Label
+
+      - name: list
+        method: list
+        params:
+          - name: userId
+            type: string
+            required: true
+            description: User's email address
+            default: me
+        returns: gmail_v1.Schema$ListLabelsResponse
+
+      - name: create
+        method: create
+        params:
+          - name: userId
+            type: string
+            required: true
+            description: User's email address
+            default: me
+          - name: requestBody
+            type: object
+            required: true
+            description: Label details
+        returns: gmail_v1.Schema$Label
+
+      - name: delete
+        method: delete
+        params:
+          - name: userId
+            type: string
+            required: true
+            description: User's email address
+            default: me
+          - name: id
+            type: string
+            required: true
+            description: Label ID
+        returns: void
+
+  - name: GmailDraft
+    plural: GmailDrafts
+    sdkPath: gmail.users.drafts
+    description: Gmail draft messages
+    operations:
+      - name: create
+        method: create
+        params:
+          - name: userId
+            type: string
+            required: true
+            description: User's email address
+            default: me
+          - name: requestBody
+            type: object
+            required: true
+            description: Draft message
+        returns: gmail_v1.Schema$Draft
+
+      - name: get
+        method: get
+        params:
+          - name: userId
+            type: string
+            required: true
+            description: User's email address
+            default: me
+          - name: id
+            type: string
+            required: true
+            description: Draft ID
+        returns: gmail_v1.Schema$Draft
+
+      - name: send
+        method: send
+        params:
+          - name: userId
+            type: string
+            required: true
+            description: User's email address
+            default: me
+          - name: requestBody
+            type: object
+            required: true
+            description: Draft to send
+        returns: gmail_v1.Schema$Message
+
+      - name: delete
+        method: delete
+        params:
+          - name: userId
+            type: string
+            required: true
+            description: User's email address
+            default: me
+          - name: id
+            type: string
+            required: true
+            description: Draft ID
+        returns: void
+
+  - name: GmailAttachment
+    plural: GmailAttachments
+    sdkPath: gmail.users.messages.attachments
+    description: Gmail message attachments
+    operations:
+      - name: get
+        method: get
+        params:
+          - name: userId
+            type: string
+            required: true
+            description: User's email address
+            default: me
+          - name: messageId
+            type: string
+            required: true
+            description: Message ID
+          - name: id
+            type: string
+            required: true
+            description: Attachment ID
+        returns: gmail_v1.Schema$MessagePartBody
+
+  # ============================================================================
+  # Calendar Resources
+  # ============================================================================
+  - name: CalendarEvent
+    plural: CalendarEvents
+    sdkPath: calendar.events
+    description: Calendar events
+    operations:
+      - name: insert
+        method: insert
+        params:
+          - name: calendarId
+            type: string
+            required: true
+            description: Calendar ID (use 'primary' for primary calendar)
+          - name: requestBody
+            type: object
+            required: true
+            description: Event details
+        returns: calendar_v3.Schema$Event
+
+      - name: get
+        method: get
+        params:
+          - name: calendarId
+            type: string
+            required: true
+            description: Calendar ID
+          - name: eventId
+            type: string
+            required: true
+            description: Event ID
+        returns: calendar_v3.Schema$Event
+
+      - name: patch
+        method: patch
+        params:
+          - name: calendarId
+            type: string
+            required: true
+            description: Calendar ID
+          - name: eventId
+            type: string
+            required: true
+            description: Event ID
+          - name: requestBody
+            type: object
+            required: true
+            description: Event updates
+        returns: calendar_v3.Schema$Event
+
+      - name: delete
+        method: delete
+        params:
+          - name: calendarId
+            type: string
+            required: true
+            description: Calendar ID
+          - name: eventId
+            type: string
+            required: true
+            description: Event ID
+        returns: void
+
+      - name: list
+        method: list
+        params:
+          - name: calendarId
+            type: string
+            required: true
+            description: Calendar ID
+          - name: maxResults
+            type: number
+            required: false
+            description: Maximum results per page
+            default: 100
+          - name: pageToken
+            type: string
+            required: false
+            description: Page token for pagination
+          - name: orderBy
+            type: string
+            required: false
+            description: Sort order (startTime, updated)
+        returns: calendar_v3.Schema$Events
+        pagination:
+          type: cursor
+          cursorField: pageToken
+          limitField: maxResults
+
+      - name: move
+        method: move
+        params:
+          - name: calendarId
+            type: string
+            required: true
+            description: Source calendar ID
+          - name: eventId
+            type: string
+            required: true
+            description: Event ID
+          - name: destination
+            type: string
+            required: true
+            description: Destination calendar ID
+        returns: calendar_v3.Schema$Event
+
+      - name: quickAdd
+        method: quickAdd
+        params:
+          - name: calendarId
+            type: string
+            required: true
+            description: Calendar ID
+          - name: text
+            type: string
+            required: true
+            description: Natural language event description
+        returns: calendar_v3.Schema$Event
+
+  - name: Calendar
+    plural: Calendars
+    sdkPath: calendar.calendars
+    description: Calendar resources
+    operations:
+      - name: get
+        method: get
+        params:
+          - name: calendarId
+            type: string
+            required: true
+            description: Calendar ID
+        returns: calendar_v3.Schema$Calendar
+
+      - name: insert
+        method: insert
+        params:
+          - name: requestBody
+            type: object
+            required: true
+            description: Calendar details
+        returns: calendar_v3.Schema$Calendar
+
+      - name: delete
+        method: delete
+        params:
+          - name: calendarId
+            type: string
+            required: true
+            description: Calendar ID
+        returns: void
+
+  - name: CalendarList
+    plural: CalendarLists
+    sdkPath: calendar.calendarList
+    description: Calendar list entries
+    operations:
+      - name: list
+        method: list
+        params:
+          - name: maxResults
+            type: number
+            required: false
+            description: Maximum results per page
+            default: 100
+          - name: pageToken
+            type: string
+            required: false
+            description: Page token for pagination
+        returns: calendar_v3.Schema$CalendarList
+        pagination:
+          type: cursor
+          cursorField: pageToken
+          limitField: maxResults
+
+  - name: FreeBusy
+    plural: FreeBusy
+    sdkPath: calendar.freebusy
+    description: Free/busy information
+    operations:
+      - name: query
+        method: query
+        params:
+          - name: requestBody
+            type: object
+            required: true
+            description: Free/busy query
+        returns: calendar_v3.Schema$FreeBusyResponse
+
+  # ============================================================================
+  # Drive Resources
+  # ============================================================================
+  - name: DriveFile
+    plural: DriveFiles
+    sdkPath: drive.files
+    description: Google Drive files and folders
+    operations:
+      - name: get
+        method: get
+        params:
+          - name: fileId
+            type: string
+            required: true
+            description: File ID
+          - name: fields
+            type: string
+            required: false
+            description: Fields to include
+            default: '*'
+          - name: supportsAllDrives
+            type: boolean
+            required: false
+            description: Support shared drives
+            default: true
+        returns: drive_v3.Schema$File
+
+      - name: list
+        method: list
+        params:
+          - name: pageSize
+            type: number
+            required: false
+            description: Maximum results per page
+            default: 100
+          - name: pageToken
+            type: string
+            required: false
+            description: Page token for pagination
+          - name: q
+            type: string
+            required: false
+            description: Search query
+          - name: orderBy
+            type: string
+            required: false
+            description: Sort order
+          - name: fields
+            type: string
+            required: false
+            description: Fields to include
+            default: nextPageToken, files(*)
+          - name: supportsAllDrives
+            type: boolean
+            required: false
+            description: Support shared drives
+            default: true
+        returns: drive_v3.Schema$FileList
+        pagination:
+          type: cursor
+          cursorField: pageToken
+          limitField: pageSize
+
+      - name: create
+        method: create
+        params:
+          - name: requestBody
+            type: object
+            required: true
+            description: File metadata
+          - name: media
+            type: object
+            required: false
+            description: File content
+          - name: fields
+            type: string
+            required: false
+            description: Fields to include
+            default: '*'
+          - name: supportsAllDrives
+            type: boolean
+            required: false
+            description: Support shared drives
+            default: true
+        returns: drive_v3.Schema$File
+
+      - name: update
+        method: update
+        params:
+          - name: fileId
+            type: string
+            required: true
+            description: File ID
+          - name: requestBody
+            type: object
+            required: true
+            description: File metadata updates
+          - name: fields
+            type: string
+            required: false
+            description: Fields to include
+            default: '*'
+          - name: supportsAllDrives
+            type: boolean
+            required: false
+            description: Support shared drives
+            default: true
+        returns: drive_v3.Schema$File
+
+      - name: delete
+        method: delete
+        params:
+          - name: fileId
+            type: string
+            required: true
+            description: File ID
+          - name: supportsAllDrives
+            type: boolean
+            required: false
+            description: Support shared drives
+            default: true
+        returns: void
+
+      - name: copy
+        method: copy
+        params:
+          - name: fileId
+            type: string
+            required: true
+            description: Source file ID
+          - name: requestBody
+            type: object
+            required: true
+            description: Destination file metadata
+          - name: fields
+            type: string
+            required: false
+            description: Fields to include
+            default: '*'
+          - name: supportsAllDrives
+            type: boolean
+            required: false
+            description: Support shared drives
+            default: true
+        returns: drive_v3.Schema$File
+
+      - name: export
+        method: export
+        params:
+          - name: fileId
+            type: string
+            required: true
+            description: File ID
+          - name: mimeType
+            type: string
+            required: true
+            description: Export MIME type
+        returns: string
+
+  - name: DrivePermission
+    plural: DrivePermissions
+    sdkPath: drive.permissions
+    description: Drive file permissions
+    operations:
+      - name: create
+        method: create
+        params:
+          - name: fileId
+            type: string
+            required: true
+            description: File ID
+          - name: requestBody
+            type: object
+            required: true
+            description: Permission details
+          - name: supportsAllDrives
+            type: boolean
+            required: false
+            description: Support shared drives
+            default: true
+        returns: drive_v3.Schema$Permission
+
+      - name: list
+        method: list
+        params:
+          - name: fileId
+            type: string
+            required: true
+            description: File ID
+          - name: fields
+            type: string
+            required: false
+            description: Fields to include
+            default: '*'
+          - name: supportsAllDrives
+            type: boolean
+            required: false
+            description: Support shared drives
+            default: true
+        returns: drive_v3.Schema$PermissionList
+
+      - name: delete
+        method: delete
+        params:
+          - name: fileId
+            type: string
+            required: true
+            description: File ID
+          - name: permissionId
+            type: string
+            required: true
+            description: Permission ID
+          - name: supportsAllDrives
+            type: boolean
+            required: false
+            description: Support shared drives
+            default: true
+        returns: void
+
+  # ============================================================================
+  # Docs Resources
+  # ============================================================================
+  - name: Document
+    plural: Documents
+    sdkPath: docs.documents
+    description: Google Docs documents
+    operations:
+      - name: get
+        method: get
+        params:
+          - name: documentId
+            type: string
+            required: true
+            description: Document ID
+        returns: docs_v1.Schema$Document
+
+      - name: create
+        method: create
+        params:
+          - name: requestBody
+            type: object
+            required: true
+            description: Document details
+        returns: docs_v1.Schema$Document
+
+      - name: batchUpdate
+        method: batchUpdate
+        params:
+          - name: documentId
+            type: string
+            required: true
+            description: Document ID
+          - name: requestBody
+            type: object
+            required: true
+            description: Batch update requests
+        returns: docs_v1.Schema$BatchUpdateDocumentResponse
+
+  # ============================================================================
+  # Sheets Resources
+  # ============================================================================
+  - name: Spreadsheet
+    plural: Spreadsheets
+    sdkPath: sheets.spreadsheets
+    description: Google Sheets spreadsheets
+    operations:
+      - name: get
+        method: get
+        params:
+          - name: spreadsheetId
+            type: string
+            required: true
+            description: Spreadsheet ID
+        returns: sheets_v4.Schema$Spreadsheet
+
+      - name: create
+        method: create
+        params:
+          - name: requestBody
+            type: object
+            required: true
+            description: Spreadsheet details
+        returns: sheets_v4.Schema$Spreadsheet
+
+      - name: batchUpdate
+        method: batchUpdate
+        params:
+          - name: spreadsheetId
+            type: string
+            required: true
+            description: Spreadsheet ID
+          - name: requestBody
+            type: object
+            required: true
+            description: Batch update requests
+        returns: sheets_v4.Schema$BatchUpdateSpreadsheetResponse
+
+  - name: SpreadsheetValues
+    plural: SpreadsheetValues
+    sdkPath: sheets.spreadsheets.values
+    description: Spreadsheet cell values
+    operations:
+      - name: get
+        method: get
+        params:
+          - name: spreadsheetId
+            type: string
+            required: true
+            description: Spreadsheet ID
+          - name: range
+            type: string
+            required: true
+            description: A1 notation range (e.g., Sheet1!A1:C10)
+        returns: sheets_v4.Schema$ValueRange
+
+      - name: update
+        method: update
+        params:
+          - name: spreadsheetId
+            type: string
+            required: true
+            description: Spreadsheet ID
+          - name: range
+            type: string
+            required: true
+            description: A1 notation range
+          - name: valueInputOption
+            type: string
+            required: true
+            description: How values should be interpreted
+            default: USER_ENTERED
+          - name: requestBody
+            type: object
+            required: true
+            description: Values to update
+        returns: sheets_v4.Schema$UpdateValuesResponse
+
+      - name: append
+        method: append
+        params:
+          - name: spreadsheetId
+            type: string
+            required: true
+            description: Spreadsheet ID
+          - name: range
+            type: string
+            required: true
+            description: A1 notation range
+          - name: valueInputOption
+            type: string
+            required: true
+            description: How values should be interpreted
+            default: USER_ENTERED
+          - name: requestBody
+            type: object
+            required: true
+            description: Values to append
+        returns: sheets_v4.Schema$AppendValuesResponse
+
+      - name: clear
+        method: clear
+        params:
+          - name: spreadsheetId
+            type: string
+            required: true
+            description: Spreadsheet ID
+          - name: range
+            type: string
+            required: true
+            description: A1 notation range
+        returns: sheets_v4.Schema$ClearValuesResponse
+
+      - name: batchGet
+        method: batchGet
+        params:
+          - name: spreadsheetId
+            type: string
+            required: true
+            description: Spreadsheet ID
+          - name: ranges
+            type: string[]
+            required: true
+            description: A1 notation ranges
+        returns: sheets_v4.Schema$BatchGetValuesResponse
+
+  # ============================================================================
+  # Contacts (People API) Resources
+  # ============================================================================
+  - name: Contact
+    plural: Contacts
+    sdkPath: people.people
+    description: Contacts from People API
+    operations:
+      - name: get
+        method: get
+        params:
+          - name: resourceName
+            type: string
+            required: true
+            description: Contact resource name
+          - name: personFields
+            type: string
+            required: true
+            description: Fields to include
+            default: names,emailAddresses,phoneNumbers,addresses,organizations,birthdays,photos
+        returns: people_v1.Schema$Person
+
+      - name: createContact
+        method: createContact
+        params:
+          - name: requestBody
+            type: object
+            required: true
+            description: Contact details
+        returns: people_v1.Schema$Person
+
+      - name: updateContact
+        method: updateContact
+        params:
+          - name: resourceName
+            type: string
+            required: true
+            description: Contact resource name
+          - name: updatePersonFields
+            type: string
+            required: true
+            description: Fields to update
+          - name: requestBody
+            type: object
+            required: true
+            description: Contact updates
+        returns: people_v1.Schema$Person
+
+      - name: deleteContact
+        method: deleteContact
+        params:
+          - name: resourceName
+            type: string
+            required: true
+            description: Contact resource name
+        returns: void
+
+      - name: searchContacts
+        method: searchContacts
+        params:
+          - name: query
+            type: string
+            required: true
+            description: Search query
+          - name: pageSize
+            type: number
+            required: false
+            description: Maximum results per page
+            default: 100
+          - name: readMask
+            type: string
+            required: false
+            description: Fields to include
+            default: names,emailAddresses,phoneNumbers
+        returns: people_v1.Schema$SearchContactsResponse
+
+  - name: ContactConnections
+    plural: ContactConnections
+    sdkPath: people.people.connections
+    description: Contact connections (contact list)
+    operations:
+      - name: list
+        method: list
+        params:
+          - name: resourceName
+            type: string
+            required: true
+            description: Resource name (use 'people/me')
+            default: people/me
+          - name: pageSize
+            type: number
+            required: false
+            description: Maximum results per page
+            default: 100
+          - name: pageToken
+            type: string
+            required: false
+            description: Page token for pagination
+          - name: personFields
+            type: string
+            required: true
+            description: Fields to include
+            default: names,emailAddresses,phoneNumbers,addresses,organizations,birthdays,photos
+        returns: people_v1.Schema$ListConnectionsResponse
+        pagination:
+          type: cursor
+          cursorField: pageToken
+          limitField: pageSize
+
+webhooks:
+  enabled: true
+  signatureHeader: X-Goog-Channel-Token
+  verificationMethod: secret
+  events:
+    # Gmail events
+    - name: gmail.messageReceived
+      type: gmail.messageReceived
+      description: Occurs when a new Gmail message is received
+    - name: gmail.historyChanged
+      type: gmail.historyChanged
+      description: Occurs when Gmail history changes (message added/deleted/labeled)
+
+    # Calendar events
+    - name: calendar.eventCreated
+      type: calendar.eventCreated
+      description: Occurs when a calendar event is created
+    - name: calendar.eventUpdated
+      type: calendar.eventUpdated
+      description: Occurs when a calendar event is updated
+    - name: calendar.eventDeleted
+      type: calendar.eventDeleted
+      description: Occurs when a calendar event is deleted
+
+    # Drive events
+    - name: drive.fileChanged
+      type: drive.fileChanged
+      description: Occurs when a Drive file is changed
+    - name: drive.fileTrashed
+      type: drive.fileTrashed
+      description: Occurs when a Drive file is trashed
+    - name: drive.fileUntrashed
+      type: drive.fileUntrashed
+      description: Occurs when a Drive file is restored from trash
+    - name: drive.fileDeleted
+      type: drive.fileDeleted
+      description: Occurs when a Drive file is permanently deleted
+
+errors:
+  mapping:
+    - code: INVALID_ARGUMENT
+      type: validation
+      statusCode: 400
+      message: Invalid request parameters
+      retryable: false
+    - code: FAILED_PRECONDITION
+      type: validation
+      statusCode: 400
+      message: Request cannot be executed in current state
+      retryable: false
+    - code: OUT_OF_RANGE
+      type: validation
+      statusCode: 400
+      message: Parameter value out of range
+      retryable: false
+    - code: UNAUTHENTICATED
+      type: authentication
+      statusCode: 401
+      message: Authentication required or token expired
+      retryable: false
+    - code: PERMISSION_DENIED
+      type: authorization
+      statusCode: 403
+      message: Insufficient permissions
+      retryable: false
+    - code: NOT_FOUND
+      type: not_found
+      statusCode: 404
+      message: Resource not found
+      retryable: false
+    - code: ALREADY_EXISTS
+      type: validation
+      statusCode: 409
+      message: Resource already exists
+      retryable: false
+    - code: ABORTED
+      type: validation
+      statusCode: 409
+      message: Operation was aborted
+      retryable: true
+    - code: RESOURCE_EXHAUSTED
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit or quota exceeded
+      retryable: true
+    - code: CANCELLED
+      type: validation
+      statusCode: 499
+      message: Request was cancelled
+      retryable: false
+    - code: UNKNOWN
+      type: server
+      statusCode: 500
+      message: Unknown server error
+      retryable: false
+    - code: INTERNAL
+      type: server
+      statusCode: 500
+      message: Internal server error
+      retryable: true
+    - code: NOT_IMPLEMENTED
+      type: server
+      statusCode: 501
+      message: Operation not implemented
+      retryable: false
+    - code: UNAVAILABLE
+      type: server
+      statusCode: 503
+      message: Service temporarily unavailable
+      retryable: true
+    - code: DEADLINE_EXCEEDED
+      type: server
+      statusCode: 504
+      message: Request timeout
+      retryable: true
+    - code: DATA_LOSS
+      type: server
+      statusCode: 500
+      message: Unrecoverable data loss
+      retryable: false
+  retryable: [RESOURCE_EXHAUSTED, UNAVAILABLE, DEADLINE_EXCEEDED, INTERNAL, ABORTED]
+  nonRetryable:
+    [
+      INVALID_ARGUMENT,
+      FAILED_PRECONDITION,
+      OUT_OF_RANGE,
+      UNAUTHENTICATED,
+      PERMISSION_DENIED,
+      NOT_FOUND,
+      ALREADY_EXISTS,
+      CANCELLED,
+      UNKNOWN,
+      NOT_IMPLEMENTED,
+      DATA_LOSS,
+    ]
+
+tests:
+  enabled: true
+  cleanup: true
+  scenarios:
+    # Gmail scenarios
+    - name: Gmail Send Email
+      description: Test sending email
+      steps:
+        - action: create
+          resource: GmailMessage
+        - action: retrieve
+          resource: GmailMessage
+        - action: delete
+          resource: GmailMessage
+
+    - name: Gmail Labels
+      description: Test label operations
+      steps:
+        - action: create
+          resource: GmailLabel
+        - action: retrieve
+          resource: GmailLabel
+        - action: list
+          resource: GmailLabel
+        - action: delete
+          resource: GmailLabel
+
+    - name: Gmail Drafts
+      description: Test draft operations
+      steps:
+        - action: create
+          resource: GmailDraft
+        - action: retrieve
+          resource: GmailDraft
+        - action: delete
+          resource: GmailDraft
+
+    - name: Gmail Message List
+      description: Test message listing with filters
+      steps:
+        - action: list
+          resource: GmailMessage
+
+    - name: Gmail Message Modify
+      description: Test message label modification
+      steps:
+        - action: create
+          resource: GmailMessage
+        - action: update
+          resource: GmailMessage
+        - action: delete
+          resource: GmailMessage
+
+    # Calendar scenarios
+    - name: Calendar Event Operations
+      description: Test calendar event CRUD
+      steps:
+        - action: create
+          resource: CalendarEvent
+        - action: retrieve
+          resource: CalendarEvent
+        - action: update
+          resource: CalendarEvent
+        - action: delete
+          resource: CalendarEvent
+
+    - name: Calendar List Events
+      description: Test listing calendar events
+      steps:
+        - action: list
+          resource: CalendarEvent
+
+    - name: Calendar Quick Add
+      description: Test natural language event creation
+      steps:
+        - action: create
+          resource: CalendarEvent
+
+    - name: Calendar Operations
+      description: Test calendar CRUD
+      steps:
+        - action: create
+          resource: Calendar
+        - action: retrieve
+          resource: Calendar
+        - action: delete
+          resource: Calendar
+
+    - name: Calendar List
+      description: Test listing calendars
+      steps:
+        - action: list
+          resource: CalendarList
+
+    - name: Calendar Free/Busy
+      description: Test free/busy query
+      steps:
+        - action: retrieve
+          resource: FreeBusy
+
+    - name: Calendar Move Event
+      description: Test moving event between calendars
+      steps:
+        - action: create
+          resource: CalendarEvent
+        - action: update
+          resource: CalendarEvent
+        - action: delete
+          resource: CalendarEvent
+
+    # Drive scenarios
+    - name: Drive File Operations
+      description: Test Drive file CRUD
+      steps:
+        - action: create
+          resource: DriveFile
+        - action: retrieve
+          resource: DriveFile
+        - action: update
+          resource: DriveFile
+        - action: delete
+          resource: DriveFile
+
+    - name: Drive List Files
+      description: Test listing Drive files
+      steps:
+        - action: list
+          resource: DriveFile
+
+    - name: Drive Copy File
+      description: Test copying Drive file
+      steps:
+        - action: create
+          resource: DriveFile
+        - action: create
+          resource: DriveFile
+        - action: delete
+          resource: DriveFile
+
+    - name: Drive Folder Operations
+      description: Test Drive folder creation
+      steps:
+        - action: create
+          resource: DriveFile
+        - action: delete
+          resource: DriveFile
+
+    - name: Drive Permissions
+      description: Test Drive file permissions
+      steps:
+        - action: create
+          resource: DriveFile
+        - action: create
+          resource: DrivePermission
+        - action: list
+          resource: DrivePermission
+        - action: delete
+          resource: DrivePermission
+        - action: delete
+          resource: DriveFile
+
+    - name: Drive Search
+      description: Test Drive file search
+      steps:
+        - action: list
+          resource: DriveFile
+
+    - name: Drive Export
+      description: Test exporting Google Workspace files
+      steps:
+        - action: create
+          resource: DriveFile
+        - action: retrieve
+          resource: DriveFile
+        - action: delete
+          resource: DriveFile
+
+    # Docs scenarios
+    - name: Docs Document Operations
+      description: Test Docs document CRUD
+      steps:
+        - action: create
+          resource: Document
+        - action: retrieve
+          resource: Document
+
+    - name: Docs Batch Update
+      description: Test Docs batch updates
+      steps:
+        - action: create
+          resource: Document
+        - action: update
+          resource: Document
+
+    # Sheets scenarios
+    - name: Sheets Spreadsheet Operations
+      description: Test Sheets spreadsheet CRUD
+      steps:
+        - action: create
+          resource: Spreadsheet
+        - action: retrieve
+          resource: Spreadsheet
+
+    - name: Sheets Values Operations
+      description: Test reading/writing cell values
+      steps:
+        - action: create
+          resource: Spreadsheet
+        - action: retrieve
+          resource: SpreadsheetValues
+        - action: update
+          resource: SpreadsheetValues
+        - action: retrieve
+          resource: SpreadsheetValues
+
+    - name: Sheets Append Values
+      description: Test appending values to spreadsheet
+      steps:
+        - action: create
+          resource: Spreadsheet
+        - action: create
+          resource: SpreadsheetValues
+        - action: retrieve
+          resource: SpreadsheetValues
+
+    - name: Sheets Clear Values
+      description: Test clearing cell values
+      steps:
+        - action: create
+          resource: Spreadsheet
+        - action: update
+          resource: SpreadsheetValues
+        - action: delete
+          resource: SpreadsheetValues
+
+    - name: Sheets Batch Get
+      description: Test batch reading values
+      steps:
+        - action: create
+          resource: Spreadsheet
+        - action: retrieve
+          resource: SpreadsheetValues
+
+    - name: Sheets Batch Update
+      description: Test spreadsheet batch updates
+      steps:
+        - action: create
+          resource: Spreadsheet
+        - action: update
+          resource: Spreadsheet
+
+    # Contacts scenarios
+    - name: Contact Operations
+      description: Test contact CRUD
+      steps:
+        - action: create
+          resource: Contact
+        - action: retrieve
+          resource: Contact
+        - action: update
+          resource: Contact
+        - action: delete
+          resource: Contact
+
+    - name: Contact List
+      description: Test listing contacts
+      steps:
+        - action: list
+          resource: ContactConnections
+
+    - name: Contact Search
+      description: Test searching contacts
+      steps:
+        - action: retrieve
+          resource: Contact
+
+docs:
+  homepage: https://workspace.google.com
+  apiDocs: https://developers.google.com/workspace
+  guides:
+    quickstart: https://developers.google.com/workspace/guides/get-started
+    authentication: https://developers.google.com/workspace/guides/auth-overview
+    gmail: https://developers.google.com/gmail/api/guides
+    calendar: https://developers.google.com/calendar/api/guides/overview
+    drive: https://developers.google.com/drive/api/guides/about-sdk
+    docs: https://developers.google.com/docs/api/how-tos/overview
+    sheets: https://developers.google.com/sheets/api/guides/concepts
+    contacts: https://developers.google.com/people/api/rest
+---
+
+# Google Workspace Integration
+
+Comprehensive integration for Google Workspace APIs including Gmail, Calendar, Drive, Docs, Sheets, and Contacts. This integration enables full automation of Google Workspace services with OAuth2 authentication and comprehensive error handling.
+
+## Features
+
+- **Gmail**: Send/receive email, manage labels and drafts, handle attachments
+- **Calendar**: Create/manage events, calendars, free/busy queries
+- **Drive**: Upload/download files, manage permissions and sharing, search files
+- **Docs**: Create/edit documents with batch operations
+- **Sheets**: Read/write spreadsheet data with batch updates
+- **Contacts**: Manage contacts via People API
+- **OAuth2 Authentication**: Secure user-based authentication
+- **Service Accounts**: Server-to-server authentication with domain-wide delegation
+- **Webhooks**: Push notifications for Gmail, Calendar, and Drive
+- **Comprehensive Types**: Full TypeScript type definitions
+- **Automatic Retries**: Built-in retry logic for transient failures
+- **Rate Limiting**: Automatic handling of quota and rate limit errors
+
+## Quick Start
+
+```typescript
+import { GoogleWorkspaceClient } from '@dotdo/sdk.do/integrations/google-workspace'
+
+// Initialize with OAuth2
+const client = new GoogleWorkspaceClient({
+  oauth2: {
+    clientId: process.env.GOOGLE_CLIENT_ID!,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    redirectUri: 'http://localhost:3000/auth/callback',
+    accessToken: 'user-access-token',
+    refreshToken: 'user-refresh-token',
+  },
+})
+
+// Send an email
+await client.gmail.sendEmail({
+  to: 'user@example.com',
+  subject: 'Hello from Google Workspace!',
+  text: 'This is a test email.',
+  html: '<h1>This is a test email.</h1>',
+})
+
+// Create a calendar event
+await client.calendar.createEvent('primary', {
+  summary: 'Team Meeting',
+  start: { dateTime: '2024-01-15T10:00:00-08:00' },
+  end: { dateTime: '2024-01-15T11:00:00-08:00' },
+  attendees: [{ email: 'team@example.com' }],
+})
+
+// Upload a file to Drive
+await client.drive.createFile({
+  name: 'report.pdf',
+  content: pdfBuffer,
+  contentType: 'application/pdf',
+})
+```
+
+## Authentication
+
+### OAuth2 (User Authentication)
+
+OAuth2 is used for accessing user data with their permission.
+
+**1. Set up OAuth2 credentials in Google Cloud Console:**
+
+- Go to [Google Cloud Console](https://console.cloud.google.com)
+- Create or select a project
+- Enable Google Workspace APIs (Gmail, Calendar, Drive, etc.)
+- Create OAuth2 credentials (Client ID and Secret)
+- Add authorized redirect URIs
+
+**2. Request user authorization:**
+
+```typescript
+import { google } from 'googleapis'
+
+const oauth2Client = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET, 'http://localhost:3000/auth/callback')
+
+// Generate authorization URL
+const authUrl = oauth2Client.generateAuthUrl({
+  access_type: 'offline',
+  scope: ['https://mail.google.com/', 'https://www.googleapis.com/auth/calendar', 'https://www.googleapis.com/auth/drive'],
+})
+
+// Redirect user to authUrl
+// After authorization, exchange code for tokens
+const { tokens } = await oauth2Client.getToken(code)
+oauth2Client.setCredentials(tokens)
+
+// Use tokens with GoogleWorkspaceClient
+const client = new GoogleWorkspaceClient({
+  oauth2: {
+    clientId: process.env.GOOGLE_CLIENT_ID!,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    redirectUri: 'http://localhost:3000/auth/callback',
+    accessToken: tokens.access_token,
+    refreshToken: tokens.refresh_token,
+  },
+})
+```
+
+### Service Account (Server-to-Server)
+
+Service accounts are used for server-to-server authentication without user interaction.
+
+**1. Create service account in Google Cloud Console:**
+
+- Go to [Google Cloud Console](https://console.cloud.google.com)
+- Create a service account
+- Download JSON key file
+- Enable domain-wide delegation (for accessing user data)
+
+**2. Grant domain-wide delegation:**
+
+- Go to Google Workspace Admin Console
+- Security > API Controls > Domain-wide Delegation
+- Add service account client ID with required scopes
+
+**3. Use service account:**
+
+```typescript
+import serviceAccountKey from './service-account-key.json'
+
+const client = new GoogleWorkspaceClient({
+  serviceAccount: serviceAccountKey,
+  scopes: ['https://mail.google.com/', 'https://www.googleapis.com/auth/calendar', 'https://www.googleapis.com/auth/drive'],
+  subject: 'user@example.com', // User to impersonate
+})
+```
+
+## Gmail
+
+### Send Email
+
+```typescript
+// Simple text email
+await client.gmail.sendEmail({
+  to: 'user@example.com',
+  subject: 'Hello',
+  text: 'Hello from Google Workspace!',
+})
+
+// HTML email with attachments
+await client.gmail.sendEmail({
+  to: ['user1@example.com', 'user2@example.com'],
+  cc: 'manager@example.com',
+  subject: 'Weekly Report',
+  html: '<h1>Weekly Report</h1><p>Attached is the report.</p>',
+  attachments: [
+    {
+      filename: 'report.pdf',
+      content: pdfBuffer,
+      contentType: 'application/pdf',
+    },
+  ],
+})
+
+// Reply to thread
+await client.gmail.sendEmail({
+  to: 'user@example.com',
+  subject: 'Re: Original Subject',
+  text: 'This is a reply.',
+  threadId: 'thread-id',
+  inReplyTo: '<message-id>',
+  references: '<message-id>',
+})
+```
+
+### Read Email
+
+```typescript
+// Get specific message
+const message = await client.gmail.getMessage('message-id')
+console.log(message.snippet)
+
+// List messages with filters
+const unread = await client.gmail.listMessages({ q: 'is:unread' })
+const fromUser = await client.gmail.listMessages({ q: 'from:user@example.com' })
+const withLabel = await client.gmail.listMessages({ labelIds: ['INBOX', 'IMPORTANT'] })
+
+// Search messages
+const results = await client.gmail.listMessages({
+  q: 'has:attachment after:2024/01/01',
+})
+
+// Paginate through messages
+let pageToken: string | undefined
+do {
+  const response = await client.gmail.listMessages({}, { pageToken })
+  for (const msg of response.items) {
+    console.log(msg.snippet)
+  }
+  pageToken = response.nextPageToken
+} while (pageToken)
+```
+
+### Manage Labels
+
+```typescript
+// Create label
+const label = await client.gmail.createLabel('Important Projects')
+
+// List all labels
+const labels = await client.gmail.listLabels()
+
+// Apply labels to message
+await client.gmail.modifyMessage('message-id', [label.id], ['UNREAD'])
+
+// Delete label
+await client.gmail.deleteLabel(label.id)
+```
+
+### Drafts
+
+```typescript
+// Create draft
+const draft = await client.gmail.createDraft({
+  to: 'user@example.com',
+  subject: 'Draft Email',
+  text: 'This is a draft.',
+})
+
+// Send draft
+await client.gmail.sendDraft(draft.id!)
+
+// Delete draft
+await client.gmail.deleteDraft(draft.id!)
+```
+
+## Calendar
+
+### Create Events
+
+```typescript
+// Simple event
+await client.calendar.createEvent('primary', {
+  summary: 'Team Meeting',
+  start: { dateTime: '2024-01-15T10:00:00-08:00' },
+  end: { dateTime: '2024-01-15T11:00:00-08:00' },
+})
+
+// Event with attendees and reminders
+await client.calendar.createEvent('primary', {
+  summary: 'Project Review',
+  description: 'Quarterly project review meeting',
+  location: 'Conference Room A',
+  start: { dateTime: '2024-01-15T14:00:00-08:00' },
+  end: { dateTime: '2024-01-15T15:00:00-08:00' },
+  attendees: [{ email: 'user1@example.com' }, { email: 'user2@example.com', optional: true }],
+  reminders: {
+    useDefault: false,
+    overrides: [
+      { method: 'email', minutes: 24 * 60 }, // 1 day before
+      { method: 'popup', minutes: 10 }, // 10 minutes before
+    ],
+  },
+})
+
+// All-day event
+await client.calendar.createEvent('primary', {
+  summary: 'Company Holiday',
+  start: { date: '2024-12-25' },
+  end: { date: '2024-12-26' },
+})
+
+// Recurring event (weekly)
+await client.calendar.createEvent('primary', {
+  summary: 'Weekly Standup',
+  start: { dateTime: '2024-01-15T09:00:00-08:00' },
+  end: { dateTime: '2024-01-15T09:30:00-08:00' },
+  recurrence: ['RRULE:FREQ=WEEKLY;COUNT=10'],
+})
+
+// Natural language event (quick add)
+await client.calendar.quickAdd('primary', 'Lunch with John tomorrow at noon')
+```
+
+### Manage Events
+
+```typescript
+// Get event
+const event = await client.calendar.getEvent('primary', 'event-id')
+
+// Update event
+await client.calendar.updateEvent('primary', 'event-id', {
+  summary: 'Updated Meeting Title',
+  start: { dateTime: '2024-01-15T11:00:00-08:00' },
+  end: { dateTime: '2024-01-15T12:00:00-08:00' },
+})
+
+// Delete event
+await client.calendar.deleteEvent('primary', 'event-id')
+
+// Move event to different calendar
+await client.calendar.moveEvent('primary', 'event-id', 'other-calendar-id')
+
+// List events
+const events = await client.calendar.listEvents('primary')
+```
+
+### Free/Busy
+
+```typescript
+// Check availability
+const freeBusy = await client.calendar.freeBusy({
+  timeMin: new Date(),
+  timeMax: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // Next 7 days
+  items: [{ id: 'primary' }, { id: 'user@example.com' }],
+})
+
+// Check busy times
+for (const [calendarId, calendar] of Object.entries(freeBusy.calendars)) {
+  console.log(`${calendarId} busy times:`)
+  for (const busy of calendar.busy) {
+    console.log(`  ${busy.start} - ${busy.end}`)
+  }
+}
+```
+
+### Calendar Management
+
+```typescript
+// Create calendar
+const calendar = await client.calendar.createCalendar('Project Calendar', 'Team project events')
+
+// List all calendars
+const calendars = await client.calendar.listCalendars()
+
+// Get calendar
+const cal = await client.calendar.getCalendar('calendar-id')
+
+// Delete calendar
+await client.calendar.deleteCalendar('calendar-id')
+```
+
+## Drive
+
+### File Operations
+
+```typescript
+// Create/upload file
+const file = await client.drive.createFile({
+  name: 'data.json',
+  content: JSON.stringify({ hello: 'world' }),
+  contentType: 'application/json',
+  parents: ['folder-id'], // Optional parent folder
+})
+
+// Create Google Docs/Sheets/Slides
+const doc = await client.drive.createFile({
+  name: 'My Document',
+  mimeType: 'application/vnd.google-apps.document',
+})
+
+const sheet = await client.drive.createFile({
+  name: 'My Spreadsheet',
+  mimeType: 'application/vnd.google-apps.spreadsheet',
+})
+
+// Get file metadata
+const fileInfo = await client.drive.getFile(file.id)
+
+// Download file content
+const content = await client.drive.downloadFile(file.id)
+
+// Update file metadata
+await client.drive.updateFile(file.id, {
+  name: 'renamed-data.json',
+  description: 'Updated description',
+})
+
+// Copy file
+const copy = await client.drive.copyFile(file.id, 'data-copy.json')
+
+// Delete file
+await client.drive.deleteFile(file.id)
+```
+
+### Folder Operations
+
+```typescript
+// Create folder
+const folder = await client.drive.createFolder('My Folder')
+
+// Create nested folder
+const subfolder = await client.drive.createFolder('Subfolder', folder.id)
+
+// Upload file to folder
+await client.drive.createFile({
+  name: 'file.txt',
+  content: 'Hello',
+  contentType: 'text/plain',
+  parents: [folder.id],
+})
+```
+
+### Search Files
+
+```typescript
+// Search by name
+const files = await client.drive.searchFiles("name contains 'report'")
+
+// Search by MIME type
+const pdfs = await client.drive.searchFiles("mimeType='application/pdf'")
+
+// Search in folder
+const folderFiles = await client.drive.searchFiles(`'${folderId}' in parents`)
+
+// Complex search
+const results = await client.drive.searchFiles("name contains 'report' and mimeType='application/pdf' and modifiedTime > '2024-01-01'")
+
+// List all files
+const allFiles = await client.drive.listFiles()
+```
+
+### Permissions & Sharing
+
+```typescript
+// Share with specific user
+await client.drive.shareFile(fileId, {
+  type: 'user',
+  role: 'reader',
+  emailAddress: 'user@example.com',
+})
+
+// Share with anyone (public link)
+await client.drive.shareFile(fileId, {
+  type: 'anyone',
+  role: 'reader',
+})
+
+// Share with domain
+await client.drive.shareFile(fileId, {
+  type: 'domain',
+  role: 'writer',
+  domain: 'example.com',
+})
+
+// List permissions
+const permissions = await client.drive.listPermissions(fileId)
+
+// Revoke permission
+await client.drive.revokePermission(fileId, permissionId)
+```
+
+### Export Files
+
+```typescript
+// Export Google Doc to PDF
+const pdf = await client.drive.exportFile(docId, 'application/pdf')
+
+// Export Google Doc to Word
+const docx = await client.drive.exportFile(docId, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+
+// Export Google Sheet to Excel
+const xlsx = await client.drive.exportFile(sheetId, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+// Export Google Sheet to CSV
+const csv = await client.drive.exportFile(sheetId, 'text/csv')
+```
+
+## Docs
+
+### Document Operations
+
+```typescript
+// Create document
+const doc = await client.docs.createDocument('My Document')
+
+// Get document
+const document = await client.docs.getDocument(doc.documentId)
+
+// Insert text
+await client.docs.insertText(doc.documentId, 'Hello World!', 1)
+
+// Delete text
+await client.docs.deleteText(doc.documentId, 1, 12)
+
+// Replace text
+await client.docs.replaceText(doc.documentId, 'old', 'new')
+
+// Batch update
+await client.docs.batchUpdate(doc.documentId, [
+  { insertText: { text: 'Title\n', location: { index: 1 } } },
+  {
+    updateTextStyle: {
+      range: { startIndex: 1, endIndex: 6 },
+      textStyle: { bold: true, fontSize: { magnitude: 24, unit: 'PT' } },
+      fields: 'bold,fontSize',
+    },
+  },
+  { insertText: { text: 'Body text here', location: { index: 7 } } },
+])
+```
+
+## Sheets
+
+### Spreadsheet Operations
+
+```typescript
+// Create spreadsheet
+const sheet = await client.sheets.createSpreadsheet('My Spreadsheet')
+
+// Get spreadsheet
+const spreadsheet = await client.sheets.getSpreadsheet(sheet.spreadsheetId)
+
+// Read values
+const values = await client.sheets.getValues(sheet.spreadsheetId, 'Sheet1!A1:C10')
+console.log(values.values) // 2D array
+
+// Write values
+await client.sheets.updateValues(sheet.spreadsheetId, 'Sheet1!A1:C2', [
+  ['Name', 'Email', 'Phone'],
+  ['John Doe', 'john@example.com', '555-1234'],
+])
+
+// Append values
+await client.sheets.appendValues(sheet.spreadsheetId, 'Sheet1!A:C', [['Jane Doe', 'jane@example.com', '555-5678']])
+
+// Clear values
+await client.sheets.clearValues(sheet.spreadsheetId, 'Sheet1!A1:C10')
+
+// Batch get values
+const ranges = await client.sheets.batchGetValues(sheet.spreadsheetId, ['Sheet1!A1:A10', 'Sheet1!B1:B10'])
+```
+
+### Sheet Management
+
+```typescript
+// Add sheet
+await client.sheets.addSheet(sheet.spreadsheetId, 'New Sheet')
+
+// Delete sheet
+await client.sheets.deleteSheet(sheet.spreadsheetId, sheetId)
+
+// Batch update
+await client.sheets.batchUpdate(sheet.spreadsheetId, {
+  requests: [
+    { addSheet: { properties: { title: 'Sheet2' } } },
+    {
+      updateCells: {
+        range: { sheetId: 0, startRowIndex: 0, endRowIndex: 1 },
+        rows: [{ values: [{ userEnteredValue: { stringValue: 'Header' } }] }],
+        fields: 'userEnteredValue',
+      },
+    },
+  ],
+})
+```
+
+## Contacts
+
+### Contact Operations
+
+```typescript
+// Create contact
+const contact = await client.contacts.createContact({
+  names: [{ givenName: 'John', familyName: 'Doe' }],
+  emailAddresses: [{ value: 'john@example.com' }],
+  phoneNumbers: [{ value: '555-1234' }],
+  addresses: [
+    {
+      streetAddress: '123 Main St',
+      city: 'San Francisco',
+      region: 'CA',
+      postalCode: '94102',
+      country: 'USA',
+    },
+  ],
+})
+
+// Get contact
+const person = await client.contacts.getContact(contact.resourceName)
+
+// Update contact
+await client.contacts.updateContact(contact.resourceName, {
+  emailAddresses: [{ value: 'newemail@example.com' }],
+})
+
+// Delete contact
+await client.contacts.deleteContact(contact.resourceName)
+
+// List contacts
+const contacts = await client.contacts.listContacts()
+
+// Search contacts
+const results = await client.contacts.searchContacts('john')
+```
+
+## Webhooks
+
+Google Workspace uses push notifications for real-time updates. You need to set up watch channels for each service.
+
+### Setup
+
+**1. Configure domain verification and webhook URL in Google Cloud Console**
+
+**2. Create watch channels:**
+
+```typescript
+import { google } from 'googleapis'
+import { GoogleWorkspaceWebhooks } from '@dotdo/sdk.do/integrations/google-workspace'
+
+// Gmail watch (requires Pub/Sub topic)
+const gmail = google.gmail({ version: 'v1', auth })
+await gmail.users.watch({
+  userId: 'me',
+  requestBody: {
+    topicName: 'projects/your-project/topics/gmail-notifications',
+    labelIds: ['INBOX'],
+  },
+})
+
+// Calendar watch
+const calendar = google.calendar({ version: 'v3', auth })
+const calendarWatch = GoogleWorkspaceWebhooks.createCalendarWatchRequest('https://example.com/webhooks/calendar', 'my-secret-token')
+await calendar.events.watch({
+  calendarId: 'primary',
+  requestBody: calendarWatch,
+})
+
+// Drive watch
+const drive = google.drive({ version: 'v3', auth })
+const driveWatch = GoogleWorkspaceWebhooks.createDriveWatchRequest('https://example.com/webhooks/drive', 'my-secret-token')
+await drive.changes.watch({
+  pageToken: startPageToken,
+  requestBody: driveWatch,
+})
+```
+
+**3. Handle webhook notifications:**
+
+```typescript
+import { GoogleWorkspaceWebhooks } from '@dotdo/sdk.do/integrations/google-workspace'
+
+app.post('/webhooks/google', (req, res) => {
+  // Verify notification
+  const validation = GoogleWorkspaceWebhooks.validateNotification(req.headers, 'my-secret-token')
+  if (!validation.valid) {
+    return res.status(401).send(validation.error)
+  }
+
+  // Parse notification
+  const notification = GoogleWorkspaceWebhooks.parseNotification(req.headers)
+
+  // Handle based on service
+  switch (notification.service) {
+    case 'gmail':
+      // Fetch history changes
+      const historyId = notification.resourceId
+      // Use gmail.users.history.list() to get changes
+      break
+
+    case 'calendar':
+      // Sync calendar events
+      // Use calendar.events.list() with syncToken
+      break
+
+    case 'drive':
+      // Fetch file changes
+      // Use drive.changes.list() with pageToken
+      break
+  }
+
+  res.status(200).send('OK')
+})
+```
+
+## Error Handling
+
+```typescript
+import { GoogleWorkspaceIntegrationError } from '@dotdo/sdk.do/integrations/google-workspace'
+
+try {
+  await client.gmail.sendEmail({
+    to: 'invalid-email',
+    subject: 'Test',
+    text: 'Test',
+  })
+} catch (error) {
+  if (error instanceof GoogleWorkspaceIntegrationError) {
+    console.error('Service:', error.service)
+    console.error('Code:', error.code)
+    console.error('Message:', error.getDetailedMessage())
+
+    if (error.isAuthenticationError()) {
+      // Handle authentication error - refresh token or re-authenticate
+    } else if (error.isPermissionError()) {
+      // Handle permission error - request additional scopes
+    } else if (error.isRateLimitError()) {
+      // Handle rate limit - implement backoff
+      const delay = error.getRetryDelay(1)
+      if (delay) {
+        await new Promise((resolve) => setTimeout(resolve, delay))
+        // Retry operation
+      }
+    } else if (error.isQuotaError()) {
+      // Handle quota error - wait until daily reset
+    } else if (error.isRetriable()) {
+      // Retry with exponential backoff
+    }
+  }
+}
+```
+
+## Rate Limits
+
+Google Workspace APIs have the following rate limits:
+
+- **Gmail**: 250 quota units/second per user, 25,000 quota units/day
+- **Calendar**: 500 queries/second per user, 1,000,000 queries/day
+- **Drive**: 12,000 queries/minute per user
+- **Docs**: 300 queries/minute per user
+- **Sheets**: 100 queries/100 seconds per user
+- **People API**: 90 queries/minute per user
+
+The client automatically handles rate limits with exponential backoff.
+
+## Best Practices
+
+1. **Use Service Accounts for Server Operations**: Service accounts avoid user interaction and are better for automation
+2. **Request Minimal Scopes**: Only request OAuth scopes you actually need
+3. **Implement Webhook Handlers**: Use webhooks instead of polling for real-time updates
+4. **Handle Token Refresh**: Implement automatic token refresh for OAuth2
+5. **Batch Operations**: Use batch APIs when performing multiple operations
+6. **Error Handling**: Implement comprehensive error handling with retries
+7. **Respect Rate Limits**: Use exponential backoff for rate limit errors
+8. **Use Partial Responses**: Request only needed fields to reduce response size
+9. **Cache Data**: Cache frequently accessed data to reduce API calls
+10. **Monitor Quotas**: Track quota usage to avoid hitting daily limits
+
+## Common Use Cases
+
+### Email Automation
+
+```typescript
+// Send daily digest email
+const unread = await client.gmail.listMessages({ q: 'is:unread' })
+const digest = `You have ${unread.totalItems} unread messages`
+await client.gmail.sendEmail({
+  to: 'user@example.com',
+  subject: 'Daily Email Digest',
+  text: digest,
+})
+```
+
+### Calendar Sync
+
+```typescript
+// Sync events to external system
+const events = await client.calendar.listEvents('primary')
+for (const event of events.items) {
+  // Save to database or external system
+  await saveEvent(event)
+}
+```
+
+### Document Backup
+
+```typescript
+// Backup all Google Docs to local storage
+const files = await client.drive.searchFiles("mimeType='application/vnd.google-apps.document'")
+for (const file of files.items) {
+  const content = await client.drive.exportFile(file.id, 'application/pdf')
+  await fs.promises.writeFile(`./backup/${file.name}.pdf`, content)
+}
+```
+
+### Contact Import
+
+```typescript
+// Import contacts from CSV
+const contacts = parseCSV(csvContent)
+for (const contact of contacts) {
+  await client.contacts.createContact({
+    names: [{ givenName: contact.firstName, familyName: contact.lastName }],
+    emailAddresses: [{ value: contact.email }],
+    phoneNumbers: [{ value: contact.phone }],
+  })
+}
+```
+
+## Support
+
+- **Documentation**: https://developers.google.com/workspace
+- **API Reference**: https://developers.google.com/workspace/products
+- **Community**: https://groups.google.com/g/google-workspace-dev
+- **Status**: https://workspace.google.com/status

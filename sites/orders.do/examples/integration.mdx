@@ -1,0 +1,572 @@
+---
+$id: https://orders.do/examples/integration
+$type: HowTo
+title: Order Management Integration Examples
+description: Learn how to integrate orders.do with invoices, payments, customers, products, and external services.
+keywords: [integration, invoices, payments, customers, products, external services]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Order Management Integration Examples
+
+This example demonstrates how to integrate orders.do with other `.do` platform services and external systems.
+
+## Integration with invoices.do
+
+Automatically create invoices from orders:
+
+```typescript
+import $, { db, on } from 'sdk.do'
+
+// Create invoice when order is created
+await on($.Order.created, async (order) => {
+  const totals = calculateOrderTotal(order)
+
+  const invoice = await db.create($.Invoice, {
+    $type: 'Invoice',
+    invoiceNumber: `INV-${order.orderNumber}`,
+    dateIssued: new Date().toISOString(),
+    referencesOrder: order.$id,
+    customer: order.customer,
+    accountId: order.customer.$id,
+    totalPaymentDue: {
+      $type: 'PriceSpecification',
+      price: totals.total,
+      priceCurrency: 'USD',
+    },
+    paymentDueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    paymentStatus: 'PaymentDue',
+  })
+
+  console.log('Invoice created:', invoice.invoiceNumber)
+})
+
+// Update invoice when order is delivered
+await on($.Order.updated, async (order) => {
+  if (order.orderStatus === 'OrderDelivered') {
+    const invoice = await db.list($.Invoice, {
+      where: { referencesOrder: order.$id },
+    })
+
+    if (invoice[0]) {
+      await db.update(invoice[0], {
+        paymentStatus: 'PaymentComplete',
+        paymentDate: new Date().toISOString(),
+      })
+    }
+  }
+})
+```
+
+## Integration with payments.do
+
+Process payments for orders:
+
+```typescript
+import { send } from 'sdk.do'
+
+// Process payment on order creation
+await on($.Order.created, async (order) => {
+  const totals = calculateOrderTotal(order)
+
+  try {
+    // Send payment request
+    const paymentResult = await send({
+      $type: 'PaymentRequest',
+      order: order.$id,
+      amount: totals.total,
+      currency: 'USD',
+      paymentMethod: order.paymentMethod,
+      customer: order.customer,
+    })
+
+    if (paymentResult.success) {
+      await db.update(order, {
+        paymentStatus: 'PaymentComplete',
+        paymentTransactionId: paymentResult.transactionId,
+        orderStatus: 'OrderProcessing',
+      })
+    } else {
+      await db.update(order, {
+        paymentStatus: 'PaymentDeclined',
+        orderStatus: 'OrderProblem',
+        orderProblem: 'Payment declined',
+      })
+    }
+  } catch (error) {
+    console.error('Payment processing failed:', error)
+
+    await db.update(order, {
+      paymentStatus: 'PaymentFailed',
+      orderStatus: 'OrderProblem',
+      orderProblem: error.message,
+    })
+  }
+})
+
+// Process refund on cancellation
+await on($.Order.updated, async (order) => {
+  if (order.orderStatus === 'OrderCancelled' && order.paymentStatus === 'PaymentComplete') {
+    const totals = calculateOrderTotal(order)
+
+    await send({
+      $type: 'RefundRequest',
+      order: order.$id,
+      transactionId: order.paymentTransactionId,
+      amount: totals.total,
+      currency: 'USD',
+      reason: order.cancellationReason || 'Order cancelled',
+    })
+
+    await db.update(order, {
+      paymentStatus: 'PaymentRefunded',
+    })
+  }
+})
+```
+
+## Integration with customers.do
+
+Update customer data based on orders:
+
+```typescript
+// Update customer stats on order creation
+await on($.Order.created, async (order) => {
+  const customer = await db.get($.Person, order.customer.$id)
+
+  await db.update(customer, {
+    totalOrders: (customer.totalOrders || 0) + 1,
+    lastOrderDate: order.orderDate,
+    firstOrderDate: customer.firstOrderDate || order.orderDate,
+  })
+})
+
+// Update customer lifetime value on delivery
+await on($.Order.updated, async (order) => {
+  if (order.orderStatus === 'OrderDelivered') {
+    const customer = await db.get($.Person, order.customer.$id)
+    const totals = calculateOrderTotal(order)
+
+    await db.update(customer, {
+      totalSpent: (customer.totalSpent || 0) + totals.total,
+      lastPurchaseDate: new Date().toISOString(),
+    })
+
+    // Check for loyalty tier upgrade
+    if (customer.totalSpent >= 1000 && customer.loyaltyTier !== 'Gold') {
+      await db.update(customer, {
+        loyaltyTier: 'Gold',
+      })
+
+      await send({
+        $type: 'EmailMessage',
+        recipient: customer.email,
+        subject: "You've reached Gold status!",
+        text: 'Congratulations on becoming a Gold member!',
+      })
+    }
+  }
+})
+```
+
+## Integration with products.do
+
+Manage product inventory and analytics:
+
+```typescript
+// Reserve inventory on order creation
+await on($.Order.created, async (order) => {
+  for (const item of order.orderedItem) {
+    const product = await db.get($.Product, item.orderedItem.$id)
+
+    await db.update(product, {
+      quantityAvailable: product.quantityAvailable - item.orderQuantity,
+      quantityReserved: product.quantityReserved + item.orderQuantity,
+    })
+
+    // Check if reorder needed
+    if (product.quantityAvailable <= product.reorderPoint) {
+      await send({
+        $type: 'ReorderNotification',
+        product: product.$id,
+        currentQuantity: product.quantityAvailable,
+        reorderPoint: product.reorderPoint,
+        suggestedQuantity: product.reorderQuantity,
+      })
+    }
+  }
+})
+
+// Commit inventory on shipment
+await on($.Order.updated, async (order) => {
+  if (order.orderStatus === 'OrderInTransit') {
+    for (const item of order.orderedItem) {
+      const product = await db.get($.Product, item.orderedItem.$id)
+
+      await db.update(product, {
+        quantityReserved: product.quantityReserved - item.orderQuantity,
+        quantityOnHand: product.quantityOnHand - item.orderQuantity,
+        totalSold: (product.totalSold || 0) + item.orderQuantity,
+        lastSoldDate: new Date().toISOString(),
+      })
+    }
+  }
+})
+
+// Release inventory on cancellation
+await on($.Order.updated, async (order) => {
+  if (order.orderStatus === 'OrderCancelled') {
+    for (const item of order.orderedItem) {
+      const product = await db.get($.Product, item.orderedItem.$id)
+
+      await db.update(product, {
+        quantityAvailable: product.quantityAvailable + item.orderQuantity,
+        quantityReserved: product.quantityReserved - item.orderQuantity,
+      })
+    }
+  }
+})
+```
+
+## Integration with Shipping Carriers (External)
+
+Integrate with shipping APIs like UPS, FedEx, USPS:
+
+```typescript
+interface ShippingRateRequest {
+  origin: PostalAddress
+  destination: PostalAddress
+  packages: Array<{
+    weight: number
+    dimensions: { length: number; width: number; height: number }
+  }>
+}
+
+interface ShippingRate {
+  carrier: string
+  service: string
+  cost: number
+  estimatedDays: number
+}
+
+async function getShippingRates(order: Order): Promise<ShippingRate[]> {
+  const request: ShippingRateRequest = {
+    origin: order.seller.address,
+    destination: order.orderDelivery.deliveryAddress,
+    packages: calculatePackages(order.orderedItem),
+  }
+
+  // Call shipping APIs
+  const [upsRates, fedexRates, uspsRates] = await Promise.all([getUPSRates(request), getFedExRates(request), getUSPSRates(request)])
+
+  return [...upsRates, ...fedexRates, ...uspsRates].sort((a, b) => a.cost - b.cost)
+}
+
+async function createShippingLabel(order: Order): Promise<void> {
+  const carrier = order.orderDelivery.hasDeliveryMethod.name
+
+  let label
+  if (carrier === 'UPS') {
+    label = await createUPSLabel(order)
+  } else if (carrier === 'FedEx') {
+    label = await createFedExLabel(order)
+  } else {
+    label = await createUSPSLabel(order)
+  }
+
+  await db.update(order, {
+    orderDelivery: {
+      ...order.orderDelivery,
+      trackingNumber: label.trackingNumber,
+      trackingUrl: label.trackingUrl,
+      shippingLabel: label.labelUrl,
+    },
+  })
+}
+
+// Track shipment status
+import { every } from 'sdk.do'
+
+await every('*/30 * * * *', async () => {
+  const inTransitOrders = await db.list($.Order, {
+    where: { orderStatus: 'OrderInTransit' },
+  })
+
+  for (const order of inTransitOrders) {
+    const status = await getTrackingStatus(order.orderDelivery.trackingNumber)
+
+    if (status.delivered) {
+      await db.update(order, {
+        orderStatus: 'OrderDelivered',
+        deliveredAt: status.deliveredAt,
+      })
+    }
+  }
+})
+```
+
+## Integration with Email Service (External)
+
+Send transactional emails via SendGrid, Mailgun, etc:
+
+```typescript
+import { send } from 'sdk.do'
+
+interface EmailTemplate {
+  subject: string
+  html: string
+  text: string
+}
+
+async function sendOrderEmail(order: Order, templateName: string): Promise<void> {
+  const template = await getEmailTemplate(templateName, order)
+
+  await send({
+    $type: 'EmailMessage',
+    provider: 'sendgrid',
+    recipient: order.customer.email,
+    subject: template.subject,
+    html: template.html,
+    text: template.text,
+    metadata: {
+      orderId: order.$id,
+      orderNumber: order.orderNumber,
+    },
+  })
+}
+
+function getEmailTemplate(templateName: string, order: Order): EmailTemplate {
+  const templates = {
+    'order-confirmation': {
+      subject: `Order ${order.orderNumber} Confirmed`,
+      html: `
+        <h1>Thank you for your order!</h1>
+        <p>Order Number: ${order.orderNumber}</p>
+        <p>Order Date: ${new Date(order.orderDate).toLocaleDateString()}</p>
+        <h2>Items:</h2>
+        <ul>
+          ${order.orderedItem
+            .map(
+              (item) => `
+            <li>${item.orderedItem.name} x ${item.orderQuantity} - $${item.price.price * item.orderQuantity}</li>
+          `
+            )
+            .join('')}
+        </ul>
+        <p><strong>Total: $${calculateOrderTotal(order).total}</strong></p>
+      `,
+      text: `Order ${order.orderNumber} confirmed...`,
+    },
+    'order-shipped': {
+      subject: `Order ${order.orderNumber} Shipped`,
+      html: `
+        <h1>Your order has shipped!</h1>
+        <p>Tracking Number: ${order.orderDelivery.trackingNumber}</p>
+        <p><a href="${order.orderDelivery.trackingUrl}">Track your order</a></p>
+      `,
+      text: `Your order has shipped. Tracking: ${order.orderDelivery.trackingNumber}`,
+    },
+  }
+
+  return templates[templateName]
+}
+```
+
+## Integration with CRM (External)
+
+Sync orders to Salesforce, HubSpot, etc:
+
+```typescript
+async function syncOrderToCRM(order: Order): Promise<void> {
+  // Create opportunity in CRM
+  await send({
+    $type: 'CRMSync',
+    provider: 'salesforce',
+    operation: 'create',
+    objectType: 'Opportunity',
+    data: {
+      Name: `Order ${order.orderNumber}`,
+      AccountId: order.customer.crmId,
+      Amount: calculateOrderTotal(order).total,
+      CloseDate: order.orderDate,
+      StageName: mapOrderStatusToCRMStage(order.orderStatus),
+      OrderId: order.$id,
+    },
+  })
+}
+
+function mapOrderStatusToCRMStage(orderStatus: OrderStatus): string {
+  const mapping = {
+    OrderPending: 'Qualification',
+    OrderProcessing: 'Proposal',
+    OrderInTransit: 'Closed Won',
+    OrderDelivered: 'Closed Won',
+    OrderCancelled: 'Closed Lost',
+    OrderReturned: 'Closed Lost',
+  }
+
+  return mapping[orderStatus] || 'Qualification'
+}
+
+// Sync order updates
+await on($.Order.updated, async (order) => {
+  await send({
+    $type: 'CRMSync',
+    provider: 'salesforce',
+    operation: 'update',
+    objectType: 'Opportunity',
+    filter: { OrderId: order.$id },
+    data: {
+      StageName: mapOrderStatusToCRMStage(order.orderStatus),
+      LastModifiedDate: new Date().toISOString(),
+    },
+  })
+})
+```
+
+## Integration with Analytics (External)
+
+Track order events in Google Analytics, Mixpanel, etc:
+
+```typescript
+async function trackOrderEvent(eventName: string, order: Order, additionalData?: Record<string, any>): Promise<void> {
+  const totals = calculateOrderTotal(order)
+
+  await send({
+    $type: 'AnalyticsEvent',
+    provider: 'mixpanel',
+    event: eventName,
+    userId: order.customer.$id,
+    properties: {
+      orderId: order.$id,
+      orderNumber: order.orderNumber,
+      orderTotal: totals.total,
+      itemCount: order.orderedItem.length,
+      orderStatus: order.orderStatus,
+      ...additionalData,
+    },
+  })
+}
+
+// Track key order events
+await on($.Order.created, async (order) => {
+  await trackOrderEvent('Order Created', order)
+})
+
+await on($.Order.updated, async (order) => {
+  if (order.orderStatus === 'OrderDelivered') {
+    await trackOrderEvent('Order Delivered', order, {
+      deliveryTime: calculateDeliveryTime(order),
+    })
+  }
+
+  if (order.orderStatus === 'OrderCancelled') {
+    await trackOrderEvent('Order Cancelled', order, {
+      cancellationReason: order.cancellationReason,
+    })
+  }
+})
+```
+
+## Integration with Inventory Management System
+
+Sync with external inventory systems:
+
+```typescript
+import { every } from 'sdk.do'
+
+// Sync inventory every hour
+await every('0 * * * *', async () => {
+  const products = await db.list($.Product)
+
+  for (const product of products) {
+    // Get inventory from external system
+    const externalInventory = await getExternalInventory(product.sku)
+
+    // Update local inventory
+    await db.update(product, {
+      quantityOnHand: externalInventory.onHand,
+      quantityAvailable: externalInventory.available,
+      lastInventorySync: new Date().toISOString(),
+    })
+  }
+
+  console.log('Inventory sync complete')
+})
+
+async function getExternalInventory(sku: string) {
+  // Call external inventory API
+  const response = await fetch(`https://inventory-api.example.com/products/${sku}`)
+  return await response.json()
+}
+```
+
+## Complete Integration Example
+
+Full e-commerce order workflow with all integrations:
+
+```typescript
+import $, { db, on, send } from 'sdk.do'
+
+// Order creation with all integrations
+await on($.Order.created, async (order) => {
+  console.log('Processing new order:', order.orderNumber)
+
+  // 1. Validate inventory
+  const hasInventory = await validateInventory(order.orderedItem)
+  if (!hasInventory) {
+    await db.update(order, {
+      orderStatus: 'OrderProblem',
+      orderProblem: 'Insufficient inventory',
+    })
+    return
+  }
+
+  // 2. Reserve inventory
+  await reserveInventory(order.orderedItem)
+
+  // 3. Process payment
+  const paymentResult = await processPayment(order)
+  if (!paymentResult.success) {
+    await releaseInventory(order.orderedItem)
+    return
+  }
+
+  // 4. Create invoice
+  await createInvoice(order)
+
+  // 5. Update customer
+  await updateCustomerStats(order)
+
+  // 6. Create fulfillment task
+  await createFulfillmentTask(order)
+
+  // 7. Send confirmation email
+  await sendOrderEmail(order, 'order-confirmation')
+
+  // 8. Sync to CRM
+  await syncOrderToCRM(order)
+
+  // 9. Track analytics
+  await trackOrderEvent('Order Created', order)
+
+  console.log('Order processing complete:', order.orderNumber)
+})
+```
+
+## See Also
+
+- [Basic Usage](./basic-usage)
+- [Advanced Patterns](./advanced-patterns)
+- [Real-World Use Case](./real-world-use-case)
+- [API Reference](../api/)
+
+## License
+
+MIT (Open Source)
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

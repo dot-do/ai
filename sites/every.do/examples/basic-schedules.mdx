@@ -1,0 +1,590 @@
+---
+$id: https://every.do/examples/basic-schedules
+$type: HowTo
+title: Basic Scheduled Tasks
+description: Simple examples of scheduled tasks using every.do
+keywords: [examples, basic, schedules, getting started]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Basic Scheduled Tasks
+
+Simple examples demonstrating the fundamentals of scheduled tasks with every.do.
+
+## Hourly Task
+
+Run a task every hour on the hour:
+
+```typescript
+import { $, every } from 'sdk.do'
+
+every($.Hourly, async () => {
+  console.log('Running hourly task at:', new Date())
+  await performHourlyCheck()
+})
+
+async function performHourlyCheck() {
+  // Your hourly logic here
+  console.log('Hourly check completed')
+}
+```
+
+**Use Cases:**
+
+- Health checks
+- Data synchronization
+- Cache refresh
+- Status updates
+
+## Daily Task
+
+Execute a task once per day at midnight UTC:
+
+```typescript
+import { $, every } from 'sdk.do'
+
+every($.Daily, async () => {
+  console.log('Running daily task')
+  await generateDailyReport()
+})
+
+async function generateDailyReport() {
+  const report = {
+    date: new Date(),
+    status: 'completed',
+    metrics: {
+      // Report data
+    },
+  }
+
+  console.log('Daily report:', report)
+  return report
+}
+```
+
+**Use Cases:**
+
+- Daily reports
+- End-of-day processing
+- Backup tasks
+- Log rotation
+
+## Weekly Task
+
+Run a task every Monday at midnight UTC:
+
+```typescript
+import { $, every } from 'sdk.do'
+
+every($.Weekly, async () => {
+  console.log('Running weekly task')
+  await performWeeklyMaintenance()
+})
+
+async function performWeeklyMaintenance() {
+  console.log('Weekly maintenance started')
+
+  // Cleanup old data
+  await cleanupOldRecords()
+
+  // Generate weekly summary
+  await generateWeeklySummary()
+
+  console.log('Weekly maintenance completed')
+}
+```
+
+**Use Cases:**
+
+- Weekly summaries
+- Maintenance tasks
+- Report distribution
+- Data archival
+
+## Every 15 Minutes
+
+Execute a task four times per hour:
+
+```typescript
+import { $, every } from 'sdk.do'
+
+every($.Every15Minutes, async () => {
+  console.log('Running every 15 minutes')
+  await checkSystemStatus()
+})
+
+async function checkSystemStatus() {
+  const status = {
+    timestamp: new Date(),
+    healthy: true,
+    // Status checks
+  }
+
+  if (!status.healthy) {
+    console.warn('System health check failed')
+  }
+
+  return status
+}
+```
+
+**Use Cases:**
+
+- Frequent monitoring
+- Real-time sync
+- Status checks
+- Queue processing
+
+## Specific Time Daily
+
+Run at a specific time each day using cron:
+
+```typescript
+import { every } from 'sdk.do'
+
+// Run at 2:30am daily
+every('30 2 * * *', async () => {
+  console.log('Running at 2:30am')
+  await performNightlyBackup()
+})
+
+async function performNightlyBackup() {
+  console.log('Starting backup...')
+
+  // Backup logic
+  const backup = {
+    timestamp: new Date(),
+    status: 'completed',
+  }
+
+  console.log('Backup completed:', backup)
+  return backup
+}
+```
+
+**Use Cases:**
+
+- Off-peak processing
+- Database backups
+- Heavy computation
+- Data imports
+
+## Business Days Only
+
+Run only on weekdays (Monday-Friday):
+
+```typescript
+import { $, every } from 'sdk.do'
+
+every($.BusinessDay, async () => {
+  console.log('Running on business day')
+  await sendMorningReport()
+})
+
+async function sendMorningReport() {
+  console.log('Sending morning report at 9am')
+
+  const report = {
+    date: new Date(),
+    type: 'morning-briefing',
+    // Report data
+  }
+
+  // Send to team
+  console.log('Report sent:', report)
+}
+```
+
+**Use Cases:**
+
+- Business reports
+- Workday notifications
+- Office hours tasks
+- Team updates
+
+## Multiple Schedules
+
+Register multiple handlers for different frequencies:
+
+```typescript
+import { $, every } from 'sdk.do'
+
+// High-frequency checks
+every($.Every5Minutes, async () => {
+  await quickHealthCheck()
+})
+
+// Standard monitoring
+every($.Hourly, async () => {
+  await detailedMonitoring()
+})
+
+// Daily aggregation
+every($.Daily, async () => {
+  await aggregateDailyMetrics()
+})
+
+async function quickHealthCheck() {
+  console.log('Quick health check')
+}
+
+async function detailedMonitoring() {
+  console.log('Detailed monitoring')
+}
+
+async function aggregateDailyMetrics() {
+  console.log('Aggregating daily metrics')
+}
+```
+
+## With Timezone
+
+Schedule tasks in a specific timezone:
+
+```typescript
+import { $, every } from 'sdk.do'
+
+// Run at 9am Eastern Time
+every(
+  $.Daily,
+  async () => {
+    console.log('Running at 9am ET')
+    await morningTask()
+  },
+  {
+    timezone: 'America/New_York',
+  }
+)
+
+async function morningTask() {
+  console.log('Morning task executed')
+}
+```
+
+**Common Timezones:**
+
+- `America/New_York` - Eastern Time
+- `America/Chicago` - Central Time
+- `America/Los_Angeles` - Pacific Time
+- `Europe/London` - UK
+- `Asia/Tokyo` - Japan
+
+## With Error Handling
+
+Handle errors gracefully in scheduled tasks:
+
+```typescript
+import { $, every } from 'sdk.do'
+
+every($.Hourly, async () => {
+  try {
+    console.log('Starting task')
+    await riskyOperation()
+    console.log('Task completed successfully')
+  } catch (error) {
+    console.error('Task failed:', error)
+    await handleError(error)
+  }
+})
+
+async function riskyOperation() {
+  // Potentially failing operation
+  throw new Error('Something went wrong')
+}
+
+async function handleError(error: Error) {
+  console.log('Handling error:', error.message)
+  // Send alert, log error, etc.
+}
+```
+
+## Task with Logging
+
+Track execution with detailed logging:
+
+```typescript
+import { $, every } from 'sdk.do'
+
+every($.Daily, async () => {
+  const taskId = generateTaskId()
+  const startTime = Date.now()
+
+  console.log(`[${taskId}] Task started at ${new Date()}`)
+
+  try {
+    await performTask()
+
+    const duration = Date.now() - startTime
+    console.log(`[${taskId}] Task completed in ${duration}ms`)
+  } catch (error) {
+    const duration = Date.now() - startTime
+    console.error(`[${taskId}] Task failed after ${duration}ms:`, error)
+  }
+})
+
+function generateTaskId() {
+  return `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+}
+
+async function performTask() {
+  console.log('Performing task...')
+  // Task logic
+}
+```
+
+## Conditional Execution
+
+Execute different logic based on conditions:
+
+```typescript
+import { $, every } from 'sdk.do'
+
+every($.Daily, async () => {
+  const today = new Date()
+  const dayOfWeek = today.getDay()
+  const dayOfMonth = today.getDate()
+
+  // Monday-specific task
+  if (dayOfWeek === 1) {
+    await mondayTask()
+  }
+
+  // First day of month
+  if (dayOfMonth === 1) {
+    await monthlyTask()
+  }
+
+  // Last day of month (approximate)
+  if (dayOfMonth === 28) {
+    await endOfMonthTask()
+  }
+
+  // Always run daily task
+  await regularDailyTask()
+})
+
+async function mondayTask() {
+  console.log('Monday-specific task')
+}
+
+async function monthlyTask() {
+  console.log('Monthly task')
+}
+
+async function endOfMonthTask() {
+  console.log('End of month task')
+}
+
+async function regularDailyTask() {
+  console.log('Regular daily task')
+}
+```
+
+## Cron Pattern Examples
+
+Common cron patterns for precise scheduling:
+
+```typescript
+import { every } from 'sdk.do'
+
+// Every minute
+every('* * * * *', async () => {
+  console.log('Every minute')
+})
+
+// Every 5 minutes
+every('*/5 * * * *', async () => {
+  console.log('Every 5 minutes')
+})
+
+// Every hour at :30
+every('30 * * * *', async () => {
+  console.log('30 minutes past every hour')
+})
+
+// Every day at 3:15am
+every('15 3 * * *', async () => {
+  console.log('3:15am daily')
+})
+
+// Weekdays at 9am
+every('0 9 * * 1-5', async () => {
+  console.log('9am on weekdays')
+})
+
+// First day of month at midnight
+every('0 0 1 * *', async () => {
+  console.log('First day of month')
+})
+
+// Sundays at noon
+every('0 12 * * 0', async () => {
+  console.log('Sunday noon')
+})
+```
+
+## Task with Timeout
+
+Prevent long-running tasks from hanging:
+
+```typescript
+import { $, every } from 'sdk.do'
+
+every(
+  $.Hourly,
+  async () => {
+    await longRunningTask()
+  },
+  {
+    timeout: 300000, // 5 minutes
+  }
+)
+
+async function longRunningTask() {
+  console.log('Starting long-running task')
+
+  // Simulate long operation
+  await new Promise((resolve) => setTimeout(resolve, 60000))
+
+  console.log('Long-running task completed')
+}
+```
+
+## Testing Scheduled Tasks
+
+Export handlers for testing:
+
+```typescript
+import { $, every } from 'sdk.do'
+
+// Export handler for testing
+export async function dailyTaskHandler() {
+  console.log('Executing daily task')
+
+  const result = {
+    timestamp: new Date(),
+    status: 'completed',
+    data: await fetchData(),
+  }
+
+  return result
+}
+
+// Use in schedule
+every($.Daily, dailyTaskHandler)
+
+// Can be tested independently
+async function fetchData() {
+  return { example: 'data' }
+}
+```
+
+Then in your tests:
+
+```typescript
+import { dailyTaskHandler } from './schedules'
+
+test('daily task executes correctly', async () => {
+  const result = await dailyTaskHandler()
+
+  expect(result).toBeDefined()
+  expect(result.status).toBe('completed')
+  expect(result.data).toBeDefined()
+})
+```
+
+## Best Practices
+
+### 1. Keep Tasks Focused
+
+Each scheduled task should do one thing:
+
+```typescript
+// Good: Focused tasks
+every($.Daily, generateReport)
+every($.Daily, cleanupLogs)
+every($.Daily, sendNotifications)
+
+// Avoid: Kitchen sink task
+every($.Daily, async () => {
+  await generateReport()
+  await cleanupLogs()
+  await sendNotifications()
+  await updateStats()
+  // ... too much in one task
+})
+```
+
+### 2. Use Semantic Schedules
+
+Prefer readable semantic schedules:
+
+```typescript
+// Good: Clear and readable
+every($.Daily, handler)
+every($.Hourly, handler)
+every($.Weekly, handler)
+
+// Less clear: Requires cron knowledge
+every('0 0 * * *', handler)
+every('0 * * * *', handler)
+every('0 0 * * 1', handler)
+```
+
+### 3. Always Handle Errors
+
+Never let errors crash your scheduler:
+
+```typescript
+every($.Hourly, async () => {
+  try {
+    await task()
+  } catch (error) {
+    console.error('Task failed:', error)
+    // Handle error appropriately
+  }
+})
+```
+
+### 4. Add Logging
+
+Track execution for debugging:
+
+```typescript
+every($.Daily, async () => {
+  console.log('Task started:', new Date())
+
+  await task()
+
+  console.log('Task completed:', new Date())
+})
+```
+
+### 5. Make Tasks Idempotent
+
+Ensure tasks can safely run multiple times:
+
+```typescript
+// Good: Idempotent (uses current date as key)
+every($.Daily, async () => {
+  await saveReport(getCurrentDate(), data)
+})
+
+// Risky: Not idempotent (creates duplicate)
+every($.Daily, async () => {
+  await createReport(data)
+})
+```
+
+## See Also
+
+- [Business Schedules](./business-schedules) - Real-world business examples
+- [Schedules Guide](../docs/schedules) - All schedule types
+- [Patterns](../docs/patterns) - Advanced patterns
+- [API Reference](../api/) - Complete API documentation
+
+## License
+
+MIT (Open Source)

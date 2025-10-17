@@ -1,0 +1,1027 @@
+---
+$id: https://cli.do/api
+$type: APIReference
+title: CLI API Reference - cli.do
+description: Complete API reference for programmatic usage of cli.do
+keywords: [api, reference, programmatic, library, typescript]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# CLI API Reference
+
+Complete API reference for using cli.do programmatically in your applications.
+
+## Overview
+
+While cli.do is primarily a command-line tool, it can also be used as a library in Node.js applications. This provides programmatic access to all CLI functionality with full TypeScript support.
+
+## Installation
+
+```bash
+pnpm add cli.do
+```
+
+## Quick Start
+
+```typescript
+import { cli, db, ai, send, on, every } from 'cli.do'
+
+// Execute CLI commands programmatically
+const businesses = await cli.exec('db list Business')
+
+// Or use SDK functions directly
+const businesses = await db.list('Business')
+const content = await ai.generate({ prompt: 'Write a haiku' })
+await send('Order.created', { id: '123' })
+```
+
+## Core API
+
+### cli.exec()
+
+Execute CLI commands programmatically.
+
+**Signature:**
+
+```typescript
+function exec(command: string, options?: ExecOptions): Promise<any>
+```
+
+**Parameters:**
+
+- `command` - CLI command string (without 'do' prefix)
+- `options` - Execution options
+
+**Options:**
+
+```typescript
+interface ExecOptions {
+  format?: 'json' | 'yaml' | 'table' | 'pretty' | 'raw'
+  verbose?: boolean
+  quiet?: boolean
+  timeout?: number
+  env?: string
+}
+```
+
+**Returns:** Command output (parsed according to format)
+
+**Examples:**
+
+```typescript
+// List businesses
+const businesses = await cli.exec('db list Business')
+
+// Generate with AI
+const content = await cli.exec('ai generate "Write a haiku"')
+
+// Send event
+await cli.exec('send Order.created \'{"id": "123"}\'')
+
+// With options
+const result = await cli.exec('db list Business', {
+  format: 'json',
+  verbose: true,
+  timeout: 10000,
+})
+```
+
+### cli.config
+
+Access and modify CLI configuration.
+
+**Properties:**
+
+```typescript
+interface Config {
+  api: {
+    endpoint: string
+    key: string
+  }
+  output: {
+    format: 'json' | 'yaml' | 'table' | 'pretty'
+    color: boolean
+    pretty: boolean
+  }
+  log: {
+    level: 'debug' | 'info' | 'warn' | 'error'
+    file: string
+  }
+}
+```
+
+**Methods:**
+
+```typescript
+// Get configuration
+const config = cli.config.get()
+const apiKey = cli.config.get('api.key')
+
+// Set configuration
+cli.config.set('api.key', 'your-key')
+cli.config.set('output.format', 'json')
+
+// Load from file
+cli.config.load('/path/to/config.yaml')
+
+// Save to file
+cli.config.save('/path/to/config.yaml')
+```
+
+**Examples:**
+
+```typescript
+// Set API credentials
+cli.config.set('api.endpoint', 'https://api.do')
+cli.config.set('api.key', process.env.DO_API_KEY)
+
+// Get current format
+const format = cli.config.get('output.format')
+
+// Update output preferences
+cli.config.set('output.color', false)
+cli.config.set('log.level', 'debug')
+```
+
+## Database API
+
+### db.list()
+
+List entities by semantic type.
+
+**Signature:**
+
+```typescript
+function list(type: string, options?: ListOptions): Promise<Entity[]>
+```
+
+**Parameters:**
+
+- `type` - Semantic type (e.g., 'Business', 'Person')
+- `options` - Query options
+
+**Options:**
+
+```typescript
+interface ListOptions {
+  where?: Record<string, any>
+  limit?: number
+  offset?: number
+  sort?: string
+  fields?: string[]
+}
+```
+
+**Returns:** Array of entities
+
+**Examples:**
+
+```typescript
+// List all businesses
+const businesses = await db.list('Business')
+
+// List with filter
+const engineers = await db.list('Person', {
+  where: { jobTitle: 'Software Engineer' },
+})
+
+// List with pagination
+const products = await db.list('Product', {
+  limit: 10,
+  offset: 20,
+})
+
+// List with sorting
+const sorted = await db.list('Business', {
+  sort: 'name:asc',
+})
+
+// List specific fields
+const names = await db.list('Person', {
+  fields: ['name', 'email'],
+})
+```
+
+### db.get()
+
+Get entity by type and ID.
+
+**Signature:**
+
+```typescript
+function get(type: string, id: string, options?: GetOptions): Promise<Entity>
+```
+
+**Parameters:**
+
+- `type` - Semantic type
+- `id` - Entity ID
+- `options` - Get options
+
+**Options:**
+
+```typescript
+interface GetOptions {
+  fields?: string[]
+}
+```
+
+**Returns:** Entity object
+
+**Examples:**
+
+```typescript
+// Get business
+const business = await db.get('Business', 'acme-corp')
+
+// Get specific fields
+const person = await db.get('Person', 'john-doe', {
+  fields: ['name', 'email'],
+})
+```
+
+### db.create()
+
+Create new entity.
+
+**Signature:**
+
+```typescript
+function create(type: string, data: Entity | Entity[]): Promise<Entity | Entity[]>
+```
+
+**Parameters:**
+
+- `type` - Semantic type
+- `data` - Entity data or array of entities
+
+**Returns:** Created entity or array of entities
+
+**Examples:**
+
+```typescript
+// Create single entity
+const person = await db.create('Person', {
+  $id: 'jane-smith',
+  $type: 'Person',
+  name: 'Jane Smith',
+  email: 'jane@example.com',
+})
+
+// Batch create
+const people = await db.create('Person', [
+  { name: 'Alice', email: 'alice@example.com' },
+  { name: 'Bob', email: 'bob@example.com' },
+])
+```
+
+### db.update()
+
+Update existing entity.
+
+**Signature:**
+
+```typescript
+function update(type: string, id: string, data: Partial<Entity>, options?: UpdateOptions): Promise<Entity>
+```
+
+**Parameters:**
+
+- `type` - Semantic type
+- `id` - Entity ID
+- `data` - Update data
+- `options` - Update options
+
+**Options:**
+
+```typescript
+interface UpdateOptions {
+  merge?: boolean
+}
+```
+
+**Returns:** Updated entity
+
+**Examples:**
+
+```typescript
+// Update entity
+const updated = await db.update('Person', 'john-doe', {
+  jobTitle: 'Senior Engineer',
+})
+
+// Merge update
+const merged = await db.update('Person', 'john-doe', { email: 'new@example.com' }, { merge: true })
+```
+
+### db.delete()
+
+Delete entity.
+
+**Signature:**
+
+```typescript
+function del(type: string, id: string, options?: DeleteOptions): Promise<void>
+```
+
+**Parameters:**
+
+- `type` - Semantic type
+- `id` - Entity ID
+- `options` - Delete options
+
+**Options:**
+
+```typescript
+interface DeleteOptions {
+  soft?: boolean
+}
+```
+
+**Returns:** void
+
+**Examples:**
+
+```typescript
+// Delete entity
+await db.del('Person', 'john-doe')
+
+// Soft delete
+await db.del('Person', 'john-doe', { soft: true })
+```
+
+### db.related()
+
+Query entity relationships.
+
+**Signature:**
+
+```typescript
+function related(source: string, predicate: string, target: string, options?: RelatedOptions): Promise<Entity[]>
+```
+
+**Parameters:**
+
+- `source` - Source entity as 'Type:id'
+- `predicate` - Relationship predicate
+- `target` - Target type
+- `options` - Query options
+
+**Options:**
+
+```typescript
+interface RelatedOptions {
+  limit?: number
+}
+```
+
+**Returns:** Array of related entities
+
+**Examples:**
+
+```typescript
+// Query relationships
+const brands = await db.related('Business:acme', 'owns', 'Brand')
+
+const employees = await db.related('Organization:acme', 'employs', 'Person', {
+  limit: 10,
+})
+```
+
+### db.relate()
+
+Create relationship between entities.
+
+**Signature:**
+
+```typescript
+function relate(source: string, predicate: string, target: string, metadata?: Record<string, any>): Promise<void>
+```
+
+**Parameters:**
+
+- `source` - Source entity as 'Type:id'
+- `predicate` - Relationship predicate
+- `target` - Target entity as 'Type:id'
+- `metadata` - Optional relationship metadata
+
+**Returns:** void
+
+**Examples:**
+
+```typescript
+// Create relationship
+await db.relate('Business:acme', 'owns', 'Brand:acme-brand')
+
+// With metadata
+await db.relate('Person:john', 'worksFor', 'Organization:acme', {
+  startDate: '2020-01-01',
+  department: 'Engineering',
+})
+```
+
+## AI API
+
+### ai.generate()
+
+Generate content with AI.
+
+**Signature:**
+
+```typescript
+function generate(options: GenerateOptions): Promise<string | object>
+```
+
+**Parameters:**
+
+- `options` - Generation options
+
+**Options:**
+
+```typescript
+interface GenerateOptions {
+  prompt: string
+  model?: 'claude-sonnet-4.5' | 'gpt-5' | 'gpt-5-mini' | 'gpt-5-codex'
+  schema?: string
+  temperature?: number
+  maxTokens?: number
+  system?: string
+  format?: 'text' | 'json'
+}
+```
+
+**Returns:** Generated content (string or parsed JSON)
+
+**Examples:**
+
+```typescript
+// Simple generation
+const text = await ai.generate({
+  prompt: 'Write a haiku about coding',
+})
+
+// With specific model
+const content = await ai.generate({
+  prompt: 'Explain quantum computing',
+  model: 'claude-sonnet-4.5',
+})
+
+// With schema
+const product = await ai.generate({
+  prompt: 'Create a laptop product',
+  schema: 'Product',
+  format: 'json',
+})
+
+// With temperature
+const creative = await ai.generate({
+  prompt: 'Write a story',
+  temperature: 1.5,
+})
+
+// With system prompt
+const expert = await ai.generate({
+  prompt: 'Explain machine learning',
+  system: 'You are a professor of computer science',
+})
+```
+
+### ai.embed()
+
+Create embeddings for text.
+
+**Signature:**
+
+```typescript
+function embed(text: string, options?: EmbedOptions): Promise<number[]>
+```
+
+**Parameters:**
+
+- `text` - Text to embed
+- `options` - Embedding options
+
+**Options:**
+
+```typescript
+interface EmbedOptions {
+  model?: string
+  dimensions?: number
+}
+```
+
+**Returns:** Array of embedding values
+
+**Examples:**
+
+```typescript
+// Create embedding
+const embedding = await ai.embed('Hello world')
+
+// With custom dimensions
+const embedding768 = await ai.embed('Text', {
+  dimensions: 768,
+})
+```
+
+### ai.batch()
+
+Batch process AI requests.
+
+**Signature:**
+
+```typescript
+function batch(requests: BatchRequest[], options?: BatchOptions): Promise<BatchResult[]>
+```
+
+**Parameters:**
+
+- `requests` - Array of requests
+- `options` - Batch options
+
+**Request:**
+
+```typescript
+interface BatchRequest {
+  operation: 'generate' | 'embed'
+  prompt?: string
+  text?: string
+  model?: string
+  schema?: string
+}
+```
+
+**Options:**
+
+```typescript
+interface BatchOptions {
+  parallel?: number
+}
+```
+
+**Returns:** Array of results
+
+**Examples:**
+
+```typescript
+// Batch generate
+const results = await ai.batch([
+  { operation: 'generate', prompt: 'Write haiku 1' },
+  { operation: 'generate', prompt: 'Write haiku 2' },
+  { operation: 'generate', prompt: 'Write haiku 3' },
+])
+
+// Batch embed
+const embeddings = await ai.batch([
+  { operation: 'embed', text: 'Document 1' },
+  { operation: 'embed', text: 'Document 2' },
+])
+
+// With parallelism
+const results = await ai.batch(requests, {
+  parallel: 10,
+})
+```
+
+## Event API
+
+### send()
+
+Send semantic event.
+
+**Signature:**
+
+```typescript
+function send(pattern: string, data: any, options?: SendOptions): Promise<SendResult>
+```
+
+**Parameters:**
+
+- `pattern` - Event pattern (e.g., 'Order.created')
+- `data` - Event data
+- `options` - Send options
+
+**Options:**
+
+```typescript
+interface SendOptions {
+  delay?: number
+}
+```
+
+**Returns:** Send result with event ID
+
+**Examples:**
+
+```typescript
+// Send event
+await send('Order.created', {
+  $type: 'Order',
+  $id: 'order-123',
+  customer: 'john-doe',
+  total: 99.99,
+})
+
+// With delay
+await send('Invoice.paid', { id: 'invoice-456' }, { delay: 5000 })
+```
+
+### on()
+
+Listen for semantic events.
+
+**Signature:**
+
+```typescript
+function on(pattern: string, handler: EventHandler, options?: OnOptions): Promise<void>
+```
+
+**Parameters:**
+
+- `pattern` - Event pattern to match
+- `handler` - Event handler function
+- `options` - Listener options
+
+**Handler:**
+
+```typescript
+type EventHandler = (event: any) => void | Promise<void>
+```
+
+**Options:**
+
+```typescript
+interface OnOptions {
+  count?: number
+  timeout?: number
+}
+```
+
+**Returns:** void (listens indefinitely or until count/timeout)
+
+**Examples:**
+
+```typescript
+// Listen for events
+on('Order.created', async (order) => {
+  console.log('Order created:', order)
+  await processOrder(order)
+})
+
+// Pattern matching
+on('*.created', (entity) => {
+  console.log('Entity created:', entity.$type, entity.$id)
+})
+
+// With count limit
+on('Order.created', handleOrder, { count: 10 })
+
+// With timeout
+on('Order.created', handleOrder, { timeout: 60000 })
+```
+
+### watch()
+
+Watch events or database changes.
+
+**Signature:**
+
+```typescript
+function watch(type: 'event' | 'db', target: string, handler: WatchHandler, options?: WatchOptions): Promise<void>
+```
+
+**Parameters:**
+
+- `type` - Watch type
+- `target` - Event pattern or database type
+- `handler` - Change handler
+- `options` - Watch options
+
+**Handler:**
+
+```typescript
+type WatchHandler = (change: any) => void | Promise<void>
+```
+
+**Returns:** void (watches indefinitely)
+
+**Examples:**
+
+```typescript
+// Watch events
+watch('event', 'Order.created', (event) => {
+  console.log('New order:', event)
+})
+
+// Watch database changes
+watch('db', 'Business', (change) => {
+  console.log('Business changed:', change)
+})
+```
+
+## Scheduled Workflow API
+
+### every()
+
+Schedule recurring tasks.
+
+**Signature:**
+
+```typescript
+function every(interval: string, task: Task, options?: EveryOptions): Promise<TaskHandle>
+```
+
+**Parameters:**
+
+- `interval` - Interval ('Daily', 'Hourly', 'Weekly', or cron)
+- `task` - Task function or command
+- `options` - Scheduling options
+
+**Task:**
+
+```typescript
+type Task = string | (() => void | Promise<void>)
+```
+
+**Options:**
+
+```typescript
+interface EveryOptions {
+  name?: string
+  timezone?: string
+  enabled?: boolean
+  metadata?: Record<string, any>
+}
+```
+
+**Returns:** Task handle for management
+
+**Examples:**
+
+```typescript
+// Schedule function
+every('Daily', async () => {
+  await backupDatabase()
+})
+
+// Schedule command
+every('Hourly', 'collect metrics')
+
+// With options
+const task = every('Daily', backupDatabase, {
+  name: 'daily-backup',
+  timezone: 'America/New_York',
+})
+
+// Cron schedule
+every('0 0 * * *', cleanupOldData)
+```
+
+### every.list()
+
+List scheduled tasks.
+
+**Signature:**
+
+```typescript
+function list(options?: ListTaskOptions): Promise<Task[]>
+```
+
+**Returns:** Array of scheduled tasks
+
+**Examples:**
+
+```typescript
+// List all tasks
+const tasks = await every.list()
+
+// List enabled only
+const enabled = await every.list({ status: 'enabled' })
+```
+
+### every.remove()
+
+Remove scheduled task.
+
+**Signature:**
+
+```typescript
+function remove(name: string): Promise<void>
+```
+
+**Parameters:**
+
+- `name` - Task name
+
+**Returns:** void
+
+**Examples:**
+
+```typescript
+// Remove task
+await every.remove('daily-backup')
+```
+
+## User API
+
+### user.current()
+
+Get current user information.
+
+**Signature:**
+
+```typescript
+function current(): Promise<User>
+```
+
+**Returns:** Current user object
+
+**Examples:**
+
+```typescript
+// Get current user
+const user = await user.current()
+console.log(user.name, user.email)
+```
+
+### user.session()
+
+Get current session information.
+
+**Signature:**
+
+```typescript
+function session(): Promise<Session>
+```
+
+**Returns:** Current session object
+
+**Examples:**
+
+```typescript
+// Get session
+const session = await user.session()
+console.log(session.id, session.expiresAt)
+```
+
+### user.can()
+
+Check user permissions.
+
+**Signature:**
+
+```typescript
+function can(action: string, type: string, id?: string): Promise<boolean>
+```
+
+**Parameters:**
+
+- `action` - Action ('read', 'create', 'update', 'delete')
+- `type` - Entity type
+- `id` - Optional entity ID
+
+**Returns:** Boolean indicating permission
+
+**Examples:**
+
+```typescript
+// Check type permission
+const canEdit = await user.can('edit', 'Blog')
+
+// Check entity permission
+const canDelete = await user.can('delete', 'Blog', 'blog-123')
+```
+
+## Types
+
+### Entity
+
+Base entity type:
+
+```typescript
+interface Entity {
+  $id?: string
+  $type: string
+  [key: string]: any
+}
+```
+
+### SendResult
+
+Event send result:
+
+```typescript
+interface SendResult {
+  success: boolean
+  eventId: string
+  timestamp: string
+}
+```
+
+### TaskHandle
+
+Scheduled task handle:
+
+```typescript
+interface TaskHandle {
+  name: string
+  interval: string
+  enabled: boolean
+  remove(): Promise<void>
+  enable(): Promise<void>
+  disable(): Promise<void>
+}
+```
+
+### User
+
+User object:
+
+```typescript
+interface User {
+  $id: string
+  $type: 'Person'
+  name: string
+  email: string
+  roles: string[]
+}
+```
+
+### Session
+
+Session object:
+
+```typescript
+interface Session {
+  id: string
+  userId: string
+  createdAt: string
+  expiresAt: string
+}
+```
+
+## Error Handling
+
+All API functions throw typed errors:
+
+```typescript
+try {
+  const business = await db.get('Business', 'not-found')
+} catch (error) {
+  if (error instanceof NotFoundError) {
+    console.error('Business not found')
+  } else if (error instanceof AuthError) {
+    console.error('Authentication failed')
+  } else if (error instanceof NetworkError) {
+    console.error('Network error')
+  } else {
+    console.error('Unknown error:', error)
+  }
+}
+```
+
+## TypeScript Support
+
+cli.do provides full TypeScript support with type definitions:
+
+```typescript
+import type { Entity, ListOptions, GenerateOptions } from 'cli.do'
+
+// Typed entities
+interface Business extends Entity {
+  $type: 'Business'
+  name: string
+  industry: string
+  numberOfEmployees: number
+}
+
+// Typed operations
+const businesses = await db.list<Business>('Business')
+businesses.forEach((b) => {
+  console.log(b.name, b.industry)
+})
+```
+
+## Environment Variables
+
+All configuration can be set via environment variables:
+
+```typescript
+process.env.DO_API_ENDPOINT = 'https://api.do'
+process.env.DO_API_KEY = 'your-api-key'
+process.env.DO_OUTPUT_FORMAT = 'json'
+process.env.DO_LOG_LEVEL = 'info'
+```
+
+## See Also
+
+- [Getting Started](../docs/getting-started) - Quick start guide
+- [Commands Reference](../docs/commands) - CLI commands
+- [Examples](../examples/) - Usage examples
+- [SDK.do](https://sdk.do) - Core SDK documentation
+
+---
+
+Part of the [cli.do](https://cli.do) documentation.

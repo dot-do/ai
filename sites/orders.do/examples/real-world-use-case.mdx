@@ -1,0 +1,477 @@
+---
+$id: https://orders.do/examples/real-world-use-case
+$type: HowTo
+title: Real-World E-Commerce Order Management
+description: Complete example of building an e-commerce order management system with orders.do, including inventory, payments, shipping, and customer notifications.
+keywords: [real-world, e-commerce, complete example, order management, production]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Real-World E-Commerce Order Management
+
+This example demonstrates a complete e-commerce order management system using orders.do with all integrations and workflows.
+
+## System Architecture
+
+```
+Customer → Place Order → Validate → Process Payment → Fulfill → Ship → Deliver
+              ↓            ↓             ↓              ↓         ↓        ↓
+           Invoice     Inventory     Payment     Warehouse   Shipping  Customer
+                       Reserve       Gateway      System      Carrier   Service
+```
+
+## Complete Implementation
+
+```typescript
+import $, { db, on, send, every } from 'sdk.do'
+
+// ============================================================================
+// 1. ORDER CREATION & VALIDATION
+// ============================================================================
+
+await on($.Order.created, async (order) => {
+  console.log(`[${order.orderNumber}] New order received`)
+
+  // Validate customer
+  const customer = await db.get($.Person, order.customer.$id)
+  if (!customer) {
+    await handleOrderProblem(order, 'Customer not found')
+    return
+  }
+
+  // Validate inventory
+  const inventoryValid = await validateInventory(order.orderedItem)
+  if (!inventoryValid.success) {
+    await handleOrderProblem(order, `Inventory issue: ${inventoryValid.error}`)
+    return
+  }
+
+  // Validate addresses
+  const addressValid = await validateAddresses(order)
+  if (!addressValid.success) {
+    await handleOrderProblem(order, `Address issue: ${addressValid.error}`)
+    return
+  }
+
+  // Calculate shipping rates
+  const shippingRates = await getShippingRates(order)
+  await db.update(order, {
+    availableShippingRates: shippingRates,
+  })
+
+  // Reserve inventory
+  await reserveInventory(order.orderedItem)
+
+  // Emit validation complete
+  await send({
+    $type: 'OrderValidated',
+    order: order.$id,
+  })
+
+  console.log(`[${order.orderNumber}] Validation complete`)
+})
+
+// ============================================================================
+// 2. PAYMENT PROCESSING
+// ============================================================================
+
+await on('OrderValidated', async (event) => {
+  const order = await db.get($.Order, event.order)
+  console.log(`[${order.orderNumber}] Processing payment`)
+
+  const totals = calculateOrderTotal(order)
+
+  try {
+    // Process payment with retry
+    const paymentResult = await processPaymentWithRetry(order, totals.total)
+
+    if (paymentResult.success) {
+      await db.update(order, {
+        paymentStatus: 'PaymentComplete',
+        paymentTransactionId: paymentResult.transactionId,
+        orderStatus: 'OrderProcessing',
+      })
+
+      // Create invoice
+      await createInvoiceForOrder(order, totals)
+
+      // Update customer
+      await updateCustomerStats(order, totals)
+
+      // Send confirmation
+      await sendOrderConfirmation(order)
+
+      // Emit payment complete
+      await send({
+        $type: 'OrderPaymentComplete',
+        order: order.$id,
+      })
+
+      console.log(`[${order.orderNumber}] Payment successful`)
+    } else {
+      await handlePaymentFailure(order, paymentResult.error)
+    }
+  } catch (error) {
+    await handlePaymentFailure(order, error.message)
+  }
+})
+
+// ============================================================================
+// 3. ORDER FULFILLMENT
+// ============================================================================
+
+await on('OrderPaymentComplete', async (event) => {
+  const order = await db.get($.Order, event.order)
+  console.log(`[${order.orderNumber}] Starting fulfillment`)
+
+  // Determine fulfillment center
+  const fulfillmentCenter = await determineFulfillmentCenter(order)
+
+  // Generate pick list
+  const pickList = await generatePickList(order.orderedItem, fulfillmentCenter)
+
+  // Generate packing slip
+  const packingSlip = await generatePackingSlip(order)
+
+  // Create fulfillment task
+  const task = await db.create($.Task, {
+    $type: 'FulfillmentTask',
+    order: order.$id,
+    fulfillmentCenter: fulfillmentCenter.$id,
+    pickList,
+    packingSlip,
+    status: 'Pending',
+    priority: calculatePriority(order),
+    assignedAt: new Date().toISOString(),
+  })
+
+  // Notify warehouse
+  await send({
+    $type: 'FulfillmentTaskCreated',
+    task: task.$id,
+    fulfillmentCenter: fulfillmentCenter.$id,
+  })
+
+  console.log(`[${order.orderNumber}] Fulfillment task created`)
+})
+
+// ============================================================================
+// 4. SHIPPING
+// ============================================================================
+
+await on('FulfillmentTaskComplete', async (event) => {
+  const task = await db.get($.Task, event.task)
+  const order = await db.get($.Order, task.order)
+
+  console.log(`[${order.orderNumber}] Creating shipping label`)
+
+  // Create shipping label
+  const label = await createShippingLabel(order)
+
+  // Commit inventory
+  await commitInventory(order.orderedItem)
+
+  // Update order
+  await db.update(order, {
+    orderStatus: 'OrderInTransit',
+    orderDelivery: {
+      ...order.orderDelivery,
+      trackingNumber: label.trackingNumber,
+      trackingUrl: label.trackingUrl,
+      carrier: label.carrier,
+      service: label.service,
+      shippedAt: new Date().toISOString(),
+      estimatedDelivery: label.estimatedDelivery,
+    },
+  })
+
+  // Send shipping notification
+  await sendShippingNotification(order)
+
+  // Track analytics
+  await trackOrderEvent('Order Shipped', order)
+
+  console.log(`[${order.orderNumber}] Order shipped - ${label.trackingNumber}`)
+})
+
+// ============================================================================
+// 5. DELIVERY TRACKING
+// ============================================================================
+
+// Check for delivered orders every 30 minutes
+await every('*/30 * * * *', async () => {
+  const inTransitOrders = await db.list($.Order, {
+    where: { orderStatus: 'OrderInTransit' },
+  })
+
+  console.log(`Checking ${inTransitOrders.length} orders for delivery updates`)
+
+  for (const order of inTransitOrders) {
+    try {
+      const trackingStatus = await getTrackingStatus(order.orderDelivery.trackingNumber)
+
+      if (trackingStatus.status === 'delivered') {
+        await db.update(order, {
+          orderStatus: 'OrderDelivered',
+          deliveredAt: trackingStatus.deliveredAt,
+        })
+
+        // Send delivery confirmation
+        await sendDeliveryConfirmation(order)
+
+        // Request review
+        await scheduleReviewRequest(order, 3) // 3 days after delivery
+
+        // Track analytics
+        await trackOrderEvent('Order Delivered', order)
+
+        console.log(`[${order.orderNumber}] Delivered at ${trackingStatus.deliveredAt}`)
+      } else if (trackingStatus.status === 'exception') {
+        await handleDeliveryException(order, trackingStatus)
+      }
+    } catch (error) {
+      console.error(`Failed to check tracking for ${order.orderNumber}:`, error)
+    }
+  }
+})
+
+// ============================================================================
+// 6. ORDER MODIFICATIONS & CANCELLATIONS
+// ============================================================================
+
+export async function cancelOrder(orderId: string, reason: string) {
+  const order = await db.get($.Order, orderId)
+
+  // Check if order can be cancelled
+  if (!['OrderPending', 'OrderProcessing'].includes(order.orderStatus)) {
+    throw new Error(`Cannot cancel order in status: ${order.orderStatus}`)
+  }
+
+  // Release inventory
+  await releaseInventory(order.orderedItem)
+
+  // Process refund if payment was made
+  if (order.paymentStatus === 'PaymentComplete') {
+    await processRefund(order, reason)
+  }
+
+  // Update order
+  await db.update(order, {
+    orderStatus: 'OrderCancelled',
+    cancellationReason: reason,
+    cancelledAt: new Date().toISOString(),
+  })
+
+  // Send cancellation email
+  await sendCancellationNotification(order, reason)
+
+  // Track analytics
+  await trackOrderEvent('Order Cancelled', order, { reason })
+
+  console.log(`[${order.orderNumber}] Order cancelled: ${reason}`)
+
+  return order
+}
+
+// ============================================================================
+// 7. RETURNS PROCESSING
+// ============================================================================
+
+export async function createReturn(orderId: string, items: Array<{ itemNumber: string; quantity: number; reason: string }>): Promise<Order> {
+  const order = await db.get($.Order, orderId)
+
+  // Validate return eligibility
+  const daysSinceDelivery = Math.floor((Date.now() - new Date(order.deliveredAt).getTime()) / (24 * 60 * 60 * 1000))
+
+  if (daysSinceDelivery > 30) {
+    throw new Error('Return window has expired (30 days)')
+  }
+
+  // Create return order
+  const returnItems = items.map((item) => {
+    const originalItem = order.orderedItem.find((i) => i.orderItemNumber === item.itemNumber)
+    return {
+      ...originalItem,
+      orderQuantity: item.quantity,
+      returnReason: item.reason,
+    }
+  })
+
+  const returnOrder = await db.create($.Order, {
+    $type: 'Order',
+    orderNumber: `RET-${order.orderNumber}`,
+    orderDate: new Date().toISOString(),
+    orderStatus: 'OrderReturned',
+    referencesOrder: order.$id,
+    customer: order.customer,
+    orderedItem: returnItems,
+  })
+
+  // Create return label
+  const returnLabel = await createReturnLabel(order)
+
+  // Send return instructions
+  await sendReturnInstructions(order, returnLabel)
+
+  console.log(`[${returnOrder.orderNumber}] Return created`)
+
+  return returnOrder
+}
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+function calculateOrderTotal(order: Order) {
+  const subtotal = order.orderedItem.reduce((sum, item) => sum + item.price.price * item.orderQuantity, 0)
+  const tax = subtotal * 0.08
+  const shipping = 9.99
+  const total = subtotal + tax + shipping
+
+  return { subtotal, tax, shipping, total }
+}
+
+async function handleOrderProblem(order: Order, problem: string) {
+  await db.update(order, {
+    orderStatus: 'OrderProblem',
+    orderProblem: problem,
+  })
+
+  await send({
+    $type: 'Alert',
+    severity: 'high',
+    message: `Order ${order.orderNumber}: ${problem}`,
+    order: order.$id,
+  })
+
+  console.error(`[${order.orderNumber}] Problem: ${problem}`)
+}
+
+async function sendOrderConfirmation(order: Order) {
+  const totals = calculateOrderTotal(order)
+
+  await send({
+    $type: 'EmailMessage',
+    recipient: order.customer.email,
+    subject: `Order ${order.orderNumber} Confirmed`,
+    html: `
+      <h1>Thank you for your order!</h1>
+      <p><strong>Order Number:</strong> ${order.orderNumber}</p>
+      <p><strong>Order Date:</strong> ${new Date(order.orderDate).toLocaleDateString()}</p>
+
+      <h2>Items Ordered:</h2>
+      <ul>
+        ${order.orderedItem
+          .map(
+            (item) => `
+          <li>${item.orderedItem.name} x ${item.orderQuantity} - $${(item.price.price * item.orderQuantity).toFixed(2)}</li>
+        `
+          )
+          .join('')}
+      </ul>
+
+      <p><strong>Subtotal:</strong> $${totals.subtotal.toFixed(2)}</p>
+      <p><strong>Tax:</strong> $${totals.tax.toFixed(2)}</p>
+      <p><strong>Shipping:</strong> $${totals.shipping.toFixed(2)}</p>
+      <p><strong>Total:</strong> $${totals.total.toFixed(2)}</p>
+
+      <p>We'll send you updates as your order progresses.</p>
+    `,
+  })
+}
+
+// ============================================================================
+// USAGE EXAMPLE
+// ============================================================================
+
+// Create a complete order
+const order = await db.create($.Order, {
+  $type: 'Order',
+  orderNumber: await generateOrderNumber(),
+  orderDate: new Date().toISOString(),
+  customer: {
+    $id: 'customer-123',
+    $type: 'Person',
+    name: 'Jane Smith',
+    email: 'jane@example.com',
+  },
+  orderedItem: [
+    {
+      $type: 'OrderItem',
+      orderItemNumber: '1',
+      orderedItem: {
+        $id: 'product-456',
+        $type: 'Product',
+        name: 'Wireless Headphones',
+        sku: 'WH-1000',
+      },
+      orderQuantity: 2,
+      price: {
+        $type: 'PriceSpecification',
+        price: 299.99,
+        priceCurrency: 'USD',
+      },
+    },
+  ],
+  orderStatus: 'OrderPending',
+  paymentMethod: {
+    $type: 'PaymentCard',
+    name: 'Visa ending in 1234',
+  },
+  billingAddress: {
+    $type: 'PostalAddress',
+    streetAddress: '123 Main St',
+    addressLocality: 'San Francisco',
+    addressRegion: 'CA',
+    postalCode: '94102',
+    addressCountry: 'US',
+  },
+  orderDelivery: {
+    $type: 'ParcelDelivery',
+    deliveryAddress: {
+      $type: 'PostalAddress',
+      streetAddress: '123 Main St',
+      addressLocality: 'San Francisco',
+      addressRegion: 'CA',
+      postalCode: '94102',
+      addressCountry: 'US',
+    },
+  },
+})
+
+console.log('Order created:', order.orderNumber)
+// The workflow will automatically:
+// 1. Validate the order
+// 2. Process payment
+// 3. Create invoice
+// 4. Start fulfillment
+// 5. Ship the order
+// 6. Track delivery
+// 7. Send notifications at each step
+```
+
+## Key Takeaways
+
+1. **Event-Driven Architecture** - Use events for loose coupling
+2. **Error Handling** - Gracefully handle failures at each step
+3. **Automated Workflows** - Let the system handle routine operations
+4. **Customer Communication** - Keep customers informed throughout
+5. **Integration** - Connect with all necessary services
+6. **Monitoring** - Track metrics and detect issues early
+
+## See Also
+
+- [Basic Usage](./basic-usage)
+- [Advanced Patterns](./advanced-patterns)
+- [Integration](./integration)
+- [API Reference](../api/)
+
+## License
+
+MIT (Open Source)
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

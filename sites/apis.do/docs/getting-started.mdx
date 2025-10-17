@@ -1,0 +1,690 @@
+---
+$id: https://apis.do/docs/getting-started
+$type: TechArticle
+title: Getting Started with apis.do
+description: Complete guide to using the apis.do API gateway for platform services
+keywords: [getting started, api gateway, setup, tutorial, rest, authentication]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Getting Started with apis.do
+
+This guide will walk you through using the apis.do API gateway to access platform services, handle authentication, and build your first API integration.
+
+## Prerequisites
+
+Before you begin, ensure you have:
+
+- **Node.js 18+** installed on your system
+- **pnpm** package manager (or npm/yarn)
+- **API credentials** (API key or OAuth client)
+- **sdk.do** installed in your project
+
+## Installation
+
+Install the sdk.do package which includes the API client:
+
+```bash
+pnpm add sdk.do
+```
+
+Or with npm:
+
+```bash
+npm install sdk.do
+```
+
+## Authentication Setup
+
+### Option 1: API Key
+
+Get an API key from the `.do` platform dashboard:
+
+```bash
+# Set as environment variable
+export APIS_API_KEY=your-api-key-here
+```
+
+### Option 2: JWT Token
+
+Use JWT authentication for user-specific requests:
+
+```bash
+# Set as environment variable
+export APIS_JWT_TOKEN=your-jwt-token-here
+```
+
+### Option 3: OAuth2
+
+Register an OAuth2 application and get credentials:
+
+```bash
+# Set OAuth credentials
+export APIS_OAUTH_CLIENT_ID=your-client-id
+export APIS_OAUTH_CLIENT_SECRET=your-client-secret
+```
+
+## Your First API Request
+
+Create a new file `api-test.ts`:
+
+```typescript
+import { api } from 'sdk.do'
+
+async function main() {
+  try {
+    // Make your first API request
+    const response = await api('https://apis.do/businesses', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+    })
+
+    console.log('Businesses:', response)
+  } catch (error) {
+    console.error('API Error:', error)
+  }
+}
+
+main()
+```
+
+Run the script:
+
+```bash
+tsx api-test.ts
+```
+
+You should see a list of businesses from the database.
+
+## Basic API Operations
+
+### GET Request (List Resources)
+
+```typescript
+import { api } from 'sdk.do'
+
+// List all businesses
+const businesses = await api('https://apis.do/businesses', {
+  method: 'GET',
+  headers: {
+    Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+  },
+})
+
+console.log(`Found ${businesses.length} businesses`)
+```
+
+### GET Request (Single Resource)
+
+```typescript
+// Get specific business by ID
+const business = await api('https://apis.do/businesses/business-123', {
+  method: 'GET',
+  headers: {
+    Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+  },
+})
+
+console.log('Business:', business.name)
+```
+
+### POST Request (Create Resource)
+
+```typescript
+// Create new business
+const newBusiness = await api('https://apis.do/businesses', {
+  method: 'POST',
+  headers: {
+    Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+    'Content-Type': 'application/json',
+  },
+  body: {
+    name: 'Acme Corporation',
+    industry: 'Technology',
+    foundingDate: '2025-01-01',
+    description: 'Leading tech company',
+  },
+})
+
+console.log('Created business:', newBusiness.$id)
+```
+
+### PUT Request (Update Resource)
+
+```typescript
+// Update existing business
+const updatedBusiness = await api('https://apis.do/businesses/business-123', {
+  method: 'PUT',
+  headers: {
+    Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+    'Content-Type': 'application/json',
+  },
+  body: {
+    name: 'Acme Corp (Updated)',
+    revenue: 1000000,
+  },
+})
+
+console.log('Updated business:', updatedBusiness.name)
+```
+
+### DELETE Request (Remove Resource)
+
+```typescript
+// Delete business
+await api('https://apis.do/businesses/business-123', {
+  method: 'DELETE',
+  headers: {
+    Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+  },
+})
+
+console.log('Business deleted successfully')
+```
+
+## Using Semantic Patterns
+
+The API gateway supports semantic patterns for type-safe requests:
+
+```typescript
+import $, { api } from 'sdk.do'
+
+// List businesses with semantic pattern
+const businesses = await api($.Business.list, {
+  where: { industry: 'Technology' },
+  limit: 10,
+})
+
+// Get single business
+const business = await api($.Business.get, {
+  id: 'business-123',
+})
+
+// Create business
+const newBusiness = await api($.Business.create, {
+  name: 'Tech Startup',
+  industry: 'Technology',
+})
+
+// Update business
+await api($.Business.update, {
+  id: 'business-123',
+  data: { revenue: 2000000 },
+})
+
+// Delete business
+await api($.Business.delete, {
+  id: 'business-123',
+})
+```
+
+## Query Parameters
+
+Add query parameters for filtering and pagination:
+
+```typescript
+import { api } from 'sdk.do'
+
+// List businesses with filters
+const businesses = await api('https://apis.do/businesses', {
+  method: 'GET',
+  headers: {
+    Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+  },
+  query: {
+    industry: 'Technology',
+    limit: 20,
+    offset: 0,
+    sort: 'name',
+    order: 'asc',
+  },
+})
+
+// URL will be: /businesses?industry=Technology&limit=20&offset=0&sort=name&order=asc
+```
+
+## Error Handling
+
+Always handle API errors appropriately:
+
+```typescript
+import { api } from 'sdk.do'
+
+try {
+  const business = await api('https://apis.do/businesses/invalid-id', {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+    },
+  })
+} catch (error) {
+  // Check error status
+  if (error.status === 404) {
+    console.error('Business not found')
+  } else if (error.status === 401) {
+    console.error('Unauthorized - check your API key')
+  } else if (error.status === 403) {
+    console.error('Forbidden - insufficient permissions')
+  } else if (error.status === 429) {
+    console.error('Rate limit exceeded - try again later')
+  } else if (error.status === 500) {
+    console.error('Server error - contact support')
+  } else {
+    console.error('API error:', error.message)
+  }
+}
+```
+
+## Rate Limiting
+
+The API gateway enforces rate limits. Check headers to monitor usage:
+
+```typescript
+import { api } from 'sdk.do'
+
+const response = await api('https://apis.do/businesses', {
+  method: 'GET',
+  headers: {
+    Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+  },
+})
+
+// Check rate limit headers
+const limit = response.headers['x-ratelimit-limit']
+const remaining = response.headers['x-ratelimit-remaining']
+const reset = response.headers['x-ratelimit-reset']
+
+console.log(`Rate limit: ${remaining}/${limit}`)
+console.log(`Resets at: ${new Date(reset * 1000).toISOString()}`)
+
+if (remaining < 10) {
+  console.warn('Rate limit running low!')
+}
+```
+
+## Schema Validation
+
+Validate requests and responses with Schema.org types:
+
+```typescript
+import $, { api } from 'sdk.do'
+
+// Request validation
+const business = await api('https://apis.do/businesses', {
+  method: 'POST',
+  headers: {
+    Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+    'Content-Type': 'application/json',
+  },
+  body: {
+    name: 'Tech Corp',
+    industry: 'Technology',
+  },
+  schema: $.Business,
+  validate: 'request', // Validates before sending
+})
+
+// Response validation
+const businesses = await api('https://apis.do/businesses', {
+  method: 'GET',
+  headers: {
+    Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+  },
+  schema: $.Business,
+  validate: 'response', // Validates response data
+})
+```
+
+## Request/Response Transformation
+
+Transform data to match your needs:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Transform request before sending
+const business = await api('https://apis.do/businesses', {
+  method: 'POST',
+  headers: {
+    Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+    'Content-Type': 'application/json',
+  },
+  body: {
+    name: 'Tech Startup',
+  },
+  transform: {
+    request: (data) => ({
+      ...data,
+      $type: 'Business',
+      createdAt: new Date().toISOString(),
+      status: 'active',
+    }),
+  },
+})
+
+// Transform response after receiving
+const businesses = await api('https://apis.do/businesses', {
+  method: 'GET',
+  headers: {
+    Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+  },
+  transform: {
+    response: (data) => {
+      return data.map((b) => ({
+        id: b.$id,
+        name: b.name,
+        industry: b.industry,
+        // Omit other fields
+      }))
+    },
+  },
+})
+```
+
+## Accessing Different Services
+
+The API gateway routes to different platform services:
+
+### Database Service
+
+```typescript
+// List, get, create, update, delete entities
+const businesses = await api('https://apis.do/businesses')
+const products = await api('https://apis.do/products')
+const orders = await api('https://apis.do/orders')
+```
+
+### AI Service
+
+```typescript
+// Generate content with AI
+const analysis = await api('https://apis.do/ai/generate', {
+  method: 'POST',
+  headers: {
+    Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+    'Content-Type': 'application/json',
+  },
+  body: {
+    prompt: 'Analyze this business data',
+    data: {
+      /* business data */
+    },
+  },
+})
+```
+
+### Event Service
+
+```typescript
+// Publish events
+await api('https://apis.do/events/send', {
+  method: 'POST',
+  headers: {
+    Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+    'Content-Type': 'application/json',
+  },
+  body: {
+    type: 'Order.created',
+    data: {
+      orderId: 'order-123',
+      total: 99.99,
+    },
+  },
+})
+```
+
+### Workflow Service
+
+```typescript
+// Start workflow
+const workflow = await api('https://apis.do/workflows/start', {
+  method: 'POST',
+  headers: {
+    Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+    'Content-Type': 'application/json',
+  },
+  body: {
+    workflowId: 'order-fulfillment',
+    context: {
+      orderId: 'order-123',
+    },
+  },
+})
+```
+
+### User Service
+
+```typescript
+// Get current user
+const user = await api('https://apis.do/users/me', {
+  method: 'GET',
+  headers: {
+    Authorization: `Bearer ${process.env.APIS_JWT_TOKEN}`,
+  },
+})
+
+console.log('Current user:', user.email)
+```
+
+## Complete Example
+
+Here's a complete example that demonstrates common API operations:
+
+```typescript
+import $, { api } from 'sdk.do'
+
+async function businessWorkflow() {
+  try {
+    // 1. Create a business
+    console.log('Creating business...')
+    const business = await api('https://apis.do/businesses', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: {
+        name: 'Acme Corporation',
+        industry: 'Technology',
+        foundingDate: '2025-01-01',
+      },
+      schema: $.Business,
+      validate: 'request',
+    })
+    console.log('Created:', business.$id)
+
+    // 2. List all businesses
+    console.log('Listing businesses...')
+    const businesses = await api('https://apis.do/businesses', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+      },
+      query: {
+        industry: 'Technology',
+        limit: 10,
+      },
+    })
+    console.log(`Found ${businesses.length} tech businesses`)
+
+    // 3. Update the business
+    console.log('Updating business...')
+    const updated = await api(`https://apis.do/businesses/${business.$id}`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: {
+        revenue: 1000000,
+        employees: 50,
+      },
+    })
+    console.log('Updated revenue:', updated.revenue)
+
+    // 4. Generate AI analysis
+    console.log('Analyzing business with AI...')
+    const analysis = await api('https://apis.do/ai/generate', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: {
+        prompt: 'Provide business insights and recommendations',
+        data: updated,
+      },
+    })
+    console.log('AI Analysis:', analysis)
+
+    // 5. Publish event
+    console.log('Publishing event...')
+    await api('https://apis.do/events/send', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: {
+        type: 'Business.analyzed',
+        data: {
+          businessId: business.$id,
+          analysis,
+        },
+      },
+    })
+    console.log('Event published')
+
+    // 6. Check rate limits
+    const response = await api('https://apis.do/businesses', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+      },
+    })
+    console.log('Rate limit remaining:', response.headers['x-ratelimit-remaining'])
+  } catch (error) {
+    console.error('Workflow error:', error.message)
+    if (error.status) {
+      console.error('Status:', error.status)
+    }
+  }
+}
+
+businessWorkflow()
+```
+
+## Next Steps
+
+Now that you understand the basics, explore:
+
+1. **[Routing](./routing)** - Advanced routing patterns and semantic routing
+2. **[Authentication](./authentication)** - Detailed authentication methods
+3. **[API Reference](../api/)** - Complete API documentation
+4. **[Examples](../examples/)** - More practical examples
+5. **[Best Practices](../docs/best-practices)** - Recommended patterns
+
+## Configuration
+
+Create a configuration file for your API client:
+
+```typescript
+// api.config.ts
+export const apiConfig = {
+  baseUrl: 'https://apis.do',
+  timeout: 30000,
+  retries: 3,
+  headers: {
+    Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+    'Content-Type': 'application/json',
+    'User-Agent': 'my-app/1.0.0',
+  },
+}
+
+// Use in requests
+import { api } from 'sdk.do'
+import { apiConfig } from './api.config'
+
+const businesses = await api(`${apiConfig.baseUrl}/businesses`, {
+  headers: apiConfig.headers,
+  timeout: apiConfig.timeout,
+})
+```
+
+## Troubleshooting
+
+### Connection Issues
+
+Test gateway connectivity:
+
+```bash
+curl https://apis.do/health
+```
+
+Expected response:
+
+```json
+{
+  "status": "healthy",
+  "version": "1.0.0",
+  "timestamp": "2025-10-10T12:00:00Z"
+}
+```
+
+### Authentication Errors
+
+Verify your credentials:
+
+```typescript
+// Test API key
+const response = await api('https://apis.do/auth/verify', {
+  method: 'GET',
+  headers: {
+    Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+  },
+})
+
+console.log('Auth status:', response.valid)
+```
+
+### Rate Limit Issues
+
+If you hit rate limits:
+
+```typescript
+try {
+  const response = await api('https://apis.do/businesses')
+} catch (error) {
+  if (error.status === 429) {
+    const resetTime = error.headers['x-ratelimit-reset']
+    const waitMs = parseInt(resetTime) * 1000 - Date.now()
+    console.log(`Rate limited. Wait ${waitMs}ms before retrying`)
+  }
+}
+```
+
+### Service Unavailable
+
+Check service status:
+
+```bash
+curl https://apis.do/status
+```
+
+## Support
+
+Need help? We're here:
+
+- **Documentation**: [apis.do](https://apis.do)
+- **GitHub Issues**: [github.com/dot-do/ai/issues](https://github.com/dot-do/ai/issues)
+- **API Status**: [status.apis.do](https://status.apis.do)
+- **Discord Community**: Join for real-time help
+
+---
+
+Ready to learn more? Continue to [Routing](./routing) to understand advanced routing patterns.

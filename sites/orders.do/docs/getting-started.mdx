@@ -1,0 +1,520 @@
+---
+$id: https://orders.do/docs/getting-started
+$type: TechArticle
+title: Getting Started with orders.do
+description: Learn how to set up and create your first order using the orders.do framework with semantic patterns and Schema.org types.
+keywords: [getting started, order management, setup, installation, first order, tutorial]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Getting Started with orders.do
+
+This guide will help you set up orders.do and create your first order using semantic patterns and Schema.org Order types.
+
+## Prerequisites
+
+- Node.js 18+ installed
+- pnpm package manager
+- Basic understanding of TypeScript
+- Familiarity with Schema.org types (optional)
+
+## Installation
+
+Install the `.do` platform SDK:
+
+```bash
+pnpm add sdk.do
+```
+
+The SDK includes everything you need for order management:
+
+```typescript
+import $, { db, on, send } from 'sdk.do'
+```
+
+## Your First Order
+
+Let's create a simple order with a single product:
+
+```typescript
+import $, { db } from 'sdk.do'
+
+// Create an order
+const order = await db.create($.Order, {
+  $type: 'Order',
+  orderNumber: 'ORD-2025-001',
+  orderDate: new Date().toISOString(),
+  customer: {
+    $type: 'Person',
+    name: 'Jane Smith',
+    email: 'jane@example.com',
+  },
+  orderedItem: [
+    {
+      $type: 'OrderItem',
+      orderItemNumber: '1',
+      orderedItem: {
+        $type: 'Product',
+        name: 'Wireless Mouse',
+        sku: 'WM-500',
+      },
+      orderQuantity: 1,
+      price: {
+        $type: 'PriceSpecification',
+        price: 49.99,
+        priceCurrency: 'USD',
+      },
+    },
+  ],
+  orderStatus: 'OrderProcessing',
+})
+
+console.log('Order created:', order.$id)
+```
+
+## Understanding Order Structure
+
+An order consists of several key components:
+
+### 1. Order Metadata
+
+Basic order information:
+
+```typescript
+{
+  $type: 'Order',
+  orderNumber: 'ORD-2025-001',      // Unique order identifier
+  orderDate: '2025-10-10T10:00:00Z', // When order was placed
+  orderStatus: 'OrderProcessing'     // Current order state
+}
+```
+
+### 2. Customer Information
+
+Who placed the order:
+
+```typescript
+customer: {
+  $type: 'Person',
+  name: 'Jane Smith',
+  email: 'jane@example.com',
+  telephone: '+1-555-0123'
+}
+```
+
+### 3. Order Items
+
+What was ordered:
+
+```typescript
+orderedItem: [
+  {
+    $type: 'OrderItem',
+    orderItemNumber: '1',
+    orderedItem: {
+      $type: 'Product',
+      name: 'Wireless Mouse',
+      sku: 'WM-500',
+    },
+    orderQuantity: 1,
+    price: {
+      $type: 'PriceSpecification',
+      price: 49.99,
+      priceCurrency: 'USD',
+    },
+  },
+]
+```
+
+### 4. Payment Information
+
+How the order will be paid:
+
+```typescript
+paymentMethod: {
+  $type: 'PaymentCard',
+  name: 'Visa ending in 1234'
+}
+```
+
+### 5. Delivery Information
+
+Where the order will be shipped:
+
+```typescript
+orderDelivery: {
+  $type: 'ParcelDelivery',
+  deliveryAddress: {
+    $type: 'PostalAddress',
+    streetAddress: '123 Main St',
+    addressLocality: 'San Francisco',
+    addressRegion: 'CA',
+    postalCode: '94102',
+    addressCountry: 'US'
+  }
+}
+```
+
+## Creating Multi-Item Orders
+
+Orders often contain multiple products:
+
+```typescript
+const order = await db.create($.Order, {
+  $type: 'Order',
+  orderNumber: 'ORD-2025-002',
+  orderDate: new Date().toISOString(),
+  customer: {
+    $type: 'Person',
+    name: 'John Doe',
+    email: 'john@example.com',
+  },
+  orderedItem: [
+    {
+      $type: 'OrderItem',
+      orderItemNumber: '1',
+      orderedItem: {
+        $type: 'Product',
+        name: 'Laptop',
+        sku: 'LAP-1000',
+      },
+      orderQuantity: 1,
+      price: {
+        $type: 'PriceSpecification',
+        price: 1299.99,
+        priceCurrency: 'USD',
+      },
+    },
+    {
+      $type: 'OrderItem',
+      orderItemNumber: '2',
+      orderedItem: {
+        $type: 'Product',
+        name: 'Laptop Bag',
+        sku: 'BAG-100',
+      },
+      orderQuantity: 1,
+      price: {
+        $type: 'PriceSpecification',
+        price: 49.99,
+        priceCurrency: 'USD',
+      },
+    },
+    {
+      $type: 'OrderItem',
+      orderItemNumber: '3',
+      orderedItem: {
+        $type: 'Product',
+        name: 'Wireless Mouse',
+        sku: 'WM-500',
+      },
+      orderQuantity: 2,
+      price: {
+        $type: 'PriceSpecification',
+        price: 49.99,
+        priceCurrency: 'USD',
+      },
+    },
+  ],
+  orderStatus: 'OrderProcessing',
+})
+```
+
+## Retrieving Orders
+
+Fetch orders from the database:
+
+```typescript
+// Get a specific order by ID
+const order = await db.get($.Order, 'order-123')
+
+// List all orders
+const allOrders = await db.list($.Order)
+
+// Find orders by customer
+const customerOrders = await db.list($.Order, {
+  where: {
+    'customer.email': 'jane@example.com',
+  },
+})
+
+// Find orders by status
+const processingOrders = await db.list($.Order, {
+  where: {
+    orderStatus: 'OrderProcessing',
+  },
+})
+
+// Find orders by date range
+const recentOrders = await db.list($.Order, {
+  where: {
+    orderDate: {
+      $gte: '2025-10-01T00:00:00Z',
+      $lte: '2025-10-31T23:59:59Z',
+    },
+  },
+})
+```
+
+## Updating Orders
+
+Modify order information as it progresses:
+
+```typescript
+// Update order status
+await db.update(order, {
+  orderStatus: 'OrderInTransit',
+})
+
+// Add tracking information
+await db.update(order, {
+  orderDelivery: {
+    $type: 'ParcelDelivery',
+    trackingNumber: '1Z999AA10123456784',
+    trackingUrl: 'https://track.example.com/1Z999AA10123456784',
+    hasDeliveryMethod: {
+      $type: 'DeliveryMethod',
+      name: 'Ground Shipping',
+    },
+  },
+})
+
+// Update delivery estimate
+await db.update(order, {
+  orderDelivery: {
+    ...order.orderDelivery,
+    expectedArrivalFrom: '2025-10-15T09:00:00Z',
+    expectedArrivalUntil: '2025-10-15T17:00:00Z',
+  },
+})
+```
+
+## Order Status Values
+
+Use semantic status values from Schema.org:
+
+```typescript
+// Available order status values
+const orderStatuses = {
+  OrderPending: 'Order placed, awaiting processing',
+  OrderProcessing: 'Order is being processed',
+  OrderInTransit: 'Order is being shipped',
+  OrderDelivered: 'Order has been delivered',
+  OrderPickupAvailable: 'Order is ready for pickup',
+  OrderProblem: 'There is a problem with the order',
+  OrderCancelled: 'Order has been cancelled',
+  OrderReturned: 'Order has been returned',
+}
+
+// Update order status
+await db.update(order, {
+  orderStatus: 'OrderDelivered',
+  deliveredAt: new Date().toISOString(),
+})
+```
+
+## Event-Driven Order Processing
+
+React to order events automatically:
+
+```typescript
+import { on, send } from 'sdk.do'
+
+// Listen for new orders
+await on($.Order.created, async (order) => {
+  console.log('New order received:', order.orderNumber)
+
+  // Send confirmation email
+  await send({
+    $type: 'EmailMessage',
+    recipient: order.customer.email,
+    subject: `Order ${order.orderNumber} confirmed`,
+    text: 'Thank you for your order!',
+  })
+})
+
+// Listen for order status changes
+await on($.Order.updated, async (order) => {
+  if (order.orderStatus === 'OrderDelivered') {
+    // Send delivery notification
+    await send({
+      $type: 'EmailMessage',
+      recipient: order.customer.email,
+      subject: `Order ${order.orderNumber} delivered`,
+      text: 'Your order has been delivered!',
+    })
+  }
+})
+```
+
+## Calculating Order Totals
+
+Helper function to calculate order totals:
+
+```typescript
+function calculateOrderTotal(order: Order) {
+  const subtotal = order.orderedItem.reduce((sum, item) => {
+    return sum + item.price.price * item.orderQuantity
+  }, 0)
+
+  const tax = subtotal * 0.08 // 8% tax rate
+  const shipping = 9.99
+  const total = subtotal + tax + shipping
+
+  return {
+    subtotal,
+    tax,
+    shipping,
+    total,
+  }
+}
+
+// Use in order creation
+const totals = calculateOrderTotal(orderData)
+const order = await db.create($.Order, {
+  ...orderData,
+  priceSpecification: {
+    $type: 'PriceSpecification',
+    price: totals.total,
+    priceCurrency: 'USD',
+  },
+})
+```
+
+## Common Patterns
+
+### Pattern 1: Order Validation
+
+Validate orders before processing:
+
+```typescript
+async function validateOrder(order: Order) {
+  // Check if customer exists
+  const customer = await db.get($.Person, order.customer.$id)
+  if (!customer) {
+    throw new Error('Customer not found')
+  }
+
+  // Check if products exist and are in stock
+  for (const item of order.orderedItem) {
+    const product = await db.get($.Product, item.orderedItem.$id)
+    if (!product) {
+      throw new Error(`Product ${item.orderedItem.name} not found`)
+    }
+    if (product.inventory < item.orderQuantity) {
+      throw new Error(`Insufficient inventory for ${item.orderedItem.name}`)
+    }
+  }
+
+  return true
+}
+```
+
+### Pattern 2: Order Confirmation
+
+Send order confirmation with details:
+
+```typescript
+async function sendOrderConfirmation(order: Order) {
+  const totals = calculateOrderTotal(order)
+
+  await send({
+    $type: 'EmailMessage',
+    recipient: order.customer.email,
+    subject: `Order ${order.orderNumber} Confirmation`,
+    html: `
+      <h1>Thank you for your order!</h1>
+      <p>Order Number: ${order.orderNumber}</p>
+      <p>Order Date: ${new Date(order.orderDate).toLocaleDateString()}</p>
+
+      <h2>Items Ordered:</h2>
+      <ul>
+        ${order.orderedItem
+          .map(
+            (item) => `
+          <li>
+            ${item.orderedItem.name} x ${item.orderQuantity}
+            - $${item.price.price * item.orderQuantity}
+          </li>
+        `
+          )
+          .join('')}
+      </ul>
+
+      <p>Subtotal: $${totals.subtotal.toFixed(2)}</p>
+      <p>Tax: $${totals.tax.toFixed(2)}</p>
+      <p>Shipping: $${totals.shipping.toFixed(2)}</p>
+      <p><strong>Total: $${totals.total.toFixed(2)}</strong></p>
+
+      <p>Your order will be delivered to:</p>
+      <p>
+        ${order.orderDelivery.deliveryAddress.streetAddress}<br>
+        ${order.orderDelivery.deliveryAddress.addressLocality},
+        ${order.orderDelivery.deliveryAddress.addressRegion}
+        ${order.orderDelivery.deliveryAddress.postalCode}
+      </p>
+    `,
+  })
+}
+```
+
+## Next Steps
+
+Now that you understand the basics:
+
+1. Read [Architecture](./architecture) to understand order system design
+2. Learn [Best Practices](./best-practices) for order management
+3. Explore [Examples](../examples/) for real-world patterns
+4. Check [API Reference](../api/) for complete API documentation
+
+## Troubleshooting
+
+### Order not saving?
+
+Make sure you're using the correct Schema.org types:
+
+```typescript
+// Correct
+const order = await db.create($.Order, {
+  $type: 'Order',
+  // ...
+})
+
+// Incorrect - missing $type
+const order = await db.create($.Order, {
+  orderNumber: 'ORD-001',
+  // ...
+})
+```
+
+### Can't find orders?
+
+Verify your query syntax:
+
+```typescript
+// Correct
+const orders = await db.list($.Order, {
+  where: { orderStatus: 'OrderProcessing' },
+})
+
+// Incorrect - typo in status
+const orders = await db.list($.Order, {
+  where: { orderStatus: 'Processing' },
+})
+```
+
+### Need Help?
+
+- Check [Troubleshooting Guide](./troubleshooting)
+- Review [Examples](../examples/)
+- Visit [sdk.do](https://sdk.do) documentation
+
+## License
+
+MIT (Open Source)
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

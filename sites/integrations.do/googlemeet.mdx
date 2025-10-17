@@ -1,0 +1,97 @@
+---
+$id: https://integrations.do/googlemeet
+$type: Integration
+name: Google Meet
+service: googlemeet
+description: Google Meet is a secure video conferencing platform that integrates with Google Workspace, facilitating remote meetings, screen sharing, and chat
+category: communication
+sdkBased: false
+baseUrl: https://api.googlemeet.com
+
+auth:
+  type: oauth2
+  authorizationUrl: https://accounts.google.com/o/oauth2/v2/auth
+  tokenUrl: https://oauth2.googleapis.com/token
+  scopes:
+    - https://www.googleapis.com/auth/meetings.space.created
+    - https://www.googleapis.com/auth/meetings.space.settings
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Google Meet actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: false
+  events: []
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://meet.google.com/
+  apiDocs: https://meet.google.com/
+---
+
+# Google Meet Integration
+
+Google Meet is a secure video conferencing platform that integrates with Google Workspace, facilitating remote meetings, screen sharing, and chat
+
+## Quick Start
+
+```typescript
+import { GoogleMeetClient } from '@dotdo/sdk.do/integrations/googlemeet'
+
+const googlemeet = new GoogleMeetClient({
+  apiKey: process.env.GOOGLEMEET_API_KEY,
+})
+
+const result = await googlemeet.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Google Meet provides 9 actions through the Composio API.
+
+## License
+
+MIT

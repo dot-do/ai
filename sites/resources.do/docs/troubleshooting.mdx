@@ -1,0 +1,166 @@
+---
+$id: https://resources.do/docs/troubleshooting
+$type: TechArticle
+title: resources.do Troubleshooting
+description: Common issues and solutions for working with data records
+keywords: [troubleshooting, debugging, errors, solutions, data]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# resources.do Troubleshooting
+
+Common issues and solutions when working with data records and resources.
+
+## Resource Not Found
+
+**Problem**: `Resource not found: person-123`
+
+**Solution**:
+
+```typescript
+// Check if resource exists
+const exists = await db.exists($.Person, 'person-123')
+if (!exists) {
+  console.error('Resource does not exist')
+}
+
+// Handle not found
+const person = await db.get($.Person, id).catch(() => null)
+if (!person) {
+  // Handle missing resource
+}
+```
+
+## Query Timeout
+
+**Problem**: `Query timeout after 30000ms`
+
+**Solution**:
+
+```typescript
+// Add limit
+const people = await db.list($.Person, { limit: 100 })
+
+// Use pagination
+async function* getAllPeople() {
+  let offset = 0
+  while (true) {
+    const page = await db.list($.Person, { limit: 100, offset })
+    if (page.length === 0) break
+    yield* page
+    offset += 100
+  }
+}
+```
+
+## Validation Errors
+
+**Problem**: `Validation error: Invalid email format`
+
+**Solution**:
+
+```typescript
+import { validate } from 'sdk.do'
+
+const result = validate(data, $.Person)
+if (!result.valid) {
+  console.error('Errors:', result.errors)
+  // Fix data based on errors
+}
+```
+
+## Duplicate Resources
+
+**Problem**: Creating duplicate resources
+
+**Solution**:
+
+```typescript
+// Check for existing
+const existing = await db.list($.Person, {
+  where: { email: data.email },
+  limit: 1,
+})
+
+if (existing.length > 0) {
+  throw new Error('Person with this email already exists')
+}
+
+await db.create($.Person, data)
+```
+
+## Slow Queries
+
+**Problem**: Queries taking too long
+
+**Solution**:
+
+```typescript
+// Use indexed fields
+const people = await db.list($.Person, {
+  where: { email: 'jane@example.com' }, // email is indexed
+})
+
+// Avoid complex nested queries
+// Use simpler filters or create indexes
+
+// Use caching
+const cached = await getCachedResource(id)
+```
+
+## Memory Issues
+
+**Problem**: Out of memory when loading many resources
+
+**Solution**:
+
+```typescript
+// Use pagination instead of loading all
+async function processAllPeople() {
+  let offset = 0
+  const limit = 100
+
+  while (true) {
+    const page = await db.list($.Person, { limit, offset })
+    if (page.length === 0) break
+
+    for (const person of page) {
+      await processPerson(person)
+    }
+
+    offset += limit
+    // Page is garbage collected
+  }
+}
+```
+
+## Relationship Issues
+
+**Problem**: Related resources not found
+
+**Solution**:
+
+```typescript
+// Check if relationship exists
+const related = await db.related(person, $.worksFor, $.Organization)
+if (related.length === 0) {
+  console.log('No employer relationship')
+}
+
+// Create relationship if missing
+if (related.length === 0) {
+  await db.relate(person, $.worksFor, organization)
+}
+```
+
+## Getting Help
+
+- [GitHub Issues](https://github.com/dot-do/ai/issues)
+- [Documentation](https://resources.do)
+- Discord community
+
+---
+
+**Next**: See [API Reference](../api/reference) for complete API documentation.

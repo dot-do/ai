@@ -1,0 +1,480 @@
+---
+$id: https://sdk.do/docs/getting-started
+$type: TechArticle
+title: Getting Started with sdk.do
+description: Complete guide to setting up and using sdk.do for Business-as-Code development
+keywords: [getting started, setup, tutorial, sdk, business-as-code]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Getting Started with sdk.do
+
+This guide will walk you through setting up sdk.do and building your first Business-as-Code application.
+
+## Prerequisites
+
+Before you begin, ensure you have:
+
+- **Node.js 18+** installed on your system
+- **pnpm** package manager (or npm/yarn)
+- **TypeScript knowledge** (recommended)
+- **OpenAI API key** (for AI features)
+- **Database connection** (PostgreSQL recommended)
+
+## Installation
+
+Install sdk.do using pnpm:
+
+```bash
+pnpm add sdk.do
+```
+
+Or with npm:
+
+```bash
+npm install sdk.do
+```
+
+## Environment Setup
+
+Create a `.env` file in your project root:
+
+```bash
+# Required: Database connection
+SDK_DATABASE_URL=postgres://user:pass@localhost:5432/mydb
+
+# Required: OpenAI API key (for AI features)
+SDK_OPENAI_API_KEY=sk-your-api-key-here
+
+# Optional: AI model configuration
+SDK_AI_MODEL=gpt-5
+SDK_AI_TEMPERATURE=0.7
+
+# Optional: Performance tuning
+SDK_BATCH_SIZE=100
+SDK_CACHE_TTL=3600
+```
+
+## Your First Application
+
+Create a new file `index.ts`:
+
+```typescript
+import $, { db, ai, on, send, every } from 'sdk.do'
+
+// Create a business entity
+async function createBusiness() {
+  const business = await db.create($.Business, {
+    name: 'Acme Corporation',
+    industry: 'Technology',
+    foundingDate: '2025-01-01',
+    description: 'Leading tech company',
+  })
+
+  console.log('Created business:', business.$id)
+  return business
+}
+
+// Listen for new orders
+on($.Order.created, async (order) => {
+  console.log('New order received:', order.$id)
+
+  // Generate order analysis with AI
+  const analysis = await ai.generate('Analyze this order and provide insights', { order, schema: $.AnalysisReport })
+
+  console.log('Order analysis:', analysis)
+
+  // Send fulfillment event
+  send($.Order.fulfilled, {
+    orderId: order.$id,
+    analysis,
+  })
+})
+
+// Schedule daily report
+every($.Daily, async () => {
+  const orders = await db.list($.Order, {
+    where: {
+      createdAt: {
+        $gte: new Date(Date.now() - 24 * 60 * 60 * 1000),
+      },
+    },
+  })
+
+  console.log(`Daily report: ${orders.length} orders processed`)
+})
+
+// Run the application
+async function main() {
+  console.log('Starting Business-as-Code application...')
+
+  // Create business
+  const business = await createBusiness()
+
+  // List all businesses
+  const businesses = await db.list($.Business, { limit: 10 })
+  console.log(`Total businesses: ${businesses.length}`)
+
+  // Create a sample order
+  const order = await db.create($.Order, {
+    $type: 'Order',
+    orderNumber: 'ORD-001',
+    customer: 'customer-123',
+    orderDate: new Date().toISOString(),
+    orderStatus: 'Processing',
+    totalPrice: 299.99,
+  })
+
+  // Trigger order event
+  send($.Order.created, order)
+}
+
+main().catch(console.error)
+```
+
+## Run Your Application
+
+```bash
+tsx index.ts
+```
+
+You should see output like:
+
+```
+Starting Business-as-Code application...
+Created business: business-abc123
+Total businesses: 1
+New order received: order-xyz789
+Order analysis: { summary: "...", recommendations: [...] }
+```
+
+## Understanding the Code
+
+### The $ Proxy
+
+The `$` proxy provides access to 800+ Schema.org types:
+
+```typescript
+import $ from 'sdk.do'
+
+// Access semantic types
+$.Business // Business entity type
+$.Person // Person entity type
+$.Product // Product entity type
+$.Order // Order entity type
+
+// Access predicates (relationships)
+$.worksFor // Person works for Organization
+$.owns // Organization owns Brand
+$.sells // Business sells Product
+```
+
+### Database Operations
+
+The `db` object provides CRUD operations:
+
+```typescript
+import { db } from 'sdk.do'
+
+// Create
+const entity = await db.create($.Business, { name: 'Acme' })
+
+// Read
+const business = await db.get($.Business, 'id')
+const businesses = await db.list($.Business, { limit: 10 })
+
+// Update
+await db.update(business, { revenue: 1000000 })
+
+// Delete
+await db.delete(business)
+
+// Relationships
+await db.relate(person, $.worksFor, organization)
+```
+
+### AI Services
+
+The `ai` object provides AI capabilities:
+
+```typescript
+import { ai } from 'sdk.do'
+
+// Generate content
+const content = await ai.generate('Create a product description')
+
+// Generate with schema
+const product = await ai.generate('Create a tech product', {
+  schema: $.Product,
+})
+
+// Embed text for semantic search
+const embedding = await ai.embed('Search query')
+
+// Batch processing (50% cost savings)
+const results = await ai.batch([{ prompt: 'Analyze text 1' }, { prompt: 'Analyze text 2' }])
+```
+
+### Event System
+
+The `on` and `send` functions handle events:
+
+```typescript
+import { on, send } from 'sdk.do'
+
+// Listen for events
+on($.Order.created, async (order) => {
+  console.log('Order created:', order)
+})
+
+// Publish events
+send($.Order.created, {
+  $type: 'Order',
+  orderId: 'order-123',
+  total: 99.99,
+})
+```
+
+### Scheduled Workflows
+
+The `every` function schedules recurring tasks:
+
+```typescript
+import { every } from 'sdk.do'
+
+// Run daily
+every($.Daily, async () => {
+  await generateReport()
+})
+
+// Run hourly
+every($.Hourly, async () => {
+  await syncData()
+})
+
+// Custom cron
+every('0 */6 * * *', async () => {
+  await performMaintenance()
+})
+```
+
+## Next Steps
+
+Now that you have a basic application running, explore:
+
+1. **[Quick Start](./quickstart)** - Build a complete example in 5 minutes
+2. **[API Reference](./api-reference)** - Complete API documentation
+3. **[Examples](../examples/)** - Practical code examples
+4. **[Database Guide](../../database.do)** - Advanced database operations
+5. **[Events Guide](../../events.do)** - Event system deep dive
+6. **[Workflows Guide](../../workflows.do)** - Workflow orchestration
+
+## Common Patterns
+
+### Create and Relate Entities
+
+```typescript
+// Create entities
+const person = await db.create($.Person, {
+  name: 'John Doe',
+  email: 'john@example.com',
+})
+
+const organization = await db.create($.Organization, {
+  name: 'Acme Corp',
+  industry: 'Technology',
+})
+
+// Create relationship
+await db.relate(person, $.worksFor, organization)
+
+// Query relationships
+const employer = await db.related(person, $.worksFor, $.Organization)
+const employees = await db.related(organization, $.employs, $.Person)
+```
+
+### AI-Powered Data Enrichment
+
+```typescript
+// Create entity with minimal data
+const product = await db.create($.Product, {
+  name: 'Smart Watch',
+  price: 299.99,
+})
+
+// Enrich with AI-generated content
+const enrichedData = await ai.generate(`Generate detailed product information for: ${product.name}`, { schema: $.Product })
+
+// Update with enriched data
+await db.update(product, enrichedData)
+```
+
+### Event-Driven Workflows
+
+```typescript
+// Listen for customer creation
+on($.Customer.created, async (customer) => {
+  // Send welcome email
+  send($.Email.send, {
+    to: customer.email,
+    subject: 'Welcome!',
+    template: 'welcome',
+  })
+
+  // Create onboarding tasks
+  await db.create($.Task, {
+    title: 'Complete profile',
+    assignee: customer.$id,
+    dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+  })
+
+  // Trigger onboarding workflow
+  send($.Workflow.start, {
+    workflowId: 'customer-onboarding',
+    context: { customerId: customer.$id },
+  })
+})
+```
+
+## Troubleshooting
+
+### Import Errors
+
+If you see TypeScript errors about imports, ensure you have the correct tsconfig:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "strict": true
+  }
+}
+```
+
+### Database Connection Issues
+
+Verify your database URL is correct:
+
+```bash
+# Test connection
+psql $SDK_DATABASE_URL
+
+# Or use SDK test command
+pnpm tsx -e "import { db } from 'sdk.do'; db.list($.Business).then(console.log)"
+```
+
+### OpenAI API Key Issues
+
+Ensure your API key is valid:
+
+```bash
+# Test API key
+curl https://api.openai.com/v1/models \
+  -H "Authorization: Bearer $SDK_OPENAI_API_KEY"
+```
+
+### Missing Types
+
+Install Schema.org type definitions:
+
+```bash
+pnpm add schema.org.ai
+```
+
+Then import types:
+
+```typescript
+import type { Business, Person, Product } from 'schema.org.ai'
+```
+
+## Best Practices
+
+### 1. Use Environment Variables
+
+Never hardcode credentials:
+
+```typescript
+// Good
+const apiKey = process.env.SDK_OPENAI_API_KEY
+
+// Bad
+const apiKey = 'sk-hardcoded-key'
+```
+
+### 2. Handle Errors Gracefully
+
+Always wrap async operations in try-catch:
+
+```typescript
+try {
+  const business = await db.create($.Business, data)
+} catch (error) {
+  console.error('Failed to create business:', error)
+  // Handle error appropriately
+}
+```
+
+### 3. Use Semantic Patterns
+
+Leverage the semantic `$` proxy for type safety:
+
+```typescript
+// Good - type-safe
+const businesses = await db.list($.Business)
+
+// Avoid - string-based
+const businesses = await db.list('Business')
+```
+
+### 4. Batch AI Operations
+
+Use batch processing for cost savings:
+
+```typescript
+// Good - 50% cost savings
+const results = await ai.batch(items.map((item) => ({ prompt: `Process: ${item}` })))
+
+// Avoid - expensive sequential processing
+for (const item of items) {
+  await ai.generate(`Process: ${item}`)
+}
+```
+
+### 5. Type Your Data
+
+Use TypeScript types for better IDE support:
+
+```typescript
+import type { Business } from 'schema.org.ai'
+
+const business: Business = await db.create($.Business, {
+  name: 'Acme',
+  industry: 'Technology',
+})
+```
+
+## Support and Community
+
+- **Documentation**: [sdk.do](https://sdk.do)
+- **GitHub Issues**: [github.com/dot-do/ai/issues](https://github.com/dot-do/ai/issues)
+- **Discussions**: [github.com/dot-do/ai/discussions](https://github.com/dot-do/ai/discussions)
+- **Discord**: Join our community server
+
+## Additional Resources
+
+- [Installation Guide](./installation)
+- [Quick Start Tutorial](./quickstart)
+- [API Reference](./api-reference)
+- [Database Operations](../examples/database)
+- [Event Handling](../examples/events)
+- [AI Generation](../examples/ai-generation)
+
+---
+
+Ready to build more? Continue to the [Quick Start Tutorial](./quickstart) for a complete walkthrough.

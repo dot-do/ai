@@ -1,0 +1,659 @@
+---
+$id: https://llm.do/docs/getting-started
+$type: TechArticle
+title: Getting Started with llm.do
+description: Quick start guide for the LLM gateway in the .do platform
+keywords: [llm, gateway, getting started, openai, anthropic, setup, configuration]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Getting Started
+
+Get started with the LLM gateway in the `.do` platform in under 5 minutes.
+
+## Installation
+
+Install the SDK in your project:
+
+```bash
+pnpm add sdk.do
+```
+
+Or use the CLI:
+
+```bash
+pnpm add -g cli.do
+```
+
+## API Keys
+
+llm.do requires API keys for the AI providers you want to use.
+
+### OpenAI (GPT Models)
+
+1. Create an account at [platform.openai.com](https://platform.openai.com)
+2. Generate an API key from the API keys section
+3. Set the environment variable:
+
+```bash
+export OPENAI_API_KEY=sk-...
+```
+
+### Anthropic (Claude Models)
+
+1. Create an account at [console.anthropic.com](https://console.anthropic.com)
+2. Generate an API key from the API settings
+3. Set the environment variable:
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+```
+
+## Basic Usage
+
+### Simple Text Generation
+
+Generate text with a simple prompt:
+
+```typescript
+import { llm } from 'sdk.do'
+
+const response = await llm.generate('Write a haiku about artificial intelligence')
+
+console.log(response)
+// Outputs:
+// "Silicon neurons fire
+// Learning patterns, teaching self
+// Intelligence grows"
+```
+
+### Structured Output
+
+Generate JSON objects with schema validation:
+
+```typescript
+import { $, llm } from 'sdk.do'
+
+const product = await llm.generate('Create a smartphone product listing', {
+  schema: $.Product,
+  structured: true,
+})
+
+console.log(product)
+// {
+//   $type: "Product",
+//   name: "Galaxy Pro X",
+//   description: "Next-gen smartphone with AI capabilities",
+//   brand: { $type: "Brand", name: "TechCorp" },
+//   offers: {
+//     $type: "Offer",
+//     price: 999.99,
+//     priceCurrency: "USD"
+//   }
+// }
+```
+
+### Multi-Provider Access
+
+Access different AI providers through the same interface:
+
+```typescript
+import { llm } from 'sdk.do'
+
+// Use OpenAI GPT-5
+const gptResponse = await llm.generate('Explain quantum computing', {
+  provider: 'openai',
+  model: 'gpt-5',
+})
+
+// Use Anthropic Claude
+const claudeResponse = await llm.generate('Explain quantum computing', {
+  provider: 'anthropic',
+  model: 'claude-sonnet-4.5',
+})
+```
+
+### Intelligent Routing
+
+Let the gateway choose the optimal provider and model:
+
+```typescript
+import { llm } from 'sdk.do'
+
+// Route based on cost optimization
+const costOptimized = await llm.generate('Simple classification task', {
+  routing: { optimize: 'cost' },
+})
+
+// Route based on quality
+const qualityOptimized = await llm.generate('Complex creative writing', {
+  routing: { optimize: 'quality' },
+})
+
+// Route based on speed
+const speedOptimized = await llm.generate('Quick response needed', {
+  routing: { optimize: 'speed' },
+})
+```
+
+## Configuration
+
+### Environment Variables
+
+Create a `.env` file in your project root:
+
+```bash
+# Required: API keys for providers
+OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
+
+# Optional: Gateway configuration
+LLM_DEFAULT_PROVIDER=openai
+LLM_DEFAULT_MODEL=gpt-5
+LLM_ENABLE_CACHING=true
+LLM_CACHE_TTL=3600
+LLM_ENABLE_ANALYTICS=true
+LLM_RATE_LIMIT=100
+```
+
+### SDK Configuration
+
+Configure the LLM gateway programmatically:
+
+```typescript
+import { llm } from 'sdk.do'
+
+llm.config({
+  // Default provider and model
+  defaultProvider: 'openai',
+  defaultModel: 'gpt-5',
+
+  // Routing strategy
+  routing: {
+    strategy: 'auto', // auto, cost, quality, speed
+    fallback: 'claude-sonnet-4.5',
+  },
+
+  // Caching configuration
+  caching: {
+    enabled: true,
+    ttl: 3600, // 1 hour
+  },
+
+  // Analytics
+  analytics: {
+    enabled: true,
+    trackCosts: true,
+  },
+
+  // Rate limiting
+  rateLimit: {
+    requestsPerMinute: 100,
+    tokensPerMinute: 100000,
+  },
+})
+```
+
+### Per-Request Configuration
+
+Override configuration for individual requests:
+
+```typescript
+import { llm } from 'sdk.do'
+
+const response = await llm.generate('prompt', {
+  provider: 'anthropic',
+  model: 'claude-sonnet-4.5',
+  temperature: 0.9,
+  maxTokens: 8192,
+  cache: {
+    enabled: false,
+  },
+})
+```
+
+## Provider Selection
+
+### OpenAI Models
+
+Choose the right OpenAI model for your use case:
+
+```typescript
+import { llm } from 'sdk.do'
+
+// GPT-5 (default) - Best for general tasks
+await llm.generate('Analyze this data', {
+  provider: 'openai',
+  model: 'gpt-5',
+})
+
+// GPT-5 Mini - Cost-effective for simple tasks
+await llm.generate('Summarize this text', {
+  provider: 'openai',
+  model: 'gpt-5-mini',
+})
+
+// GPT-5 Nano - Fastest, cheapest for very simple tasks
+await llm.generate('Extract category', {
+  provider: 'openai',
+  model: 'gpt-5-nano',
+})
+
+// GPT-5 Codex - Optimized for code
+await llm.generate('Refactor this function', {
+  provider: 'openai',
+  model: 'gpt-5-codex',
+})
+```
+
+### Anthropic Models
+
+Choose the right Claude model:
+
+```typescript
+import { llm } from 'sdk.do'
+
+// Claude Sonnet 4.5 - Balanced performance
+await llm.generate('Creative writing task', {
+  provider: 'anthropic',
+  model: 'claude-sonnet-4.5',
+})
+
+// Claude Opus 4 - Most capable
+await llm.generate('Complex reasoning task', {
+  provider: 'anthropic',
+  model: 'claude-opus-4',
+})
+
+// Claude Haiku 4 - Fastest and most affordable
+await llm.generate('Quick response needed', {
+  provider: 'anthropic',
+  model: 'claude-haiku-4',
+})
+```
+
+## Vector Embeddings
+
+Generate embeddings for semantic search and similarity:
+
+```typescript
+import { llm } from 'sdk.do'
+
+// OpenAI embeddings (1536 dimensions)
+const openaiEmbedding = await llm.embed('semantic search query', {
+  provider: 'openai',
+  model: 'text-embedding-3-large',
+})
+
+console.log(openaiEmbedding.length) // 1536
+console.log(openaiEmbedding.slice(0, 3)) // [0.123, -0.456, 0.789]
+
+// Anthropic embeddings (1024 dimensions)
+const claudeEmbedding = await llm.embed('semantic search query', {
+  provider: 'anthropic',
+})
+
+console.log(claudeEmbedding.length) // 1024
+
+// Batch embeddings
+const embeddings = await llm.embed(['query 1', 'query 2', 'query 3'], {
+  provider: 'openai',
+})
+
+console.log(embeddings.length) // 3
+```
+
+## Streaming
+
+Stream responses for real-time user experiences:
+
+```typescript
+import { llm } from 'sdk.do'
+
+// Basic streaming
+const stream = llm.stream('Write a comprehensive guide to AI')
+
+for await (const chunk of stream) {
+  process.stdout.write(chunk)
+}
+
+// Streaming with events
+const stream = llm.stream('Generate long content', {
+  provider: 'openai',
+  model: 'gpt-5',
+  onStart: () => console.log('Generation started...'),
+  onChunk: (chunk) => process.stdout.write(chunk),
+  onComplete: () => console.log('\nGeneration complete!'),
+  onError: (error) => console.error('Error:', error),
+})
+
+await stream.complete()
+```
+
+## Batch Processing
+
+Process large datasets with 50% cost savings:
+
+```typescript
+import { $, llm } from 'sdk.do'
+
+// Prepare batch requests
+const requests = [
+  { prompt: 'Generate product description 1', schema: $.Product },
+  { prompt: 'Generate product description 2', schema: $.Product },
+  { prompt: 'Generate product description 3', schema: $.Product },
+]
+
+// Submit batch
+const batch = await llm.batch.create(requests, {
+  provider: 'openai',
+  model: 'gpt-5-mini',
+})
+
+console.log(`Batch created: ${batch.id}`)
+
+// Check status
+const status = await llm.batch.status(batch.id)
+console.log(`Status: ${status.status}`)
+console.log(`Progress: ${status.completed}/${status.total}`)
+
+// Get results when complete
+if (status.status === 'completed') {
+  const results = await llm.batch.results(batch.id)
+  console.log(`Got ${results.length} results`)
+}
+```
+
+## Schema Integration
+
+Use Schema.org types for structured generation:
+
+```typescript
+import { $, llm } from 'sdk.do'
+
+// Generate Organization
+const org = await llm.generate('Create an AI startup profile', {
+  schema: $.Organization,
+  structured: true,
+})
+
+console.log(org.$type) // "Organization"
+console.log(org.name) // "AI Innovations Inc."
+console.log(org.description) // Generated description
+
+// Generate Person
+const person = await llm.generate('Create employee profile for a data scientist', {
+  schema: $.Person,
+  structured: true,
+  context: {
+    worksFor: org,
+  },
+})
+
+// Generate Product
+const product = await llm.generate('Create SaaS product listing', {
+  schema: $.Product,
+  structured: true,
+  context: {
+    manufacturer: org,
+  },
+})
+```
+
+Available schemas from [schema.org.ai](https://schema.org.ai):
+
+- **Business**: Organization, LocalBusiness, Corporation
+- **People**: Person, Employee, Customer
+- **Products**: Product, Service, Offer
+- **Content**: Article, BlogPost, HowTo
+- **Events**: Event, OnlineEvent, BusinessEvent
+- **Places**: Place, PostalAddress, GeoCoordinates
+
+See [schema.org.ai](https://schema.org.ai) for all 817 available types.
+
+## Error Handling
+
+Handle API errors gracefully:
+
+```typescript
+import { llm } from 'sdk.do'
+
+try {
+  const response = await llm.generate('prompt', {
+    provider: 'openai',
+  })
+  console.log(response)
+} catch (error) {
+  if (error.code === 'RATE_LIMIT_EXCEEDED') {
+    console.error('Rate limit exceeded, retry later')
+  } else if (error.code === 'INVALID_API_KEY') {
+    console.error('Invalid API key for provider')
+  } else if (error.code === 'PROVIDER_UNAVAILABLE') {
+    console.error('Provider is currently unavailable')
+  } else {
+    console.error('Generation failed:', error.message)
+  }
+}
+```
+
+## Automatic Failover
+
+Configure automatic failover between providers:
+
+```typescript
+import { llm } from 'sdk.do'
+
+const response = await llm.generate('prompt', {
+  provider: 'openai',
+  model: 'gpt-5',
+  routing: {
+    fallback: 'claude-sonnet-4.5', // Fallback to Claude if OpenAI fails
+    retries: 3, // Retry 3 times before failing
+  },
+})
+```
+
+## Usage Analytics
+
+Track your usage and costs:
+
+```typescript
+import { llm } from 'sdk.do'
+
+// Get usage statistics
+const stats = await llm.analytics.usage({
+  period: 'last_7_days',
+})
+
+console.log(`Total requests: ${stats.totalRequests}`)
+console.log(`Total cost: $${stats.totalCost}`)
+console.log(`OpenAI requests: ${stats.byProvider.openai.requests}`)
+console.log(`Anthropic requests: ${stats.byProvider.anthropic.requests}`)
+
+// Get cost breakdown
+const costs = await llm.analytics.costs({
+  period: 'last_30_days',
+  groupBy: ['provider', 'model'],
+})
+
+console.log(costs)
+// {
+//   openai: {
+//     'gpt-5': 80.00,
+//     'gpt-5-mini': 20.00,
+//     'gpt-5-nano': 5.00
+//   },
+//   anthropic: {
+//     'claude-sonnet-4.5': 50.50
+//   }
+// }
+```
+
+## Common Patterns
+
+### Content Generation
+
+```typescript
+import { $, llm } from 'sdk.do'
+
+// Blog post generation
+const post = await llm.generate('Write about sustainable AI practices', {
+  schema: $.BlogPost,
+  structured: true,
+  provider: 'anthropic', // Claude is great for creative content
+})
+
+// Product description
+const description = await llm.generate(`Product description for ${product.name}`, {
+  schema: $.Product,
+  context: product,
+  provider: 'openai',
+  model: 'gpt-5-mini', // Cost-effective for simple tasks
+})
+```
+
+### Data Enrichment
+
+```typescript
+import { $, llm, db } from 'sdk.do'
+
+// Enrich products with AI-generated content
+const products = await db.list($.Product, {
+  where: { description: null },
+})
+
+for (const product of products) {
+  const enriched = await llm.generate(`Generate comprehensive description for ${product.name}`, {
+    schema: $.Product,
+    context: product,
+    routing: { optimize: 'cost' }, // Use cheapest suitable model
+  })
+
+  await db.update(product.$id, {
+    description: enriched.description,
+  })
+}
+```
+
+### Semantic Search
+
+```typescript
+import { llm, db } from 'sdk.do'
+
+// Create embeddings for search
+const query = 'affordable laptop for students'
+const embedding = await llm.embed(query, {
+  provider: 'openai',
+  model: 'text-embedding-3-large',
+})
+
+// Find similar items
+const results = await db.similaritySearch(embedding, {
+  limit: 10,
+  threshold: 0.8,
+})
+
+console.log(`Found ${results.length} results`)
+```
+
+## Best Practices
+
+### 1. Choose the Right Provider
+
+Different providers have different strengths:
+
+- **OpenAI GPT-5**: Great for general-purpose tasks, structured output
+- **Anthropic Claude**: Excellent for creative writing, long-context tasks
+- **GPT-5 Mini/Nano**: Cost-effective for simple tasks
+- **GPT-5 Codex**: Best for code-related tasks
+
+### 2. Use Intelligent Routing
+
+Let the gateway choose the optimal provider:
+
+```typescript
+// Good: Automatic routing
+await llm.generate('prompt', {
+  routing: { optimize: 'cost' },
+})
+
+// Avoid: Always using the same provider/model
+await llm.generate('prompt', {
+  provider: 'openai',
+  model: 'gpt-5', // Might be overkill for simple tasks
+})
+```
+
+### 3. Enable Caching
+
+Reduce costs for frequently used prompts:
+
+```typescript
+// Good: Enable caching
+await llm.generate('common prompt', {
+  cache: { enabled: true, ttl: 3600 },
+})
+```
+
+### 4. Use Batch Processing
+
+For large datasets, always use batch processing:
+
+```typescript
+// Good: Batch processing (50% cheaper)
+const batch = await llm.batch.create(requests)
+
+// Avoid: Individual requests (expensive)
+for (const req of requests) {
+  await llm.generate(req.prompt)
+}
+```
+
+### 5. Implement Error Handling
+
+Always handle errors with fallback strategies:
+
+```typescript
+try {
+  const response = await llm.generate('prompt', {
+    provider: 'openai',
+    routing: {
+      fallback: 'anthropic',
+      retries: 3,
+    },
+  })
+} catch (error) {
+  // Handle error appropriately
+}
+```
+
+## Next Steps
+
+Now that you have llm.do set up, explore more features:
+
+- [Architecture](./architecture) - Understand gateway design and patterns
+- [Best Practices](./best-practices) - Optimization and advanced usage
+- [Troubleshooting](./troubleshooting) - Common issues and solutions
+- [API Reference](../api/reference) - Complete API documentation
+
+## Examples
+
+Check out practical examples:
+
+- [Basic Usage](../examples/basic-usage) - Simple generation and embeddings
+- [Advanced Patterns](../examples/advanced-patterns) - Routing and optimization
+- [Integration](../examples/integration) - Integration with other services
+- [Real-World Use Case](../examples/real-world-use-case) - Production implementation
+
+## Support
+
+- [API Reference](../api/reference) - Complete API documentation
+- [GitHub Issues](https://github.com/dot-do/ai/issues) - Report bugs
+- [Discord Community](https://discord.gg/dotdo) - Get help
+- [Documentation](https://llm.do) - Full documentation
+
+## License
+
+MIT (Open Source)

@@ -1,0 +1,203 @@
+---
+$id: https://admin.do/docs/getting-started
+$type: TechArticle
+title: Getting Started with admin.do
+description: Setup and basic usage of admin.do for platform administration
+keywords: [getting-started, admin, setup, user management, RBAC, monitoring]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Getting Started with admin.do
+
+Get started with the admin interface for managing the `.do` platform.
+
+## Installation
+
+```bash
+pnpm add admin.do
+```
+
+## Configuration
+
+Create a `.env` file:
+
+```bash
+# Database
+ADMIN_DATABASE_URL=postgres://...
+
+# Authentication
+ADMIN_SESSION_SECRET=your-secret-key
+ADMIN_JWT_SECRET=your-jwt-secret
+
+# Access Control
+ADMIN_RBAC_ENABLED=true
+ADMIN_DEFAULT_ROLE=viewer
+
+# Monitoring
+ADMIN_METRICS_ENABLED=true
+ADMIN_AUDIT_LOG_ENABLED=true
+```
+
+## Create First Admin User
+
+```typescript
+import { $, admin } from 'admin.do'
+
+const adminUser = await admin.users.create({
+  email: 'admin@company.com',
+  name: 'Admin User',
+  role: 'super-admin',
+  permissions: ['*'], // All permissions
+})
+
+console.log(`Admin user created: ${adminUser.$id}`)
+```
+
+## User Management
+
+### Create Users
+
+```typescript
+const user = await admin.users.create({
+  email: 'john@company.com',
+  name: 'John Doe',
+  role: 'developer',
+  department: 'Engineering',
+  permissions: ['platform.read', 'database.write'],
+})
+```
+
+### List Users
+
+```typescript
+const users = await admin.users.list({
+  where: { role: 'developer', active: true },
+  limit: 50,
+  orderBy: { createdAt: 'desc' },
+})
+```
+
+### Update Users
+
+```typescript
+await admin.users.update(user.$id, {
+  role: 'senior-developer',
+  permissions: ['platform.admin', 'database.admin'],
+})
+```
+
+## Role-Based Access Control (RBAC)
+
+### Define Roles
+
+```typescript
+await admin.roles.create({
+  name: 'content-editor',
+  description: 'Can create and edit content',
+  permissions: ['content.read', 'content.write', 'content.publish'],
+})
+```
+
+### Assign Roles
+
+```typescript
+await admin.users.assignRole(user.$id, 'content-editor')
+```
+
+### Check Permissions
+
+```typescript
+const hasPermission = await admin.users.hasPermission(user.$id, 'content.publish')
+```
+
+## System Configuration
+
+### Set Configuration
+
+```typescript
+await admin.config.set('feature_flags', {
+  newUI: true,
+  betaFeatures: false,
+  aiAssistant: true,
+})
+```
+
+### Get Configuration
+
+```typescript
+const config = await admin.config.get('feature_flags')
+```
+
+## Monitoring
+
+### View System Metrics
+
+```typescript
+const metrics = await admin.monitor.getMetrics({
+  period: '24h',
+  metrics: ['cpu', 'memory', 'requests', 'errors'],
+})
+
+console.log(`CPU: ${metrics.cpu.average}%`)
+console.log(`Requests: ${metrics.requests.total}`)
+```
+
+### View Logs
+
+```typescript
+const logs = await admin.logs.query({
+  level: 'error',
+  since: '2025-10-01',
+  limit: 100,
+})
+```
+
+## Audit Logging
+
+### Log Actions
+
+```typescript
+await admin.audit.log({
+  action: 'user.role_changed',
+  actor: admin.currentUser,
+  target: user.$id,
+  details: { oldRole: 'developer', newRole: 'admin' },
+})
+```
+
+### Query Audit Log
+
+```typescript
+const auditLog = await admin.audit.query({
+  action: 'user.*',
+  since: '2025-10-01',
+  limit: 50,
+})
+```
+
+## Dashboard
+
+### Access Admin Dashboard
+
+The admin.do dashboard provides:
+
+- User management interface
+- System metrics and monitoring
+- Configuration management
+- Audit log viewer
+- Role and permission management
+
+Access at: `https://admin.your-domain.com`
+
+## Next Steps
+
+- [Architecture](./architecture) - Understand admin.do architecture
+- [Best Practices](./best-practices) - Security and management best practices
+- [Troubleshooting](./troubleshooting) - Common issues and solutions
+- [API Reference](../api/reference) - Complete API documentation
+
+## License
+
+MIT (Open Source)

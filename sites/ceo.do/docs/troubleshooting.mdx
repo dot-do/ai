@@ -1,0 +1,406 @@
+---
+$id: https://ceo.do/docs/troubleshooting
+$type: TechArticle
+title: CEO Strategic Agent Troubleshooting
+description: Common issues and solutions for CEO Strategic Agent
+keywords: [troubleshooting, ceo.do, debugging, issues, solutions]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Troubleshooting
+
+Common issues and solutions when working with CEO Strategic Agent.
+
+## Common Issues
+
+### Agent Not Responding
+
+**Problem**: Agent doesn't respond or times out
+
+**Symptoms**:
+
+- No response after 30+ seconds
+- Timeout errors
+- Connection errors
+
+**Solution**:
+
+```typescript
+// Increase timeout
+const ceoAgent = await agent.create({
+  $role: $.ChiefExecutiveOfficer,
+  timeout: 60000, // 60 seconds
+  retry_config: {
+    max_retries: 3,
+    backoff: 'exponential',
+  },
+})
+
+// Check API status
+const status = await agent.checkStatus()
+console.log('API Status:', status)
+```
+
+### Poor Quality Results
+
+**Problem**: Agent produces low-quality or irrelevant results
+
+**Symptoms**:
+
+- Results don't match expectations
+- Irrelevant information
+- Incomplete responses
+
+**Solution**:
+
+```typescript
+// Provide more context
+const result = await ceoAgent.execute({
+  task: 'Clear, specific task description',
+  context: {
+    background: 'Detailed background information',
+    constraints: ['Specific constraints'],
+    goals: 'Clear goals',
+    examples: ['Example 1', 'Example 2'],
+  },
+})
+
+// Adjust temperature for consistency
+const ceoAgent = await agent.create({
+  $role: $.ChiefExecutiveOfficer,
+  temperature: 0.3, // Lower for more consistent results
+  model: 'claude-sonnet-4.5',
+})
+```
+
+### Rate Limit Errors
+
+**Problem**: API rate limit exceeded
+
+**Symptoms**:
+
+- `RATE_LIMIT_EXCEEDED` error
+- 429 status code
+- Requests blocked
+
+**Solution**:
+
+```typescript
+// Implement rate limiting
+const ceoAgent = await agent.create({
+  $role: $.ChiefExecutiveOfficer,
+  rate_limit: {
+    requests_per_minute: 50,
+    requests_per_day: 10000,
+    backoff_strategy: 'exponential',
+  },
+})
+
+// Handle rate limit errors
+try {
+  const result = await ceoAgent.execute(task)
+} catch (error) {
+  if (error.code === 'RATE_LIMIT_EXCEEDED') {
+    const retryAfter = error.retry_after || 60000
+    console.log(`Rate limited. Retrying after ${retryAfter}ms`)
+    await sleep(retryAfter)
+    // Retry the request
+  }
+}
+```
+
+### Authentication Errors
+
+**Problem**: Invalid API key or authentication failure
+
+**Symptoms**:
+
+- `AUTHENTICATION_FAILED` error
+- 401 status code
+- Access denied messages
+
+**Solution**:
+
+```typescript
+// Verify API keys are set
+if (!process.env.ANTHROPIC_API_KEY) {
+  throw new Error('ANTHROPIC_API_KEY environment variable not set')
+}
+
+// Create agent with explicit auth
+const ceoAgent = await agent.create({
+  $role: $.ChiefExecutiveOfficer,
+  auth: {
+    anthropic_key: process.env.ANTHROPIC_API_KEY,
+    openai_key: process.env.OPENAI_API_KEY,
+  },
+})
+```
+
+### Memory/Performance Issues
+
+**Problem**: High memory usage or slow performance
+
+**Symptoms**:
+
+- Increasing memory consumption
+- Slow response times
+- System freezes
+
+**Solution**:
+
+```typescript
+// Implement resource limits
+const ceoAgent = await agent.create({
+  $role: $.ChiefExecutiveOfficer,
+  limits: {
+    max_tokens: 4000,
+    max_concurrent_requests: 10,
+    max_memory_mb: 512,
+  },
+})
+
+// Use streaming for large responses
+const stream = await ceoAgent.executeStream(task)
+for await (const chunk of stream) {
+  console.log(chunk)
+}
+```
+
+## Configuration Issues
+
+### Environment Variables
+
+**Problem**: Environment variables not loading
+
+**Solution**:
+
+```bash
+# Create .env file
+echo "ANTHROPIC_API_KEY=sk-ant-..." > .env
+echo "OPENAI_API_KEY=sk-..." >> .env
+
+# Load with dotenv
+```
+
+```typescript
+import 'dotenv/config'
+
+// Verify variables loaded
+console.log('ANTHROPIC_API_KEY:', process.env.ANTHROPIC_API_KEY ? 'Set' : 'Not set')
+```
+
+### Model Configuration
+
+**Problem**: Wrong model or configuration
+
+**Solution**:
+
+```typescript
+// Use correct model
+const ceoAgent = await agent.create({
+  $role: $.ChiefExecutiveOfficer,
+  model: 'claude-sonnet-4.5', // or 'gpt-5'
+  temperature: 0.7,
+  max_tokens: 4000,
+})
+```
+
+## Performance Issues
+
+### Slow Response Times
+
+**Problem**: Agent takes too long to respond
+
+**Solution**:
+
+```typescript
+// Optimize with caching
+const ceoAgent = await agent.create({
+  $role: $.ChiefExecutiveOfficer,
+  cache: {
+    enabled: true,
+    ttl: 3600,
+    strategy: 'semantic_similarity',
+  },
+})
+
+// Use parallel processing
+const results = await Promise.all([ceoAgent.execute(task1), ceoAgent.execute(task2), ceoAgent.execute(task3)])
+```
+
+### High Token Usage
+
+**Problem**: Excessive token consumption
+
+**Solution**:
+
+```typescript
+// Limit token usage
+const ceoAgent = await agent.create({
+  $role: $.ChiefExecutiveOfficer,
+  max_tokens: 2000, // Limit response length
+  truncate_input: true, // Truncate long inputs
+})
+
+// Monitor token usage
+const result = await ceoAgent.execute(task)
+console.log('Tokens used:', result.metadata.tokens_used)
+```
+
+## Integration Issues
+
+### API Connection Errors
+
+**Problem**: Cannot connect to external APIs
+
+**Solution**:
+
+```typescript
+// Test API connectivity
+const testConnection = async () => {
+  try {
+    const result = await fetch('https://api.service.com/health')
+    return result.ok
+  } catch (error) {
+    console.error('API connection failed:', error)
+    return false
+  }
+}
+
+// Implement fallback
+if (!(await testConnection())) {
+  console.log('Using fallback configuration')
+  // Use fallback
+}
+```
+
+### Tool Integration Errors
+
+**Problem**: External tool integration failing
+
+**Solution**:
+
+```typescript
+// Verify tool configuration
+const ceoAgent = await agent.create({
+  $role: $.ChiefExecutiveOfficer,
+  tools: {
+    tool1: await api.connect('tool1', {
+      api_key: process.env.TOOL1_API_KEY,
+      timeout: 30000,
+    }),
+    tool2: await api.connect('tool2', {
+      api_key: process.env.TOOL2_API_KEY,
+      retry: 3,
+    }),
+  },
+})
+
+// Test tool connectivity
+for (const [name, tool] of Object.entries(ceoAgent.tools)) {
+  const isHealthy = await tool.healthCheck()
+  console.log(`${name}: ${isHealthy ? 'OK' : 'ERROR'}`)
+}
+```
+
+## Debugging
+
+### Enable Debug Logging
+
+```typescript
+// Enable verbose logging
+const ceoAgent = await agent.create({
+  $role: $.ChiefExecutiveOfficer,
+  logging: {
+    level: 'debug',
+    output: 'console',
+    include_metadata: true,
+  },
+})
+```
+
+### Inspect Execution
+
+```typescript
+// Get detailed execution trace
+const result = await ceoAgent.execute({
+  task: 'Your task',
+  debug: true,
+})
+
+console.log('Execution trace:', result.trace)
+console.log('Steps taken:', result.steps)
+console.log('Reasoning:', result.reasoning)
+```
+
+### Test Mode
+
+```typescript
+// Use test mode for debugging
+const ceoAgent = await agent.create({
+  $role: $.ChiefExecutiveOfficer,
+  test_mode: true, // Uses test API endpoints
+  mock_responses: true, // Returns mock data
+})
+```
+
+## Getting Help
+
+If you're still experiencing issues:
+
+### Community Support
+
+- **Discord**: [discord.gg/dotdo](https://discord.gg/dotdo)
+- **GitHub Discussions**: [github.com/dot-do/platform/discussions](https://github.com/dot-do/platform/discussions)
+- **Stack Overflow**: Tag questions with `do-platform`
+
+### Documentation
+
+- [Getting Started](./getting-started) - Setup guide
+- [Architecture](./architecture) - System architecture
+- [Best Practices](./best-practices) - Implementation best practices
+- [API Reference](../api/reference) - Complete API documentation
+
+### Contact Support
+
+- **Email**: support@do.platform
+- **Status Page**: [status.do.platform](https://status.do.platform)
+- **Bug Reports**: [github.com/dot-do/platform/issues](https://github.com/dot-do/platform/issues)
+
+## Frequently Asked Questions
+
+**Q: How do I check if the service is down?**
+A: Check [status.do.platform](https://status.do.platform) for service status.
+
+**Q: Why am I getting rate limited?**
+A: Implement rate limiting and retry logic. See Rate Limit Errors section above.
+
+**Q: Can I use my own model?**
+A: Yes, you can configure custom models. See the model configuration documentation.
+
+**Q: How do I optimize token usage?**
+A: Set `max_tokens`, enable caching, and use streaming for large responses.
+
+**Q: Is there a staging environment?**
+A: Yes, set `environment: 'staging'` in your agent configuration.
+
+## Error Codes Reference
+
+| Code            | Description            | Solution            |
+| --------------- | ---------------------- | ------------------- |
+| `AUTH_FAILED`   | Authentication failed  | Check API keys      |
+| `RATE_LIMIT`    | Rate limit exceeded    | Implement backoff   |
+| `TIMEOUT`       | Request timeout        | Increase timeout    |
+| `INVALID_INPUT` | Invalid input          | Validate input      |
+| `MODEL_ERROR`   | Model error            | Try different model |
+| `TOOL_ERROR`    | Tool integration error | Check tool config   |
+
+## Related Documentation
+
+- [Getting Started](./getting-started) - Setup guide
+- [Architecture](./architecture) - System architecture
+- [Best Practices](./best-practices) - Implementation best practices
+- [API Reference](../api/reference) - Complete API documentation

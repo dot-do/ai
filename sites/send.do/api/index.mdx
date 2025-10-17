@@ -1,0 +1,695 @@
+---
+$id: https://send.do/api
+$type: APIReference
+title: send API Reference
+description: Complete API documentation for the send event publishing function
+keywords: [api, reference, documentation, send, publish, events]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# send API Reference
+
+Complete API documentation for the `send` event publishing function.
+
+## send()
+
+Publish an event to notify all subscribers.
+
+**Signature**:
+
+```typescript
+function send<T = any>(eventType: string, data: T, metadata?: EventMetadata): Promise<void>
+```
+
+**Parameters**:
+
+- `eventType` - Event name following `Object.Action` pattern (e.g., `'Order.created'`)
+- `data` - Event payload (any JSON-serializable data)
+- `metadata` - Optional event metadata for tracing and debugging
+
+**Returns**: Promise that resolves when the event is published
+
+**Examples**:
+
+```typescript
+import { send } from 'sdk.do'
+
+// Simple event
+await send('Order.created', {
+  id: '12345',
+  total: 100,
+})
+
+// With metadata
+await send('Order.created', orderData, {
+  timestamp: new Date(),
+  source: 'checkout-service',
+  correlationId: sessionId,
+  userId: currentUser.id,
+})
+
+// Fire and forget (don't await)
+send('Metrics.updated', metricsData)
+```
+
+**Type Parameters**:
+
+- `T` - Type of the event data payload
+
+**Throws**:
+
+- `Error` - If event type is invalid
+- `Error` - If data cannot be serialized
+- `Error` - If publishing fails
+
+---
+
+## sendBatch()
+
+Publish multiple events efficiently in a single batch.
+
+**Signature**:
+
+```typescript
+function sendBatch(
+  events: Array<{
+    type: string
+    data: any
+    metadata?: EventMetadata
+  }>
+): Promise<void>
+```
+
+**Parameters**:
+
+- `events` - Array of events to publish, each containing:
+  - `type` - Event name
+  - `data` - Event payload
+  - `metadata` - Optional metadata
+
+**Returns**: Promise that resolves when all events are published
+
+**Example**:
+
+```typescript
+import { sendBatch } from 'sdk.do'
+
+await sendBatch([
+  { type: 'Order.created', data: order1 },
+  { type: 'Order.created', data: order2 },
+  { type: 'Order.created', data: order3 },
+])
+```
+
+**Performance**: More efficient than multiple `send()` calls for publishing multiple events.
+
+---
+
+## Types
+
+### EventMetadata
+
+Metadata attached to events for tracing and debugging.
+
+```typescript
+interface EventMetadata {
+  timestamp?: Date
+  source?: string
+  correlationId?: string
+  causationId?: string
+  userId?: string
+  version?: number
+  [key: string]: any
+}
+```
+
+**Properties**:
+
+- `timestamp` - When the event occurred (defaults to current time if not provided)
+- `source` - Source service or component that published the event
+- `correlationId` - Unique ID to correlate related events across services
+- `causationId` - ID of the event that caused this event (for event chains)
+- `userId` - ID of the user who triggered the event
+- `version` - Schema version of the event data
+- Additional custom properties can be added as needed
+
+**Example**:
+
+```typescript
+const metadata: EventMetadata = {
+  timestamp: new Date(),
+  source: 'order-service',
+  correlationId: 'corr-123',
+  causationId: 'event-456',
+  userId: 'user-789',
+  version: 2,
+  region: 'us-east-1',
+  environment: 'production',
+}
+
+await send('Order.created', orderData, metadata)
+```
+
+---
+
+### Event
+
+The event object structure (primarily used by listeners, but useful for type definitions).
+
+```typescript
+interface Event<T = any> {
+  type: string
+  data: T
+  metadata?: EventMetadata
+}
+```
+
+**Properties**:
+
+- `type` - Event name following `Object.Action` pattern
+- `data` - Event payload (typed as `T`)
+- `metadata` - Optional event metadata
+
+**Example**:
+
+```typescript
+import type { Event } from 'sdk.do'
+
+// Define custom event type
+interface OrderCreatedEvent
+  extends Event<{
+    id: string
+    customer: string
+    total: number
+  }> {
+  type: 'Order.created'
+}
+
+// Publish with type safety
+const eventData: OrderCreatedEvent['data'] = {
+  id: '12345',
+  customer: 'acme-corp',
+  total: 1500.0,
+}
+
+await send<OrderCreatedEvent['data']>('Order.created', eventData)
+```
+
+---
+
+## Event Naming
+
+### Object.Action Pattern
+
+All events follow the `Object.Action` naming pattern:
+
+```typescript
+'{Object}.{Action}'
+```
+
+- **Object**: Business entity (Order, Payment, User, Product)
+- **Action**: Past tense verb (created, updated, deleted, shipped)
+
+**Examples**:
+
+```typescript
+'Order.created' // Order was created
+'Payment.completed' // Payment was completed
+'User.registered' // User registered
+'Product.updated' // Product was updated
+'Inventory.reserved' // Inventory was reserved
+```
+
+See [Event Naming Guide](../docs/event-naming) for complete naming conventions.
+
+---
+
+## Common Event Patterns
+
+### Lifecycle Events
+
+Standard entity lifecycle events:
+
+```typescript
+// Creation
+await send('Order.created', orderData)
+await send('User.created', userData)
+await send('Product.created', productData)
+
+// Updates
+await send('Order.updated', orderData)
+await send('User.updated', userData)
+await send('Product.updated', productData)
+
+// Deletion
+await send('Order.deleted', { id: orderId })
+await send('User.deleted', { id: userId })
+await send('Product.deleted', { id: productId })
+
+// Archival
+await send('Order.archived', { id: orderId })
+await send('User.archived', { id: userId })
+```
+
+### State Change Events
+
+Business process state transitions:
+
+```typescript
+// Order lifecycle
+await send('Order.submitted', orderData)
+await send('Order.validated', orderData)
+await send('Order.fulfilled', orderData)
+await send('Order.shipped', orderData)
+await send('Order.delivered', orderData)
+await send('Order.completed', orderData)
+
+// Payment states
+await send('Payment.requested', paymentData)
+await send('Payment.authorized', paymentData)
+await send('Payment.captured', paymentData)
+await send('Payment.completed', paymentData)
+await send('Payment.failed', paymentData)
+await send('Payment.refunded', paymentData)
+
+// User states
+await send('User.registered', userData)
+await send('User.verified', userData)
+await send('User.activated', userData)
+await send('User.suspended', userData)
+```
+
+### Business Action Events
+
+Domain-specific business actions:
+
+```typescript
+// Customer actions
+await send('Customer.contacted', contactData)
+await send('Customer.onboarded', onboardingData)
+await send('Customer.upgraded', upgradeData)
+
+// Inventory actions
+await send('Inventory.reserved', reservationData)
+await send('Inventory.released', releaseData)
+await send('Inventory.restocked', restockData)
+
+// Notification actions
+await send('Notification.sent', notificationData)
+await send('Notification.delivered', deliveryData)
+```
+
+---
+
+## Usage Patterns
+
+### Synchronous Publishing
+
+Wait for event to be published:
+
+```typescript
+import { send } from 'sdk.do'
+
+async function createOrder(orderData: any) {
+  const order = await db.create($.Order, orderData)
+
+  // Wait for publish to complete
+  await send('Order.created', order)
+
+  // Safe to return - event is published
+  return order
+}
+```
+
+**Use when**: You need confirmation that the event was published before proceeding.
+
+### Asynchronous Publishing
+
+Publish without waiting:
+
+```typescript
+import { send } from 'sdk.do'
+
+async function createOrder(orderData: any) {
+  const order = await db.create($.Order, orderData)
+
+  // Publish asynchronously (don't await)
+  send('Order.created', order).catch(console.error)
+
+  // Return immediately
+  return order
+}
+```
+
+**Use when**: Performance is critical and you can tolerate delayed publishing.
+
+### Batch Publishing
+
+Publish multiple events efficiently:
+
+```typescript
+import { sendBatch } from 'sdk.do'
+
+async function processOrders(orders: Order[]) {
+  const results = await Promise.all(orders.map((order) => processOrder(order)))
+
+  // Publish all events at once
+  await sendBatch([
+    { type: 'Order.processed', data: results[0] },
+    { type: 'Order.processed', data: results[1] },
+    { type: 'Order.processed', data: results[2] },
+  ])
+}
+```
+
+**Use when**: Publishing multiple events and want to optimize performance.
+
+---
+
+## Integration with SDK
+
+### With Database Operations
+
+```typescript
+import { db, send } from 'sdk.do'
+
+// Automatically publish events on database changes
+db.on('create', async (entity) => {
+  await send(`${entity.$type}.created`, entity)
+})
+
+db.on('update', async (entity) => {
+  await send(`${entity.$type}.updated`, entity)
+})
+```
+
+### With Event Listeners
+
+```typescript
+import { on, send } from 'sdk.do'
+
+// React to events and publish new events
+on('Order.created', async (event) => {
+  await processOrder(event.data)
+  await send('Order.processed', event.data)
+})
+```
+
+### With AI Services
+
+```typescript
+import { ai, send } from 'sdk.do'
+
+async function analyzeContent(content: string) {
+  const analysis = await ai.generate({
+    prompt: `Analyze: ${content}`,
+    schema: $.Analysis,
+  })
+
+  await send('Content.analyzed', {
+    content,
+    analysis,
+  })
+}
+```
+
+### With Scheduled Workflows
+
+```typescript
+import { every, send } from 'sdk.do'
+
+// Generate daily report
+every($.Daily, async () => {
+  const report = await generateReport()
+  await send('Report.generated', report)
+})
+```
+
+---
+
+## Semantic Integration
+
+### Using with $ Proxy
+
+The `$` proxy provides semantic context for event names:
+
+```typescript
+import $, { send } from 'sdk.do'
+
+// Semantic event publishing
+await send($.Order.created, orderData)
+await send($.Payment.completed, paymentData)
+await send($.User.registered, userData)
+```
+
+### Schema.org Types
+
+Events can reference Schema.org types:
+
+```typescript
+await send('Order.created', {
+  $type: 'Order',
+  $id: 'order-12345',
+  orderNumber: '12345',
+  customer: {
+    $type: 'Organization',
+    name: 'Acme Corp',
+  },
+  orderedItem: [
+    {
+      $type: 'Product',
+      name: 'Widget Pro',
+    },
+  ],
+})
+```
+
+---
+
+## Error Handling
+
+### Try-Catch
+
+Handle publish errors:
+
+```typescript
+try {
+  await send('Order.created', orderData)
+} catch (error) {
+  console.error('Failed to publish event:', error)
+
+  // Store for retry
+  await storeFailedEvent({
+    type: 'Order.created',
+    data: orderData,
+    error: error.message,
+  })
+}
+```
+
+### Retry Logic
+
+Automatically retry failed publishes:
+
+```typescript
+async function sendWithRetry(type: string, data: any, maxRetries = 3): Promise<void> {
+  let lastError
+
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      await send(type, data)
+      return
+    } catch (error) {
+      lastError = error
+      await delay(Math.pow(2, i) * 1000) // Exponential backoff
+    }
+  }
+
+  throw new Error(`Failed after ${maxRetries} retries: ${lastError.message}`)
+}
+```
+
+### Graceful Degradation
+
+Don't let event publishing break your flow:
+
+```typescript
+async function createOrder(orderData: any) {
+  // Critical: Create the order
+  const order = await db.create($.Order, orderData)
+
+  // Non-critical: Publish event
+  try {
+    await send('Order.created', order)
+  } catch (error) {
+    // Log but don't fail
+    console.error('Failed to publish event:', error)
+  }
+
+  // Order was still created
+  return order
+}
+```
+
+---
+
+## Performance
+
+### Non-Blocking Publishing
+
+Optimize response time:
+
+```typescript
+// Good - Non-blocking
+send('Metrics.updated', metricsData)
+return response
+
+// Bad - Blocks response
+await send('Metrics.updated', metricsData)
+return response
+```
+
+### Batch Publishing
+
+Reduce overhead:
+
+```typescript
+// Good - Batch
+await sendBatch([
+  { type: 'Order.created', data: order1 },
+  { type: 'Order.created', data: order2 },
+])
+
+// Bad - Sequential
+await send('Order.created', order1)
+await send('Order.created', order2)
+```
+
+### Payload Size
+
+Keep payloads focused:
+
+```typescript
+// Good - Essential data
+await send('Order.created', {
+  id: order.id,
+  customerId: order.customerId,
+  total: order.total,
+})
+
+// Bad - Huge payload
+await send('Order.created', {
+  ...order,
+  ...customer,
+  ...allRelatedData,
+})
+```
+
+---
+
+## Testing
+
+### Mock in Unit Tests
+
+```typescript
+import { send } from 'sdk.do'
+import { vi } from 'vitest'
+
+// Mock send function
+vi.mock('sdk.do', () => ({
+  send: vi.fn(),
+}))
+
+test('publishes order created event', async () => {
+  await createOrder({ id: '12345' })
+
+  expect(send).toHaveBeenCalledWith(
+    'Order.created',
+    expect.objectContaining({
+      id: '12345',
+    })
+  )
+})
+```
+
+### Integration Tests
+
+```typescript
+import { on, send } from 'sdk.do'
+
+test('event flow', async () => {
+  const events = []
+
+  on('Order.*', async (event) => {
+    events.push(event.type)
+  })
+
+  await send('Order.created', { id: '12345' })
+  await send('Order.validated', { id: '12345' })
+
+  await delay(100)
+
+  expect(events).toEqual(['Order.created', 'Order.validated'])
+})
+```
+
+---
+
+## Best Practices
+
+1. **Use Semantic Naming**: Follow `Object.Action` pattern consistently
+2. **Include Complete Context**: Event data should be self-contained
+3. **Add Metadata**: Include timestamp, source, correlation ID, user context
+4. **Type Your Events**: Use TypeScript interfaces for type safety
+5. **Handle Errors**: Don't let publishing failures break your application
+6. **Keep Payloads Small**: Only include necessary data
+7. **Use Async Publishing**: Fire-and-forget for non-critical events
+8. **Batch When Possible**: Publish multiple events efficiently
+9. **Document Events**: Document event structure and purpose
+10. **Test Event Flows**: Write tests for event publishing
+
+---
+
+## Configuration
+
+### Environment Variables
+
+No configuration required! The `send` function works out of the box.
+
+For advanced use cases, configure the event bus:
+
+```typescript
+import { configureEvents } from 'sdk.do'
+
+configureEvents({
+  maxRetries: 3,
+  retryDelay: 1000,
+  persist: true,
+  storage: 'redis',
+  debug: false,
+})
+```
+
+---
+
+## Related Functions
+
+- **[on()](https://on.do/api)** - Subscribe to events
+- **[once()](https://on.do/api#once)** - Subscribe to event once
+- **[waitFor()](https://on.do/api#waitfor)** - Wait for specific event
+- **[configureEvents()](https://events.do/api#configureevents)** - Configure event bus
+
+---
+
+## See Also
+
+- [Getting Started](../docs/getting-started) - Installation and basic setup
+- [Publishing Patterns](../docs/patterns) - Advanced patterns
+- [Event Naming](../docs/event-naming) - Naming conventions
+- [Basic Publishing Example](../examples/basic-publishing) - Simple examples
+- [Workflow Events Example](../examples/workflow-events) - Event chains
+- [on.do](https://on.do) - Event listeners
+- [events.do](https://events.do) - Complete event system
+- [sdk.do](https://sdk.do) - Core SDK documentation

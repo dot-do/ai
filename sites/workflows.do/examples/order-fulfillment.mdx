@@ -1,0 +1,826 @@
+---
+$id: https://workflows.do/examples/order-fulfillment
+$type: HowTo
+title: Order Fulfillment Workflow Example
+description: Complete e-commerce order fulfillment workflow with parallel processing, error handling, and compensation
+keywords: [workflow, e-commerce, order fulfillment, parallel, compensation, saga]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Order Fulfillment Workflow Example
+
+This example demonstrates a complete e-commerce order fulfillment workflow with parallel processing, distributed transactions, and error compensation.
+
+## Overview
+
+We'll build a workflow that handles:
+
+1. Order validation
+2. Parallel inventory check and payment authorization
+3. Inventory reservation
+4. Payment capture
+5. Shipment creation
+6. Customer notification
+7. Compensation on failure
+
+## Complete Example
+
+```typescript
+import { $, workflow, db, send } from 'sdk.do'
+
+const orderFulfillmentWorkflow = workflow({
+  name: 'OrderFulfillment',
+  description: 'Complete order fulfillment from validation to delivery',
+  version: '2.0.0',
+  steps: [
+    {
+      name: 'ValidateOrder',
+      action: async (order) => {
+        console.log(`Validating order ${order.id}...`)
+
+        // Validate order data
+        if (!order.customerId || !order.items?.length) {
+          throw new Error('Invalid order: missing customer or items')
+        }
+
+        // Calculate totals
+        const subtotal = order.items.reduce((sum, item) => sum + item.price * item.quantity, 0)
+        const tax = subtotal * 0.08 // 8% tax
+        const shipping = order.items.length > 5 ? 0 : 9.99
+        const total = subtotal + tax + shipping
+
+        console.log(`✓ Order validated: $${total.toFixed(2)}`)
+
+        return {
+          ...order,
+          subtotal,
+          tax,
+          shipping,
+          total,
+          validated: true,
+        }
+      },
+      timeout: 5000,
+      onSuccess: 'CheckAvailability',
+    },
+    {
+      $type: 'ParallelStep',
+      name: 'CheckAvailability',
+      description: 'Check inventory and authorize payment in parallel',
+      branches: [
+        {
+          name: 'CheckInventory',
+          action: async (order) => {
+            console.log('Checking inventory availability...')
+
+            // Check each item
+            for (const item of order.items) {
+              const product = await db.get($.Product, {
+                where: { id: item.productId },
+              })
+
+              if (!product) {
+                throw new Error(`Product not found: ${item.productId}`)
+              }
+
+              if (product.inventory < item.quantity) {
+                throw new Error(`Insufficient inventory for ${product.name}: ` + `requested ${item.quantity}, available ${product.inventory}`)
+              }
+            }
+
+            console.log('✓ Inventory available')
+            return { inventoryAvailable: true }
+          },
+          timeout: 10000,
+          retryPolicy: {
+            maxAttempts: 2,
+            backoff: 'exponential',
+          },
+        },
+        {
+          name: 'AuthorizePayment',
+          action: async (order) => {
+            console.log('Authorizing payment...')
+
+            // Authorize payment with payment gateway
+            const authorization = await fetch('https://api.payment-gateway.com/authorize', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                customerId: order.customerId,
+                amount: order.total,
+                currency: 'USD',
+              }),
+            }).then((r) => r.json())
+
+            if (authorization.status !== 'authorized') {
+              throw new Error(`Payment authorization failed: ${authorization.reason}`)
+            }
+
+            console.log(`✓ Payment authorized: ${authorization.id}`)
+
+            return {
+              paymentAuthorized: true,
+              authorizationId: authorization.id,
+              authorizedAmount: order.total,
+            }
+          },
+          timeout: 30000,
+          retryPolicy: {
+            maxAttempts: 3,
+            backoff: 'exponential',
+            retryableErrors: ['NetworkError', 'TimeoutError'],
+          },
+        },
+      ],
+      waitForAll: true,
+      onSuccess: 'ReserveInventory',
+      onFailure: 'HandleAvailabilityFailure',
+    },
+    {
+      name: 'ReserveInventory',
+      action: async (order) => {
+        console.log('Reserving inventory...')
+
+        const reservations = []
+
+        for (const item of order.items) {
+          const reservation = await db.create($.InventoryReservation, {
+            orderId: order.id,
+            productId: item.productId,
+            quantity: item.quantity,
+            reservedAt: new Date(),
+            expiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15 minutes
+          })
+
+          // Decrement inventory
+          await db.update($.Product, {
+            where: { id: item.productId },
+            data: {
+              inventory: { decrement: item.quantity },
+              reserved: { increment: item.quantity },
+            },
+          })
+
+          reservations.push(reservation)
+        }
+
+        console.log(`✓ Inventory reserved: ${reservations.length} items`)
+
+        return {
+          ...order,
+          inventoryReserved: true,
+          reservations: reservations.map((r) => r.id),
+        }
+      },
+      timeout: 15000,
+      compensation: async (order) => {
+        console.log('Compensating: Releasing inventory reservations...')
+
+        // Release all reservations
+        for (const reservationId of order.reservations || []) {
+          const reservation = await db.get($.InventoryReservation, {
+            where: { id: reservationId },
+          })
+
+          if (reservation) {
+            // Restore inventory
+            await db.update($.Product, {
+              where: { id: reservation.productId },
+              data: {
+                inventory: { increment: reservation.quantity },
+                reserved: { decrement: reservation.quantity },
+              },
+            })
+
+            // Delete reservation
+            await db.delete($.InventoryReservation, {
+              where: { id: reservationId },
+            })
+          }
+        }
+
+        console.log('✓ Inventory released')
+      },
+      onSuccess: 'CapturePayment',
+    },
+    {
+      name: 'CapturePayment',
+      action: async (order) => {
+        console.log('Capturing payment...')
+
+        // Capture authorized payment
+        const capture = await fetch('https://api.payment-gateway.com/capture', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            authorizationId: order.authorizationId,
+            amount: order.total,
+          }),
+        }).then((r) => r.json())
+
+        if (capture.status !== 'captured') {
+          throw new Error(`Payment capture failed: ${capture.reason}`)
+        }
+
+        // Record transaction
+        const transaction = await db.create($.Transaction, {
+          orderId: order.id,
+          customerId: order.customerId,
+          amount: order.total,
+          status: 'completed',
+          transactionId: capture.id,
+          capturedAt: new Date(),
+        })
+
+        console.log(`✓ Payment captured: $${order.total.toFixed(2)}`)
+
+        return {
+          ...order,
+          paymentCaptured: true,
+          transactionId: transaction.id,
+        }
+      },
+      timeout: 30000,
+      retryPolicy: {
+        maxAttempts: 3,
+        backoff: 'exponential',
+      },
+      compensation: async (order) => {
+        console.log('Compensating: Refunding payment...')
+
+        // Refund payment
+        await fetch('https://api.payment-gateway.com/refund', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            transactionId: order.transactionId,
+            amount: order.total,
+            reason: 'Order cancelled',
+          }),
+        })
+
+        // Update transaction status
+        await db.update($.Transaction, {
+          where: { id: order.transactionId },
+          data: { status: 'refunded', refundedAt: new Date() },
+        })
+
+        console.log('✓ Payment refunded')
+      },
+      onSuccess: 'CreateShipment',
+    },
+    {
+      name: 'CreateShipment',
+      action: async (order) => {
+        console.log('Creating shipment...')
+
+        // Get customer shipping address
+        const customer = await db.get($.Customer, {
+          where: { id: order.customerId },
+        })
+
+        // Create shipment with shipping provider
+        const shipment = await fetch('https://api.shipping-provider.com/shipments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: order.id,
+            recipient: {
+              name: customer.name,
+              address: customer.shippingAddress,
+            },
+            items: order.items,
+            shippingMethod: order.shippingMethod || 'standard',
+          }),
+        }).then((r) => r.json())
+
+        // Save shipment record
+        const shipmentRecord = await db.create($.Shipment, {
+          orderId: order.id,
+          trackingNumber: shipment.trackingNumber,
+          carrier: shipment.carrier,
+          status: 'pending',
+          estimatedDelivery: shipment.estimatedDelivery,
+          createdAt: new Date(),
+        })
+
+        console.log(`✓ Shipment created: ${shipment.trackingNumber}`)
+
+        return {
+          ...order,
+          shipmentCreated: true,
+          trackingNumber: shipment.trackingNumber,
+          estimatedDelivery: shipment.estimatedDelivery,
+        }
+      },
+      timeout: 20000,
+      retryPolicy: {
+        maxAttempts: 3,
+        backoff: 'exponential',
+      },
+      compensation: async (order) => {
+        console.log('Compensating: Cancelling shipment...')
+
+        // Cancel shipment
+        await fetch(`https://api.shipping-provider.com/shipments/${order.trackingNumber}/cancel`, { method: 'POST' })
+
+        // Update shipment status
+        await db.update($.Shipment, {
+          where: { trackingNumber: order.trackingNumber },
+          data: { status: 'cancelled', cancelledAt: new Date() },
+        })
+
+        console.log('✓ Shipment cancelled')
+      },
+      onSuccess: 'NotifyCustomer',
+    },
+    {
+      name: 'NotifyCustomer',
+      action: async (order) => {
+        console.log('Notifying customer...')
+
+        // Get customer info
+        const customer = await db.get($.Customer, {
+          where: { id: order.customerId },
+        })
+
+        // Send confirmation email
+        await send($.Email.send, {
+          to: customer.email,
+          subject: `Order Confirmed - #${order.id}`,
+          template: 'order-confirmation',
+          data: {
+            customerName: customer.name,
+            orderId: order.id,
+            items: order.items,
+            total: order.total,
+            trackingNumber: order.trackingNumber,
+            estimatedDelivery: order.estimatedDelivery,
+          },
+        })
+
+        // Send SMS notification
+        if (customer.phone) {
+          await send($.SMS.send, {
+            to: customer.phone,
+            message: `Your order #${order.id} has been confirmed! Track it: ${order.trackingNumber}`,
+          })
+        }
+
+        console.log('✓ Customer notified')
+
+        return {
+          ...order,
+          customerNotified: true,
+        }
+      },
+      timeout: 15000,
+      retryPolicy: {
+        maxAttempts: 2,
+      },
+      // Don't fail workflow if notification fails
+      onFailure: 'LogNotificationFailure',
+      onSuccess: 'CompleteOrder',
+    },
+    {
+      name: 'CompleteOrder',
+      action: async (order) => {
+        console.log('Completing order...')
+
+        // Update order status
+        await db.update($.Order, {
+          where: { id: order.id },
+          data: {
+            status: 'fulfilled',
+            fulfilledAt: new Date(),
+          },
+        })
+
+        // Log event
+        await db.create($.Event, {
+          type: 'order.fulfilled',
+          orderId: order.id,
+          timestamp: new Date(),
+        })
+
+        console.log(`✓ Order ${order.id} completed successfully`)
+
+        return {
+          success: true,
+          orderId: order.id,
+          trackingNumber: order.trackingNumber,
+          message: 'Order fulfilled successfully',
+        }
+      },
+    },
+    {
+      name: 'HandleAvailabilityFailure',
+      action: async (order, error) => {
+        console.error('Availability check failed:', error.message)
+
+        // Release payment authorization if it exists
+        if (order.authorizationId) {
+          await fetch(`https://api.payment-gateway.com/authorizations/${order.authorizationId}/void`, { method: 'POST' })
+        }
+
+        return {
+          success: false,
+          orderId: order.id,
+          error: error.message,
+        }
+      },
+    },
+    {
+      name: 'LogNotificationFailure',
+      action: async (order) => {
+        console.log('Notification failed, but order completed')
+
+        await db.create($.Event, {
+          type: 'notification.failed',
+          orderId: order.id,
+          timestamp: new Date(),
+        })
+
+        return {
+          success: true,
+          orderId: order.id,
+          warning: 'Order completed but customer notification failed',
+        }
+      },
+    },
+  ],
+  errorHandling: {
+    strategy: 'compensate',
+    compensateInReverse: true,
+    logCompensations: true,
+  },
+})
+
+// Execute workflow
+const result = await orderFulfillmentWorkflow.execute({
+  id: 'order_12345',
+  customerId: 'cust_789',
+  items: [
+    {
+      productId: 'prod_1',
+      name: 'Wireless Headphones',
+      price: 79.99,
+      quantity: 2,
+    },
+    {
+      productId: 'prod_2',
+      name: 'USB Cable',
+      price: 9.99,
+      quantity: 3,
+    },
+  ],
+  shippingMethod: 'express',
+})
+
+console.log('Order fulfillment result:', result)
+```
+
+## Explanation
+
+### Step 1: Validate Order
+
+Validates order data and calculates totals:
+
+```typescript
+{
+  name: 'ValidateOrder',
+  action: async (order) => {
+    const subtotal = order.items.reduce(...)
+    const tax = subtotal * 0.08
+    const total = subtotal + tax + shipping
+
+    return { ...order, subtotal, tax, total, validated: true }
+  }
+}
+```
+
+### Step 2: Parallel Availability Check
+
+Checks inventory and authorizes payment **in parallel** for speed:
+
+```typescript
+{
+  $type: 'ParallelStep',
+  name: 'CheckAvailability',
+  branches: [
+    {
+      name: 'CheckInventory',
+      action: async (order) => {
+        // Check stock levels
+        for (const item of order.items) {
+          const product = await db.get($.Product, ...)
+          if (product.inventory < item.quantity) {
+            throw new Error('Insufficient inventory')
+          }
+        }
+        return { inventoryAvailable: true }
+      }
+    },
+    {
+      name: 'AuthorizePayment',
+      action: async (order) => {
+        // Authorize payment (doesn't charge yet)
+        const auth = await paymentGateway.authorize(order.total)
+        return { authorizationId: auth.id }
+      }
+    }
+  ],
+  waitForAll: true // Both must succeed
+}
+```
+
+**Benefits:**
+
+- Faster execution (parallel vs sequential)
+- Fail fast if either check fails
+- Better user experience
+
+### Step 3: Reserve Inventory
+
+Reserves inventory with compensation:
+
+```typescript
+{
+  name: 'ReserveInventory',
+  action: async (order) => {
+    // Reserve inventory
+    const reservations = []
+    for (const item of order.items) {
+      const reservation = await db.create($.InventoryReservation, ...)
+      await db.update($.Product, {
+        data: { inventory: { decrement: item.quantity } }
+      })
+      reservations.push(reservation)
+    }
+    return { ...order, reservations }
+  },
+  compensation: async (order) => {
+    // Release reservations if workflow fails
+    for (const reservationId of order.reservations) {
+      await db.update($.Product, {
+        data: { inventory: { increment: reservation.quantity } }
+      })
+    }
+  }
+}
+```
+
+**Compensation Pattern:**
+
+- If any subsequent step fails, inventory is automatically released
+- Maintains data consistency
+- No manual cleanup needed
+
+### Step 4: Capture Payment
+
+Captures the authorized payment:
+
+```typescript
+{
+  name: 'CapturePayment',
+  action: async (order) => {
+    // Capture (charge) the authorized payment
+    const capture = await paymentGateway.capture(order.authorizationId)
+    return { ...order, transactionId: capture.id }
+  },
+  compensation: async (order) => {
+    // Refund if workflow fails after capture
+    await paymentGateway.refund(order.transactionId)
+  }
+}
+```
+
+### Step 5: Create Shipment
+
+Creates shipment with shipping provider:
+
+```typescript
+{
+  name: 'CreateShipment',
+  action: async (order) => {
+    const shipment = await shippingProvider.createShipment({
+      orderId: order.id,
+      items: order.items
+    })
+    return { ...order, trackingNumber: shipment.trackingNumber }
+  },
+  compensation: async (order) => {
+    // Cancel shipment if needed
+    await shippingProvider.cancelShipment(order.trackingNumber)
+  }
+}
+```
+
+### Step 6: Notify Customer
+
+Sends confirmation email and SMS:
+
+```typescript
+{
+  name: 'NotifyCustomer',
+  action: async (order) => {
+    await send($.Email.send, { ... })
+    await send($.SMS.send, { ... })
+    return { ...order, customerNotified: true }
+  },
+  onFailure: 'LogNotificationFailure' // Continue even if fails
+}
+```
+
+**Non-Critical Step:**
+
+- Notification failure doesn't cancel order
+- Logs failure for follow-up
+- Better user experience (order still fulfilled)
+
+## Running the Workflow
+
+### Basic Execution
+
+```typescript
+const result = await orderFulfillmentWorkflow.execute({
+  id: 'order_12345',
+  customerId: 'cust_789',
+  items: [{ productId: 'prod_1', quantity: 2, price: 79.99 }],
+})
+
+console.log(result)
+// {
+//   success: true,
+//   orderId: 'order_12345',
+//   trackingNumber: '1Z999AA1...',
+//   message: 'Order fulfilled successfully'
+// }
+```
+
+### With Monitoring
+
+```typescript
+orderFulfillmentWorkflow.on('step.started', (step) => {
+  console.log(`[${new Date().toISOString()}] Started: ${step.name}`)
+})
+
+orderFulfillmentWorkflow.on('step.completed', (step, result) => {
+  console.log(`[${new Date().toISOString()}] Completed: ${step.name}`)
+})
+
+orderFulfillmentWorkflow.on('compensation', (step) => {
+  console.log(`[${new Date().toISOString()}] Compensating: ${step.name}`)
+})
+```
+
+### Event-Driven Execution
+
+Trigger workflow when orders are created:
+
+```typescript
+import { on } from 'sdk.do'
+
+on($.Order.created, async (order) => {
+  console.log(`Processing new order: ${order.id}`)
+  await orderFulfillmentWorkflow.execute(order)
+})
+```
+
+## Testing
+
+### Test Successful Path
+
+```typescript
+test('successful order fulfillment', async () => {
+  const result = await orderFulfillmentWorkflow.execute({
+    id: 'test_order_1',
+    customerId: 'test_customer',
+    items: [{ productId: 'test_product', quantity: 1, price: 29.99 }],
+  })
+
+  expect(result.success).toBe(true)
+  expect(result.trackingNumber).toBeDefined()
+})
+```
+
+### Test Compensation
+
+```typescript
+test('compensates on payment failure', async () => {
+  // Mock payment failure
+  mock(paymentGateway.capture, async () => {
+    throw new Error('Payment failed')
+  })
+
+  await expect(
+    orderFulfillmentWorkflow.execute({ ... })
+  ).rejects.toThrow('Payment failed')
+
+  // Verify inventory was released
+  const product = await db.get($.Product, { id: 'test_product' })
+  expect(product.reserved).toBe(0)
+})
+```
+
+### Test Parallel Execution
+
+```typescript
+test('checks inventory and payment in parallel', async () => {
+  const startTime = Date.now()
+
+  await orderFulfillmentWorkflow.execute({ ... })
+
+  const duration = Date.now() - startTime
+
+  // Should be faster than sequential (< 15s vs 40s)
+  expect(duration).toBeLessThan(15000)
+})
+```
+
+## Error Scenarios
+
+### Insufficient Inventory
+
+```typescript
+// Inventory check fails
+// Payment authorization is voided
+// No compensation needed (no changes made yet)
+```
+
+### Payment Capture Fails
+
+```typescript
+// Inventory reservations are released (compensation)
+// Order marked as failed
+// Customer notified of failure
+```
+
+### Shipment Creation Fails
+
+```typescript
+// Payment is refunded (compensation)
+// Inventory is released (compensation)
+// Order marked as failed
+```
+
+## Performance Optimization
+
+### Parallel Processing
+
+**Before** (Sequential - ~50 seconds):
+
+```
+ValidateOrder (5s) → CheckInventory (10s) → AuthorizePayment (30s) → ...
+```
+
+**After** (Parallel - ~35 seconds):
+
+```
+ValidateOrder (5s) → [CheckInventory (10s) || AuthorizePayment (30s)] → ...
+```
+
+**Benefit**: 30% faster
+
+### Optimistic Locking
+
+Use optimistic locking for inventory updates:
+
+```typescript
+await db.update($.Product, {
+  where: {
+    id: item.productId,
+    version: product.version, // Only update if version matches
+  },
+  data: {
+    inventory: { decrement: item.quantity },
+    version: { increment: 1 },
+  },
+})
+```
+
+## Best Practices
+
+1. **Use parallel steps**: Speed up independent operations
+2. **Implement compensation**: Maintain consistency in distributed system
+3. **Set appropriate timeouts**: Different for different operations
+4. **Retry transient failures**: Payment, shipping API calls
+5. **Don't fail for non-critical steps**: Notifications, logging
+6. **Log everything**: Audit trail for debugging
+7. **Test compensation paths**: Verify rollback works
+8. **Monitor execution**: Track metrics and errors
+
+## Next Steps
+
+- [Approval Workflow Example](./approval-workflow.mdx) - Human-in-the-loop workflows
+- [Workflow Patterns](../docs/workflow-patterns.mdx) - Learn more patterns
+- [Orchestration](../docs/orchestration.mdx) - Advanced strategies
+
+## Resources
+
+- [workflows.do](https://workflows.do)
+- [Saga Pattern](https://microservices.io/patterns/data/saga.html)
+- [Compensation Patterns](https://docs.temporal.io/workflows#compensation)

@@ -1,0 +1,845 @@
+---
+$id: https://every.do/docs/patterns
+$type: TechArticle
+title: Scheduled Workflow Patterns
+description: Common patterns for scheduled workflows in Business-as-Code applications
+keywords: [patterns, workflows, best practices, scheduling, automation]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Scheduled Workflow Patterns
+
+Common patterns for building reliable, maintainable scheduled workflows in Business-as-Code applications.
+
+## Data Synchronization Patterns
+
+### Incremental Sync
+
+Sync only changed data since last run:
+
+```typescript
+import { $, every, db, api } from 'sdk.do'
+
+every($.Hourly, async () => {
+  // Get last sync timestamp
+  const lastSync = await db.get($.SyncStatus, 'inventory-sync')
+  const since = lastSync?.lastSyncedAt || new Date(0)
+
+  // Fetch only changed items
+  const changedItems = await api.fetch(`https://warehouse.example.com/api/inventory?since=${since.toISOString()}`)
+
+  // Update local database
+  for (const item of changedItems) {
+    await db.upsert($.Product, {
+      sku: item.sku,
+      stockQuantity: item.quantity,
+      lastSynced: new Date(),
+    })
+  }
+
+  // Update sync status
+  await db.upsert($.SyncStatus, {
+    $id: 'inventory-sync',
+    lastSyncedAt: new Date(),
+    itemsSynced: changedItems.length,
+  })
+})
+```
+
+### Full Sync with Checkpoint
+
+Perform full sync with progress tracking:
+
+```typescript
+import { $, every, db, api } from 'sdk.do'
+
+every($.Daily, async () => {
+  let page = 0
+  let hasMore = true
+  const batchSize = 100
+
+  while (hasMore) {
+    // Fetch page
+    const items = await api.fetch(`https://external.example.com/api/data?page=${page}&limit=${batchSize}`)
+
+    // Process batch
+    for (const item of items) {
+      await db.upsert($.Entity, item)
+    }
+
+    // Save checkpoint
+    await db.upsert($.SyncCheckpoint, {
+      $id: 'full-sync',
+      page,
+      processedAt: new Date(),
+    })
+
+    hasMore = items.length === batchSize
+    page++
+  }
+
+  // Mark sync complete
+  await db.upsert($.SyncStatus, {
+    $id: 'full-sync',
+    completedAt: new Date(),
+    totalPages: page,
+  })
+})
+```
+
+### Bidirectional Sync
+
+Sync changes in both directions:
+
+```typescript
+import { $, every, db, api } from 'sdk.do'
+
+every($.Every15Minutes, async () => {
+  // Get locally modified records
+  const localChanges = await db.list($.Product, {
+    where: {
+      modifiedLocally: true,
+      syncedAt: null,
+    },
+  })
+
+  // Push local changes
+  for (const product of localChanges) {
+    await api.post('https://external.example.com/api/products', product)
+
+    await db.update(product.$id, {
+      modifiedLocally: false,
+      syncedAt: new Date(),
+    })
+  }
+
+  // Pull remote changes
+  const remoteChanges = await api.fetch('https://external.example.com/api/products/changes')
+
+  for (const change of remoteChanges) {
+    await db.upsert($.Product, {
+      ...change,
+      syncedAt: new Date(),
+    })
+  }
+})
+```
+
+## Reporting Patterns
+
+### Daily Report
+
+Generate and distribute daily reports:
+
+```typescript
+import { $, every, db, ai, send } from 'sdk.do'
+
+every($.Daily, async () => {
+  // Get yesterday's data
+  const startDate = startOfYesterday()
+  const endDate = startOfToday()
+
+  const orders = await db.list($.Order, {
+    where: {
+      createdAt: { gte: startDate, lt: endDate },
+    },
+  })
+
+  // Calculate metrics
+  const metrics = {
+    orderCount: orders.length,
+    totalRevenue: orders.reduce((sum, o) => sum + o.total, 0),
+    averageOrderValue: orders.length > 0 ? orders.reduce((sum, o) => sum + o.total, 0) / orders.length : 0,
+  }
+
+  // Generate insights with AI
+  const insights = await ai.generate(`Analyze daily sales: ${JSON.stringify(metrics)}`, {
+    schema: $.AnalysisReport,
+    structured: true,
+  })
+
+  // Create report
+  const report = await db.create($.Report, {
+    type: 'daily-sales',
+    date: startDate,
+    metrics,
+    insights,
+  })
+
+  // Distribute report
+  await send('Report.generated', {
+    reportId: report.$id,
+    type: 'daily-sales',
+    date: startDate,
+  })
+})
+```
+
+### Weekly Summary
+
+Aggregate and summarize weekly data:
+
+```typescript
+import { $, every, db, send } from 'sdk.do'
+
+every($.Weekly, async () => {
+  const weekStart = startOfWeek(new Date())
+  const weekEnd = endOfWeek(new Date())
+
+  // Gather weekly data
+  const orders = await db.list($.Order, {
+    where: {
+      createdAt: { gte: weekStart, lte: weekEnd },
+    },
+  })
+
+  // Group by day
+  const dailyBreakdown = orders.reduce((acc, order) => {
+    const day = format(order.createdAt, 'yyyy-MM-dd')
+    if (!acc[day]) acc[day] = { count: 0, revenue: 0 }
+    acc[day].count++
+    acc[day].revenue += order.total
+    return acc
+  }, {})
+
+  // Create summary
+  const summary = await db.create($.WeeklySummary, {
+    weekStart,
+    weekEnd,
+    totalOrders: orders.length,
+    totalRevenue: orders.reduce((sum, o) => sum + o.total, 0),
+    dailyBreakdown,
+  })
+
+  await send('Summary.generated', {
+    type: 'weekly',
+    summaryId: summary.$id,
+  })
+})
+```
+
+### Monthly Rollup
+
+Roll up monthly metrics:
+
+```typescript
+import { $, every, db } from 'sdk.do'
+
+every($.Monthly, async () => {
+  const monthStart = startOfMonth(subMonths(new Date(), 1))
+  const monthEnd = endOfMonth(subMonths(new Date(), 1))
+
+  // Aggregate monthly data
+  const orders = await db.list($.Order, {
+    where: {
+      createdAt: { gte: monthStart, lte: monthEnd },
+    },
+  })
+
+  const customers = await db.list($.Customer, {
+    where: {
+      createdAt: { gte: monthStart, lte: monthEnd },
+    },
+  })
+
+  // Calculate metrics
+  const monthlyMetrics = {
+    month: format(monthStart, 'yyyy-MM'),
+    newCustomers: customers.length,
+    totalOrders: orders.length,
+    totalRevenue: orders.reduce((sum, o) => sum + o.total, 0),
+    averageOrderValue: orders.length > 0 ? orders.reduce((sum, o) => sum + o.total, 0) / orders.length : 0,
+    repeatCustomers: await db.count($.Order, {
+      where: {
+        createdAt: { gte: monthStart, lte: monthEnd },
+        customerId: { in: customers.map((c) => c.$id) },
+      },
+      having: { count: { gt: 1 } },
+    }),
+  }
+
+  // Store monthly rollup
+  await db.create($.MonthlyMetrics, monthlyMetrics)
+})
+```
+
+## Cleanup Patterns
+
+### Time-Based Cleanup
+
+Remove old data based on age:
+
+```typescript
+import { $, every, db, send } from 'sdk.do'
+
+every($.Daily, async () => {
+  // Delete sessions older than 30 days
+  const cutoffDate = subDays(new Date(), 30)
+
+  const oldSessions = await db.list($.Session, {
+    where: {
+      createdAt: { lt: cutoffDate },
+    },
+  })
+
+  await db.delete(oldSessions.map((s) => s.$id))
+
+  // Delete expired tokens
+  const expiredTokens = await db.list($.Token, {
+    where: {
+      expiresAt: { lt: new Date() },
+    },
+  })
+
+  await db.delete(expiredTokens.map((t) => t.$id))
+
+  // Report cleanup
+  await send('Cleanup.completed', {
+    sessionsDeleted: oldSessions.length,
+    tokensDeleted: expiredTokens.length,
+    timestamp: new Date(),
+  })
+})
+```
+
+### Archive Before Delete
+
+Archive old records before deletion:
+
+```typescript
+import { $, every, db } from 'sdk.do'
+
+every($.Weekly, async () => {
+  const archiveDate = subMonths(new Date(), 6)
+
+  // Find records to archive
+  const oldOrders = await db.list($.Order, {
+    where: {
+      completedAt: { lt: archiveDate },
+      archived: false,
+    },
+  })
+
+  // Archive to cold storage
+  for (const order of oldOrders) {
+    await archiveToS3(order)
+
+    // Mark as archived
+    await db.update(order.$id, {
+      archived: true,
+      archivedAt: new Date(),
+    })
+  }
+
+  // Delete archived records after 1 year
+  const deleteDate = subYears(new Date(), 1)
+  await db.delete($.Order, {
+    where: {
+      archived: true,
+      archivedAt: { lt: deleteDate },
+    },
+  })
+})
+```
+
+### Soft Delete Cleanup
+
+Permanently delete soft-deleted records:
+
+```typescript
+import { $, every, db } from 'sdk.do'
+
+every($.Monthly, async () => {
+  const purgeDate = subDays(new Date(), 90)
+
+  // Find soft-deleted records
+  const softDeleted = await db.list($.Entity, {
+    where: {
+      deletedAt: {
+        ne: null,
+        lt: purgeDate,
+      },
+    },
+  })
+
+  // Permanently delete
+  await db.hardDelete(softDeleted.map((e) => e.$id))
+
+  console.log(`Purged ${softDeleted.length} soft-deleted records`)
+})
+```
+
+## Maintenance Patterns
+
+### Database Optimization
+
+Optimize database performance:
+
+```typescript
+import { $, every, db } from 'sdk.do'
+
+every('0 3 * * 0', async () => {
+  // Sunday 3am - low traffic time
+
+  // Analyze tables
+  await db.analyze()
+
+  // Rebuild indexes
+  await db.reindex()
+
+  // Vacuum database
+  await db.vacuum()
+
+  // Update statistics
+  await db.updateStats()
+
+  console.log('Database maintenance completed')
+})
+```
+
+### Cache Warming
+
+Pre-warm caches before peak hours:
+
+```typescript
+import { $, every, db } from 'sdk.do'
+
+// Warm cache at 8am before business hours
+every('0 8 * * 1-5', async () => {
+  // Pre-load frequently accessed data
+  const popularProducts = await db.list($.Product, {
+    where: { featured: true },
+    limit: 100,
+  })
+
+  for (const product of popularProducts) {
+    await cache.set(`product:${product.$id}`, product)
+  }
+
+  // Pre-compute expensive queries
+  const topCustomers = await db.query(`
+    SELECT customer_id, SUM(total) as lifetime_value
+    FROM orders
+    GROUP BY customer_id
+    ORDER BY lifetime_value DESC
+    LIMIT 1000
+  `)
+
+  await cache.set('top-customers', topCustomers)
+
+  console.log('Cache warming completed')
+})
+```
+
+### Log Rotation
+
+Rotate and archive logs:
+
+```typescript
+import { $, every, db } from 'sdk.do'
+
+every($.Daily, async () => {
+  const logDate = subDays(new Date(), 7)
+
+  // Archive old logs
+  const oldLogs = await db.list($.Log, {
+    where: {
+      createdAt: { lt: logDate },
+    },
+  })
+
+  // Compress and store
+  const compressed = await compressLogs(oldLogs)
+  await uploadToS3(`logs/${format(logDate, 'yyyy-MM-dd')}.gz`, compressed)
+
+  // Delete from database
+  await db.delete(oldLogs.map((l) => l.$id))
+
+  console.log(`Rotated ${oldLogs.length} log entries`)
+})
+```
+
+## Notification Patterns
+
+### Reminder Notifications
+
+Send reminders at scheduled times:
+
+```typescript
+import { $, every, db, send } from 'sdk.do'
+
+every($.Daily, async () => {
+  const tomorrow = addDays(new Date(), 1)
+
+  // Find upcoming events
+  const upcomingEvents = await db.list($.Event, {
+    where: {
+      startDate: {
+        gte: startOfDay(tomorrow),
+        lt: endOfDay(tomorrow),
+      },
+      reminderSent: false,
+    },
+  })
+
+  // Send reminders
+  for (const event of upcomingEvents) {
+    await send('Notification.scheduled', {
+      userId: event.organizerId,
+      type: 'event-reminder',
+      message: `Reminder: ${event.name} starts tomorrow`,
+      event,
+    })
+
+    await db.update(event.$id, {
+      reminderSent: true,
+    })
+  }
+})
+```
+
+### Digest Notifications
+
+Batch notifications into digests:
+
+```typescript
+import { $, every, db, send } from 'sdk.do'
+
+every($.Daily, async () => {
+  const users = await db.list($.User, {
+    where: { digestEnabled: true },
+  })
+
+  for (const user of users) {
+    // Gather user's notifications
+    const notifications = await db.list($.Notification, {
+      where: {
+        userId: user.$id,
+        read: false,
+        createdAt: { gte: startOfYesterday() },
+      },
+    })
+
+    if (notifications.length > 0) {
+      // Send digest
+      await send('Email.scheduled', {
+        to: user.email,
+        type: 'daily-digest',
+        notifications,
+      })
+
+      // Mark as included in digest
+      await db.update(
+        notifications.map((n) => n.$id),
+        { digestSent: true }
+      )
+    }
+  }
+})
+```
+
+### Expiration Alerts
+
+Alert before items expire:
+
+```typescript
+import { $, every, db, send } from 'sdk.do'
+
+every($.Daily, async () => {
+  const warningDate = addDays(new Date(), 7)
+
+  // Find expiring subscriptions
+  const expiring = await db.list($.Subscription, {
+    where: {
+      expiresAt: {
+        gte: new Date(),
+        lt: warningDate,
+      },
+      expirationWarningAt: null,
+    },
+  })
+
+  // Send warnings
+  for (const subscription of expiring) {
+    const daysUntil = differenceInDays(subscription.expiresAt, new Date())
+
+    await send('Notification.scheduled', {
+      userId: subscription.customerId,
+      type: 'expiration-warning',
+      daysUntilExpiration: daysUntil,
+      subscription,
+    })
+
+    await db.update(subscription.$id, {
+      expirationWarningAt: new Date(),
+    })
+  }
+})
+```
+
+## Error Handling Patterns
+
+### Retry with Backoff
+
+Implement exponential backoff for failed tasks:
+
+```typescript
+import { $, every, db, send } from 'sdk.do'
+
+every($.Hourly, async () => {
+  await executeWithRetry(
+    async () => {
+      await externalAPICall()
+    },
+    {
+      maxAttempts: 5,
+      initialDelay: 1000,
+      backoff: 'exponential',
+    }
+  )
+})
+
+async function executeWithRetry(
+  fn: () => Promise<void>,
+  options: {
+    maxAttempts: number
+    initialDelay: number
+    backoff: 'exponential' | 'linear'
+  }
+) {
+  let attempt = 0
+
+  while (attempt < options.maxAttempts) {
+    try {
+      await fn()
+      return
+    } catch (error) {
+      attempt++
+
+      if (attempt >= options.maxAttempts) {
+        await send('Task.failed', {
+          task: 'hourly-sync',
+          error: error.message,
+          attempts: attempt,
+        })
+        throw error
+      }
+
+      const delay = options.backoff === 'exponential' ? options.initialDelay * Math.pow(2, attempt) : options.initialDelay * attempt
+
+      await new Promise((resolve) => setTimeout(resolve, delay))
+    }
+  }
+}
+```
+
+### Circuit Breaker
+
+Prevent cascading failures:
+
+```typescript
+import { $, every } from 'sdk.do'
+
+class CircuitBreaker {
+  private failures = 0
+  private lastFailure: Date | null = null
+  private state: 'closed' | 'open' | 'half-open' = 'closed'
+
+  async execute(fn: () => Promise<void>) {
+    if (this.state === 'open') {
+      // Check if we should try again
+      if (this.lastFailure && Date.now() - this.lastFailure.getTime() > 60000) {
+        this.state = 'half-open'
+      } else {
+        throw new Error('Circuit breaker is open')
+      }
+    }
+
+    try {
+      await fn()
+      this.onSuccess()
+    } catch (error) {
+      this.onFailure()
+      throw error
+    }
+  }
+
+  private onSuccess() {
+    this.failures = 0
+    this.state = 'closed'
+  }
+
+  private onFailure() {
+    this.failures++
+    this.lastFailure = new Date()
+
+    if (this.failures >= 5) {
+      this.state = 'open'
+    }
+  }
+}
+
+const breaker = new CircuitBreaker()
+
+every($.Hourly, async () => {
+  await breaker.execute(async () => {
+    await externalAPICall()
+  })
+})
+```
+
+### Dead Letter Queue
+
+Handle persistently failing tasks:
+
+```typescript
+import { $, every, db, send } from 'sdk.do'
+
+every($.Hourly, async () => {
+  const tasks = await db.list($.PendingTask)
+
+  for (const task of tasks) {
+    try {
+      await processTask(task)
+      await db.delete(task.$id)
+    } catch (error) {
+      // Increment failure count
+      const failureCount = (task.failureCount || 0) + 1
+
+      if (failureCount >= 3) {
+        // Move to dead letter queue
+        await db.create($.DeadLetterTask, {
+          ...task,
+          error: error.message,
+          failedAt: new Date(),
+        })
+        await db.delete(task.$id)
+
+        await send('Task.movedToDeadLetter', {
+          taskId: task.$id,
+          error: error.message,
+        })
+      } else {
+        // Retry later
+        await db.update(task.$id, {
+          failureCount,
+          lastError: error.message,
+          nextRetry: addMinutes(new Date(), 15),
+        })
+      }
+    }
+  }
+})
+```
+
+## Best Practices
+
+### 1. Make Tasks Idempotent
+
+Ensure tasks can safely run multiple times:
+
+```typescript
+// Good: Idempotent (uses upsert)
+every($.Hourly, async () => {
+  await db.upsert($.Report, {
+    date: getCurrentDate(),
+    data: reportData,
+  })
+})
+
+// Bad: Not idempotent (creates duplicate)
+every($.Hourly, async () => {
+  await db.create($.Report, {
+    date: getCurrentDate(),
+    data: reportData,
+  })
+})
+```
+
+### 2. Use Transactions
+
+Keep operations atomic:
+
+```typescript
+every($.Daily, async () => {
+  await db.transaction(async (tx) => {
+    const orders = await tx.list($.Order, {
+      where: { status: 'pending' },
+    })
+
+    for (const order of orders) {
+      await tx.update(order.$id, { status: 'processed' })
+      await tx.create($.ProcessedOrder, order)
+    }
+  })
+})
+```
+
+### 3. Add Monitoring
+
+Track execution and failures:
+
+```typescript
+every($.Hourly, async () => {
+  const startTime = Date.now()
+
+  try {
+    await task()
+
+    await db.create($.ExecutionLog, {
+      task: 'hourly-sync',
+      status: 'success',
+      duration: Date.now() - startTime,
+    })
+  } catch (error) {
+    await db.create($.ExecutionLog, {
+      task: 'hourly-sync',
+      status: 'failed',
+      duration: Date.now() - startTime,
+      error: error.message,
+    })
+  }
+})
+```
+
+### 4. Use Timeouts
+
+Prevent runaway tasks:
+
+```typescript
+every(
+  $.Daily,
+  async () => {
+    await longTask()
+  },
+  {
+    timeout: 3600000, // 1 hour
+  }
+)
+```
+
+### 5. Coordinate with Events
+
+Publish events for observability:
+
+```typescript
+every($.Daily, async () => {
+  await send('DailyProcess.started')
+
+  const result = await processData()
+
+  await send('DailyProcess.completed', result)
+})
+```
+
+## Next Steps
+
+- [API Reference](../api/) - Complete API documentation
+- [Examples](../examples/) - Practical examples
+- [Getting Started](./getting-started) - Setup guide
+
+## License
+
+MIT (Open Source)

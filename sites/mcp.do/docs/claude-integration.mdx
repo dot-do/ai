@@ -1,0 +1,678 @@
+---
+$id: https://mcp.do/docs/claude-integration
+$type: TechArticle
+title: Claude Desktop Integration
+description: Complete guide to integrating mcp.do with Claude Desktop for AI-powered TypeScript execution
+keywords: [claude, claude desktop, mcp, integration, ai assistant]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Claude Desktop Integration
+
+Complete guide to integrating mcp.do with Claude Desktop for secure TypeScript execution.
+
+## Overview
+
+Claude Desktop is Anthropic's official desktop application for Claude, with built-in support for the Model Context Protocol (MCP). By integrating mcp.do, you enable Claude to execute TypeScript code using the full `sdk.do` API.
+
+## Prerequisites
+
+### Install Claude Desktop
+
+Download from [claude.ai/desktop](https://claude.ai/desktop):
+
+- **macOS**: Claude.dmg
+- **Windows**: Claude-Setup.exe
+- **Linux**: Claude.AppImage
+
+### Install Node.js
+
+Claude Desktop requires Node.js to run MCP servers:
+
+- Download from [nodejs.org](https://nodejs.org/)
+- Recommended: LTS version (20.x or later)
+- Verify: `node --version`
+
+## Configuration
+
+### 1. Locate Config File
+
+The Claude Desktop configuration file location varies by operating system:
+
+**macOS**:
+
+```bash
+~/.config/claude/config.json
+```
+
+**Windows**:
+
+```
+%APPDATA%\Claude\config.json
+```
+
+**Linux**:
+
+```bash
+~/.config/claude/config.json
+```
+
+### 2. Create/Edit Config File
+
+If the file doesn't exist, create it:
+
+```bash
+# macOS/Linux
+mkdir -p ~/.config/claude
+touch ~/.config/claude/config.json
+
+# Windows (PowerShell)
+New-Item -ItemType Directory -Force -Path $env:APPDATA\Claude
+New-Item -ItemType File -Force -Path $env:APPDATA\Claude\config.json
+```
+
+### 3. Add mcp.do Server
+
+Edit the config file and add:
+
+```json
+{
+  "mcpServers": {
+    "do": {
+      "command": "npx",
+      "args": ["-y", "mcp.do"],
+      "env": {
+        "DO_API_KEY": "your-api-key-here"
+      }
+    }
+  }
+}
+```
+
+### 4. Restart Claude Desktop
+
+Close and restart Claude Desktop to load the new MCP server.
+
+## Verifying the Integration
+
+### Check Tool Availability
+
+In Claude Desktop, the `do` tool should now be available. Claude will automatically use it when appropriate, or you can explicitly request it:
+
+**Prompt**:
+
+```
+What tools do you have available?
+```
+
+**Expected Response**:
+
+```
+I have access to the following tools:
+- do: Execute TypeScript code using sdk.do
+```
+
+### Test Basic Execution
+
+**Prompt**:
+
+```
+Use the do tool to execute: return { message: 'Hello from mcp.do!' }
+```
+
+**Expected Result**:
+Claude should execute the code and return the result.
+
+### Test SDK Access
+
+**Prompt**:
+
+```
+Use the do tool to query the database for all businesses
+```
+
+Claude should execute:
+
+```typescript
+import $, { db } from 'sdk.do'
+const businesses = await db.list($.Business)
+return businesses
+```
+
+## Advanced Configuration
+
+### Multiple API Keys
+
+Configure different keys for different environments:
+
+```json
+{
+  "mcpServers": {
+    "do-dev": {
+      "command": "npx",
+      "args": ["-y", "mcp.do"],
+      "env": {
+        "DO_API_KEY": "sk_dev_your_key",
+        "DO_BASE_URL": "https://dev.apis.do"
+      }
+    },
+    "do-prod": {
+      "command": "npx",
+      "args": ["-y", "mcp.do"],
+      "env": {
+        "DO_API_KEY": "sk_prod_your_key",
+        "DO_BASE_URL": "https://apis.do"
+      }
+    }
+  }
+}
+```
+
+Tell Claude which to use:
+
+```
+Use the do-dev tool to query the database
+```
+
+### Custom Configuration File
+
+Create a separate config file for mcp.do settings:
+
+**Create `~/.mcp-do-config.json`**:
+
+```json
+{
+  "apiKey": "sk_your_api_key",
+  "baseUrl": "https://apis.do",
+  "logLevel": "info",
+  "maxExecutionTime": 30000,
+  "permissions": {
+    "db": ["read", "write"],
+    "ai": ["generate", "embed"],
+    "api": ["fetch"]
+  }
+}
+```
+
+**Reference in Claude config**:
+
+```json
+{
+  "mcpServers": {
+    "do": {
+      "command": "npx",
+      "args": ["-y", "mcp.do", "--config", "~/.mcp-do-config.json"]
+    }
+  }
+}
+```
+
+### Debugging Configuration
+
+Enable debug logging to troubleshoot issues:
+
+```json
+{
+  "mcpServers": {
+    "do": {
+      "command": "npx",
+      "args": ["-y", "mcp.do"],
+      "env": {
+        "DO_API_KEY": "your-api-key",
+        "DO_LOG_LEVEL": "debug",
+        "NODE_OPTIONS": "--trace-warnings"
+      }
+    }
+  }
+}
+```
+
+View logs:
+
+```bash
+# macOS/Linux
+tail -f ~/.config/claude/mcp-logs/do.log
+
+# Windows
+Get-Content -Path "$env:APPDATA\Claude\mcp-logs\do.log" -Wait
+```
+
+## Usage Patterns
+
+### Explicit Tool Usage
+
+Tell Claude exactly what to do:
+
+````
+Use the do tool to execute this TypeScript:
+```typescript
+import { db } from 'sdk.do'
+const users = await db.list('users')
+return users.length
+````
+
+```
+
+### Implicit Tool Usage
+
+Let Claude decide when to use the tool:
+
+```
+
+How many businesses are in our database?
+
+```
+
+Claude will automatically use the `do` tool to query the database.
+
+### Multi-Step Workflows
+
+Claude can execute multiple operations:
+
+```
+
+Use the do tool to:
+
+1. Get all products
+2. For each product, generate a description using AI
+3. Update the database with the new descriptions
+
+```
+
+Claude will write and execute TypeScript to accomplish all steps.
+
+### Error Handling
+
+Claude handles errors gracefully:
+
+```
+
+Use the do tool to fetch business with ID 'nonexistent'
+
+````
+
+Claude will execute the code, catch the error, and explain what went wrong.
+
+## Common Use Cases
+
+### Database Queries
+
+**Prompt**: "Show me all customers who signed up this month"
+
+Claude executes:
+```typescript
+import $, { db } from 'sdk.do'
+
+const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+
+const customers = await db.list($.Customer, {
+  where: {
+    createdDate: { $gte: startOfMonth }
+  }
+})
+
+return customers
+````
+
+### AI Content Generation
+
+**Prompt**: "Generate product descriptions for all products without descriptions"
+
+Claude executes:
+
+```typescript
+import $, { db, ai } from 'sdk.do'
+
+const products = await db.list($.Product, {
+  where: { description: null },
+})
+
+for (const product of products) {
+  const description = await ai.generate({
+    prompt: `Write a compelling description for: ${product.name}`,
+    schema: $.Text,
+  })
+
+  await db.update($.Product, product.$id, {
+    description: description.text,
+  })
+}
+
+return { updated: products.length }
+```
+
+### Data Analysis
+
+**Prompt**: "Analyze sales by category for the last 30 days"
+
+Claude executes:
+
+```typescript
+import { db } from 'sdk.do'
+
+const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+
+const sales = await db.query(
+  `
+  SELECT
+    category,
+    COUNT(*) as count,
+    SUM(amount) as total,
+    AVG(amount) as average
+  FROM sales
+  WHERE date >= ?
+  GROUP BY category
+  ORDER BY total DESC
+`,
+  [thirtyDaysAgo]
+)
+
+return sales
+```
+
+### Workflow Automation
+
+**Prompt**: "Create a workflow that sends daily reports"
+
+Claude executes:
+
+```typescript
+import $, { every, db, ai, send } from 'sdk.do'
+
+every('0 9 * * *', async () => {
+  // Get yesterday's metrics
+  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000)
+
+  const metrics = await db.query(
+    `
+    SELECT
+      COUNT(*) as orders,
+      SUM(amount) as revenue
+    FROM orders
+    WHERE date >= ?
+  `,
+    [yesterday]
+  )
+
+  // Generate insights
+  const insights = await ai.generate({
+    prompt: `Analyze these daily metrics: ${JSON.stringify(metrics)}`,
+    schema: $.Report,
+  })
+
+  // Send report
+  await send($.DailyReport.created, {
+    date: yesterday,
+    metrics,
+    insights,
+  })
+})
+
+return { workflow: 'created' }
+```
+
+## Best Practices
+
+### 1. Be Specific with Prompts
+
+Instead of:
+
+```
+Check the database
+```
+
+Use:
+
+```
+Use the do tool to list all businesses in the Technology industry
+```
+
+### 2. Handle Errors
+
+Ask Claude to include error handling:
+
+```
+Use the do tool to fetch business 'abc-123', and handle the case where it doesn't exist
+```
+
+### 3. Return Structured Data
+
+Request structured output:
+
+```
+Use the do tool to get user stats and return as { total, active, inactive }
+```
+
+### 4. Use Semantic Types
+
+Leverage the semantic `$` proxy:
+
+```
+Use the do tool to query all entities of type $.Product
+```
+
+### 5. Combine Operations
+
+Request multi-step operations:
+
+```
+Use the do tool to:
+1. Query all incomplete orders
+2. Send reminder emails
+3. Return the count of reminders sent
+```
+
+## Troubleshooting
+
+### Tool Not Available
+
+**Problem**: Claude says `do` tool is not available
+
+**Solutions**:
+
+1. Verify config file location and syntax
+2. Check Node.js is installed: `node --version`
+3. Restart Claude Desktop
+4. Check MCP logs for errors
+
+### Authentication Errors
+
+**Problem**: `Invalid API key` errors
+
+**Solutions**:
+
+1. Verify `DO_API_KEY` is set correctly
+2. Check API key hasn't expired
+3. Ensure API key has required permissions
+
+### Execution Timeouts
+
+**Problem**: "Execution timed out" errors
+
+**Solutions**:
+
+1. Increase timeout in config:
+
+```json
+{
+  "env": {
+    "DO_MAX_EXECUTION_TIME": "60000"
+  }
+}
+```
+
+2. Optimize queries (add LIMIT, indexes)
+3. Break large operations into smaller chunks
+
+### Permission Errors
+
+**Problem**: "Permission denied" errors
+
+**Solutions**:
+
+1. Check API key permissions
+2. Verify resource access in config
+3. Contact platform admin for access
+
+### Import Errors
+
+**Problem**: "Cannot find module" errors
+
+**Solutions**:
+
+1. Verify mcp.do is running: check logs
+2. Ensure Node.js can resolve modules
+3. Try reinstalling: `npm install -g mcp.do`
+
+## Configuration Examples
+
+### Minimal Configuration
+
+```json
+{
+  "mcpServers": {
+    "do": {
+      "command": "npx",
+      "args": ["-y", "mcp.do"]
+    }
+  }
+}
+```
+
+### Production Configuration
+
+```json
+{
+  "mcpServers": {
+    "do": {
+      "command": "npx",
+      "args": ["-y", "mcp.do"],
+      "env": {
+        "DO_API_KEY": "sk_prod_key",
+        "DO_BASE_URL": "https://apis.do",
+        "DO_LOG_LEVEL": "warn",
+        "DO_MAX_EXECUTION_TIME": "30000",
+        "DO_ENABLE_CACHE": "true"
+      }
+    }
+  }
+}
+```
+
+### Development Configuration
+
+```json
+{
+  "mcpServers": {
+    "do-dev": {
+      "command": "npx",
+      "args": ["-y", "mcp.do"],
+      "env": {
+        "DO_API_KEY": "sk_dev_key",
+        "DO_BASE_URL": "https://dev.apis.do",
+        "DO_LOG_LEVEL": "debug",
+        "DO_MAX_EXECUTION_TIME": "60000"
+      }
+    }
+  }
+}
+```
+
+### Multi-Environment Configuration
+
+```json
+{
+  "mcpServers": {
+    "do-dev": {
+      "command": "npx",
+      "args": ["-y", "mcp.do"],
+      "env": {
+        "DO_API_KEY": "sk_dev_key",
+        "DO_BASE_URL": "https://dev.apis.do"
+      }
+    },
+    "do-staging": {
+      "command": "npx",
+      "args": ["-y", "mcp.do"],
+      "env": {
+        "DO_API_KEY": "sk_staging_key",
+        "DO_BASE_URL": "https://staging.apis.do"
+      }
+    },
+    "do": {
+      "command": "npx",
+      "args": ["-y", "mcp.do"],
+      "env": {
+        "DO_API_KEY": "sk_prod_key",
+        "DO_BASE_URL": "https://apis.do"
+      }
+    }
+  }
+}
+```
+
+## Security Considerations
+
+### API Key Management
+
+Never commit API keys to version control:
+
+```bash
+# Add to .gitignore
+echo "config.json" >> .gitignore
+```
+
+Use environment variables:
+
+```bash
+# In .env file (also add to .gitignore)
+DO_API_KEY=sk_your_key
+
+# Reference in config
+{
+  "env": {
+    "DO_API_KEY": "${DO_API_KEY}"
+  }
+}
+```
+
+### Permission Scoping
+
+Limit permissions to minimum required:
+
+```json
+{
+  "env": {
+    "DO_PERMISSIONS": "db:read,ai:generate"
+  }
+}
+```
+
+### Rate Limiting
+
+Configure rate limits to prevent abuse:
+
+```json
+{
+  "env": {
+    "DO_MAX_REQUESTS_PER_MINUTE": "60",
+    "DO_MAX_EXECUTION_TIME": "30000"
+  }
+}
+```
+
+## Next Steps
+
+- [Getting Started](./getting-started) - Quick start guide
+- [API Reference](../api/) - Complete tool reference
+- [Basic Examples](../examples/basic) - Common usage patterns
+- [Execute TypeScript](../examples/execute-typescript) - Advanced TypeScript examples
+
+## Getting Help
+
+- **Documentation**: [mcp.do](https://mcp.do)
+- **Claude Desktop**: [claude.ai/desktop](https://claude.ai/desktop)
+- **Issues**: [GitHub Issues](https://github.com/dot-do/platform/issues)
+- **Community**: [Discord](https://discord.gg/dotdo)

@@ -1,0 +1,585 @@
+---
+$id: https://db.do
+$type: WebSite
+name: db.do
+description: Database operations using the db SDK function for semantic data management
+keywords: [database, db, crud, operations, semantic, relationships, queries, business-as-code]
+author:
+  $type: Organization
+  name: .do Platform
+license: CC-BY-4.0
+---
+
+# db.do
+
+**Database operations using the `db` SDK function for semantic data management**
+
+db.do documents the `db` function from the `.do` platform's Business-as-Code SDK. It provides a simple, semantic interface for database operations using `$.Subject.predicate.Object` patterns with full Schema.org type support.
+
+## Quick Start
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// List all businesses
+const businesses = await db.list($.Business, {
+  where: { industry: 'Technology' },
+})
+
+// Get a specific business
+const business = await db.get($.Business, 'biz_123')
+
+// Create a new business
+const newBusiness = await db.create($.Business, {
+  name: 'Acme Corp',
+  industry: 'Technology',
+  foundedDate: '2025-01-01',
+})
+
+// Update a business
+await db.update($.Business, 'biz_123', {
+  industry: 'Software',
+})
+
+// Delete a business
+await db.delete($.Business, 'biz_123')
+
+// Query relationships
+const brands = await db.relate(business, $.owns, $.Brand)
+```
+
+## Key Features
+
+### 🎯 Semantic Types
+
+Work with data using natural Schema.org types:
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Business entities
+await db.list($.Business)
+await db.list($.Organization)
+await db.list($.Corporation)
+
+// People
+await db.list($.Person)
+await db.list($.Employee)
+await db.list($.Customer)
+
+// Products
+await db.list($.Product)
+await db.list($.Service)
+await db.list($.Offer)
+```
+
+### 🔍 Powerful Queries
+
+Filter, sort, and paginate with intuitive syntax:
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Filter by properties
+const techBiz = await db.list($.Business, {
+  where: {
+    industry: 'Technology',
+    foundingDate: { $gte: '2020-01-01' },
+  },
+})
+
+// Sort and paginate
+const recent = await db.list($.Business, {
+  orderBy: { foundingDate: 'desc' },
+  limit: 10,
+  offset: 0,
+})
+
+// Include relationships
+const withBrands = await db.get($.Business, 'biz_123', {
+  include: ['brands', 'employees'],
+})
+```
+
+### 🔗 Semantic Relationships
+
+Query relationships using semantic predicates:
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Find all brands owned by a business
+const brands = await db.relate(business, $.owns, $.Brand)
+
+// Find all employees of an organization
+const employees = await db.relate(org, $.employs, $.Person)
+
+// Find customers served by a business
+const customers = await db.relate(business, $.serves, $.Customer)
+
+// Multi-hop queries
+const brandProducts = await db.relate(brand, $.offers, $.Product)
+```
+
+### 📦 Batch Operations
+
+Perform multiple operations efficiently:
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Batch create
+const businesses = await db.createMany($.Business, [
+  { name: 'Acme Corp', industry: 'Tech' },
+  { name: 'Globex Inc', industry: 'Manufacturing' },
+])
+
+// Batch update
+await db.updateMany($.Business, {
+  where: { industry: 'Tech' },
+  data: { verified: true },
+})
+
+// Batch delete
+await db.deleteMany($.Business, {
+  where: { status: 'inactive' },
+})
+```
+
+## Core Operations
+
+The `db` function provides six core operations:
+
+1. **`db.list()`** - Query multiple entities with filters
+2. **`db.get()`** - Retrieve a single entity by ID
+3. **`db.create()`** - Create a new entity
+4. **`db.update()`** - Modify an existing entity
+5. **`db.delete()`** - Remove an entity
+6. **`db.relate()`** - Query semantic relationships
+
+## Documentation
+
+- [Getting Started](./docs/getting-started) - Installation and setup
+- [Operations](./docs/operations) - Complete operations reference
+- [Relationships](./docs/relationships) - Semantic relationship queries
+- [API Reference](./api/) - Complete API documentation
+
+## Examples
+
+- [CRUD Operations](./examples/crud) - Create, read, update, delete
+- [Relationships](./examples/relationships) - Working with semantic relationships
+
+## Use Cases
+
+### Business Data Management
+
+Manage business entities with semantic types:
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Query organizations in San Francisco
+const orgs = await db.list($.Organization, {
+  where: {
+    address: {
+      addressLocality: 'San Francisco',
+      addressRegion: 'CA',
+    },
+  },
+})
+
+// Get organization with employees
+const org = await db.get($.Organization, 'org_123', {
+  include: ['employees', 'address'],
+})
+
+// Find all products owned by an organization
+const products = await db.relate(org, $.owns, $.Product)
+```
+
+### E-Commerce Operations
+
+Manage orders, products, and customers:
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Find all orders for a customer
+const orders = await db.list($.Order, {
+  where: {
+    customer: { $id: 'customer_123' },
+  },
+  orderBy: { orderDate: 'desc' },
+})
+
+// Create an order with items
+const order = await db.create($.Order, {
+  $type: 'Order',
+  customer: { $id: 'customer_123' },
+  orderItems: [
+    {
+      $type: 'OrderItem',
+      orderedItem: { $id: 'product_456' },
+      orderQuantity: 2,
+    },
+  ],
+})
+
+// Update order status
+await db.update($.Order, order.$id, {
+  orderStatus: 'Delivered',
+})
+```
+
+### Knowledge Graph Queries
+
+Build and query semantic knowledge graphs:
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Create business with relationships
+const business = await db.create($.Business, {
+  name: 'TechCorp',
+  industry: 'Technology',
+})
+
+// Create brands owned by business
+const brand1 = await db.create($.Brand, {
+  name: 'TechBrand Pro',
+  owner: { $id: business.$id },
+})
+
+// Query the graph
+const allBrands = await db.relate(business, $.owns, $.Brand)
+const brandProducts = await db.relate(brand1, $.offers, $.Product)
+```
+
+### Content Management
+
+Manage articles, blog posts, and media:
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Create article
+const article = await db.create($.Article, {
+  headline: 'Understanding AI in Business',
+  author: { $id: 'person_123' },
+  datePublished: '2025-10-10',
+  articleBody: '...',
+})
+
+// Find all articles by author
+const authorArticles = await db.relate(author, $.wrote, $.Article)
+
+// Find published articles
+const published = await db.list($.Article, {
+  where: {
+    datePublished: { $lte: new Date().toISOString() },
+  },
+  orderBy: { datePublished: 'desc' },
+})
+```
+
+## Integration with .do Platform
+
+db.do is part of the `.do` platform's semantic ecosystem:
+
+```typescript
+import { $, db, ai, on, send } from 'sdk.do'
+
+// Generate content when entity is created
+on($.Product.created, async (event) => {
+  const product = event.data
+
+  if (!product.description) {
+    const description = await ai.generate(`Generate description for ${product.name}`, { context: product })
+
+    await db.update(product.$id, { description })
+  }
+})
+
+// Send event when entity is updated
+on($.Business.updated, async (event) => {
+  await send($.Business.verified, event.data)
+})
+
+// Query with AI enrichment
+const products = await db.list($.Product)
+for (const product of products) {
+  const embedding = await ai.embed(`${product.name} ${product.description}`)
+  await db.update(product.$id, { embedding })
+}
+```
+
+## Semantic Patterns
+
+db.do uses `$.Subject.predicate.Object` patterns for natural data operations:
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Entity types (nouns)
+$.Business
+$.Product
+$.Person
+
+// Relationships (predicates)
+$.owns
+$.employs
+$.serves
+$.offers
+
+// Events (past tense)
+$.Business.created
+$.Product.updated
+$.Order.deleted
+
+// Complete semantic patterns
+const business = await db.get($.Business, 'biz_123')
+const brands = await db.relate(business, $.owns, $.Brand)
+const products = await db.relate(brand, $.offers, $.Product)
+```
+
+## db.do vs database.do
+
+**db.do** documents the `db` SDK function - the interface for database operations in your code.
+
+**database.do** documents the full database service - the infrastructure, architecture, and deployment.
+
+```typescript
+// db.do - Function interface
+import { $, db } from 'sdk.do'
+const business = await db.get($.Business, 'biz_123')
+
+// database.do - Service configuration
+// Covers: D1, Durable Objects, RPC, caching, scaling
+```
+
+Use db.do to learn how to use database operations in your applications.
+
+## Configuration
+
+### Environment Variables
+
+```bash
+# Database configuration (handled by platform)
+DATABASE_URL=...            # Connection string
+DATABASE_REGION=auto        # Deployment region
+DATABASE_CACHE_TTL=300      # Cache TTL in seconds
+```
+
+### TypeScript Configuration
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Configure database client
+db.config({
+  region: 'auto',
+  cacheTTL: 300,
+  timeout: 5000,
+})
+```
+
+## Performance
+
+### Caching
+
+db.do automatically caches frequently accessed entities:
+
+```typescript
+// First call - database query
+const business = await db.get($.Business, 'biz_123')
+
+// Subsequent calls - served from cache
+const sameBusiness = await db.get($.Business, 'biz_123')
+```
+
+### Batch Operations
+
+Use batch operations for better performance:
+
+```typescript
+// Good: Single batch operation
+await db.createMany($.Business, businesses)
+
+// Avoid: Multiple individual operations
+for (const biz of businesses) {
+  await db.create($.Business, biz)
+}
+```
+
+### Pagination
+
+Handle large result sets efficiently:
+
+```typescript
+const businesses = await db.list($.Business, {
+  limit: 50,
+  offset: 0,
+  orderBy: { name: 'asc' },
+})
+
+// Use cursor-based pagination for better performance
+const page1 = await db.list($.Business, {
+  limit: 50,
+  orderBy: { createdAt: 'desc' },
+})
+
+const page2 = await db.list($.Business, {
+  limit: 50,
+  after: page1[page1.length - 1].$id,
+  orderBy: { createdAt: 'desc' },
+})
+```
+
+## Best Practices
+
+### 1. Use Semantic Types
+
+Always use Schema.org types via the `$` proxy:
+
+```typescript
+// Good - semantic type
+const business = await db.get($.Business, 'biz_123')
+
+// Avoid - string identifier
+const business = await db.get('businesses', 'biz_123')
+```
+
+### 2. Include Related Data
+
+Fetch related entities efficiently:
+
+```typescript
+// Good - include in single query
+const business = await db.get($.Business, 'biz_123', {
+  include: ['brands', 'employees', 'address'],
+})
+
+// Avoid - multiple queries
+const business = await db.get($.Business, 'biz_123')
+const brands = await db.relate(business, $.owns, $.Brand)
+const employees = await db.relate(business, $.employs, $.Person)
+```
+
+### 3. Use Filters Effectively
+
+Apply filters to reduce data transfer:
+
+```typescript
+// Good - filter at database
+const active = await db.list($.Business, {
+  where: { status: 'active' },
+})
+
+// Avoid - filter in application
+const all = await db.list($.Business)
+const active = all.filter((b) => b.status === 'active')
+```
+
+### 4. Handle Errors Gracefully
+
+Always implement error handling:
+
+```typescript
+try {
+  const business = await db.get($.Business, 'biz_123')
+} catch (error) {
+  if (error.code === 'NOT_FOUND') {
+    // Handle missing entity
+  } else if (error.code === 'DATABASE_ERROR') {
+    // Handle database errors
+  }
+  throw error
+}
+```
+
+### 5. Use Batch for Multiple Operations
+
+Batch operations are more efficient:
+
+```typescript
+// Good - batch operation
+await db.createMany($.Business, [biz1, biz2, biz3])
+
+// Avoid - individual operations
+await db.create($.Business, biz1)
+await db.create($.Business, biz2)
+await db.create($.Business, biz3)
+```
+
+## Type Safety
+
+Full TypeScript support with type inference:
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Type-safe queries
+const business = await db.get($.Business, 'biz_123')
+// business is typed as Business with autocomplete
+
+// Type-safe relationships
+const brands = await db.relate(business, $.owns, $.Brand)
+// brands is typed as Brand[]
+
+// Type-safe updates
+await db.update($.Business, 'biz_123', {
+  name: 'New Name', // Valid
+  industry: 'Tech', // Valid
+  invalid: 'field', // TypeScript error
+})
+```
+
+## License
+
+db.do is released under the [Creative Commons Attribution 4.0 International License (CC-BY-4.0)](https://creativecommons.org/licenses/by/4.0/).
+
+This means you are free to:
+
+- **Share**: Copy and redistribute the material in any medium or format
+- **Adapt**: Remix, transform, and build upon the material for any purpose, even commercially
+
+Under the following terms:
+
+- **Attribution**: You must give appropriate credit, provide a link to the license, and indicate if changes were made
+
+## Resources
+
+- [sdk.do](https://sdk.do) - Core SDK documentation
+- [database.do](https://database.do) - Database service documentation
+- [schema.org.ai](https://schema.org.ai) - Schema.org types for AI
+- [graphdl.do](https://graphdl.do) - GraphDL semantic patterns
+- [`.do` Platform](https://do)
+
+## Related Domains
+
+- **[database.do](https://database.do)** - Database service documentation
+- **[ai.do](https://ai.do)** - AI services
+- **[api.do](https://api.do)** - External API integration
+- **[on.do](https://on.do)** - Event listeners
+- **[send.do](https://send.do)** - Event publishing
+- **[every.do](https://every.do)** - Scheduled workflows
+
+## Contributing
+
+db.do is part of the [`.do` platform](https://do) ecosystem. Contributions are welcome!
+
+See the [ai repository](https://github.com/dot-do/ai) for contribution guidelines.
+
+## Acknowledgments
+
+db.do builds upon:
+
+- [Schema.org](https://schema.org) - Structured data vocabulary
+- [GraphDL](https://graphdl.do) - Semantic graph patterns
+- [JSON-LD](https://www.w3.org/TR/json-ld11/) - Linked data format
+- [Cloudflare D1](https://developers.cloudflare.com/d1/) - SQL database
+- [Cloudflare Durable Objects](https://developers.cloudflare.com/durable-objects/) - Distributed state
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

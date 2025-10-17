@@ -1,0 +1,143 @@
+---
+$id: https://nouns.do/examples/advanced-patterns
+$type: HowTo
+title: Advanced Patterns
+description: Complex patterns and advanced usage of semantic entity types
+keywords: [advanced, patterns, complex, custom types]
+---
+
+# Advanced Patterns
+
+Advanced patterns for working with semantic entity types.
+
+## Custom Type Registration
+
+```typescript
+import { registry } from 'nouns.do/core'
+
+registry.registerType({
+  $type: 'Lead',
+  parent: 'Person',
+  properties: [
+    { name: 'leadSource', type: 'string' },
+    { name: 'leadScore', type: 'number' },
+    { name: 'leadStatus', type: 'string', enum: ['New', 'Qualified', 'Converted'] },
+  ],
+})
+
+const lead = await db.create($.Lead, {
+  $type: 'Lead',
+  name: 'Potential Customer',
+  email: 'customer@example.com',
+  leadSource: 'Website',
+  leadScore: 85,
+  leadStatus: 'Qualified',
+})
+```
+
+## Type Polymorphism
+
+```typescript
+function processEntity(entity: Thing) {
+  switch (entity.$type) {
+    case 'Person':
+      return `Person: ${entity.name} (${entity.email})`
+    case 'Organization':
+      return `Organization: ${entity.legalName || entity.name}`
+    case 'Product':
+      return `Product: ${entity.name} - $${entity.price}`
+    default:
+      return `Unknown: ${entity.name}`
+  }
+}
+```
+
+## Nested Entity Composition
+
+```typescript
+const order = await db.create($.Order, {
+  $type: 'Order',
+  orderNumber: 'ORD-001',
+  customer: {
+    $type: 'Person',
+    name: 'John Doe',
+    email: 'john@example.com',
+  },
+  orderedItem: {
+    $type: 'Product',
+    name: 'Widget',
+    price: 99.99,
+  },
+  seller: {
+    $type: 'Organization',
+    name: 'Acme Corp',
+  },
+})
+```
+
+## Batch Operations
+
+```typescript
+const people = await Promise.all([
+  db.create($.Person, { name: 'Alice', email: 'alice@example.com' }),
+  db.create($.Person, { name: 'Bob', email: 'bob@example.com' }),
+  db.create($.Person, { name: 'Carol', email: 'carol@example.com' }),
+])
+
+await Promise.all(people.map((person) => db.update(person, { jobTitle: 'Engineer' })))
+```
+
+## AI-Generated Entities
+
+```typescript
+import { ai } from 'sdk.do'
+
+const person = await ai.generate('Create a software engineer profile for Sarah Chen', { schema: $.Person })
+
+const products = await ai.batch([
+  { prompt: 'Create a laptop product', schema: $.Product },
+  { prompt: 'Create a phone product', schema: $.Product },
+  { prompt: 'Create a tablet product', schema: $.Product },
+])
+```
+
+## Custom Validation
+
+```typescript
+import { validator } from 'nouns.do/core'
+
+validator.registerValidator('Person', 'email', async (value) => {
+  const exists = await db.list($.Person, {
+    where: { email: value },
+    limit: 1,
+  })
+
+  if (exists.length > 0) {
+    return { valid: false, message: 'Email already exists' }
+  }
+
+  return { valid: true }
+})
+```
+
+## Pagination
+
+```typescript
+async function* getAllPeople() {
+  let offset = 0
+  const limit = 100
+
+  while (true) {
+    const page = await db.list($.Person, { limit, offset })
+    if (page.length === 0) break
+    yield* page
+    offset += limit
+  }
+}
+
+for await (const person of getAllPeople()) {
+  console.log(person.name)
+}
+```
+
+See [Integration](./integration) and [Real-World Use Case](./real-world-use-case) for more examples.

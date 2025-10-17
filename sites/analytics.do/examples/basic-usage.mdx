@@ -1,0 +1,201 @@
+---
+$id: https://analytics.do/examples/basic-usage
+$type: HowTo
+title: Basic Usage - analytics.do
+description: Simple examples of tracking events, recording metrics, and querying data with analytics.do
+keywords: [basic usage, examples, event tracking, metrics, queries, analytics]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Basic Usage
+
+Simple examples to get started with analytics.do.
+
+## Track Your First Event
+
+```typescript
+import $, { analytics } from 'sdk.do'
+
+// Track a simple event
+await analytics.track($.User.signed_up, {
+  userId: 'user-123',
+  email: 'john@example.com',
+  plan: 'pro',
+  timestamp: new Date(),
+})
+
+console.log('Event tracked!')
+```
+
+## Record Your First Metric
+
+```typescript
+// Record a counter metric
+await analytics.counter($.PageViews, 1)
+
+// Record a gauge metric
+await analytics.gauge($.ActiveUsers, 42)
+
+// Record a metric with dimensions
+await analytics.metric($.Revenue, {
+  value: 99.99,
+  dimensions: {
+    product: 'pro-plan',
+    region: 'us-west',
+  },
+})
+
+console.log('Metrics recorded!')
+```
+
+## Query Metrics
+
+```typescript
+// Simple query
+const total = await analytics.query({
+  metric: $.PageViews,
+  timeframe: 'today',
+  aggregation: 'count',
+})
+console.log('Page views today:', total.value)
+
+// Query with grouping
+const byRegion = await analytics.query({
+  metric: $.Revenue,
+  timeframe: 'last_7_days',
+  groupBy: ['region'],
+  aggregation: 'sum',
+})
+console.log('Revenue by region:', byRegion.data)
+
+// Time-series query
+const daily = await analytics.query({
+  metric: $.Revenue,
+  timeframe: 'last_30_days',
+  interval: 'day',
+  aggregation: 'sum',
+})
+console.log('Daily revenue:', daily.timeseries)
+```
+
+## Create a Simple Dashboard
+
+```typescript
+const dashboard = await analytics.dashboard({
+  name: 'My First Dashboard',
+  widgets: [
+    {
+      type: 'counter',
+      title: 'Total Users',
+      metric: $.Users.count,
+    },
+    {
+      type: 'timeseries',
+      title: 'Sign-ups Over Time',
+      metric: $.User.signed_up.count,
+      timeframe: 'last_30_days',
+      interval: 'day',
+    },
+  ],
+})
+
+console.log('Dashboard created!')
+console.log('URL:', await analytics.getDashboardUrl(dashboard.id))
+```
+
+## Set Up a Simple Alert
+
+```typescript
+await analytics.alert({
+  name: 'Low Sign-ups',
+  metric: $.User.signed_up.count,
+  timeframe: 'last_hour',
+  condition: { lt: 10 }, // Less than 10 sign-ups per hour
+  severity: 'medium',
+  notifications: ['email'],
+})
+
+console.log('Alert configured!')
+```
+
+## Complete E-Commerce Example
+
+```typescript
+import $, { analytics, on } from 'sdk.do'
+
+// Track product views
+on($.Product.viewed, async (product) => {
+  await analytics.track($.Product.viewed, {
+    productId: product.id,
+    productName: product.name,
+    price: product.price,
+    category: product.category,
+    timestamp: new Date(),
+  })
+
+  await analytics.counter($.ProductViews, 1)
+})
+
+// Track cart additions
+on($.Cart.item.added, async (item) => {
+  await analytics.track($.Cart.item.added, {
+    productId: item.productId,
+    quantity: item.quantity,
+    timestamp: new Date(),
+  })
+
+  await analytics.counter($.CartAdditions, 1)
+})
+
+// Track orders
+on($.Order.created, async (order) => {
+  // Track event
+  await analytics.track($.Order.created, {
+    orderId: order.id,
+    amount: order.total,
+    items: order.items.length,
+    userId: order.userId,
+    timestamp: new Date(),
+  })
+
+  // Record metrics
+  await analytics.counter($.Orders, 1)
+  await analytics.metric($.Revenue, {
+    value: order.total,
+    dimensions: {
+      product: order.items[0].productId,
+      region: order.region,
+    },
+  })
+})
+
+// Query today's metrics
+const todayStats = async () => {
+  const [views, carts, orders, revenue] = await Promise.all([
+    analytics.query({ metric: $.ProductViews, timeframe: 'today', aggregation: 'count' }),
+    analytics.query({ metric: $.CartAdditions, timeframe: 'today', aggregation: 'count' }),
+    analytics.query({ metric: $.Orders, timeframe: 'today', aggregation: 'count' }),
+    analytics.query({ metric: $.Revenue, timeframe: 'today', aggregation: 'sum' }),
+  ])
+
+  console.log("Today's Stats:")
+  console.log('- Product Views:', views.value)
+  console.log('- Cart Additions:', carts.value)
+  console.log('- Orders:', orders.value)
+  console.log('- Revenue:', `$${revenue.value}`)
+}
+
+await todayStats()
+```
+
+## Next Steps
+
+- [Advanced Patterns](./advanced-patterns.mdx) - Complex analytics scenarios
+- [Integration](./integration.mdx) - Integrate with other services
+- [Real-World Use Case](./real-world-use-case.mdx) - Complete implementation
+
+---
+
+These basic examples should get you started. For more complex scenarios, see [Advanced Patterns](./advanced-patterns.mdx).

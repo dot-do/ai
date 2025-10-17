@@ -1,0 +1,96 @@
+---
+$id: https://integrations.do/stack_exchange
+$type: Integration
+name: Stack exchange
+service: stack_exchange
+description: Stack Exchange is a network of Q&A communities where users ask questions, share knowledge, and collaborate on topics like coding, math, and more
+category: communication
+sdkBased: false
+baseUrl: https://api.stack_exchange.com
+
+auth:
+  type: oauth2
+  authorizationUrl: https://stackoverflow.com/oauth
+  tokenUrl: https://stackoverflow.com/oauth/access_token/json
+  scopes:
+    - no_expiry
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Stack exchange actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: false
+  events: []
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://www.stackexchange.com
+  apiDocs: https://www.stackexchange.com
+---
+
+# Stack exchange Integration
+
+Stack Exchange is a network of Q&A communities where users ask questions, share knowledge, and collaborate on topics like coding, math, and more
+
+## Quick Start
+
+```typescript
+import { StackexchangeClient } from '@dotdo/sdk.do/integrations/stack_exchange'
+
+const stack_exchange = new StackexchangeClient({
+  apiKey: process.env.STACK_EXCHANGE_API_KEY,
+})
+
+const result = await stack_exchange.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Stack exchange provides 8 actions through the Composio API.
+
+## License
+
+MIT

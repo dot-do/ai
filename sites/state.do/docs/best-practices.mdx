@@ -1,0 +1,957 @@
+---
+$id: https://state.do/docs/best-practices
+$type: TechArticle
+title: state.do Best Practices
+description: Production-ready patterns and best practices for building with state.do
+keywords: [best practices, optimization, performance, patterns, production]
+author:
+  $type: Organization
+  name: .do Platform
+license: CC-BY-4.0
+---
+
+# state.do Best Practices
+
+Production-ready patterns and best practices for building with state.do.
+
+## State Object Sizing
+
+### Keep Objects Small
+
+Each object should contain only related data:
+
+```typescript
+// Good: Small, focused object
+export class UserSession extends DurableObject {
+  async fetch(request: Request) {
+    const userId = await this.ctx.storage.get('userId')
+    const cart = await this.ctx.storage.get('cart')
+    const preferences = await this.ctx.storage.get('preferences')
+    return new Response(JSON.stringify({ userId, cart, preferences }))
+  }
+}
+
+// Bad: Large, unfocused object
+export class Everything extends DurableObject {
+  // Don't store all users in one object!
+  async fetch(request: Request) {
+    const allUsers = await this.ctx.storage.get('users') // Could be millions!
+    const allOrders = await this.ctx.storage.get('orders')
+    const allProducts = await this.ctx.storage.get('products')
+    // This will be slow and expensive
+  }
+}
+```
+
+**Guidelines:**
+
+- **Target size**: Keep total storage under 10MB per object
+- **Optimal size**: 100KB - 1MB for best performance
+- **Maximum size**: 1GB (hard limit)
+- **Data types**: Store only essential state, not static data
+
+### Partition Large Datasets
+
+Split large datasets across multiple objects:
+
+```typescript
+// Partition by user ID
+const sessionId = `session:${userId}`
+const session = env.SESSIONS.idFromName(sessionId)
+
+// Partition by time bucket
+const bucket = Math.floor(Date.now() / 3600000) // 1-hour buckets
+const logId = `logs:${bucket}`
+const logs = env.LOGS.idFromName(logId)
+
+// Partition by hash
+const hash = hashUserId(userId) % 100 // 100 partitions
+const dataId = `data:${hash}`
+const data = env.DATA.idFromName(dataId)
+```
+
+### Clean Up Old Data
+
+Remove expired data regularly:
+
+```typescript
+export class SelfCleaningSession extends DurableObject {
+  async fetch(request: Request) {
+    // Clean up on every request
+    await this.cleanup()
+
+    // Process request
+    const data = await this.ctx.storage.get('data')
+    return new Response(JSON.stringify(data))
+  }
+
+  async cleanup() {
+    const entries = await this.ctx.storage.list()
+    const now = Date.now()
+    const ttl = 3600000 // 1 hour
+
+    for (const [key, value] of entries) {
+      if (value.timestamp && now - value.timestamp > ttl) {
+        await this.ctx.storage.delete(key)
+      }
+    }
+  }
+
+  // Or use alarms for periodic cleanup
+  async alarm() {
+    await this.cleanup()
+
+    // Schedule next cleanup (every hour)
+    await this.ctx.storage.setAlarm(Date.now() + 3600000)
+  }
+}
+```
+
+## ID Selection Strategies
+
+### Choose Appropriate ID Types
+
+Three ways to generate IDs:
+
+```typescript
+// 1. Named IDs (deterministic, predictable)
+const id = env.COUNTER.idFromName('global-counter')
+// Use for: Singletons, user sessions, known entities
+
+// 2. Unique IDs (random, unpredictable)
+const id = env.COUNTER.newUniqueId()
+// Use for: New entities, temporary objects, one-time tasks
+
+// 3. String IDs (from external source)
+const id = env.COUNTER.idFromString(existingId)
+// Use for: Existing IDs, external system integration
+```
+
+### Naming Conventions
+
+Use consistent naming patterns:
+
+```typescript
+// Good: Clear, hierarchical naming
+const sessionId = env.SESSIONS.idFromName(`user:${userId}:session`)
+const cartId = env.CARTS.idFromName(`user:${userId}:cart`)
+const orderId = env.ORDERS.idFromName(`order:${orderId}`)
+const roomId = env.ROOMS.idFromName(`chat:${roomId}`)
+
+// Bad: Unclear or collision-prone naming
+const id1 = env.SESSIONS.idFromName(userId) // No namespace
+const id2 = env.CARTS.idFromName('cart') // Shared across users!
+const id3 = env.ORDERS.idFromName(orderId.toString()) // Might collide
+```
+
+**Best Practices:**
+
+- **Namespace**: Use prefixes to avoid collisions
+- **Hierarchy**: Use colons to show relationships
+- **Readability**: Make IDs human-readable
+- **Uniqueness**: Ensure IDs are globally unique
+
+### Avoid Shared State
+
+Don't use global singleton objects:
+
+```typescript
+// Bad: Global counter (bottleneck!)
+const globalCounter = env.COUNTERS.idFromName('global')
+
+// Good: Per-user counters (scales horizontally)
+const userCounter = env.COUNTERS.idFromName(`user:${userId}`)
+
+// Bad: Single leaderboard (contention!)
+const leaderboard = env.BOARDS.idFromName('global-leaderboard')
+
+// Good: Multiple leaderboards (partitioned)
+const region = getUserRegion(userId)
+const leaderboard = env.BOARDS.idFromName(`leaderboard:${region}`)
+```
+
+## Concurrency Handling
+
+### Single-Writer Advantage
+
+Embrace the single-writer model:
+
+```typescript
+export class BankAccount extends DurableObject {
+  async fetch(request: Request) {
+    const url = new URL(request.url)
+
+    if (url.pathname === '/transfer') {
+      // No locks needed - requests are serialized!
+      const balance = (await this.ctx.storage.get<number>('balance')) || 0
+      const { amount } = await request.json()
+
+      if (balance < amount) {
+        return new Response('Insufficient funds', { status: 400 })
+      }
+
+      await this.ctx.storage.put('balance', balance - amount)
+
+      return new Response(JSON.stringify({ balance: balance - amount }))
+    }
+
+    return new Response('Not found', { status: 404 })
+  }
+}
+```
+
+### Use Transactions for Atomicity
+
+Ensure related operations are atomic:
+
+```typescript
+export class Inventory extends DurableObject {
+  async fetch(request: Request) {
+    const { items } = await request.json()
+
+    try {
+      await this.ctx.storage.transaction(async (txn) => {
+        // All operations are atomic
+        for (const item of items) {
+          const stock = (await txn.get<number>(`stock:${item}`)) || 0
+
+          if (stock < 1) {
+            throw new Error(`Out of stock: ${item}`)
+          }
+
+          await txn.put(`stock:${item}`, stock - 1)
+        }
+
+        // Update order count
+        const orders = (await txn.get<number>('orders')) || 0
+        await txn.put('orders', orders + 1)
+      })
+
+      return new Response('Order placed')
+    } catch (error) {
+      return new Response(error.message, { status: 400 })
+    }
+  }
+}
+```
+
+### Handle Cross-Object Operations
+
+Coordinate between objects carefully:
+
+```typescript
+export class OrderProcessor extends DurableObject {
+  async fetch(request: Request) {
+    const { userId, items, amount } = await request.json()
+
+    // 1. Check inventory
+    const inventory = this.ctx.env.INVENTORY.get(this.ctx.env.INVENTORY.idFromName('inventory'))
+    const available = await inventory.fetch(
+      new Request('https://fake/check', {
+        method: 'POST',
+        body: JSON.stringify({ items }),
+      })
+    )
+
+    if (!available.ok) {
+      return new Response('Items not available', { status: 400 })
+    }
+
+    // 2. Process payment
+    const account = this.ctx.env.ACCOUNTS.get(this.ctx.env.ACCOUNTS.idFromName(`user:${userId}`))
+    const payment = await account.fetch(
+      new Request('https://fake/charge', {
+        method: 'POST',
+        body: JSON.stringify({ amount }),
+      })
+    )
+
+    if (!payment.ok) {
+      return new Response('Payment failed', { status: 400 })
+    }
+
+    // 3. Reserve inventory
+    await inventory.fetch(
+      new Request('https://fake/reserve', {
+        method: 'POST',
+        body: JSON.stringify({ items }),
+      })
+    )
+
+    // 4. Create order
+    await this.ctx.storage.put('order', {
+      userId,
+      items,
+      amount,
+      status: 'confirmed',
+      timestamp: Date.now(),
+    })
+
+    return new Response('Order created')
+  }
+}
+```
+
+**Note:** This is a simplified example. In production, use:
+
+- **Saga Pattern** - Compensating transactions for rollback
+- **Two-Phase Commit** - Prepare + commit phases
+- **Idempotency Keys** - Prevent duplicate operations
+
+## Cleanup Patterns
+
+### Automatic Expiration with Alarms
+
+```typescript
+export class ExpiringSession extends DurableObject {
+  async fetch(request: Request) {
+    const url = new URL(request.url)
+
+    if (url.pathname === '/create') {
+      const { data, ttl } = await request.json()
+
+      await this.ctx.storage.put('data', data)
+      await this.ctx.storage.put('createdAt', Date.now())
+
+      // Set expiration alarm
+      await this.ctx.storage.setAlarm(Date.now() + ttl)
+
+      return new Response('Session created')
+    }
+
+    if (url.pathname === '/get') {
+      const data = await this.ctx.storage.get('data')
+      return new Response(JSON.stringify(data))
+    }
+
+    return new Response('Not found', { status: 404 })
+  }
+
+  async alarm() {
+    // Session expired - clean up
+    await this.ctx.storage.deleteAll()
+    console.log('Session expired and cleaned up')
+  }
+}
+```
+
+### Lazy Cleanup on Access
+
+```typescript
+export class LazyCleanupCache extends DurableObject {
+  async fetch(request: Request) {
+    const url = new URL(request.url)
+
+    if (url.pathname === '/get') {
+      const key = url.searchParams.get('key')
+      const entry = await this.ctx.storage.get(key)
+
+      // Check if expired
+      if (entry && entry.expiresAt < Date.now()) {
+        await this.ctx.storage.delete(key)
+        return new Response('Not found', { status: 404 })
+      }
+
+      return new Response(JSON.stringify(entry))
+    }
+
+    if (url.pathname === '/set') {
+      const { key, value, ttl } = await request.json()
+
+      await this.ctx.storage.put(key, {
+        value,
+        expiresAt: Date.now() + ttl,
+      })
+
+      return new Response('OK')
+    }
+
+    return new Response('Not found', { status: 404 })
+  }
+}
+```
+
+### Batch Cleanup
+
+```typescript
+export class BatchCleanup extends DurableObject {
+  async fetch(request: Request) {
+    if (request.url.includes('/cleanup')) {
+      await this.performCleanup()
+      return new Response('Cleanup complete')
+    }
+
+    return new Response('OK')
+  }
+
+  async performCleanup() {
+    const entries = await this.ctx.storage.list()
+    const now = Date.now()
+    const toDelete: string[] = []
+
+    // Collect expired entries
+    for (const [key, value] of entries) {
+      if (value.expiresAt && value.expiresAt < now) {
+        toDelete.push(key)
+      }
+    }
+
+    // Batch delete
+    if (toDelete.length > 0) {
+      await this.ctx.storage.delete(toDelete)
+      console.log(`Cleaned up ${toDelete.length} expired entries`)
+    }
+  }
+
+  // Schedule periodic cleanup
+  async alarm() {
+    await this.performCleanup()
+
+    // Reschedule for next hour
+    await this.ctx.storage.setAlarm(Date.now() + 3600000)
+  }
+}
+```
+
+## Performance Optimization
+
+### Batch Storage Operations
+
+```typescript
+// Bad: Multiple roundtrips
+async getBad() {
+  const name = await this.ctx.storage.get('name')
+  const email = await this.ctx.storage.get('email')
+  const age = await this.ctx.storage.get('age')
+  return { name, email, age }
+}
+
+// Good: Single roundtrip
+async getGood() {
+  const data = await this.ctx.storage.get(['name', 'email', 'age'])
+  return {
+    name: data.get('name'),
+    email: data.get('email'),
+    age: data.get('age')
+  }
+}
+
+// Bad: Multiple writes
+async setBad(user: User) {
+  await this.ctx.storage.put('name', user.name)
+  await this.ctx.storage.put('email', user.email)
+  await this.ctx.storage.put('age', user.age)
+}
+
+// Good: Batch write
+async setGood(user: User) {
+  await this.ctx.storage.put({
+    name: user.name,
+    email: user.email,
+    age: user.age
+  })
+}
+```
+
+### Cache in Memory
+
+```typescript
+export class CachedData extends DurableObject {
+  private cache: Map<string, any> = new Map()
+  private cacheTimestamps: Map<string, number> = new Map()
+  private cacheTTL = 60000 // 1 minute
+
+  async get(key: string) {
+    // Check memory cache
+    if (this.cache.has(key)) {
+      const timestamp = this.cacheTimestamps.get(key)
+      if (Date.now() - timestamp < this.cacheTTL) {
+        return this.cache.get(key)
+      }
+    }
+
+    // Load from storage
+    const value = await this.ctx.storage.get(key)
+
+    // Update cache
+    this.cache.set(key, value)
+    this.cacheTimestamps.set(key, Date.now())
+
+    return value
+  }
+
+  async set(key: string, value: any) {
+    // Update both cache and storage
+    this.cache.set(key, value)
+    this.cacheTimestamps.set(key, Date.now())
+    await this.ctx.storage.put(key, value)
+  }
+
+  async delete(key: string) {
+    // Remove from both
+    this.cache.delete(key)
+    this.cacheTimestamps.delete(key)
+    await this.ctx.storage.delete(key)
+  }
+}
+```
+
+### Minimize Cold Starts
+
+```typescript
+export class OptimizedObject extends DurableObject {
+  // Load frequently used data once
+  private config: any
+
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env)
+    // Initialize heavy objects once
+    this.loadConfig()
+  }
+
+  async loadConfig() {
+    this.config = await this.ctx.storage.get('config')
+  }
+
+  async fetch(request: Request) {
+    // Config already loaded, no cold start penalty
+    return new Response(JSON.stringify(this.config))
+  }
+}
+```
+
+### Use List Wisely
+
+```typescript
+export class EfficientListing extends DurableObject {
+  // Bad: Load all entries
+  async listAllBad() {
+    const entries = await this.ctx.storage.list()
+    return Array.from(entries)
+  }
+
+  // Good: Use pagination
+  async listGood(limit = 100, cursor?: string) {
+    const entries = await this.ctx.storage.list({
+      limit,
+      start: cursor,
+    })
+
+    return {
+      items: Array.from(entries.entries()),
+      cursor: entries.cursor,
+    }
+  }
+
+  // Good: Use prefix filtering
+  async listByPrefix(prefix: string) {
+    const entries = await this.ctx.storage.list({
+      prefix,
+      limit: 100,
+    })
+
+    return Array.from(entries)
+  }
+
+  // Good: Use range queries
+  async listByRange(start: string, end: string) {
+    const entries = await this.ctx.storage.list({
+      start,
+      end,
+      limit: 100,
+    })
+
+    return Array.from(entries)
+  }
+}
+```
+
+## Monitoring and Observability
+
+### Structured Logging
+
+```typescript
+export class LoggingObject extends DurableObject {
+  async fetch(request: Request) {
+    const startTime = Date.now()
+    const url = new URL(request.url)
+
+    try {
+      // Log request
+      console.log(
+        JSON.stringify({
+          type: 'request',
+          objectId: this.ctx.id.toString(),
+          path: url.pathname,
+          timestamp: Date.now(),
+        })
+      )
+
+      // Process request
+      const result = await this.processRequest(request)
+
+      // Log success
+      console.log(
+        JSON.stringify({
+          type: 'success',
+          objectId: this.ctx.id.toString(),
+          path: url.pathname,
+          duration: Date.now() - startTime,
+          timestamp: Date.now(),
+        })
+      )
+
+      return result
+    } catch (error) {
+      // Log error
+      console.error(
+        JSON.stringify({
+          type: 'error',
+          objectId: this.ctx.id.toString(),
+          path: url.pathname,
+          error: error.message,
+          duration: Date.now() - startTime,
+          timestamp: Date.now(),
+        })
+      )
+
+      throw error
+    }
+  }
+
+  async processRequest(request: Request) {
+    // Implementation
+    return new Response('OK')
+  }
+}
+```
+
+### Performance Metrics
+
+```typescript
+export class MetricsObject extends DurableObject {
+  async fetch(request: Request) {
+    const metrics = {
+      requestStart: Date.now(),
+      storageOps: 0,
+      storageTime: 0,
+    }
+
+    // Track storage operations
+    const originalGet = this.ctx.storage.get.bind(this.ctx.storage)
+    this.ctx.storage.get = async (...args) => {
+      const start = Date.now()
+      metrics.storageOps++
+      const result = await originalGet(...args)
+      metrics.storageTime += Date.now() - start
+      return result
+    }
+
+    // Process request
+    const result = await this.handleRequest(request)
+
+    // Log metrics
+    console.log(
+      JSON.stringify({
+        type: 'metrics',
+        totalTime: Date.now() - metrics.requestStart,
+        storageOps: metrics.storageOps,
+        storageTime: metrics.storageTime,
+        computeTime: Date.now() - metrics.requestStart - metrics.storageTime,
+      })
+    )
+
+    return result
+  }
+
+  async handleRequest(request: Request) {
+    return new Response('OK')
+  }
+}
+```
+
+### Health Checks
+
+```typescript
+export class HealthCheckObject extends DurableObject {
+  async fetch(request: Request) {
+    const url = new URL(request.url)
+
+    if (url.pathname === '/health') {
+      return this.healthCheck()
+    }
+
+    return this.handleRequest(request)
+  }
+
+  async healthCheck() {
+    const checks = {
+      storage: false,
+      timestamp: Date.now(),
+    }
+
+    try {
+      // Test storage
+      await this.ctx.storage.put('health-check', Date.now())
+      const value = await this.ctx.storage.get('health-check')
+      checks.storage = value !== undefined
+
+      await this.ctx.storage.delete('health-check')
+
+      return new Response(
+        JSON.stringify({
+          status: 'healthy',
+          checks,
+        }),
+        {
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
+    } catch (error) {
+      return new Response(
+        JSON.stringify({
+          status: 'unhealthy',
+          checks,
+          error: error.message,
+        }),
+        {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
+    }
+  }
+
+  async handleRequest(request: Request) {
+    return new Response('OK')
+  }
+}
+```
+
+### Error Tracking
+
+```typescript
+export class ErrorTrackingObject extends DurableObject {
+  async fetch(request: Request) {
+    try {
+      return await this.handleRequest(request)
+    } catch (error) {
+      // Track error
+      await this.trackError(error, request)
+
+      // Return error response
+      return new Response(
+        JSON.stringify({
+          error: error.message,
+        }),
+        {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
+    }
+  }
+
+  async trackError(error: Error, request: Request) {
+    const errorLog = {
+      message: error.message,
+      stack: error.stack,
+      objectId: this.ctx.id.toString(),
+      url: request.url,
+      method: request.method,
+      timestamp: Date.now(),
+    }
+
+    // Store recent errors
+    const errors = (await this.ctx.storage.get<any[]>('errors')) || []
+    errors.push(errorLog)
+
+    // Keep only last 100 errors
+    if (errors.length > 100) {
+      errors.shift()
+    }
+
+    await this.ctx.storage.put('errors', errors)
+
+    // Log to console
+    console.error(JSON.stringify(errorLog))
+  }
+
+  async handleRequest(request: Request) {
+    return new Response('OK')
+  }
+}
+```
+
+## Security Best Practices
+
+### Validate Input
+
+```typescript
+export class SecureObject extends DurableObject {
+  async fetch(request: Request) {
+    const url = new URL(request.url)
+
+    if (url.pathname === '/update') {
+      const data = await request.json()
+
+      // Validate input
+      if (!this.validateData(data)) {
+        return new Response('Invalid data', { status: 400 })
+      }
+
+      // Sanitize input
+      const sanitized = this.sanitizeData(data)
+
+      await this.ctx.storage.put('data', sanitized)
+
+      return new Response('OK')
+    }
+
+    return new Response('Not found', { status: 404 })
+  }
+
+  validateData(data: any): boolean {
+    // Type validation
+    if (typeof data.name !== 'string') return false
+    if (typeof data.age !== 'number') return false
+
+    // Range validation
+    if (data.age < 0 || data.age > 150) return false
+
+    // Length validation
+    if (data.name.length > 100) return false
+
+    return true
+  }
+
+  sanitizeData(data: any) {
+    return {
+      name: data.name.trim().slice(0, 100),
+      age: Math.max(0, Math.min(150, data.age)),
+    }
+  }
+}
+```
+
+### Rate Limiting
+
+```typescript
+export class RateLimitedObject extends DurableObject {
+  async fetch(request: Request) {
+    // Check rate limit
+    if (!(await this.checkRateLimit())) {
+      return new Response('Rate limit exceeded', { status: 429 })
+    }
+
+    return this.handleRequest(request)
+  }
+
+  async checkRateLimit(): Promise<boolean> {
+    const now = Date.now()
+    const window = 60000 // 1 minute
+    const limit = 100
+
+    const requests = (await this.ctx.storage.get<number[]>('requests')) || []
+    const recent = requests.filter((t) => now - t < window)
+
+    if (recent.length >= limit) {
+      return false
+    }
+
+    recent.push(now)
+    await this.ctx.storage.put('requests', recent)
+
+    return true
+  }
+
+  async handleRequest(request: Request) {
+    return new Response('OK')
+  }
+}
+```
+
+## Testing Strategies
+
+### Unit Testing
+
+```typescript
+import { describe, it, expect } from 'vitest'
+
+describe('Counter', () => {
+  it('increments counter', async () => {
+    const env = getMiniflareBindings()
+    const id = env.COUNTER.idFromName('test')
+    const stub = env.COUNTER.get(id)
+
+    const response = await stub.fetch(new Request('https://fake/increment'))
+    const data = await response.json()
+
+    expect(data.count).toBe(1)
+  })
+
+  it('handles multiple increments', async () => {
+    const env = getMiniflareBindings()
+    const id = env.COUNTER.idFromName('test')
+    const stub = env.COUNTER.get(id)
+
+    await stub.fetch(new Request('https://fake/increment'))
+    await stub.fetch(new Request('https://fake/increment'))
+    const response = await stub.fetch(new Request('https://fake/get'))
+    const data = await response.json()
+
+    expect(data.count).toBe(2)
+  })
+})
+```
+
+### Integration Testing
+
+```typescript
+describe('Order Processing', () => {
+  it('processes complete order flow', async () => {
+    const env = getMiniflareBindings()
+
+    // 1. Create inventory
+    const inventoryId = env.INVENTORY.idFromName('inventory')
+    const inventory = env.INVENTORY.get(inventoryId)
+    await inventory.fetch(
+      new Request('https://fake/stock', {
+        method: 'POST',
+        body: JSON.stringify({ item: 'product-1', quantity: 10 }),
+      })
+    )
+
+    // 2. Create order
+    const orderId = env.ORDERS.newUniqueId()
+    const order = env.ORDERS.get(orderId)
+    const response = await order.fetch(
+      new Request('https://fake/create', {
+        method: 'POST',
+        body: JSON.stringify({
+          items: ['product-1'],
+          quantity: 1,
+        }),
+      })
+    )
+
+    expect(response.ok).toBe(true)
+
+    // 3. Verify inventory updated
+    const stockResponse = await inventory.fetch(new Request('https://fake/check?item=product-1'))
+    const stock = await stockResponse.json()
+    expect(stock.quantity).toBe(9)
+  })
+})
+```
+
+## Next Steps
+
+- Review [Architecture](./architecture) to understand internals
+- Explore [Troubleshooting](./troubleshooting) for common issues
+- Check [API Reference](../api/reference) for complete documentation
+- Study [Real-World Examples](../examples/real-world-use-case) for production patterns
+
+---
+
+Documentation licensed under [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/).

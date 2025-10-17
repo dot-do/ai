@@ -1,0 +1,139 @@
+---
+$id: https://gateway.do/docs/best-practices
+$type: TechArticle
+title: API Gateway Best Practices
+description: Best practices for using gateway.do effectively
+keywords: [gateway, best practices, optimization, security, performance]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Best Practices
+
+## Performance Optimization
+
+### 1. Enable Caching
+
+```typescript
+// Good: Cache GET requests
+const data = await gateway.get(url, {
+  cache: { enabled: true, ttl: 3600 },
+})
+
+// Avoid: No caching for frequently accessed data
+const data = await gateway.get(url)
+```
+
+### 2. Use Connection Pooling
+
+```typescript
+gateway.config({
+  connectionPool: {
+    maxSockets: 50,
+    keepAlive: true,
+  },
+})
+```
+
+### 3. Parallelize Requests
+
+```typescript
+// Good: Parallel requests
+const [users, orders, products] = await Promise.all([gateway.get('/users'), gateway.get('/orders'), gateway.get('/products')])
+
+// Avoid: Sequential requests
+const users = await gateway.get('/users')
+const orders = await gateway.get('/orders')
+const products = await gateway.get('/products')
+```
+
+## Security
+
+### 1. Store Credentials Securely
+
+```typescript
+// Good: Use environment variables
+await gateway.get(url, {
+  auth: { type: 'bearer', token: process.env.API_TOKEN },
+})
+
+// Avoid: Hardcoded credentials
+await gateway.get(url, {
+  auth: { type: 'bearer', token: 'sk-...' }, // Never do this!
+})
+```
+
+### 2. Implement Rate Limiting
+
+```typescript
+gateway.config({
+  rateLimit: {
+    default: { requests: 100, window: 60000 },
+  },
+})
+```
+
+### 3. Validate Responses
+
+```typescript
+const data = await gateway.get(url)
+
+// Validate response structure
+if (!data || !data.id) {
+  throw new Error('Invalid response')
+}
+```
+
+## Error Handling
+
+### 1. Handle Errors Gracefully
+
+```typescript
+try {
+  const data = await gateway.get(url, {
+    retry: { max: 3 },
+  })
+} catch (error) {
+  if (error.status === 429) {
+    // Handle rate limit
+  } else if (error.status >= 500) {
+    // Handle server error
+  }
+}
+```
+
+### 2. Use Circuit Breakers
+
+```typescript
+await gateway.get(url, {
+  retry: {
+    circuitBreaker: {
+      enabled: true,
+      threshold: 5,
+    },
+  },
+})
+```
+
+## Monitoring
+
+### 1. Track Usage
+
+```typescript
+const analytics = await gateway.analytics.usage()
+console.log(`Requests: ${analytics.totalRequests}`)
+console.log(`Success rate: ${analytics.successRate}`)
+```
+
+### 2. Set Up Alerts
+
+```typescript
+if (analytics.errorRate > 0.05) {
+  await sendAlert('High error rate')
+}
+```
+
+## License
+
+MIT (Open Source)

@@ -1,0 +1,621 @@
+---
+$id: https://ai.do/docs/generation
+$type: TechArticle
+title: Text Generation with ai.do
+description: Generate AI content with semantic context and schema support
+keywords: [ai, generation, gpt, claude, text generation, structured output]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Text Generation
+
+Generate AI content with semantic context, schema validation, and structured output support.
+
+## Overview
+
+The `ai.generate()` function provides a unified interface for text generation across multiple AI models (GPT-5, Claude Sonnet 4.5, and variants) with built-in support for Schema.org types and semantic context.
+
+## Basic Generation
+
+Generate text from a simple prompt:
+
+```typescript
+import { ai } from 'sdk.do'
+
+const response = await ai.generate('Write a haiku about programming')
+
+console.log(response)
+// "Code flows through the night
+//  Bugs emerge at dawn's first light
+//  Debug and make right"
+```
+
+## Structured Output
+
+Generate JSON objects that validate against Schema.org types:
+
+```typescript
+import { $, ai } from 'sdk.do'
+
+const product = await ai.generate('Create a smartphone product listing', {
+  schema: $.Product,
+  structured: true,
+})
+
+console.log(product)
+// {
+//   $type: "Product",
+//   $id: "generated-id",
+//   name: "SmartPhone X",
+//   description: "Advanced smartphone with AI capabilities",
+//   brand: { $type: "Brand", name: "TechCorp" },
+//   offers: {
+//     $type: "Offer",
+//     price: 799,
+//     priceCurrency: "USD"
+//   }
+// }
+```
+
+## Schema-Based Generation
+
+Use any Schema.org type for structured generation:
+
+### Business Types
+
+```typescript
+import { $, ai } from 'sdk.do'
+
+// Generate Organization
+const organization = await ai.generate('Create a tech startup profile in San Francisco', {
+  schema: $.Organization,
+  structured: true,
+})
+
+// Generate LocalBusiness
+const business = await ai.generate('Create a coffee shop business', {
+  schema: $.LocalBusiness,
+  structured: true,
+  context: {
+    address: '123 Main St, Portland, OR',
+  },
+})
+```
+
+### People Types
+
+```typescript
+import { $, ai } from 'sdk.do'
+
+// Generate Person
+const person = await ai.generate('Create profile for senior software engineer', {
+  schema: $.Person,
+  structured: true,
+})
+
+// Generate Employee with relationships
+const employee = await ai.generate('Create employee profile', {
+  schema: $.Person,
+  structured: true,
+  context: {
+    worksFor: organization,
+    jobTitle: 'Senior Developer',
+  },
+})
+```
+
+### Product Types
+
+```typescript
+import { $, ai } from 'sdk.do'
+
+// Generate Product
+const product = await ai.generate('Create laptop product', {
+  schema: $.Product,
+  structured: true,
+  context: {
+    category: 'Electronics',
+    brand: 'TechCorp',
+  },
+})
+
+// Generate Service
+const service = await ai.generate('Create consulting service offering', {
+  schema: $.Service,
+  structured: true,
+})
+```
+
+### Content Types
+
+```typescript
+import { $, ai } from 'sdk.do'
+
+// Generate Article
+const article = await ai.generate('Write about sustainable technology', {
+  schema: $.Article,
+  structured: true,
+  context: {
+    wordCount: 500,
+    keywords: ['sustainability', 'green tech'],
+  },
+})
+
+// Generate BlogPost
+const post = await ai.generate('Write blog post about AI ethics', {
+  schema: $.BlogPost,
+  structured: true,
+})
+
+// Generate HowTo
+const guide = await ai.generate('Create guide for deploying web apps', {
+  schema: $.HowTo,
+  structured: true,
+})
+```
+
+## Semantic Context
+
+Provide rich semantic context for better generation:
+
+```typescript
+import { $, ai } from 'sdk.do'
+
+const article = await ai.generate('Write comprehensive guide', {
+  schema: $.Article,
+  structured: true,
+  context: {
+    about: $.MachineLearning,
+    audience: $.Developer,
+    level: 'intermediate',
+    keywords: ['neural networks', 'deep learning', 'pytorch'],
+    length: 2000,
+    tone: 'technical yet accessible',
+  },
+})
+```
+
+### Context Patterns
+
+Use semantic patterns in context:
+
+```typescript
+import { $, ai } from 'sdk.do'
+
+// Subject-predicate-object patterns
+const content = await ai.generate('Create content', {
+  context: {
+    // Who it's about
+    about: $.Organization,
+
+    // Who it's for
+    for: $.Business,
+
+    // Where it applies
+    in: $.Technology,
+
+    // What it relates to
+    related: [$.Product, $.Service],
+
+    // When it's relevant
+    temporal: $.CurrentYear,
+  },
+})
+```
+
+## Model Selection
+
+Choose the appropriate model for your use case:
+
+### GPT-5 (Default)
+
+Best for general-purpose generation:
+
+```typescript
+import { ai } from 'sdk.do'
+
+const response = await ai.generate('Generate product description', {
+  model: 'gpt-5',
+})
+```
+
+### GPT-5 Mini
+
+Cost-effective for simpler tasks:
+
+```typescript
+import { ai } from 'sdk.do'
+
+const summary = await ai.generate('Summarize this in 2 sentences', {
+  model: 'gpt-5-mini',
+  context: { text: longText },
+})
+```
+
+### GPT-5 Nano
+
+Fastest and cheapest for very simple tasks:
+
+```typescript
+import { ai } from 'sdk.do'
+
+const category = await ai.generate('Extract category', {
+  model: 'gpt-5-nano',
+  context: { product: 'iPhone 15' },
+})
+```
+
+### GPT-5 Codex
+
+Optimized for code generation and analysis:
+
+```typescript
+import { ai } from 'sdk.do'
+
+const refactored = await ai.generate('Refactor this function', {
+  model: 'gpt-5-codex',
+  context: { code: sourceCode },
+})
+```
+
+### Claude Sonnet 4.5
+
+Alternative high-quality model:
+
+```typescript
+import { ai } from 'sdk.do'
+
+const creative = await ai.generate('Write creative story', {
+  model: 'claude-sonnet-4.5',
+  temperature: 0.9,
+})
+```
+
+## Generation Parameters
+
+Control generation behavior with parameters:
+
+```typescript
+import { ai } from 'sdk.do'
+
+const response = await ai.generate('prompt', {
+  // Model selection
+  model: 'gpt-5',
+
+  // Temperature (0-1): creativity vs consistency
+  temperature: 0.7,
+
+  // Maximum tokens to generate
+  maxTokens: 4096,
+
+  // Top-p sampling (0-1): diversity of choices
+  topP: 1.0,
+
+  // Frequency penalty (-2 to 2): reduce repetition
+  frequencyPenalty: 0,
+
+  // Presence penalty (-2 to 2): encourage new topics
+  presencePenalty: 0,
+
+  // Stop sequences: halt generation
+  stop: ['\n\n', '###'],
+
+  // Schema for structured output
+  schema: $.Product,
+
+  // Enable structured mode
+  structured: true,
+
+  // Semantic context
+  context: {
+    /* ... */
+  },
+})
+```
+
+### Temperature
+
+Controls randomness in generation:
+
+```typescript
+import { ai } from 'sdk.do'
+
+// Low temperature (0-0.3): Focused and deterministic
+const factual = await ai.generate('What is the capital of France?', {
+  temperature: 0.1,
+})
+
+// Medium temperature (0.4-0.7): Balanced creativity
+const description = await ai.generate('Write product description', {
+  temperature: 0.5,
+})
+
+// High temperature (0.8-1.0): Creative and diverse
+const creative = await ai.generate('Write creative story', {
+  temperature: 0.9,
+})
+```
+
+### Max Tokens
+
+Control response length:
+
+```typescript
+import { ai } from 'sdk.do'
+
+// Short response
+const summary = await ai.generate('Summarize in one sentence', {
+  maxTokens: 50,
+})
+
+// Standard response
+const description = await ai.generate('Write description', {
+  maxTokens: 500,
+})
+
+// Long response
+const article = await ai.generate('Write comprehensive article', {
+  maxTokens: 4000,
+})
+```
+
+## Advanced Patterns
+
+### Multi-Turn Generation
+
+Generate content in multiple steps:
+
+```typescript
+import { $, ai } from 'sdk.do'
+
+// Step 1: Generate outline
+const outline = await ai.generate('Create article outline about AI ethics', {
+  schema: $.Article,
+  structured: true,
+})
+
+// Step 2: Expand each section
+const sections = await Promise.all(outline.sections.map((section) => ai.generate(`Write detailed section about ${section.title}`, { maxTokens: 1000 })))
+
+// Step 3: Combine into final article
+const article = {
+  ...outline,
+  content: sections.join('\n\n'),
+}
+```
+
+### Conditional Generation
+
+Generate based on conditions:
+
+```typescript
+import { $, ai, db } from 'sdk.do'
+
+const product = await db.get(productId, $.Product)
+
+// Generate description if missing
+if (!product.description) {
+  product.description = await ai.generate(`Generate description for ${product.name}`, {
+    context: {
+      product,
+      keywords: product.keywords,
+      tone: 'professional',
+    },
+  })
+
+  await db.update(product.$id, { description: product.description })
+}
+```
+
+### Parallel Generation
+
+Generate multiple items concurrently:
+
+```typescript
+import { $, ai } from 'sdk.do'
+
+const categories = ['Electronics', 'Clothing', 'Home', 'Sports']
+
+const products = await Promise.all(
+  categories.map((category) =>
+    ai.generate(`Create example product for ${category}`, {
+      schema: $.Product,
+      structured: true,
+      context: { category },
+    })
+  )
+)
+```
+
+### Iterative Refinement
+
+Refine generation through iteration:
+
+```typescript
+import { ai } from 'sdk.do'
+
+let content = await ai.generate('Write product description')
+
+// Refine for clarity
+content = await ai.generate('Improve clarity and readability', { context: { content } })
+
+// Refine for SEO
+content = await ai.generate('Optimize for SEO with keywords', {
+  context: {
+    content,
+    keywords: ['smartphone', 'AI', 'camera'],
+  },
+})
+```
+
+## Error Handling
+
+Handle generation errors gracefully:
+
+```typescript
+import { ai } from 'sdk.do'
+
+try {
+  const response = await ai.generate('prompt')
+  console.log(response)
+} catch (error) {
+  switch (error.code) {
+    case 'RATE_LIMIT_EXCEEDED':
+      console.error('Rate limit exceeded, retry after:', error.retryAfter)
+      break
+
+    case 'INVALID_API_KEY':
+      console.error('Invalid API key, check configuration')
+      break
+
+    case 'CONTEXT_LENGTH_EXCEEDED':
+      console.error('Prompt too long, reduce size')
+      break
+
+    case 'CONTENT_FILTER':
+      console.error('Content filtered by safety system')
+      break
+
+    case 'MODEL_UNAVAILABLE':
+      console.error('Model temporarily unavailable')
+      break
+
+    default:
+      console.error('Generation failed:', error.message)
+  }
+}
+```
+
+## Retry Logic
+
+Implement retry for transient errors:
+
+```typescript
+import { ai } from 'sdk.do'
+
+async function generateWithRetry(prompt: string, options: any = {}, maxRetries = 3) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await ai.generate(prompt, options)
+    } catch (error) {
+      const shouldRetry = error.code === 'RATE_LIMIT_EXCEEDED' || error.code === 'MODEL_UNAVAILABLE'
+
+      if (shouldRetry && i < maxRetries - 1) {
+        const delay = Math.pow(2, i) * 1000 // Exponential backoff
+        await new Promise((resolve) => setTimeout(resolve, delay))
+        continue
+      }
+
+      throw error
+    }
+  }
+}
+```
+
+## Best Practices
+
+### 1. Use Appropriate Schemas
+
+Always use Schema.org types for structured output:
+
+```typescript
+// Good: Schema validation
+const product = await ai.generate('...', {
+  schema: $.Product,
+  structured: true,
+})
+
+// Avoid: Unstructured text
+const text = await ai.generate('...')
+```
+
+### 2. Provide Rich Context
+
+Include relevant context for better results:
+
+```typescript
+// Good: Rich context
+await ai.generate('Generate description', {
+  context: {
+    product: existingProduct,
+    brand: brand,
+    keywords: keywords,
+    tone: 'professional',
+  },
+})
+
+// Avoid: Minimal context
+await ai.generate('Generate description')
+```
+
+### 3. Choose Right Model
+
+Select model based on task complexity:
+
+```typescript
+// Simple classification
+await ai.generate('...', { model: 'gpt-5-nano' })
+
+// Standard generation
+await ai.generate('...', { model: 'gpt-5' })
+
+// Code tasks
+await ai.generate('...', { model: 'gpt-5-codex' })
+
+// Creative writing
+await ai.generate('...', {
+  model: 'claude-sonnet-4.5',
+  temperature: 0.9,
+})
+```
+
+### 4. Set Appropriate Temperature
+
+Match temperature to task:
+
+```typescript
+// Factual/deterministic
+await ai.generate('...', { temperature: 0.1 })
+
+// Balanced
+await ai.generate('...', { temperature: 0.5 })
+
+// Creative
+await ai.generate('...', { temperature: 0.9 })
+```
+
+### 5. Handle Errors
+
+Always implement error handling:
+
+```typescript
+try {
+  const result = await ai.generate('...')
+} catch (error) {
+  // Handle errors appropriately
+  logger.error('Generation failed', error)
+}
+```
+
+## Examples
+
+See practical examples:
+
+- [Basic Generation](../examples/basic-generation) - Simple text generation
+- [Structured Output](../examples/structured-output) - Schema-based generation
+
+## API Reference
+
+See the [API Reference](../api/) for complete function signatures and parameters.
+
+## Next Steps
+
+- [Embeddings](./embeddings) - Create vector embeddings
+- [Batch Processing](./batch-processing) - Process large datasets
+- [Examples](../examples/) - More code examples
+
+## License
+
+MIT (Open Source)

@@ -1,0 +1,718 @@
+---
+$id: https://db.do/docs/relationships
+$type: TechArticle
+title: Semantic Relationship Queries
+description: Working with semantic relationships using the db.relate() function
+keywords: [database, relationships, semantic, graph, queries, predicates, relate]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Semantic Relationships
+
+Learn how to query and manage semantic relationships between entities using the `db.relate()` function.
+
+## Overview
+
+Semantic relationships connect entities using natural predicates like `$.owns`, `$.employs`, and `$.serves`. These relationships form a knowledge graph that can be queried using the `$.Subject.predicate.Object` pattern.
+
+## Basic Relationship Query
+
+The `db.relate()` function queries relationships between entities:
+
+```typescript
+import { $, db } from 'sdk.do'
+
+const business = await db.get($.Business, 'biz_123')
+
+// Find all brands owned by this business
+const brands = await db.relate(business, $.owns, $.Brand)
+
+console.log(`Business owns ${brands.length} brands`)
+```
+
+## Relationship Pattern
+
+Semantic relationships follow the RDF triple pattern:
+
+```
+Subject → Predicate → Object
+```
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Business (subject) → owns (predicate) → Brand (object)
+const brands = await db.relate(business, $.owns, $.Brand)
+
+// Organization (subject) → employs (predicate) → Person (object)
+const employees = await db.relate(org, $.employs, $.Person)
+
+// Brand (subject) → offers (predicate) → Product (object)
+const products = await db.relate(brand, $.offers, $.Product)
+```
+
+## Common Predicates
+
+### Ownership Relationships
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Forward: Business owns Brand
+const brands = await db.relate(business, $.owns, $.Brand)
+
+// Inverse: Brand ownedBy Business
+const owner = await db.relate(brand, $.ownedBy, $.Business)
+```
+
+### Employment Relationships
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Forward: Organization employs Person
+const employees = await db.relate(org, $.employs, $.Person)
+
+// Inverse: Person worksFor Organization
+const employer = await db.relate(person, $.worksFor, $.Organization)
+```
+
+### Offering Relationships
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Forward: Organization offers Product
+const products = await db.relate(org, $.offers, $.Product)
+
+// Inverse: Product offeredBy Organization
+const provider = await db.relate(product, $.offeredBy, $.Organization)
+```
+
+### Service Relationships
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Forward: Business serves Customer
+const customers = await db.relate(business, $.serves, $.Customer)
+
+// Inverse: Customer servedBy Business
+const providers = await db.relate(customer, $.servedBy, $.Business)
+```
+
+### Authorship Relationships
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Forward: Person wrote Article
+const articles = await db.relate(person, $.wrote, $.Article)
+
+// Inverse: Article author Person
+const author = await db.relate(article, $.author, $.Person)
+```
+
+### Membership Relationships
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Forward: Organization member Person
+const members = await db.relate(org, $.member, $.Person)
+
+// Inverse: Person memberOf Organization
+const organizations = await db.relate(person, $.memberOf, $.Organization)
+```
+
+## Creating Relationships
+
+Relationships are created by referencing entities in your data:
+
+### Inline Reference
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Create brand with reference to owner
+const brand = await db.create($.Brand, {
+  name: 'TechBrand Pro',
+  owner: { $id: 'biz_123' }, // Creates ownership relationship
+})
+
+// Now can query the relationship
+const business = await db.get($.Business, 'biz_123')
+const brands = await db.relate(business, $.owns, $.Brand)
+// brands includes the new brand
+```
+
+### Explicit Relationship
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Create business
+const business = await db.create($.Business, {
+  name: 'TechCorp',
+})
+
+// Create brand
+const brand = await db.create($.Brand, {
+  name: 'TechBrand',
+})
+
+// Create relationship
+await db.createRelation(business, $.owns, brand)
+
+// Query relationship
+const brands = await db.relate(business, $.owns, $.Brand)
+```
+
+### Array of References
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Create organization with multiple employees
+const org = await db.create($.Organization, {
+  name: 'Acme Corp',
+  employees: [{ $id: 'person_1' }, { $id: 'person_2' }, { $id: 'person_3' }],
+})
+
+// Query employees
+const employees = await db.relate(org, $.employs, $.Person)
+// Returns all 3 employees
+```
+
+## Filtering Relationships
+
+Apply filters when querying relationships:
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Find active brands only
+const activeBrands = await db.relate(business, $.owns, $.Brand, {
+  where: { status: 'active' },
+})
+
+// Find senior employees
+const seniors = await db.relate(org, $.employs, $.Person, {
+  where: {
+    jobTitle: { $contains: 'Senior' },
+  },
+})
+
+// Find expensive products
+const premium = await db.relate(brand, $.offers, $.Product, {
+  where: {
+    price: { $gte: 1000 },
+  },
+})
+```
+
+## Sorting Relationships
+
+Sort related entities:
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Sort brands alphabetically
+const sortedBrands = await db.relate(business, $.owns, $.Brand, {
+  orderBy: { name: 'asc' },
+})
+
+// Sort employees by hire date
+const byHireDate = await db.relate(org, $.employs, $.Person, {
+  orderBy: { hireDate: 'desc' },
+})
+```
+
+## Paginating Relationships
+
+Handle large sets of related entities:
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// First page of employees
+const page1 = await db.relate(org, $.employs, $.Person, {
+  limit: 50,
+  offset: 0,
+  orderBy: { name: 'asc' },
+})
+
+// Second page
+const page2 = await db.relate(org, $.employs, $.Person, {
+  limit: 50,
+  offset: 50,
+  orderBy: { name: 'asc' },
+})
+```
+
+## Multi-Hop Relationships
+
+Query chains of relationships:
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Business → Brand → Product
+const business = await db.get($.Business, 'biz_123')
+
+// Get brands
+const brands = await db.relate(business, $.owns, $.Brand)
+
+// Get all products from all brands
+const allProducts = []
+for (const brand of brands) {
+  const products = await db.relate(brand, $.offers, $.Product)
+  allProducts.push(...products)
+}
+
+console.log(`Business offers ${allProducts.length} total products`)
+```
+
+### Recursive Queries
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Organization → SubOrganization → SubSubOrganization
+async function getOrgHierarchy(org, level = 0) {
+  const subOrgs = await db.relate(org, $.subOrganization, $.Organization)
+
+  return {
+    ...org,
+    level,
+    children: await Promise.all(subOrgs.map((sub) => getOrgHierarchy(sub, level + 1))),
+  }
+}
+
+const hierarchy = await getOrgHierarchy(rootOrg)
+```
+
+## Bidirectional Relationships
+
+Query relationships in both directions:
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// From business to brands (forward)
+const brands = await db.relate(business, $.owns, $.Brand)
+
+// From brand to business (inverse)
+const brand = await db.get($.Brand, 'brand_123')
+const owner = await db.relate(brand, $.ownedBy, $.Business)
+
+// Both represent the same relationship
+console.log(owner[0].$id === business.$id) // true
+```
+
+## Relationship Counting
+
+Count related entities without fetching them:
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Count brands
+const brandCount = await db.countRelations(business, $.owns, $.Brand)
+
+// Count with filter
+const activeCount = await db.countRelations(business, $.owns, $.Brand, {
+  where: { status: 'active' },
+})
+
+console.log(`Business owns ${brandCount} brands (${activeCount} active)`)
+```
+
+## Checking Relationship Existence
+
+Check if a relationship exists:
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Check if business owns a specific brand
+const owns = await db.hasRelation(business, $.owns, brand)
+
+if (owns) {
+  console.log('Business owns this brand')
+}
+
+// Check if person works for organization
+const works = await db.hasRelation(person, $.worksFor, org)
+```
+
+## Deleting Relationships
+
+Remove relationships between entities:
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Delete specific relationship
+await db.deleteRelation(business, $.owns, brand)
+
+// Delete all relationships of a type
+await db.deleteAllRelations(business, $.owns, $.Brand)
+
+// Note: This doesn't delete the entities, just the relationships
+```
+
+## Complex Relationship Queries
+
+### Multiple Relationship Types
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Get all entities related to a business
+const brands = await db.relate(business, $.owns, $.Brand)
+const employees = await db.relate(business, $.employs, $.Person)
+const customers = await db.relate(business, $.serves, $.Customer)
+const products = await db.relate(business, $.offers, $.Product)
+
+console.log({
+  brands: brands.length,
+  employees: employees.length,
+  customers: customers.length,
+  products: products.length,
+})
+```
+
+### Relationship Union
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Get all content authored by a person
+const articles = await db.relate(person, $.wrote, $.Article)
+const blogPosts = await db.relate(person, $.wrote, $.BlogPost)
+const allContent = [...articles, ...blogPosts]
+
+// Sort by date
+allContent.sort((a, b) => new Date(b.datePublished) - new Date(a.datePublished))
+```
+
+### Relationship Intersection
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Find products offered by multiple brands
+const brand1Products = await db.relate(brand1, $.offers, $.Product)
+const brand2Products = await db.relate(brand2, $.offers, $.Product)
+
+const sharedProducts = brand1Products.filter((p1) => brand2Products.some((p2) => p2.$id === p1.$id))
+
+console.log(`${sharedProducts.length} products shared between brands`)
+```
+
+## Relationship Patterns
+
+### One-to-Many
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// One business owns many brands
+const business = await db.get($.Business, 'biz_123')
+const brands = await db.relate(business, $.owns, $.Brand)
+// brands is an array
+
+// Each brand is owned by one business
+const brand = await db.get($.Brand, 'brand_123')
+const owner = await db.relate(brand, $.ownedBy, $.Business)
+// owner is an array with one element (or empty)
+```
+
+### Many-to-Many
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Person can be member of many organizations
+const person = await db.get($.Person, 'person_123')
+const orgs = await db.relate(person, $.memberOf, $.Organization)
+
+// Organization can have many members
+const org = await db.get($.Organization, 'org_123')
+const members = await db.relate(org, $.member, $.Person)
+```
+
+### Hierarchical
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Organization hierarchy
+const parent = await db.get($.Organization, 'org_123')
+const children = await db.relate(parent, $.subOrganization, $.Organization)
+
+for (const child of children) {
+  const grandchildren = await db.relate(child, $.subOrganization, $.Organization)
+  console.log(`${child.name} has ${grandchildren.length} sub-organizations`)
+}
+```
+
+## Knowledge Graph Building
+
+Build a complete knowledge graph:
+
+```typescript
+import { $, db } from 'sdk.do'
+
+async function buildBusinessGraph(businessId: string) {
+  const business = await db.get($.Business, businessId)
+
+  // Get all related entities
+  const [brands, employees, customers, products] = await Promise.all([
+    db.relate(business, $.owns, $.Brand),
+    db.relate(business, $.employs, $.Person),
+    db.relate(business, $.serves, $.Customer),
+    db.relate(business, $.offers, $.Product),
+  ])
+
+  // Get second-level relationships
+  const brandProducts = await Promise.all(brands.map((brand) => db.relate(brand, $.offers, $.Product)))
+
+  const employeeRoles = await Promise.all(employees.map((emp) => db.relate(emp, $.hasOccupation, $.Occupation)))
+
+  return {
+    business,
+    brands,
+    employees,
+    customers,
+    products,
+    brandProducts: brandProducts.flat(),
+    employeeRoles: employeeRoles.flat(),
+  }
+}
+
+const graph = await buildBusinessGraph('biz_123')
+console.log('Knowledge graph:', graph)
+```
+
+## Relationship Visualization
+
+Export relationships for visualization:
+
+```typescript
+import { $, db } from 'sdk.do'
+
+async function exportRelationshipGraph(entity) {
+  const nodes = [entity]
+  const edges = []
+
+  // Define relationship types to explore
+  const relationships = [
+    { predicate: $.owns, object: $.Brand },
+    { predicate: $.employs, object: $.Person },
+    { predicate: $.offers, object: $.Product },
+  ]
+
+  // Explore each relationship type
+  for (const rel of relationships) {
+    const related = await db.relate(entity, rel.predicate, rel.object)
+
+    for (const target of related) {
+      nodes.push(target)
+      edges.push({
+        source: entity.$id,
+        target: target.$id,
+        label: rel.predicate.toString(),
+      })
+    }
+  }
+
+  return {
+    nodes,
+    edges,
+    format: 'cytoscape', // or 'd3', 'graphviz', etc.
+  }
+}
+
+const graph = await exportRelationshipGraph(business)
+// Can now visualize with Cytoscape.js, D3, etc.
+```
+
+## Performance Optimization
+
+### Batch Relationship Queries
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Inefficient: Multiple queries
+const brands = await db.relate(business, $.owns, $.Brand)
+for (const brand of brands) {
+  const products = await db.relate(brand, $.offers, $.Product)
+}
+
+// Efficient: Batch query
+const allBrandProducts = await db.batchRelate(brands.map((b) => ({ subject: b, predicate: $.offers, object: $.Product })))
+```
+
+### Eager Loading
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Load entity with relationships in single query
+const business = await db.get($.Business, 'biz_123', {
+  include: ['brands', 'employees', 'products'],
+})
+
+// No additional queries needed
+console.log(business.brands) // Already loaded
+console.log(business.employees) // Already loaded
+console.log(business.products) // Already loaded
+```
+
+### Relationship Caching
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Cache relationship results
+const brands = await db.relate(business, $.owns, $.Brand, {
+  cache: true,
+  cacheTTL: 300, // 5 minutes
+})
+
+// Subsequent queries use cache
+const cachedBrands = await db.relate(business, $.owns, $.Brand, {
+  cache: true,
+})
+```
+
+## Best Practices
+
+### 1. Use Semantic Predicates
+
+```typescript
+// Good - semantic predicate
+const brands = await db.relate(business, $.owns, $.Brand)
+
+// Avoid - generic relationship
+const brands = await db.relate(business, 'has', $.Brand)
+```
+
+### 2. Query Bidirectionally
+
+```typescript
+// Forward relationship
+const brands = await db.relate(business, $.owns, $.Brand)
+
+// Inverse relationship (more efficient if querying from brand)
+const owner = await db.relate(brand, $.ownedBy, $.Business)
+```
+
+### 3. Filter Early
+
+```typescript
+// Good - filter at database
+const active = await db.relate(business, $.owns, $.Brand, {
+  where: { status: 'active' },
+})
+
+// Avoid - filter in memory
+const all = await db.relate(business, $.owns, $.Brand)
+const active = all.filter((b) => b.status === 'active')
+```
+
+### 4. Use Eager Loading
+
+```typescript
+// Good - eager load
+const business = await db.get($.Business, 'biz_123', {
+  include: ['brands'],
+})
+
+// Avoid - lazy load
+const business = await db.get($.Business, 'biz_123')
+const brands = await db.relate(business, $.owns, $.Brand)
+```
+
+### 5. Count Before Fetching
+
+```typescript
+// Good - check count first
+const count = await db.countRelations(business, $.owns, $.Brand)
+if (count > 0) {
+  const brands = await db.relate(business, $.owns, $.Brand)
+}
+
+// Avoid - always fetch
+const brands = await db.relate(business, $.owns, $.Brand)
+if (brands.length > 0) {
+  // ...
+}
+```
+
+## Common Patterns
+
+### Parent-Child
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Get children
+const children = await db.relate(parent, $.children, $.Person)
+
+// Get parent
+const parents = await db.relate(child, $.parent, $.Person)
+```
+
+### Manager-Employee
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Get direct reports
+const reports = await db.relate(manager, $.manages, $.Person)
+
+// Get manager
+const managers = await db.relate(employee, $.reportsTo, $.Person)
+```
+
+### Author-Content
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Get all content by author
+const content = await db.relate(author, $.wrote, $.CreativeWork)
+
+// Get author of content
+const authors = await db.relate(content, $.author, $.Person)
+```
+
+### Product-Category
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Get products in category
+const products = await db.relate(category, $.hasProduct, $.Product)
+
+// Get categories for product
+const categories = await db.relate(product, $.category, $.Category)
+```
+
+## See Also
+
+- [Getting Started](./getting-started) - Basic usage
+- [Operations](./operations) - Database operations
+- [Relationship Examples](../examples/relationships) - Practical examples
+- [API Reference](../api/) - Complete API docs
+
+## License
+
+MIT (Open Source)

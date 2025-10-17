@@ -1,0 +1,504 @@
+---
+$id: https://orders.do/examples/basic-usage
+$type: HowTo
+title: Basic Order Management Usage
+description: Learn basic order management patterns including creating orders, updating status, and handling simple workflows.
+keywords: [examples, basic usage, order creation, order management, tutorial]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Basic Order Management Usage
+
+This example demonstrates basic order management operations with orders.do.
+
+## Simple Order Creation
+
+Create a basic order with a single product:
+
+```typescript
+import $, { db } from 'sdk.do'
+
+// Create a simple order
+const order = await db.create($.Order, {
+  $type: 'Order',
+  orderNumber: 'ORD-2025-001',
+  orderDate: new Date().toISOString(),
+  customer: {
+    $type: 'Person',
+    name: 'Jane Smith',
+    email: 'jane@example.com',
+    telephone: '+1-555-0123',
+  },
+  orderedItem: [
+    {
+      $type: 'OrderItem',
+      orderItemNumber: '1',
+      orderedItem: {
+        $type: 'Product',
+        name: 'Wireless Headphones',
+        sku: 'WH-1000',
+        brand: {
+          $type: 'Brand',
+          name: 'AudioPro',
+        },
+      },
+      orderQuantity: 1,
+      price: {
+        $type: 'PriceSpecification',
+        price: 299.99,
+        priceCurrency: 'USD',
+      },
+    },
+  ],
+  orderStatus: 'OrderProcessing',
+  paymentMethod: {
+    $type: 'PaymentCard',
+    name: 'Visa ending in 1234',
+  },
+  billingAddress: {
+    $type: 'PostalAddress',
+    streetAddress: '123 Main St',
+    addressLocality: 'San Francisco',
+    addressRegion: 'CA',
+    postalCode: '94102',
+    addressCountry: 'US',
+  },
+  orderDelivery: {
+    $type: 'ParcelDelivery',
+    deliveryAddress: {
+      $type: 'PostalAddress',
+      streetAddress: '123 Main St',
+      addressLocality: 'San Francisco',
+      addressRegion: 'CA',
+      postalCode: '94102',
+      addressCountry: 'US',
+    },
+  },
+})
+
+console.log('Order created:', order.$id)
+console.log('Order number:', order.orderNumber)
+```
+
+## Retrieving Orders
+
+Fetch orders from the database:
+
+```typescript
+// Get a specific order
+const order = await db.get($.Order, 'order-id-123')
+
+// List all orders
+const allOrders = await db.list($.Order)
+
+// Find orders by customer
+const customerOrders = await db.list($.Order, {
+  where: {
+    'customer.email': 'jane@example.com',
+  },
+})
+
+// Find orders by status
+const processingOrders = await db.list($.Order, {
+  where: {
+    orderStatus: 'OrderProcessing',
+  },
+})
+
+// Find recent orders
+const recentOrders = await db.list($.Order, {
+  where: {
+    orderDate: {
+      $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+  },
+  sort: {
+    orderDate: -1,
+  },
+})
+
+console.log('Found', recentOrders.length, 'orders in the last 7 days')
+```
+
+## Updating Order Status
+
+Track order progress by updating status:
+
+```typescript
+// Update to shipped
+await db.update(order, {
+  orderStatus: 'OrderInTransit',
+  orderDelivery: {
+    ...order.orderDelivery,
+    trackingNumber: '1Z999AA10123456784',
+    trackingUrl: 'https://track.example.com/1Z999AA10123456784',
+    hasDeliveryMethod: {
+      $type: 'DeliveryMethod',
+      name: 'UPS Ground',
+    },
+    expectedArrivalFrom: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+    expectedArrivalUntil: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000 + 8 * 60 * 60 * 1000).toISOString(),
+  },
+})
+
+console.log('Order shipped with tracking:', order.orderDelivery.trackingNumber)
+
+// Update to delivered
+await db.update(order, {
+  orderStatus: 'OrderDelivered',
+  deliveredAt: new Date().toISOString(),
+})
+
+console.log('Order delivered at:', order.deliveredAt)
+```
+
+## Multi-Item Orders
+
+Create orders with multiple products:
+
+```typescript
+const order = await db.create($.Order, {
+  $type: 'Order',
+  orderNumber: 'ORD-2025-002',
+  orderDate: new Date().toISOString(),
+  customer: {
+    $type: 'Person',
+    name: 'John Doe',
+    email: 'john@example.com',
+  },
+  orderedItem: [
+    {
+      $type: 'OrderItem',
+      orderItemNumber: '1',
+      orderedItem: {
+        $type: 'Product',
+        name: 'Laptop',
+        sku: 'LAP-1000',
+      },
+      orderQuantity: 1,
+      price: {
+        $type: 'PriceSpecification',
+        price: 1299.99,
+        priceCurrency: 'USD',
+      },
+    },
+    {
+      $type: 'OrderItem',
+      orderItemNumber: '2',
+      orderedItem: {
+        $type: 'Product',
+        name: 'Wireless Mouse',
+        sku: 'WM-500',
+      },
+      orderQuantity: 2,
+      price: {
+        $type: 'PriceSpecification',
+        price: 49.99,
+        priceCurrency: 'USD',
+      },
+    },
+    {
+      $type: 'OrderItem',
+      orderItemNumber: '3',
+      orderedItem: {
+        $type: 'Product',
+        name: 'USB-C Cable',
+        sku: 'USB-C-100',
+      },
+      orderQuantity: 3,
+      price: {
+        $type: 'PriceSpecification',
+        price: 19.99,
+        priceCurrency: 'USD',
+      },
+    },
+  ],
+  orderStatus: 'OrderProcessing',
+})
+
+// Calculate totals
+const subtotal = order.orderedItem.reduce((sum, item) => sum + item.price.price * item.orderQuantity, 0)
+
+console.log('Order subtotal:', subtotal)
+console.log('Total items:', order.orderedItem.length)
+```
+
+## Order Cancellation
+
+Cancel an order and handle cleanup:
+
+```typescript
+async function cancelOrder(orderId: string, reason: string) {
+  const order = await db.get($.Order, orderId)
+
+  // Check if order can be cancelled
+  if (order.orderStatus === 'OrderDelivered') {
+    throw new Error('Cannot cancel delivered order')
+  }
+
+  if (order.orderStatus === 'OrderCancelled') {
+    throw new Error('Order already cancelled')
+  }
+
+  // Update order status
+  await db.update(order, {
+    orderStatus: 'OrderCancelled',
+    cancellationReason: reason,
+    cancelledAt: new Date().toISOString(),
+  })
+
+  console.log('Order cancelled:', order.orderNumber)
+  return order
+}
+
+// Usage
+await cancelOrder('order-id-123', 'Customer requested cancellation')
+```
+
+## Event-Driven Notifications
+
+Send notifications when orders are created or updated:
+
+```typescript
+import { on, send } from 'sdk.do'
+
+// Send confirmation email when order is created
+await on($.Order.created, async (order) => {
+  await send({
+    $type: 'EmailMessage',
+    recipient: order.customer.email,
+    subject: `Order ${order.orderNumber} Confirmed`,
+    text: `
+      Thank you for your order!
+
+      Order Number: ${order.orderNumber}
+      Order Date: ${new Date(order.orderDate).toLocaleDateString()}
+
+      We'll send you updates as your order progresses.
+    `,
+  })
+
+  console.log('Confirmation email sent for order:', order.orderNumber)
+})
+
+// Send shipping notification when order is shipped
+await on($.Order.updated, async (order) => {
+  if (order.orderStatus === 'OrderInTransit') {
+    await send({
+      $type: 'EmailMessage',
+      recipient: order.customer.email,
+      subject: `Order ${order.orderNumber} Shipped`,
+      text: `
+        Your order has been shipped!
+
+        Tracking Number: ${order.orderDelivery.trackingNumber}
+        Track your order: ${order.orderDelivery.trackingUrl}
+
+        Expected delivery: ${new Date(order.orderDelivery.expectedArrivalFrom).toLocaleDateString()}
+      `,
+    })
+
+    console.log('Shipping notification sent for order:', order.orderNumber)
+  }
+})
+
+// Send delivery notification
+await on($.Order.updated, async (order) => {
+  if (order.orderStatus === 'OrderDelivered') {
+    await send({
+      $type: 'EmailMessage',
+      recipient: order.customer.email,
+      subject: `Order ${order.orderNumber} Delivered`,
+      text: `
+        Your order has been delivered!
+
+        Thank you for shopping with us.
+      `,
+    })
+
+    console.log('Delivery notification sent for order:', order.orderNumber)
+  }
+})
+```
+
+## Order Search
+
+Search for orders using various criteria:
+
+```typescript
+// Search by customer email
+async function findCustomerOrders(email: string) {
+  return await db.list($.Order, {
+    where: {
+      'customer.email': email,
+    },
+    sort: {
+      orderDate: -1,
+    },
+  })
+}
+
+// Search by order number
+async function findOrderByNumber(orderNumber: string) {
+  const orders = await db.list($.Order, {
+    where: {
+      orderNumber: orderNumber,
+    },
+  })
+
+  return orders[0] || null
+}
+
+// Search by date range
+async function findOrdersByDateRange(startDate: Date, endDate: Date) {
+  return await db.list($.Order, {
+    where: {
+      orderDate: {
+        $gte: startDate.toISOString(),
+        $lte: endDate.toISOString(),
+      },
+    },
+  })
+}
+
+// Search by status and date
+async function findOrdersByStatusAndDate(status: string, daysAgo: number) {
+  const date = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000)
+
+  return await db.list($.Order, {
+    where: {
+      orderStatus: status,
+      orderDate: {
+        $gte: date.toISOString(),
+      },
+    },
+  })
+}
+
+// Usage
+const janeOrders = await findCustomerOrders('jane@example.com')
+console.log('Jane has', janeOrders.length, 'orders')
+
+const order = await findOrderByNumber('ORD-2025-001')
+console.log('Found order:', order?.orderNumber)
+
+const recentOrders = await findOrdersByDateRange(new Date('2025-10-01'), new Date('2025-10-31'))
+console.log('October orders:', recentOrders.length)
+
+const stuckOrders = await findOrdersByStatusAndDate('OrderProcessing', 2)
+console.log('Orders stuck in processing:', stuckOrders.length)
+```
+
+## Complete Example
+
+Full order creation and tracking workflow:
+
+```typescript
+import $, { db, on, send } from 'sdk.do'
+
+// Setup event handlers
+await on($.Order.created, async (order) => {
+  console.log('Order created:', order.orderNumber)
+  await send({
+    $type: 'EmailMessage',
+    recipient: order.customer.email,
+    subject: 'Order Confirmation',
+    text: `Order ${order.orderNumber} confirmed`,
+  })
+})
+
+await on($.Order.updated, async (order) => {
+  console.log('Order updated:', order.orderNumber, order.orderStatus)
+
+  if (order.orderStatus === 'OrderInTransit') {
+    await send({
+      $type: 'EmailMessage',
+      recipient: order.customer.email,
+      subject: 'Order Shipped',
+      text: `Tracking: ${order.orderDelivery.trackingNumber}`,
+    })
+  }
+
+  if (order.orderStatus === 'OrderDelivered') {
+    await send({
+      $type: 'EmailMessage',
+      recipient: order.customer.email,
+      subject: 'Order Delivered',
+      text: 'Thank you for your order!',
+    })
+  }
+})
+
+// Create order
+const order = await db.create($.Order, {
+  $type: 'Order',
+  orderNumber: 'ORD-2025-003',
+  orderDate: new Date().toISOString(),
+  customer: {
+    $type: 'Person',
+    name: 'Alice Johnson',
+    email: 'alice@example.com',
+  },
+  orderedItem: [
+    {
+      $type: 'OrderItem',
+      orderItemNumber: '1',
+      orderedItem: {
+        $type: 'Product',
+        name: 'Smart Watch',
+        sku: 'SW-2000',
+      },
+      orderQuantity: 1,
+      price: {
+        $type: 'PriceSpecification',
+        price: 399.99,
+        priceCurrency: 'USD',
+      },
+    },
+  ],
+  orderStatus: 'OrderProcessing',
+})
+
+// Simulate order processing
+setTimeout(async () => {
+  await db.update(order, {
+    orderStatus: 'OrderInTransit',
+    orderDelivery: {
+      $type: 'ParcelDelivery',
+      trackingNumber: '1Z999AA10987654321',
+      trackingUrl: 'https://track.example.com/1Z999AA10987654321',
+    },
+  })
+}, 5000)
+
+// Simulate delivery
+setTimeout(async () => {
+  await db.update(order, {
+    orderStatus: 'OrderDelivered',
+    deliveredAt: new Date().toISOString(),
+  })
+}, 10000)
+```
+
+## Next Steps
+
+- Explore [Advanced Patterns](./advanced-patterns) for complex workflows
+- Learn [Integration](./integration) with other services
+- Review [Real-World Use Case](./real-world-use-case) for complete examples
+- Check [API Reference](../api/) for all available functions
+
+## See Also
+
+- [Getting Started](../docs/getting-started)
+- [Best Practices](../docs/best-practices)
+- [Troubleshooting](../docs/troubleshooting)
+
+## License
+
+MIT (Open Source)
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

@@ -1,0 +1,399 @@
+---
+$id: https://functions.do/docs/getting-started
+$type: TechArticle
+title: Getting Started with functions.do
+description: Learn how to install and create your first function with functions.do
+keywords: [getting started, installation, quickstart, first function]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Getting Started with functions.do
+
+This guide will help you install functions.do and create your first typesafe, composable function.
+
+## Installation
+
+functions.do is included in the core `sdk.do` package:
+
+```bash
+pnpm add sdk.do
+```
+
+Or using npm:
+
+```bash
+npm install sdk.do
+```
+
+Or using yarn:
+
+```bash
+yarn add sdk.do
+```
+
+## Your First Function
+
+Let's create a simple function that calculates the total price of items in a cart:
+
+```typescript
+import $, { fn } from 'sdk.do'
+
+// Define the function
+const calculateCartTotal = fn($.CalculateCartTotal, (items: Array<{ price: number; quantity: number }>) => {
+  return items.reduce((total, item) => {
+    return total + item.price * item.quantity
+  }, 0)
+})
+
+// Use the function
+const total = calculateCartTotal([
+  { price: 10.99, quantity: 2 },
+  { price: 5.99, quantity: 3 },
+  { price: 15.49, quantity: 1 },
+])
+
+console.log(`Total: $${total}`) // Total: $53.44
+```
+
+## Understanding the Syntax
+
+Let's break down the function definition:
+
+```typescript
+const calculateCartTotal = fn(
+  $.CalculateCartTotal, // Semantic type identifier
+  (items) => {
+    // Implementation function
+    // Function body
+  }
+)
+```
+
+- **`fn()`**: The function wrapper that adds metadata and type safety
+- **`$.CalculateCartTotal`**: A semantic identifier using the `$` proxy pattern
+- **Implementation**: The actual business logic as a standard JavaScript function
+
+## Adding Type Safety
+
+For better IDE support and runtime validation, add TypeScript types:
+
+```typescript
+import $, { fn } from 'sdk.do'
+
+interface CartItem {
+  $type?: 'CartItem'
+  price: number
+  quantity: number
+  name: string
+}
+
+interface CartTotal {
+  $type: 'CartTotal'
+  subtotal: number
+  tax: number
+  total: number
+}
+
+const calculateCartTotal = fn($.CalculateCartTotal, (items: CartItem[]): CartTotal => {
+  const subtotal = items.reduce((sum, item) => {
+    return sum + item.price * item.quantity
+  }, 0)
+
+  const tax = subtotal * 0.08 // 8% tax
+  const total = subtotal + tax
+
+  return {
+    $type: 'CartTotal',
+    subtotal,
+    tax,
+    total,
+  }
+})
+
+// TypeScript knows the return type
+const result = calculateCartTotal([{ price: 10.99, quantity: 2, name: 'Widget' }])
+
+console.log(result.total) // Typed as number
+```
+
+## Async Functions
+
+Most real-world functions will be asynchronous:
+
+```typescript
+import $, { fn, db } from 'sdk.do'
+
+const getUserProfile = fn($.GetUserProfile, async (userId: string): Promise<$.Person> => {
+  // Async database operation
+  const user = await db.get($.Person, userId)
+
+  if (!user) {
+    throw new Error('User not found')
+  }
+
+  return user
+})
+
+// Use with await
+const user = await getUserProfile('user-123')
+console.log(user.name)
+```
+
+## Function Metadata
+
+Every function automatically includes metadata:
+
+```typescript
+const myFunction = fn($.MyFunction, (input: string) => input.toUpperCase())
+
+// Access metadata
+console.log(myFunction.$type) // 'MyFunction'
+console.log(myFunction.$id) // Auto-generated or provided
+console.log(myFunction.name) // 'MyFunction'
+```
+
+You can add additional metadata:
+
+```typescript
+const processOrder = fn(
+  {
+    $type: 'Function',
+    $id: 'https://example.com/functions/processOrder',
+    name: 'ProcessOrder',
+    description: 'Validates and processes customer orders with payment',
+    version: '1.0.0',
+    tags: ['orders', 'payments', 'critical'],
+  },
+  async (order: $.Order) => {
+    // Implementation
+  }
+)
+```
+
+## Error Handling
+
+Handle errors gracefully in your functions:
+
+```typescript
+import $, { fn } from 'sdk.do'
+
+const divideNumbers = fn($.DivideNumbers, (a: number, b: number): number => {
+  if (b === 0) {
+    throw new Error('Cannot divide by zero')
+  }
+  return a / b
+})
+
+// Handle errors when calling
+try {
+  const result = divideNumbers(10, 0)
+} catch (error) {
+  console.error('Division error:', error.message)
+}
+```
+
+## Composing Functions
+
+One of the most powerful features is function composition:
+
+```typescript
+import $, { fn, pipe } from 'sdk.do'
+
+// Define individual functions
+const addTax = fn($.AddTax, (amount: number) => amount * 1.08)
+
+const applyDiscount = fn($.ApplyDiscount, (amount: number) => amount * 0.9)
+
+const formatCurrency = fn($.FormatCurrency, (amount: number) => `$${amount.toFixed(2)}`)
+
+// Compose them into a pipeline
+const calculateFinalPrice = pipe(applyDiscount, addTax, formatCurrency)
+
+// Use the composed function
+const finalPrice = calculateFinalPrice(100)
+console.log(finalPrice) // "$97.20"
+```
+
+## Testing Functions
+
+Functions are easy to test because they're pure:
+
+```typescript
+import { describe, it, expect } from 'vitest'
+import { fn } from 'sdk.do'
+
+const add = fn($.Add, (a: number, b: number) => a + b)
+
+describe('add function', () => {
+  it('should add two numbers', () => {
+    expect(add(2, 3)).toBe(5)
+  })
+
+  it('should handle negative numbers', () => {
+    expect(add(-5, 3)).toBe(-2)
+  })
+
+  it('should handle zero', () => {
+    expect(add(0, 0)).toBe(0)
+  })
+})
+```
+
+## Integration with SDK
+
+functions.do works seamlessly with other SDK features:
+
+### With Database
+
+```typescript
+import $, { fn, db } from 'sdk.do'
+
+const createBusiness = fn($.CreateBusiness, async (data: Partial<$.Business>) => {
+  return await db.create($.Business, data)
+})
+
+const business = await createBusiness({
+  name: 'Acme Corp',
+  industry: 'Technology',
+})
+```
+
+### With AI
+
+```typescript
+import $, { fn, ai } from 'sdk.do'
+
+const generateProductDescription = fn($.GenerateProductDescription, async (product: $.Product) => {
+  const description = await ai.generate({
+    prompt: `Write a compelling description for: ${product.name}`,
+    schema: { type: 'string', maxLength: 200 },
+  })
+
+  return {
+    ...product,
+    description,
+  }
+})
+```
+
+### With Events
+
+```typescript
+import $, { fn, send, on } from 'sdk.do'
+
+// Define a function to handle events
+const handleNewOrder = fn($.HandleNewOrder, async (order: $.Order) => {
+  // Process the order
+  const processed = await processOrder(order)
+
+  // Send event
+  await send($.Order.processed, processed)
+
+  return processed
+})
+
+// Register as event handler
+on($.Order.created, handleNewOrder)
+```
+
+## Next Steps
+
+Now that you've created your first function, explore more advanced topics:
+
+- [Creating Functions](./creating-functions) - Detailed guide on function creation
+- [Composition Patterns](./composition) - Learn composition techniques
+- [API Reference](../api/) - Complete API documentation
+- [Examples](../examples/) - Real-world examples
+
+## Common Patterns
+
+### Validation Function
+
+```typescript
+const validateEmail = fn($.ValidateEmail, (email: string): boolean => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  return emailRegex.test(email)
+})
+```
+
+### Transformation Function
+
+```typescript
+const normalizeString = fn($.NormalizeString, (str: string): string => {
+  return str.trim().toLowerCase()
+})
+```
+
+### Aggregation Function
+
+```typescript
+const summarizeOrders = fn($.SummarizeOrders, (orders: $.Order[]) => {
+  return {
+    totalOrders: orders.length,
+    totalRevenue: orders.reduce((sum, o) => sum + o.total, 0),
+    averageOrderValue: orders.reduce((sum, o) => sum + o.total, 0) / orders.length,
+  }
+})
+```
+
+## Tips for Success
+
+1. **Keep functions small**: Each function should do one thing well
+2. **Use semantic names**: `$.ValidateOrder` is better than `$.Validate`
+3. **Prefer composition**: Build complex workflows from simple functions
+4. **Add type annotations**: TypeScript types make functions more reliable
+5. **Handle errors explicitly**: Don't let errors propagate unexpectedly
+6. **Test thoroughly**: Pure functions are easy to test
+
+## Troubleshooting
+
+### Function not executing
+
+Make sure you're calling the function, not just referencing it:
+
+```typescript
+// Wrong
+const result = calculateTotal  // Returns function reference
+
+// Correct
+const result = calculateTotal([...])  // Executes function
+```
+
+### Type errors
+
+Ensure your input types match the function signature:
+
+```typescript
+const add = fn($.Add, (a: number, b: number) => a + b)
+
+// This will cause a type error
+add('5', '10') // Error: string not assignable to number
+
+// Correct
+add(5, 10) // OK
+```
+
+### Async/await issues
+
+Remember to await async functions:
+
+```typescript
+const fetchData = fn($.FetchData, async () => {
+  return await fetch('/api/data')
+})
+
+// Wrong
+const data = fetchData() // Returns Promise
+
+// Correct
+const data = await fetchData() // Returns data
+```
+
+## Support
+
+- [API Reference](../api/) - Complete API documentation
+- [Examples](../examples/) - More examples
+- [GitHub Issues](https://github.com/dot-do/platform/issues) - Report issues
+- [Community Discord](https://discord.gg/dot-do) - Get help from the community

@@ -1,0 +1,84 @@
+---
+$id: https://auth.do/examples/integration
+$type: HowTo
+title: Authentication Integration Examples
+description: Integrate auth.do with other .do platform services
+keywords: [auth, integration, db, events, workflows]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Authentication Integration Examples
+
+Integrate auth.do with other .do platform services.
+
+## Integration with db.do
+
+```typescript
+import { $, auth, db } from 'sdk.do'
+
+// Filter data by authenticated user
+export async function getUserProducts(token: string) {
+  const payload = await auth.verifyToken(token)
+
+  return await db.list($.Product, {
+    where: { owner: payload.userId },
+  })
+}
+
+// Multi-tenant data access
+export async function getOrganizationData(token: string) {
+  const payload = await auth.verifyToken(token)
+  const user = await db.get($.Person, payload.userId)
+
+  return await db.list($.Product, {
+    where: { organization: user.organization.$id },
+  })
+}
+```
+
+## Integration with on.do (Events)
+
+```typescript
+import { $, auth, on, db } from 'sdk.do'
+
+// Log auth events
+on('auth.login', async (event) => {
+  await db.create($.AuditLog, {
+    eventType: 'login',
+    userId: event.data.userId,
+    timestamp: new Date(),
+    ip: event.data.ip,
+  })
+})
+
+// Send welcome email on registration
+on('auth.register', async (event) => {
+  await send($.Email.send, {
+    to: event.data.email,
+    subject: 'Welcome!',
+    body: `Welcome ${event.data.name}!`,
+  })
+})
+```
+
+## Integration with send.do
+
+```typescript
+import { auth, send } from 'sdk.do'
+
+// Send notification to authenticated user
+export async function notifyUser(token: string, message: string) {
+  const payload = await auth.verifyToken(token)
+
+  await send($.Notification.sent, {
+    recipient: payload.userId,
+    message,
+  })
+}
+```
+
+## License
+
+CC-BY-4.0 (Open Source)

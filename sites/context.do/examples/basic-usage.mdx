@@ -1,0 +1,503 @@
+---
+$id: https://context.do/examples/basic-usage
+$type: https://schema.org/TechArticle
+name: Basic Context Management Examples
+description: 10 fundamental examples for using context.do in your applications
+version: 1.0.0
+license: MIT
+author:
+  $type: https://schema.org/Organization
+  name: .do
+  url: https://do.inc
+keywords:
+  - examples
+  - basic usage
+  - context management
+  - token counting
+  - compression
+---
+
+# Basic Usage Examples
+
+This guide provides 10 fundamental examples for using `context.do` in your applications.
+
+## Example 1: Count Tokens
+
+Count tokens in text for different models:
+
+```typescript
+import { $ } from 'sdk.do'
+
+async function example1() {
+  const text = 'The quick brown fox jumps over the lazy dog'
+
+  // Count for GPT-5
+  const gptTokens = await $.Context.countTokens({
+    text: text,
+    model: 'gpt-5',
+  })
+
+  // Count for Claude
+  const claudeTokens = await $.Context.countTokens({
+    text: text,
+    model: 'claude-sonnet-4.5',
+  })
+
+  console.log(`GPT-5: ${gptTokens} tokens`)
+  console.log(`Claude: ${claudeTokens} tokens`)
+}
+```
+
+**Output:**
+
+```
+GPT-5: 9 tokens
+Claude: 10 tokens
+```
+
+## Example 2: Create Context with Token Limit
+
+Create context with automatic token limit enforcement:
+
+```typescript
+import { $ } from 'sdk.do'
+
+async function example2() {
+  const messages = [
+    { role: 'system' as const, content: 'You are a helpful assistant' },
+    { role: 'user' as const, content: 'What is AI?' },
+    { role: 'assistant' as const, content: 'AI is artificial intelligence...' },
+    { role: 'user' as const, content: 'Tell me more' },
+  ]
+
+  // Create context with token limit
+  const context = await $.Context.create({
+    content: messages,
+    maxTokens: 4000,
+    overflow: 'compress',
+  })
+
+  console.log(`Context created with ${context.tokenCount} tokens`)
+  console.log(`Compression applied: ${context.compressionApplied}`)
+}
+```
+
+**Output:**
+
+```
+Context created with 45 tokens
+Compression applied: false
+```
+
+## Example 3: Sliding Window Compression
+
+Keep only recent messages using sliding window:
+
+```typescript
+import { $ } from 'sdk.do'
+
+async function example3() {
+  const longConversation = [
+    { role: 'user' as const, content: 'Message 1' },
+    { role: 'assistant' as const, content: 'Response 1' },
+    { role: 'user' as const, content: 'Message 2' },
+    { role: 'assistant' as const, content: 'Response 2' },
+    // ... 20 more messages
+  ]
+
+  // Keep only last 10 messages
+  const compressed = await $.Context.compress({
+    messages: longConversation,
+    strategy: 'sliding',
+    windowSize: 10,
+  })
+
+  console.log(`Original: ${longConversation.length} messages`)
+  console.log(`Compressed: ${compressed.messages.length} messages`)
+  console.log(`Strategy: ${compressed.strategy}`)
+}
+```
+
+**Output:**
+
+```
+Original: 24 messages
+Compressed: 10 messages
+Strategy: sliding
+```
+
+## Example 4: Semantic Summarization
+
+Compress using AI-powered summarization:
+
+```typescript
+import { $ } from 'sdk.do'
+
+async function example4() {
+  const conversation = [
+    { role: 'user' as const, content: 'I need to return a product' },
+    { role: 'assistant' as const, content: 'I can help with that. What is your order number?' },
+    { role: 'user' as const, content: 'ORD-12345' },
+    { role: 'assistant' as const, content: 'Thanks. What is the reason for return?' },
+    { role: 'user' as const, content: 'Product was damaged on arrival' },
+    // ... more conversation
+  ]
+
+  // Compress with semantic summarization
+  const compressed = await $.Context.compress({
+    messages: conversation,
+    strategy: 'summarize',
+    targetTokens: 1000,
+    preserveRecent: 2, // Keep last 2 messages
+    summaryTokens: 500,
+  })
+
+  console.log('Summary:', compressed.summary)
+  console.log(`Recent messages: ${compressed.messages.length}`)
+  console.log(`Total tokens: ${compressed.tokens}`)
+}
+```
+
+**Output:**
+
+```
+Summary: Customer wants to return order ORD-12345 due to damage on arrival.
+Recent messages: 2
+Total tokens: 987
+```
+
+## Example 5: Count Message Tokens
+
+Count tokens in message format (includes overhead):
+
+```typescript
+import { $ } from 'sdk.do'
+
+async function example5() {
+  const messages = [
+    { role: 'system' as const, content: 'You are a helpful assistant' },
+    { role: 'user' as const, content: 'Hello!' },
+    { role: 'assistant' as const, content: 'Hi! How can I help you today?' },
+  ]
+
+  // Count as messages (includes role overhead)
+  const messageTokens = await $.Context.countTokens({
+    messages: messages,
+    model: 'gpt-5',
+  })
+
+  // Count raw text only
+  const textOnly = messages.map((m) => m.content).join('')
+  const textTokens = await $.Context.countTokens({
+    text: textOnly,
+    model: 'gpt-5',
+  })
+
+  console.log(`Message format: ${messageTokens} tokens`)
+  console.log(`Text only: ${textTokens} tokens`)
+  console.log(`Overhead: ${messageTokens - textTokens} tokens`)
+}
+```
+
+**Output:**
+
+```
+Message format: 32 tokens
+Text only: 20 tokens
+Overhead: 12 tokens
+```
+
+## Example 6: Preserve Important Messages
+
+Compress while preserving critical messages:
+
+```typescript
+import { $ } from 'sdk.do'
+
+async function example6() {
+  const messages = [
+    { role: 'system' as const, content: 'You are a helpful assistant' },
+    { role: 'user' as const, content: 'Old message 1' },
+    { role: 'assistant' as const, content: 'Old response 1' },
+    // ... many messages
+    { role: 'user' as const, content: 'Recent message' },
+    { role: 'assistant' as const, content: 'Recent response' },
+  ]
+
+  // Preserve system prompt and recent messages
+  const compressed = await $.Context.compress({
+    messages: messages,
+    strategy: 'semantic',
+    targetTokens: 3000,
+    preserveFirst: 1, // System prompt
+    preserveRecent: 2, // Last 2 messages
+    compressMiddle: true, // Only compress middle
+  })
+
+  console.log('Preserved messages:')
+  compressed.messages.forEach((m, i) => {
+    console.log(`${i + 1}. ${m.role}: ${m.content.slice(0, 50)}...`)
+  })
+}
+```
+
+**Output:**
+
+```
+Preserved messages:
+1. system: You are a helpful assistant
+2. system: [Summary of middle conversation]
+3. user: Recent message
+4. assistant: Recent response
+```
+
+## Example 7: Handle Token Overflow
+
+Gracefully handle token limit exceeded errors:
+
+```typescript
+import { $ } from 'sdk.do'
+
+async function example7() {
+  const largeContext = [
+    // ... many messages that exceed 128K tokens
+  ]
+
+  try {
+    // Attempt generation with large context
+    const response = await $.ai.generate({
+      model: 'gpt-5',
+      messages: largeContext,
+    })
+
+    console.log(response.content)
+  } catch (error: any) {
+    if (error.code === 'context_length_exceeded') {
+      console.log('Context too large, compressing...')
+
+      // Compress and retry
+      const compressed = await $.Context.compress({
+        messages: largeContext,
+        targetTokens: 100000, // Leave headroom
+        strategy: 'semantic',
+      })
+
+      const response = await $.ai.generate({
+        model: 'gpt-5',
+        messages: compressed.messages,
+      })
+
+      console.log(response.content)
+    } else {
+      throw error
+    }
+  }
+}
+```
+
+## Example 8: Batch Token Counting
+
+Count tokens for multiple texts efficiently:
+
+```typescript
+import { $ } from 'sdk.do'
+
+async function example8() {
+  const texts = [
+    'Short text',
+    'This is a longer text with more content',
+    'Medium length text here',
+    'Another example of text to count',
+    'Final text in the batch',
+  ]
+
+  // Count all texts in one call
+  const results = await $.Context.countTokensBatch({
+    texts: texts,
+    model: 'gpt-5',
+  })
+
+  console.log('Token counts:')
+  results.forEach((result, index) => {
+    console.log(`${index + 1}. ${result.tokens} tokens - "${texts[index]}"`)
+  })
+
+  const total = results.reduce((sum, r) => sum + r.tokens, 0)
+  console.log(`\nTotal: ${total} tokens`)
+}
+```
+
+**Output:**
+
+```
+Token counts:
+1. 2 tokens - "Short text"
+2. 9 tokens - "This is a longer text with more content"
+3. 4 tokens - "Medium length text here"
+4. 7 tokens - "Another example of text to count"
+5. 5 tokens - "Final text in the batch"
+
+Total: 27 tokens
+```
+
+## Example 9: Monitor Token Usage
+
+Track token usage with callbacks:
+
+```typescript
+import { $ } from 'sdk.do'
+
+async function example9() {
+  const messages = [
+    { role: 'system' as const, content: 'You are a helpful assistant' },
+    { role: 'user' as const, content: 'Tell me about AI' },
+  ]
+
+  // Create context with monitoring
+  const context = await $.Context.create({
+    content: messages,
+    maxTokens: 100000,
+    onTokenCountChange: (tokens) => {
+      console.log(`Token count: ${tokens}`)
+
+      // Alert if approaching limit
+      if (tokens > 80000) {
+        console.warn('Warning: Approaching token limit!')
+      }
+
+      // Track metrics
+      $.metrics.gauge('context.tokens', tokens)
+    },
+  })
+
+  // Add more messages
+  context.addMessage({
+    role: 'assistant',
+    content: 'AI is artificial intelligence...',
+  })
+
+  context.addMessage({
+    role: 'user',
+    content: 'Tell me more',
+  })
+}
+```
+
+**Output:**
+
+```
+Token count: 23
+Token count: 45
+Token count: 52
+```
+
+## Example 10: Optimize Context
+
+Optimize context for token budget:
+
+```typescript
+import { $ } from 'sdk.do'
+
+async function example10() {
+  const messages = [
+    { role: 'system' as const, content: 'You are a helpful assistant' },
+    { role: 'user' as const, content: 'Background information here...' },
+    { role: 'assistant' as const, content: 'I understand...' },
+    { role: 'user' as const, content: 'More context...' },
+    { role: 'user' as const, content: 'Current question' },
+  ]
+
+  // Create context
+  const context = await $.Context.create({
+    content: messages,
+    maxTokens: 10000,
+  })
+
+  console.log(`Initial tokens: ${context.tokenCount}`)
+
+  // Optimize for smaller budget
+  const optimized = await context.optimize({
+    targetTokens: 6000,
+    strategy: 'semantic',
+    preserveFirst: 1, // System prompt
+    preserveRecent: 1, // Current question
+  })
+
+  console.log(`Optimized tokens: ${optimized.tokenCount}`)
+  console.log(`Reduction: ${((1 - optimized.tokenCount / context.tokenCount) * 100).toFixed(1)}%`)
+
+  // Use optimized context
+  const response = await $.ai.generate({
+    model: 'gpt-5',
+    messages: optimized.content,
+  })
+
+  console.log(`Response: ${response.content}`)
+}
+```
+
+**Output:**
+
+```
+Initial tokens: 8456
+Optimized tokens: 5923
+Reduction: 30.0%
+Response: Based on the information provided...
+```
+
+## Running the Examples
+
+### Setup
+
+```bash
+# Install dependencies
+npm install sdk.do
+
+# Set environment variables
+export OPENAI_API_KEY=sk-...
+export ANTHROPIC_API_KEY=sk-ant-...
+```
+
+### Run Individual Examples
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Run example 1
+await example1()
+
+// Run example 2
+await example2()
+
+// Run all examples
+async function runAll() {
+  await example1()
+  await example2()
+  await example3()
+  await example4()
+  await example5()
+  await example6()
+  await example7()
+  await example8()
+  await example9()
+  await example10()
+}
+
+await runAll()
+```
+
+## Next Steps
+
+- [Advanced Patterns](./advanced-patterns.mdx) - Complex compression strategies
+- [Integration Examples](./integration.mdx) - Platform integration patterns
+- [Real-World Use Case](./real-world-use-case.mdx) - Production implementation
+
+## Related Resources
+
+- [Getting Started](../docs/getting-started.mdx) - Setup and configuration
+- [API Reference](../api/reference.mdx) - Complete API documentation
+- [Best Practices](../docs/best-practices.mdx) - Optimization techniques
+
+---
+
+Built with [sdk.do](https://sdk.do) - The semantic SDK for Business-as-Code

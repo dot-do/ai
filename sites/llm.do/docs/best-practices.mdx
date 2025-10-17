@@ -1,0 +1,796 @@
+---
+$id: https://llm.do/docs/best-practices
+$type: TechArticle
+title: LLM Gateway Best Practices
+description: Best practices for cost optimization, performance, and reliability with llm.do
+keywords: [llm, gateway, best practices, optimization, cost, performance, reliability]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Best Practices
+
+Learn how to optimize costs, improve performance, and ensure reliability when using llm.do.
+
+## Cost Optimization
+
+### 1. Use Intelligent Routing
+
+Let the gateway automatically select the most cost-effective model:
+
+```typescript
+import { llm } from 'sdk.do'
+
+// Good: Automatic cost optimization
+const response = await llm.generate('Simple classification task', {
+  routing: { optimize: 'cost' },
+})
+// Gateway selects gpt-5-nano ($0.0001/1k tokens)
+
+// Avoid: Always using premium models
+const response = await llm.generate('Simple classification task', {
+  model: 'gpt-5', // $0.002/1k tokens (20x more expensive)
+})
+```
+
+**Cost Savings**: 50-90% for simple tasks
+
+### 2. Enable Response Caching
+
+Cache frequently used prompts to eliminate redundant API calls:
+
+```typescript
+import { llm } from 'sdk.do'
+
+// Good: Enable caching for repeated queries
+const response = await llm.generate('Common FAQ question', {
+  cache: {
+    enabled: true,
+    ttl: 3600, // Cache for 1 hour
+  },
+})
+
+// First call: $0.002
+// Subsequent calls within 1 hour: $0.000 (cached)
+```
+
+**Cost Savings**: 100% for cached responses
+**Typical Hit Rate**: 30-40% for FAQ/support use cases
+
+### 3. Use Batch Processing
+
+Process large datasets with OpenAI's Batch API for 50% cost reduction:
+
+```typescript
+import { llm } from 'sdk.do'
+
+// Good: Batch processing (50% cheaper)
+const requests = items.map((item) => ({
+  prompt: `Generate description for ${item.name}`,
+  context: item,
+}))
+
+const batch = await llm.batch.create(requests, {
+  model: 'gpt-5-mini',
+  priority: 'low', // Lower priority = additional savings
+})
+
+// Cost: $0.001/1k tokens (50% off standard pricing)
+
+// Avoid: Individual requests
+for (const item of items) {
+  await llm.generate(`Generate description for ${item.name}`)
+  // Cost: $0.002/1k tokens (full price)
+}
+```
+
+**Cost Savings**: 50% for batch-eligible workloads
+**Trade-off**: Results may take 1-24 hours to complete
+
+### 4. Choose the Right Model
+
+Match model capability to task complexity:
+
+```typescript
+import { llm } from 'sdk.do'
+
+// Simple tasks: Use nano models
+await llm.generate('Extract category from: Electronics > Laptops', {
+  model: 'gpt-5-nano', // $0.0001/1k tokens
+})
+
+// Standard tasks: Use mini models
+await llm.generate('Summarize this product description', {
+  model: 'gpt-5-mini', // $0.0005/1k tokens
+})
+
+// Complex tasks: Use full models
+await llm.generate('Write comprehensive market analysis', {
+  model: 'gpt-5', // $0.002/1k tokens
+})
+
+// Code tasks: Use specialized models
+await llm.generate('Refactor this TypeScript function', {
+  model: 'gpt-5-codex', // $0.0015/1k tokens
+})
+```
+
+### 5. Optimize Prompt Length
+
+Shorter prompts = lower costs:
+
+```typescript
+// Good: Concise prompt
+await llm.generate('Summarize in 3 bullet points', {
+  context: { text: article.content },
+})
+
+// Avoid: Verbose prompt
+await llm.generate(
+  `Please read the following article carefully and provide a comprehensive summary...
+   ${article.content}
+   ...please format as bullet points with exactly 3 items...`
+)
+```
+
+**Cost Impact**: Prompt tokens typically cost as much as completion tokens
+
+### 6. Set Token Limits
+
+Prevent unexpectedly long (and expensive) responses:
+
+```typescript
+import { llm } from 'sdk.do'
+
+// Good: Set appropriate max tokens
+await llm.generate('Generate product description', {
+  maxTokens: 150, // ~100 words
+})
+
+// Avoid: No limit or excessive limit
+await llm.generate('Generate product description', {
+  maxTokens: 4096, // Could generate 3000+ words
+})
+```
+
+### 7. Monitor and Alert on Costs
+
+Track spending and set up cost alerts:
+
+```typescript
+import { llm } from 'sdk.do'
+
+// Daily cost monitoring
+const stats = await llm.analytics.usage({
+  period: 'today',
+})
+
+if (stats.totalCost > DAILY_BUDGET) {
+  // Alert: approaching budget limit
+  await sendAlert(`Daily cost: $${stats.totalCost}`)
+
+  // Optionally switch to cheaper models
+  llm.config({
+    defaultModel: 'gpt-5-mini',
+    routing: { optimize: 'cost' },
+  })
+}
+```
+
+## Performance Optimization
+
+### 1. Use Streaming for Long Responses
+
+Stream responses to improve perceived performance:
+
+```typescript
+import { llm } from 'sdk.do'
+
+// Good: Stream long responses
+const stream = llm.stream('Write a comprehensive guide')
+
+for await (const chunk of stream) {
+  // Display chunk immediately (better UX)
+  displayChunk(chunk)
+}
+
+// Avoid: Wait for complete response
+const response = await llm.generate('Write a comprehensive guide')
+// User waits 10-30 seconds before seeing anything
+displayResponse(response)
+```
+
+**Performance Gain**: Users see first tokens in ~500ms vs 10-30s for full response
+
+### 2. Parallelize Independent Requests
+
+Use Promise.all for concurrent requests:
+
+```typescript
+import { llm } from 'sdk.do'
+
+// Good: Parallel requests
+const [headline, description, metadata] = await Promise.all([
+  llm.generate('Create headline', { model: 'claude-sonnet-4.5' }),
+  llm.generate('Create description', { model: 'gpt-5' }),
+  llm.generate('Create metadata', { model: 'gpt-5-mini' }),
+])
+
+// Total time: ~2s (slowest request)
+
+// Avoid: Sequential requests
+const headline = await llm.generate('Create headline')
+const description = await llm.generate('Create description')
+const metadata = await llm.generate('Create metadata')
+
+// Total time: ~6s (sum of all requests)
+```
+
+### 3. Implement Connection Pooling
+
+Reuse HTTP connections for better performance:
+
+```typescript
+import { llm } from 'sdk.do'
+
+// Configure connection pooling
+llm.config({
+  connectionPool: {
+    maxSockets: 50,
+    keepAlive: true,
+    timeout: 60000,
+  },
+})
+```
+
+**Performance Gain**: ~50-100ms per request (saves TLS handshake)
+
+### 4. Use Provider-Specific Optimizations
+
+Different providers have different strengths:
+
+```typescript
+import { llm } from 'sdk.do'
+
+// Claude: Best for long-context tasks (200k tokens)
+await llm.generate('Analyze this entire codebase', {
+  provider: 'anthropic',
+  model: 'claude-sonnet-4.5',
+  context: { files: codebaseFiles }, // Send all files at once
+})
+
+// GPT-5: Best for structured output
+await llm.generate('Create product data', {
+  provider: 'openai',
+  model: 'gpt-5',
+  schema: $.Product,
+  structured: true, // Native JSON mode
+})
+```
+
+### 5. Cache Embeddings
+
+Cache embeddings to avoid recomputation:
+
+```typescript
+import { llm, db } from 'sdk.do'
+
+async function getEmbedding(text: string) {
+  // Check cache first
+  const cached = await db.get(`embedding:${hash(text)}`)
+  if (cached) return cached.embedding
+
+  // Generate and cache
+  const embedding = await llm.embed(text)
+  await db.create({
+    $id: `embedding:${hash(text)}`,
+    $type: 'Embedding',
+    text,
+    embedding,
+    createdAt: new Date(),
+  })
+
+  return embedding
+}
+```
+
+**Performance Gain**: ~200ms saved per cached embedding
+
+## Reliability
+
+### 1. Implement Automatic Failover
+
+Configure fallback providers for high availability:
+
+```typescript
+import { llm } from 'sdk.do'
+
+// Good: Automatic failover
+const response = await llm.generate('prompt', {
+  provider: 'openai',
+  routing: {
+    fallback: 'anthropic', // Fallback if OpenAI fails
+    retries: 3, // Retry 3 times before failing
+  },
+})
+
+// Availability: 99.99% (both providers would need to fail)
+
+// Avoid: Single provider, no retry
+const response = await llm.generate('prompt', {
+  provider: 'openai',
+})
+
+// Availability: 99.9% (depends on single provider)
+```
+
+### 2. Handle Rate Limits Gracefully
+
+Implement exponential backoff for rate limits:
+
+```typescript
+import { llm } from 'sdk.do'
+
+async function generateWithRetry(prompt: string, maxRetries = 3) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await llm.generate(prompt)
+    } catch (error) {
+      if (error.code === 'RATE_LIMIT_EXCEEDED') {
+        // Exponential backoff: 1s, 2s, 4s
+        const delay = Math.pow(2, attempt) * 1000
+        await new Promise((resolve) => setTimeout(resolve, delay))
+        continue
+      }
+      throw error
+    }
+  }
+  throw new Error('Max retries exceeded')
+}
+```
+
+### 3. Use Circuit Breakers
+
+Prevent cascading failures when providers are down:
+
+```typescript
+import { llm } from 'sdk.do'
+
+llm.config({
+  circuitBreaker: {
+    enabled: true,
+    threshold: 5, // Open circuit after 5 failures
+    timeout: 60000, // Try again after 1 minute
+    halfOpenRequests: 1, // Test with 1 request when half-open
+  },
+})
+
+// Gateway automatically stops sending requests to failed providers
+// and tries again after timeout period
+```
+
+### 4. Monitor Provider Health
+
+Track provider availability and latency:
+
+```typescript
+import { llm } from 'sdk.do'
+
+// Check provider health
+const health = await llm.analytics.providerHealth()
+
+console.log(health)
+// {
+//   openai: {
+//     available: true,
+//     latency: 850,
+//     errorRate: 0.001
+//   },
+//   anthropic: {
+//     available: true,
+//     latency: 1200,
+//     errorRate: 0.002
+//   }
+// }
+
+// Route away from degraded providers
+if (health.openai.errorRate > 0.05) {
+  llm.config({
+    defaultProvider: 'anthropic',
+  })
+}
+```
+
+### 5. Implement Timeouts
+
+Prevent requests from hanging indefinitely:
+
+```typescript
+import { llm } from 'sdk.do'
+
+// Good: Set appropriate timeout
+const response = await llm.generate('prompt', {
+  timeout: 30000, // 30 seconds
+})
+
+// For streaming: set per-chunk timeout
+const stream = llm.stream('prompt', {
+  timeout: 5000, // 5 seconds per chunk
+})
+```
+
+### 6. Log All Errors
+
+Capture detailed error information for debugging:
+
+```typescript
+import { llm } from 'sdk.do'
+
+try {
+  const response = await llm.generate('prompt')
+} catch (error) {
+  // Log detailed error information
+  logger.error('LLM generation failed', {
+    provider: error.provider,
+    model: error.model,
+    code: error.code,
+    message: error.message,
+    request: error.request,
+    timestamp: new Date(),
+  })
+
+  // Re-throw or handle gracefully
+  throw error
+}
+```
+
+## Security
+
+### 1. Sanitize User Input
+
+Always sanitize user-provided prompts:
+
+```typescript
+import { llm } from 'sdk.do'
+
+function sanitizePrompt(userInput: string): string {
+  return userInput
+    .trim()
+    .replace(/<script>/gi, '')
+    .replace(/javascript:/gi, '')
+    .slice(0, 10000) // Limit length
+}
+
+// Good: Sanitize input
+const response = await llm.generate(sanitizePrompt(userInput))
+
+// Avoid: Use raw user input
+const response = await llm.generate(userInput)
+```
+
+### 2. Implement Rate Limiting
+
+Prevent abuse with rate limiting:
+
+```typescript
+import { llm } from 'sdk.do'
+
+llm.config({
+  rateLimit: {
+    requestsPerMinute: 60,
+    tokensPerMinute: 100000,
+    per: 'user', // or 'apiKey', 'ip'
+  },
+})
+```
+
+### 3. Rotate API Keys
+
+Regularly rotate provider API keys:
+
+```typescript
+// Rotate keys monthly
+const newOpenAIKey = await rotateOpenAIKey()
+const newAnthropicKey = await rotateAnthropicKey()
+
+llm.config({
+  providers: {
+    openai: { apiKey: newOpenAIKey },
+    anthropic: { apiKey: newAnthropicKey },
+  },
+})
+```
+
+### 4. Use Environment Variables
+
+Never hardcode API keys:
+
+```typescript
+// Good: Use environment variables
+const apiKey = process.env.OPENAI_API_KEY
+
+// Avoid: Hardcoded keys
+const apiKey = 'sk-...' // Never do this!
+```
+
+### 5. Implement Content Filtering
+
+Filter inappropriate content:
+
+```typescript
+import { llm } from 'sdk.do'
+
+const response = await llm.generate(prompt, {
+  contentFilter: {
+    enabled: true,
+    categories: ['hate', 'violence', 'sexual', 'self-harm'],
+  },
+})
+
+if (response.flagged) {
+  // Content was filtered
+  throw new Error('Inappropriate content detected')
+}
+```
+
+## Schema Integration
+
+### 1. Use Structured Output
+
+Always use schemas for structured data:
+
+```typescript
+import { $, llm } from 'sdk.do'
+
+// Good: Structured output with schema
+const product = await llm.generate('Create product', {
+  schema: $.Product,
+  structured: true,
+})
+
+// Result is type-safe and validated
+console.log(product.name) // Type: string
+console.log(product.offers.price) // Type: number
+
+// Avoid: Unstructured text parsing
+const text = await llm.generate('Create product as JSON')
+const product = JSON.parse(text) // Error-prone
+```
+
+### 2. Provide Semantic Context
+
+Use Schema.org relationships for context:
+
+```typescript
+import { $, llm } from 'sdk.do'
+
+const employee = await llm.generate('Create employee profile', {
+  schema: $.Person,
+  structured: true,
+  context: {
+    worksFor: organization,
+    hasOccupation: occupation,
+    knows: colleagues,
+    alumniOf: university,
+  },
+})
+```
+
+### 3. Validate Output
+
+Always validate generated output:
+
+```typescript
+import { $, llm } from 'sdk.do'
+
+const product = await llm.generate('Create product', {
+  schema: $.Product,
+  structured: true,
+})
+
+// Validate required fields
+if (!product.name || !product.description) {
+  throw new Error('Invalid product: missing required fields')
+}
+
+// Validate types
+if (typeof product.offers?.price !== 'number') {
+  throw new Error('Invalid product: price must be number')
+}
+```
+
+## Testing
+
+### 1. Mock LLM Responses
+
+Mock llm.do in tests for faster, cheaper testing:
+
+```typescript
+import { llm } from 'sdk.do'
+import { mock } from 'sdk.do/testing'
+
+describe('Product generation', () => {
+  beforeEach(() => {
+    mock(llm.generate).mockResolvedValue({
+      $type: 'Product',
+      name: 'Test Product',
+      description: 'Test description',
+    })
+  })
+
+  it('should generate product', async () => {
+    const product = await generateProduct()
+    expect(product.name).toBe('Test Product')
+  })
+})
+```
+
+### 2. Test Error Scenarios
+
+Test failover and error handling:
+
+```typescript
+import { llm } from 'sdk.do'
+import { mock } from 'sdk.do/testing'
+
+it('should failover to anthropic if openai fails', async () => {
+  // Mock OpenAI failure
+  mock(llm.generate).mockRejectedValueOnce(new Error('OpenAI unavailable')).mockResolvedValueOnce('Response from Anthropic')
+
+  const response = await llm.generate('prompt', {
+    provider: 'openai',
+    routing: { fallback: 'anthropic' },
+  })
+
+  expect(response).toBe('Response from Anthropic')
+})
+```
+
+### 3. Test with Small Models
+
+Use cheaper models in development:
+
+```typescript
+// Development environment
+if (process.env.NODE_ENV === 'development') {
+  llm.config({
+    defaultModel: 'gpt-5-nano', // Cheapest model
+    routing: { optimize: 'cost' },
+  })
+}
+
+// Production environment
+if (process.env.NODE_ENV === 'production') {
+  llm.config({
+    defaultModel: 'gpt-5',
+    routing: { optimize: 'quality' },
+  })
+}
+```
+
+## Monitoring and Observability
+
+### 1. Track Key Metrics
+
+Monitor these critical metrics:
+
+```typescript
+import { llm } from 'sdk.do'
+
+const metrics = await llm.analytics.metrics({
+  period: 'last_24_hours',
+})
+
+console.log({
+  requestsPerSecond: metrics.requestsPerSecond,
+  averageLatency: metrics.averageLatency,
+  errorRate: metrics.errorRate,
+  costPerDay: metrics.costPerDay,
+  cacheHitRate: metrics.cacheHitRate,
+})
+```
+
+### 2. Set Up Alerts
+
+Create alerts for critical issues:
+
+```typescript
+// Alert on high error rate
+if (metrics.errorRate > 0.05) {
+  await sendAlert('High error rate: ' + metrics.errorRate)
+}
+
+// Alert on high cost
+if (metrics.costPerDay > BUDGET_DAILY) {
+  await sendAlert(`Cost alert: $${metrics.costPerDay} (budget: $${BUDGET_DAILY})`)
+}
+
+// Alert on slow responses
+if (metrics.averageLatency > 3000) {
+  await sendAlert('Slow responses: ' + metrics.averageLatency + 'ms')
+}
+```
+
+### 3. Use Structured Logging
+
+Log all LLM operations for debugging:
+
+```typescript
+import { llm } from 'sdk.do'
+
+llm.config({
+  logging: {
+    enabled: true,
+    level: 'info',
+    format: 'json',
+    includeRequest: true,
+    includeResponse: false, // Don't log full responses (privacy)
+  },
+})
+
+// Logs:
+// {
+//   timestamp: "2025-10-10T14:30:00Z",
+//   provider: "openai",
+//   model: "gpt-5",
+//   operation: "generate",
+//   latency: 850,
+//   tokens: { prompt: 100, completion: 150 },
+//   cost: 0.0005
+// }
+```
+
+## Cost Benchmarks
+
+Real-world cost comparisons:
+
+| Task                  | Model              | Cost     | Quality   | Best For                    |
+| --------------------- | ------------------ | -------- | --------- | --------------------------- |
+| Simple classification | gpt-5-nano         | $0.0001  | Good      | High-volume, simple tasks   |
+| Product descriptions  | gpt-5-mini         | $0.0005  | Very Good | Standard content generation |
+| Complex analysis      | gpt-5              | $0.002   | Excellent | Quality-critical tasks      |
+| Creative writing      | claude-sonnet-4.5  | $0.003   | Excellent | Marketing, storytelling     |
+| Code generation       | gpt-5-codex        | $0.0015  | Excellent | Development tasks           |
+| Batch processing      | gpt-5-mini (batch) | $0.00025 | Very Good | Large-scale enrichment      |
+
+## Summary
+
+**Cost Optimization:**
+
+- Use intelligent routing
+- Enable caching
+- Use batch processing
+- Choose appropriate models
+- Monitor spending
+
+**Performance:**
+
+- Use streaming
+- Parallelize requests
+- Implement connection pooling
+- Cache embeddings
+
+**Reliability:**
+
+- Implement failover
+- Handle rate limits
+- Use circuit breakers
+- Monitor provider health
+
+**Security:**
+
+- Sanitize input
+- Implement rate limiting
+- Rotate keys
+- Filter content
+
+## Next Steps
+
+- [Troubleshooting](./troubleshooting) - Common issues and solutions
+- [API Reference](../api/reference) - Complete API documentation
+- [Examples](../examples/) - Practical implementation examples
+
+## License
+
+MIT (Open Source)

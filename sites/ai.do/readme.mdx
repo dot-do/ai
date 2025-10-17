@@ -1,0 +1,476 @@
+---
+$id: https://ai.do
+$type: WebSite
+name: ai.do
+description: AI services for text generation, embeddings, and batch processing with schema support
+license: CC-BY-4.0
+---
+
+# ai.do
+
+**AI services for text generation, embeddings, and batch processing with schema support**
+
+ai.do provides the AI functionality in the `.do` platform's Business-as-Code SDK. It enables semantic AI operations with Schema.org type support, structured output generation, vector embeddings, and cost-effective batch processing.
+
+## Quick Start
+
+```typescript
+import { $, ai } from 'sdk.do'
+
+// Generate text with semantic context
+const response = await ai.generate('Write a product description', {
+  schema: $.Product,
+  context: { name: 'Smart Watch', category: 'Electronics' },
+})
+
+// Generate structured output
+const product = await ai.generate('Create a product listing', {
+  schema: $.Product,
+  structured: true,
+})
+
+// Create embeddings
+const embedding = await ai.embed('semantic search query')
+```
+
+## Key Features
+
+### 🎯 Schema-Based Generation
+
+Generate AI content with Schema.org type validation and structure:
+
+```typescript
+import { $, ai } from 'sdk.do'
+
+// Generate with Schema.org Product type
+const product = await ai.generate('Create a laptop product', {
+  schema: $.Product,
+  structured: true,
+  context: {
+    brand: 'TechCorp',
+    category: 'Computers',
+  },
+})
+
+// Result validates against Schema.org Product type
+console.log(product.$type) // "Product"
+console.log(product.name) // "TechCorp UltraBook Pro"
+console.log(product.description) // Generated description
+```
+
+### 🔢 Vector Embeddings
+
+Create semantic embeddings for search and similarity operations:
+
+```typescript
+import { ai } from 'sdk.do'
+
+// Generate embedding for text
+const embedding = await ai.embed('artificial intelligence and machine learning')
+
+// Generate embeddings for multiple texts
+const embeddings = await ai.embed(['product description one', 'product description two', 'product description three'])
+
+// Use embeddings for semantic search
+const similarity = cosineSimilarity(embedding1, embedding2)
+```
+
+### 📦 Batch Processing
+
+Process large datasets with 50% cost savings using OpenAI's Batch API:
+
+```typescript
+import { $, ai } from 'sdk.do'
+
+// Prepare batch requests
+const requests = products.map((product) => ({
+  prompt: `Generate description for ${product.name}`,
+  schema: $.Product,
+  context: product,
+}))
+
+// Submit batch job
+const batchId = await ai.batch.create(requests)
+
+// Check batch status
+const status = await ai.batch.status(batchId)
+
+// Retrieve results when complete
+if (status.completed) {
+  const results = await ai.batch.results(batchId)
+}
+```
+
+### 🧠 Multiple Model Support
+
+Support for leading AI models with consistent interface:
+
+```typescript
+import { ai } from 'sdk.do'
+
+// Use GPT-5 (default)
+const response1 = await ai.generate('prompt', {
+  model: 'gpt-5',
+})
+
+// Use Claude Sonnet 4.5
+const response2 = await ai.generate('prompt', {
+  model: 'claude-sonnet-4.5',
+})
+
+// Use GPT-5 Mini for cost efficiency
+const response3 = await ai.generate('prompt', {
+  model: 'gpt-5-mini',
+})
+```
+
+## Features
+
+- **Text Generation**: Generate content with semantic context and schema support
+- **Structured Output**: Generate JSON objects that validate against Schema.org types
+- **Vector Embeddings**: Create embeddings for semantic search and similarity
+- **Batch Processing**: Process large datasets cost-effectively with Batch API
+- **Schema Validation**: Automatic validation against Schema.org vocabulary
+- **Type Safety**: Full TypeScript support with type inference
+- **Multi-Model**: Support for GPT-5, Claude Sonnet 4.5, and specialized variants
+- **Cost Optimization**: 50% cost savings with batch processing for large datasets
+
+## Documentation
+
+- [Getting Started](./docs/getting-started) - Installation and basic setup
+- [Text Generation](./docs/generation) - Generate AI content with semantic context
+- [Embeddings](./docs/embeddings) - Create vector embeddings for semantic search
+- [Batch Processing](./docs/batch-processing) - Process large datasets efficiently
+- [API Reference](./api/) - Complete API documentation
+
+## Examples
+
+- [Basic Generation](./examples/basic-generation) - Simple text generation
+- [Structured Output](./examples/structured-output) - Schema-based generation
+- [Embeddings](./examples/embeddings) - Vector embeddings and similarity
+
+## Use Cases
+
+### Content Generation with Schema Types
+
+Generate structured business content that validates against Schema.org:
+
+```typescript
+import { $, ai } from 'sdk.do'
+
+// Generate Organization profile
+const organization = await ai.generate('Create a tech company profile for an AI startup', {
+  schema: $.Organization,
+  structured: true,
+})
+
+// Generate Person profile
+const person = await ai.generate('Create employee profile for senior engineer', {
+  schema: $.Person,
+  structured: true,
+  context: {
+    worksFor: organization,
+  },
+})
+
+// Generate Product listing
+const product = await ai.generate('Create SaaS product listing', {
+  schema: $.Product,
+  structured: true,
+  context: {
+    manufacturer: organization,
+  },
+})
+```
+
+### Semantic Search with Embeddings
+
+Build semantic search using vector embeddings:
+
+```typescript
+import { $, ai, db } from 'sdk.do'
+
+// Index products with embeddings
+const products = await db.list($.Product)
+
+for (const product of products) {
+  const embedding = await ai.embed(`${product.name} ${product.description}`)
+
+  await db.update(product.$id, {
+    embedding,
+  })
+}
+
+// Search products semantically
+const query = 'affordable laptop for students'
+const queryEmbedding = await ai.embed(query)
+
+// Find similar products using cosine similarity
+const results = products
+  .map((p) => ({
+    product: p,
+    similarity: cosineSimilarity(queryEmbedding, p.embedding),
+  }))
+  .sort((a, b) => b.similarity - a.similarity)
+  .slice(0, 10)
+```
+
+### Batch Content Enrichment
+
+Enrich large datasets efficiently with batch processing:
+
+```typescript
+import { $, ai, db } from 'sdk.do'
+
+// Get all products needing descriptions
+const products = await db.list($.Product, {
+  where: { description: null },
+})
+
+// Prepare batch requests
+const requests = products.map((product) => ({
+  custom_id: product.$id,
+  method: 'POST',
+  url: '/v1/chat/completions',
+  body: {
+    model: 'gpt-5',
+    messages: [
+      {
+        role: 'system',
+        content: 'Generate product description from provided data',
+      },
+      {
+        role: 'user',
+        content: JSON.stringify(product),
+      },
+    ],
+  },
+}))
+
+// Submit batch job
+const batch = await ai.batch.create(requests)
+
+// Poll for completion
+while (true) {
+  const status = await ai.batch.status(batch.id)
+
+  if (status.status === 'completed') {
+    const results = await ai.batch.results(batch.id)
+
+    // Update products with generated descriptions
+    for (const result of results) {
+      await db.update(result.custom_id, {
+        description: result.response.choices[0].message.content,
+      })
+    }
+
+    break
+  }
+
+  await new Promise((resolve) => setTimeout(resolve, 60000)) // Wait 1 minute
+}
+```
+
+## Integration with `.do` Platform
+
+ai.do integrates seamlessly with other `.do` platform services:
+
+```typescript
+import { $, ai, db, on } from 'sdk.do'
+
+// Generate content when entity is created
+on($.Product.created, async (event) => {
+  const product = event.data
+
+  // Generate description if missing
+  if (!product.description) {
+    const description = await ai.generate(`Generate product description for ${product.name}`, {
+      schema: $.Product,
+      context: product,
+    })
+
+    await db.update(product.$id, {
+      description,
+    })
+  }
+})
+
+// Enrich search results with AI
+on($.SearchAction.performed, async (event) => {
+  const { query, results } = event.data
+
+  // Generate query embedding
+  const queryEmbedding = await ai.embed(query)
+
+  // Rank results by semantic similarity
+  const enrichedResults = results.map((result) => ({
+    ...result,
+    relevanceScore: cosineSimilarity(queryEmbedding, result.embedding),
+  }))
+
+  return enrichedResults.sort((a, b) => b.relevanceScore - a.relevanceScore)
+})
+```
+
+## Semantic Patterns
+
+ai.do uses `$.Subject.predicate.Object` patterns for semantic operations:
+
+```typescript
+import { $, ai } from 'sdk.do'
+
+// Schema-based patterns
+await ai.generate('prompt', { schema: $.Product })
+await ai.generate('prompt', { schema: $.Organization })
+await ai.generate('prompt', { schema: $.Person })
+
+// Semantic context patterns
+await ai.generate('prompt', {
+  context: {
+    about: $.Technology,
+    for: $.Business,
+    in: $.Industry,
+  },
+})
+
+// Relationship patterns
+await ai.generate('create employee', {
+  schema: $.Person,
+  context: {
+    worksFor: organization,
+    hasOccupation: occupation,
+    knows: colleagues,
+  },
+})
+```
+
+## Configuration
+
+### Environment Variables
+
+```bash
+# OpenAI API (required for GPT models)
+OPENAI_API_KEY=sk-...
+
+# Anthropic API (required for Claude models)
+ANTHROPIC_API_KEY=sk-ant-...
+
+# Model configuration (optional)
+AI_MODEL=gpt-5              # Default model to use
+AI_TEMPERATURE=0.7          # Default temperature (0-1)
+AI_MAX_TOKENS=4096          # Default max tokens
+```
+
+### Model Selection
+
+```typescript
+import { ai } from 'sdk.do'
+
+// Configure default model
+ai.config({
+  model: 'gpt-5',
+  temperature: 0.7,
+  maxTokens: 4096,
+})
+
+// Override per request
+await ai.generate('prompt', {
+  model: 'claude-sonnet-4.5',
+  temperature: 0.9,
+})
+```
+
+## Supported Models
+
+### Current Models
+
+- **gpt-5** - Latest GPT model (default)
+- **gpt-5-mini** - Cost-effective variant
+- **gpt-5-nano** - Smallest, fastest variant
+- **gpt-5-codex** - Optimized for agentic coding
+- **claude-sonnet-4.5** - Latest Claude Sonnet model
+
+### Deprecated Models
+
+- **gpt-4o** - Legacy OpenAI model (deprecated October 2025)
+- **claude-sonnet-3.5** - Legacy Anthropic model (deprecated)
+
+Always use current models for new implementations. See [AI Models documentation](https://do/docs/ai-models) for details.
+
+## Cost Optimization
+
+### Batch Processing
+
+Use batch API for 50% cost savings on large datasets:
+
+```typescript
+// Instead of individual requests (expensive)
+for (const item of items) {
+  await ai.generate(prompt(item)) // Full price per request
+}
+
+// Use batch processing (50% cheaper)
+const batch = await ai.batch.create(items.map((item) => ({ prompt: prompt(item) })))
+```
+
+### Model Selection
+
+Choose the right model for the task:
+
+```typescript
+// Simple tasks - use nano or mini
+await ai.generate('summarize this', { model: 'gpt-5-nano' })
+
+// Standard tasks - use default
+await ai.generate('analyze sentiment', { model: 'gpt-5' })
+
+// Complex tasks - use full model
+await ai.generate('write comprehensive analysis', { model: 'gpt-5' })
+
+// Coding tasks - use codex
+await ai.generate('refactor this code', { model: 'gpt-5-codex' })
+```
+
+## License
+
+ai.do is released under the [Creative Commons Attribution 4.0 International License (CC-BY-4.0)](https://creativecommons.org/licenses/by/4.0/).
+
+This means you are free to:
+
+- **Share**: Copy and redistribute the material in any medium or format
+- **Adapt**: Remix, transform, and build upon the material for any purpose, even commercially
+
+Under the following terms:
+
+- **Attribution**: You must give appropriate credit, provide a link to the license, and indicate if changes were made
+
+## Resources
+
+- [sdk.do](https://sdk.do) - Core SDK documentation
+- [schema.org.ai](https://schema.org.ai) - Schema.org types for AI
+- [db.do](https://db.do) - Database operations
+- [api.do](https://api.do) - External API integration
+- [`.do` Platform](https://do)
+
+## Related Domains
+
+- **[api.do](https://api.do)** - External API integration
+- **[db.do](https://db.do)** - Database operations
+- **[on.do](https://on.do)** - Event listeners
+- **[send.do](https://send.do)** - Event publishing
+- **[every.do](https://every.do)** - Scheduled workflows
+
+## Contributing
+
+ai.do is part of the [`.do` platform](https://do) ecosystem. Contributions are welcome!
+
+See the [ai repository](https://github.com/dot-do/ai) for contribution guidelines.
+
+## Acknowledgments
+
+ai.do builds upon:
+
+- [Schema.org](https://schema.org) - Structured data vocabulary
+- [OpenAI API](https://platform.openai.com) - GPT models and Batch API
+- [Anthropic API](https://anthropic.com) - Claude models
+- [JSON-LD](https://www.w3.org/TR/json-ld11/) - Linked data format

@@ -1,0 +1,718 @@
+---
+$id: https://integrations.do/onedrive
+$type: Integration
+name: OneDrive
+service: onedrive
+description: Microsoft cloud storage and file synchronization service
+category: storage
+sdkBased: true
+sdkPackage: '@microsoft/microsoft-graph-client'
+sdkVersion: ^3.0.0
+sdkImport: Client
+baseUrl: https://graph.microsoft.com/v1.0
+
+auth:
+  type: oauth2
+  authorizationUrl: https://login.microsoftonline.com/common/oauth2/v2.0/authorize
+  tokenUrl: https://login.microsoftonline.com/common/oauth2/v2.0/token
+  scopes:
+    - Files.ReadWrite
+    - Files.ReadWrite.All
+    - offline_access
+
+resources:
+  - name: Drive
+    plural: Drives
+    description: Access user drives
+    operations:
+      - name: get
+        method: GET
+        path: /me/drive
+        params: []
+        returns: Drive
+
+      - name: list
+        method: GET
+        path: /me/drives
+        params: []
+        returns: Drive[]
+
+  - name: File
+    plural: Files
+    description: Upload, download, and manage files
+    operations:
+      - name: upload
+        method: PUT
+        path: /me/drive/root:/{file_path}:/content
+        params:
+          - name: file_path
+            type: string
+            required: true
+            description: File path in OneDrive
+          - name: content
+            type: Buffer
+            required: true
+            description: File contents
+        returns: File
+
+      - name: get
+        method: GET
+        path: /me/drive/items/{item_id}
+        params:
+          - name: item_id
+            type: string
+            required: true
+            description: Item ID
+        returns: File
+
+      - name: download
+        method: GET
+        path: /me/drive/items/{item_id}/content
+        params:
+          - name: item_id
+            type: string
+            required: true
+            description: Item ID
+        returns: Buffer
+
+      - name: update
+        method: PATCH
+        path: /me/drive/items/{item_id}
+        params:
+          - name: item_id
+            type: string
+            required: true
+            description: Item ID
+          - name: name
+            type: string
+            required: false
+            description: New file name
+          - name: description
+            type: string
+            required: false
+            description: File description
+        returns: File
+
+      - name: delete
+        method: DELETE
+        path: /me/drive/items/{item_id}
+        params:
+          - name: item_id
+            type: string
+            required: true
+            description: Item ID
+        returns: boolean
+
+      - name: copy
+        method: POST
+        path: /me/drive/items/{item_id}/copy
+        params:
+          - name: item_id
+            type: string
+            required: true
+            description: Item ID
+          - name: parentReference
+            type: object
+            required: true
+            description: Destination folder reference
+          - name: name
+            type: string
+            required: false
+            description: New file name
+        returns: File
+
+      - name: move
+        method: PATCH
+        path: /me/drive/items/{item_id}
+        params:
+          - name: item_id
+            type: string
+            required: true
+            description: Item ID
+          - name: parentReference
+            type: object
+            required: true
+            description: New parent folder
+          - name: name
+            type: string
+            required: false
+            description: New file name
+        returns: File
+
+  - name: Folder
+    plural: Folders
+    description: Create and manage folders
+    operations:
+      - name: create
+        method: POST
+        path: /me/drive/items/{parent_id}/children
+        params:
+          - name: parent_id
+            type: string
+            required: true
+            description: Parent folder ID (root for root folder)
+          - name: name
+            type: string
+            required: true
+            description: Folder name
+          - name: folder
+            type: object
+            required: true
+            description: Folder facet (empty object)
+        returns: Folder
+
+      - name: get
+        method: GET
+        path: /me/drive/items/{item_id}
+        params:
+          - name: item_id
+            type: string
+            required: true
+            description: Folder ID
+        returns: Folder
+
+      - name: list
+        method: GET
+        path: /me/drive/items/{item_id}/children
+        params:
+          - name: item_id
+            type: string
+            required: true
+            description: Folder ID (root for root folder)
+        returns: array
+
+      - name: delete
+        method: DELETE
+        path: /me/drive/items/{item_id}
+        params:
+          - name: item_id
+            type: string
+            required: true
+            description: Folder ID
+        returns: boolean
+
+  - name: SharedLink
+    plural: SharedLinks
+    description: Create and manage sharing permissions
+    operations:
+      - name: create
+        method: POST
+        path: /me/drive/items/{item_id}/createLink
+        params:
+          - name: item_id
+            type: string
+            required: true
+            description: Item ID
+          - name: type
+            type: string
+            required: true
+            description: Link type (view, edit, embed)
+          - name: scope
+            type: string
+            required: false
+            description: Scope (anonymous, organization)
+        returns: SharedLink
+
+      - name: list
+        method: GET
+        path: /me/drive/items/{item_id}/permissions
+        params:
+          - name: item_id
+            type: string
+            required: true
+            description: Item ID
+        returns: SharedLink[]
+
+      - name: delete
+        method: DELETE
+        path: /me/drive/items/{item_id}/permissions/{permission_id}
+        params:
+          - name: item_id
+            type: string
+            required: true
+            description: Item ID
+          - name: permission_id
+            type: string
+            required: true
+            description: Permission ID
+        returns: boolean
+
+  - name: Subscription
+    plural: Subscriptions
+    description: Create and manage webhook subscriptions
+    operations:
+      - name: create
+        method: POST
+        path: /subscriptions
+        params:
+          - name: changeType
+            type: string
+            required: true
+            description: Change type (created, updated, deleted)
+          - name: notificationUrl
+            type: string
+            required: true
+            description: Webhook URL
+          - name: resource
+            type: string
+            required: true
+            description: Resource path (e.g., /me/drive/root)
+          - name: expirationDateTime
+            type: string
+            required: true
+            description: Subscription expiry (max 6 months)
+        returns: Subscription
+
+      - name: get
+        method: GET
+        path: /subscriptions/{subscription_id}
+        params:
+          - name: subscription_id
+            type: string
+            required: true
+            description: Subscription ID
+        returns: Subscription
+
+      - name: list
+        method: GET
+        path: /subscriptions
+        params: []
+        returns: Subscription[]
+
+      - name: update
+        method: PATCH
+        path: /subscriptions/{subscription_id}
+        params:
+          - name: subscription_id
+            type: string
+            required: true
+            description: Subscription ID
+          - name: expirationDateTime
+            type: string
+            required: true
+            description: New expiry date
+        returns: Subscription
+
+      - name: delete
+        method: DELETE
+        path: /subscriptions/{subscription_id}
+        params:
+          - name: subscription_id
+            type: string
+            required: true
+            description: Subscription ID
+        returns: boolean
+
+webhooks:
+  enabled: true
+  verificationMethod: secret
+  events:
+    - name: file_created
+      type: created
+      description: File or folder created
+    - name: file_updated
+      type: updated
+      description: File or folder updated
+    - name: file_deleted
+      type: deleted
+      description: File or folder deleted
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized - Invalid or expired token
+      retryable: false
+    - code: 403
+      type: authorization
+      statusCode: 403
+      message: Forbidden - Insufficient permissions
+      retryable: false
+    - code: 404
+      type: not_found
+      statusCode: 404
+      message: Resource not found
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500, 502, 503, 504]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: true
+  scenarios:
+    - name: Drive Operations
+      description: Test drive access
+      steps:
+        - action: retrieve
+          resource: Drive
+        - action: list
+          resource: Drive
+
+    - name: File Management
+      description: Test file operations
+      steps:
+        - action: create
+          resource: File
+        - action: retrieve
+          resource: File
+        - action: update
+          resource: File
+        - action: delete
+          resource: File
+
+    - name: Folder Management
+      description: Test folder operations
+      steps:
+        - action: create
+          resource: Folder
+        - action: retrieve
+          resource: Folder
+        - action: list
+          resource: Folder
+        - action: delete
+          resource: Folder
+
+    - name: Shared Links
+      description: Test sharing operations
+      steps:
+        - action: create
+          resource: SharedLink
+        - action: list
+          resource: SharedLink
+        - action: delete
+          resource: SharedLink
+
+    - name: Webhook Subscriptions
+      description: Test subscription operations
+      steps:
+        - action: create
+          resource: Subscription
+        - action: retrieve
+          resource: Subscription
+        - action: list
+          resource: Subscription
+        - action: update
+          resource: Subscription
+        - action: delete
+          resource: Subscription
+
+docs:
+  homepage: https://www.microsoft.com/en-us/microsoft-365/onedrive/online-cloud-storage
+  apiDocs: https://learn.microsoft.com/en-us/onedrive/developer/rest-api/
+  sdkDocs: https://github.com/microsoftgraph/msgraph-sdk-javascript
+  guides:
+    authentication: https://learn.microsoft.com/en-us/onedrive/developer/rest-api/getting-started/authentication
+    webhooks: https://learn.microsoft.com/en-us/onedrive/developer/rest-api/concepts/using-webhooks
+    uploads: https://learn.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_put_content
+---
+
+# OneDrive Integration
+
+Microsoft cloud storage and file synchronization service via Microsoft Graph API.
+
+## Features
+
+- **File Management**: Upload, download, copy, move, and delete files
+- **Folder Management**: Create and organize folder hierarchies
+- **Shared Links**: Create sharing permissions with view/edit access
+- **Webhooks**: Real-time notifications for file and folder changes
+- **Microsoft Graph**: Unified API for Microsoft 365 services
+- **OAuth 2.0**: Secure user authentication
+
+## Quick Start
+
+```typescript
+import { OneDriveClient } from '@dotdo/sdk.do/integrations/onedrive'
+
+const onedrive = new OneDriveClient({
+  clientId: process.env.ONEDRIVE_CLIENT_ID,
+  clientSecret: process.env.ONEDRIVE_CLIENT_SECRET,
+  accessToken: process.env.ONEDRIVE_ACCESS_TOKEN,
+})
+
+// Upload a file
+const file = await onedrive.file.upload({
+  file_path: '/documents/report.pdf',
+  content: fileBuffer,
+})
+
+// Create a shared link
+const link = await onedrive.sharedLink.create({
+  item_id: file.id,
+  type: 'view',
+  scope: 'anonymous',
+})
+```
+
+## Authentication
+
+OneDrive uses OAuth 2.0 via Microsoft identity platform:
+
+```bash
+export ONEDRIVE_CLIENT_ID=your_client_id
+export ONEDRIVE_CLIENT_SECRET=your_client_secret
+export ONEDRIVE_ACCESS_TOKEN=your_access_token
+```
+
+## Resources
+
+### Drives
+
+Access user drives:
+
+```typescript
+// Get default drive
+const drive = await onedrive.drive.get()
+
+// List all drives
+const drives = await onedrive.drive.list()
+```
+
+### Files
+
+Upload, download, and manage files:
+
+```typescript
+// Upload file
+const file = await onedrive.file.upload({
+  file_path: '/documents/report.pdf',
+  content: Buffer.from('...'),
+})
+
+// Get file metadata
+const file = await onedrive.file.get({
+  item_id: 'item123',
+})
+
+// Download file
+const content = await onedrive.file.download({
+  item_id: 'item123',
+})
+
+// Update file
+await onedrive.file.update({
+  item_id: 'item123',
+  name: 'report_v2.pdf',
+  description: 'Updated report',
+})
+
+// Copy file
+await onedrive.file.copy({
+  item_id: 'item123',
+  parentReference: {
+    id: 'folder456',
+  },
+  name: 'report_copy.pdf',
+})
+
+// Move file
+await onedrive.file.move({
+  item_id: 'item123',
+  parentReference: {
+    id: 'folder456',
+  },
+})
+
+// Delete file
+await onedrive.file.delete({
+  item_id: 'item123',
+})
+```
+
+### Folders
+
+Create and manage folders:
+
+```typescript
+// Create folder
+const folder = await onedrive.folder.create({
+  parent_id: 'root',
+  name: 'Q4 Reports',
+  folder: {},
+})
+
+// Get folder
+const folder = await onedrive.folder.get({
+  item_id: 'folder123',
+})
+
+// List folder contents
+const items = await onedrive.folder.list({
+  item_id: 'root',
+})
+
+// Delete folder
+await onedrive.folder.delete({
+  item_id: 'folder123',
+})
+```
+
+### Shared Links
+
+Create and manage sharing permissions:
+
+```typescript
+// Create shared link
+const link = await onedrive.sharedLink.create({
+  item_id: 'item123',
+  type: 'view', // view, edit, embed
+  scope: 'anonymous', // anonymous, organization
+})
+
+// List permissions
+const permissions = await onedrive.sharedLink.list({
+  item_id: 'item123',
+})
+
+// Delete permission
+await onedrive.sharedLink.delete({
+  item_id: 'item123',
+  permission_id: 'perm123',
+})
+```
+
+### Webhook Subscriptions
+
+Real-time event notifications:
+
+```typescript
+// Create subscription
+const subscription = await onedrive.subscription.create({
+  changeType: 'created,updated,deleted',
+  notificationUrl: 'https://myapp.com/webhooks/onedrive',
+  resource: '/me/drive/root',
+  expirationDateTime: '2025-12-31T23:59:59Z',
+})
+
+// List subscriptions
+const subscriptions = await onedrive.subscription.list()
+
+// Renew subscription
+await onedrive.subscription.update({
+  subscription_id: 'sub123',
+  expirationDateTime: '2026-06-30T23:59:59Z',
+})
+
+// Delete subscription
+await onedrive.subscription.delete({
+  subscription_id: 'sub123',
+})
+```
+
+## Webhooks
+
+Microsoft Graph sends webhook notifications for drive changes:
+
+```typescript
+import { OneDriveWebhookHandler, WebhookEventRouter } from '@dotdo/sdk.do/integrations/onedrive'
+
+const handler = new OneDriveWebhookHandler()
+const event = await handler.handleRequest(request)
+
+const router = new WebhookEventRouter()
+router.onFileCreated(async (event) => {
+  console.log('File created:', event.data)
+})
+
+router.onFileUpdated(async (event) => {
+  console.log('File updated:', event.data)
+})
+
+router.onFileDeleted(async (event) => {
+  console.log('File deleted:', event.data)
+})
+
+await router.route(event)
+```
+
+**Important**:
+
+- Subscriptions expire after 6 months maximum
+- Renew subscriptions well before expiry
+- Respond to webhook within 3 seconds (200 OK)
+- For longer processing, return 202 Accepted and queue
+- Webhook validation handshake required on creation
+
+## Error Handling
+
+```typescript
+import { OneDriveError } from '@dotdo/sdk.do/integrations/onedrive'
+
+try {
+  await onedrive.file.upload({
+    /* ... */
+  })
+} catch (error) {
+  if (error instanceof OneDriveError) {
+    console.error('OneDrive Error:', error.code, error.message)
+    if (error.isRetriable()) {
+      // Retry logic
+    }
+  }
+}
+```
+
+## Best Practices
+
+1. **Root Folder**: Use `'root'` as item_id to reference root folder
+2. **OAuth Tokens**: Include `offline_access` scope for refresh tokens
+3. **Subscription Expiry**: Renew subscriptions before 6-month limit
+4. **Rate Limits**: Respect Microsoft Graph throttling limits
+5. **Large Files**: Use resumable upload for files >4MB
+6. **File Paths**: Use `/me/drive/root:/{path}:/content` for simple uploads
+7. **Webhook Response**: Return 200 within 3 seconds or 202 for async
+8. **Permissions**: Request minimal OAuth scopes needed
+
+## Common Patterns
+
+### Upload to Specific Folder
+
+```typescript
+const file = await onedrive.file.upload({
+  file_path: '/MyFolder/document.pdf',
+  content: fileBuffer,
+})
+```
+
+### Create Read-Only Link
+
+```typescript
+const link = await onedrive.sharedLink.create({
+  item_id: 'item123',
+  type: 'view',
+  scope: 'anonymous',
+})
+```
+
+### Monitor Folder Changes
+
+```typescript
+const subscription = await onedrive.subscription.create({
+  changeType: 'created,updated,deleted',
+  notificationUrl: 'https://myapp.com/webhooks',
+  resource: '/me/drive/items/folder123',
+  expirationDateTime: '2026-01-01T00:00:00Z',
+})
+```
+
+## Microsoft Graph
+
+OneDrive API is part of Microsoft Graph v1.0. All endpoints use:
+
+- Base URL: `https://graph.microsoft.com/v1.0`
+- Authentication: Bearer token in Authorization header
+- Format: JSON requests and responses
+
+## API Reference
+
+Full API documentation: https://learn.microsoft.com/en-us/onedrive/developer/rest-api/
+
+## License
+
+MIT

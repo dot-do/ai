@@ -1,0 +1,182 @@
+---
+$id: https://integrations.do/constantcontact
+$type: Integration
+name: Constant Contact
+service: constantcontact
+description: Email marketing and campaign management platform
+category: marketing
+sdkBased: false
+baseUrl: https://api.cc.email/v3
+
+auth:
+  type: oauth2
+  authorizationUrl: https://authz.constantcontact.com/oauth2/default/v1/authorize
+  tokenUrl: https://authz.constantcontact.com/oauth2/default/v1/token
+  scopes:
+    - contact_data
+    - campaign_data
+
+resources:
+  - name: Contact
+    plural: Contacts
+    description: Manage email contacts
+    operations:
+      - name: create
+        method: POST
+        path: /contacts
+        params:
+          - name: email_address
+            type: string
+            required: true
+            description: Contact email
+          - name: first_name
+            type: string
+            required: false
+            description: First name
+          - name: last_name
+            type: string
+            required: false
+            description: Last name
+        returns: Contact
+
+      - name: get
+        method: GET
+        path: /contacts/{contact_id}
+        params:
+          - name: contact_id
+            type: string
+            required: true
+            description: Contact ID
+        returns: Contact
+
+      - name: update
+        method: PUT
+        path: /contacts/{contact_id}
+        params:
+          - name: contact_id
+            type: string
+            required: true
+            description: Contact ID
+          - name: email_address
+            type: string
+            required: false
+            description: Updated email
+        returns: Contact
+
+      - name: delete
+        method: DELETE
+        path: /contacts/{contact_id}
+        params:
+          - name: contact_id
+            type: string
+            required: true
+            description: Contact ID
+        returns: boolean
+
+      - name: list
+        method: GET
+        path: /contacts
+        params:
+          - name: limit
+            type: number
+            required: false
+            description: Results per page
+        returns: Contact[]
+
+  - name: Campaign
+    plural: Campaigns
+    description: Manage email campaigns
+    operations:
+      - name: create
+        method: POST
+        path: /emails
+        params:
+          - name: name
+            type: string
+            required: true
+            description: Campaign name
+        returns: Campaign
+
+      - name: get
+        method: GET
+        path: /emails/{campaign_id}
+        params:
+          - name: campaign_id
+            type: string
+            required: true
+            description: Campaign ID
+        returns: Campaign
+
+      - name: list
+        method: GET
+        path: /emails
+        params: []
+        returns: Campaign[]
+
+webhooks:
+  enabled: false
+  events: []
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: true
+  scenarios:
+    - name: Contact Management
+      description: Test contact CRUD operations
+      steps:
+        - action: create
+          resource: Contact
+        - action: retrieve
+          resource: Contact
+        - action: update
+          resource: Contact
+        - action: list
+          resource: Contact
+        - action: delete
+          resource: Contact
+
+docs:
+  homepage: https://www.constantcontact.com
+  apiDocs: https://v3.developer.constantcontact.com/api_guide/index.html
+---
+
+# Constant Contact Integration
+
+Email marketing and campaign management platform.
+
+## Quick Start
+
+```typescript
+import { ConstantContactClient } from '@dotdo/sdk.do/integrations/constantcontact'
+
+const constantcontact = new ConstantContactClient({
+  clientId: process.env.CONSTANTCONTACT_CLIENT_ID,
+  clientSecret: process.env.CONSTANTCONTACT_CLIENT_SECRET,
+  accessToken: process.env.CONSTANTCONTACT_ACCESS_TOKEN,
+})
+
+const contact = await constantcontact.contact.create({
+  email_address: 'customer@example.com',
+  first_name: 'John',
+  last_name: 'Doe',
+})
+```
+
+## License
+
+MIT

@@ -1,0 +1,134 @@
+---
+$id: https://integrations.do/wufoo
+$type: Integration
+name: Wufoo
+service: wufoo
+description: Online form builder and data collection platform
+category: forms
+sdkBased: false
+baseUrl: https://{subdomain}.wufoo.com/api/v3
+
+auth:
+  type: api-key
+  location: header
+  headerName: Authorization
+  scheme: Basic
+
+resources:
+  - name: Form
+    plural: Forms
+    description: Access form definitions
+    operations:
+      - name: get
+        method: GET
+        path: /forms/{form_id}
+        params:
+          - name: form_id
+            type: string
+            required: true
+            description: Form ID
+        returns: Form
+
+      - name: list
+        method: GET
+        path: /forms
+        params: []
+        returns: Form[]
+
+  - name: Entry
+    plural: Entries
+    description: Access form submissions
+    operations:
+      - name: get
+        method: GET
+        path: /forms/{form_id}/entries/{entry_id}
+        params:
+          - name: form_id
+            type: string
+            required: true
+            description: Form ID
+          - name: entry_id
+            type: string
+            required: true
+            description: Entry ID
+        returns: Entry
+
+      - name: list
+        method: GET
+        path: /forms/{form_id}/entries
+        params:
+          - name: form_id
+            type: string
+            required: true
+            description: Form ID
+        returns: Entry[]
+
+      - name: create
+        method: POST
+        path: /forms/{form_id}/entries
+        params:
+          - name: form_id
+            type: string
+            required: true
+            description: Form ID
+          - name: fields
+            type: object
+            required: true
+            description: Form field values
+        returns: Entry
+
+webhooks:
+  enabled: true
+  verificationMethod: none
+  events:
+    - name: entry_created
+      type: entry_created
+      description: New form entry created
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+  retryable: [500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Form Operations
+      description: Test form access
+      steps:
+        - action: list
+          resource: Form
+        - action: retrieve
+          resource: Form
+
+docs:
+  homepage: https://www.wufoo.com
+  apiDocs: https://wufoo.github.io/docs/
+---
+
+# Wufoo Integration
+
+Online form builder and data collection platform.
+
+## Quick Start
+
+```typescript
+import { WufooClient } from '@dotdo/sdk.do/integrations/wufoo'
+
+const wufoo = new WufooClient({
+  apiKey: process.env.WUFOO_API_KEY,
+  subdomain: 'yoursubdomain',
+})
+
+const forms = await wufoo.form.list()
+```
+
+## License
+
+MIT

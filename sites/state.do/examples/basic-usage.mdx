@@ -1,0 +1,565 @@
+---
+$id: https://state.do/examples/basic-usage
+$type: HowTo
+title: Basic Usage Examples
+description: Simple examples to get started with state.do
+keywords: [examples, basic, counter, session, cache, tutorial]
+author:
+  $type: Organization
+  name: .do Platform
+license: CC-BY-4.0
+---
+
+# Basic Usage Examples
+
+Simple examples to get started with state.do.
+
+## Example 1: Simple Counter
+
+The simplest state.do example - a counter that increments:
+
+```typescript
+import { $, state } from 'sdk.do'
+
+export class Counter {
+  count: number = 0
+
+  async increment() {
+    this.count++
+    await state.save(this)
+    return this.count
+  }
+
+  async decrement() {
+    this.count--
+    await state.save(this)
+    return this.count
+  }
+
+  async get() {
+    return this.count
+  }
+
+  async reset() {
+    this.count = 0
+    await state.save(this)
+    return this.count
+  }
+}
+
+// Usage
+const counter = await state.get($.Counter, 'global-counter')
+await counter.increment() // 1
+await counter.increment() // 2
+await counter.increment() // 3
+const value = await counter.get() // 3
+```
+
+## Example 2: User Session
+
+Store user session data:
+
+```typescript
+import { $, state } from 'sdk.do'
+
+export class UserSession {
+  userId: string
+  data: Record<string, any> = {}
+  lastActivity: number = Date.now()
+
+  async set(key: string, value: any) {
+    this.data[key] = value
+    this.lastActivity = Date.now()
+    await state.save(this)
+  }
+
+  async get(key: string) {
+    this.lastActivity = Date.now()
+    await state.save(this)
+    return this.data[key]
+  }
+
+  async delete(key: string) {
+    delete this.data[key]
+    await state.save(this)
+  }
+
+  async clear() {
+    this.data = {}
+    await state.save(this)
+  }
+
+  async isActive(ttl: number = 3600000) {
+    return Date.now() - this.lastActivity < ttl
+  }
+}
+
+// Usage
+const session = await state.get($.UserSession, 'user:123')
+await session.set('cart', ['item-1', 'item-2'])
+await session.set('preferences', { theme: 'dark' })
+
+const cart = await session.get('cart')
+console.log('Cart:', cart) // ['item-1', 'item-2']
+```
+
+## Example 3: Simple Cache
+
+Cache frequently accessed data:
+
+```typescript
+import { $, state } from 'sdk.do'
+
+export class SimpleCache {
+  data: Map<string, { value: any; expiresAt: number }> = new Map()
+
+  async set(key: string, value: any, ttl: number = 3600000) {
+    this.data.set(key, {
+      value,
+      expiresAt: Date.now() + ttl,
+    })
+    await state.save(this)
+  }
+
+  async get(key: string) {
+    const entry = this.data.get(key)
+
+    if (!entry) return null
+
+    if (entry.expiresAt < Date.now()) {
+      this.data.delete(key)
+      await state.save(this)
+      return null
+    }
+
+    return entry.value
+  }
+
+  async delete(key: string) {
+    this.data.delete(key)
+    await state.save(this)
+  }
+
+  async clear() {
+    this.data.clear()
+    await state.save(this)
+  }
+
+  async size() {
+    return this.data.size
+  }
+}
+
+// Usage
+const cache = await state.get($.SimpleCache, 'api-cache')
+await cache.set('user:123', { name: 'John' }, 60000) // 1 minute TTL
+
+const user = await cache.get('user:123')
+console.log('User:', user) // { name: 'John' }
+
+// After 1 minute
+const expired = await cache.get('user:123')
+console.log('Expired:', expired) // null
+```
+
+## Example 4: Key-Value Store
+
+Simple key-value storage:
+
+```typescript
+import { $, state } from 'sdk.do'
+
+export class KeyValueStore {
+  data: Map<string, any> = new Map()
+
+  async put(key: string, value: any) {
+    this.data.set(key, value)
+    await state.save(this)
+  }
+
+  async get(key: string) {
+    return this.data.get(key)
+  }
+
+  async has(key: string) {
+    return this.data.has(key)
+  }
+
+  async delete(key: string) {
+    const result = this.data.delete(key)
+    await state.save(this)
+    return result
+  }
+
+  async list() {
+    return Array.from(this.data.keys())
+  }
+
+  async entries() {
+    return Array.from(this.data.entries())
+  }
+
+  async clear() {
+    this.data.clear()
+    await state.save(this)
+  }
+}
+
+// Usage
+const store = await state.get($.KeyValueStore, 'my-data')
+await store.put('name', 'Alice')
+await store.put('age', 30)
+await store.put('city', 'New York')
+
+const name = await store.get('name') // 'Alice'
+const keys = await store.list() // ['name', 'age', 'city']
+const all = await store.entries() // [['name', 'Alice'], ['age', 30], ['city', 'New York']]
+```
+
+## Example 5: Visit Counter
+
+Track page visits:
+
+```typescript
+import { $, state } from 'sdk.do'
+
+export class VisitCounter {
+  visits: number = 0
+  uniqueVisitors: Set<string> = new Set()
+  lastVisit: number = 0
+
+  async recordVisit(visitorId: string) {
+    this.visits++
+    this.uniqueVisitors.add(visitorId)
+    this.lastVisit = Date.now()
+    await state.save(this)
+  }
+
+  async getStats() {
+    return {
+      totalVisits: this.visits,
+      uniqueVisitors: this.uniqueVisitors.size,
+      lastVisit: this.lastVisit,
+    }
+  }
+
+  async reset() {
+    this.visits = 0
+    this.uniqueVisitors.clear()
+    this.lastVisit = 0
+    await state.save(this)
+  }
+}
+
+// Usage
+const counter = await state.get($.VisitCounter, 'page:/home')
+await counter.recordVisit('visitor-1')
+await counter.recordVisit('visitor-2')
+await counter.recordVisit('visitor-1') // Same visitor
+
+const stats = await counter.getStats()
+console.log(stats)
+// { totalVisits: 3, uniqueVisitors: 2, lastVisit: 1234567890 }
+```
+
+## Example 6: Feature Flags
+
+Store and manage feature flags:
+
+```typescript
+import { $, state } from 'sdk.do'
+
+export class FeatureFlags {
+  flags: Map<string, boolean> = new Map()
+
+  async enable(flagName: string) {
+    this.flags.set(flagName, true)
+    await state.save(this)
+  }
+
+  async disable(flagName: string) {
+    this.flags.set(flagName, false)
+    await state.save(this)
+  }
+
+  async isEnabled(flagName: string, defaultValue: boolean = false) {
+    return this.flags.get(flagName) ?? defaultValue
+  }
+
+  async toggle(flagName: string) {
+    const current = this.flags.get(flagName) ?? false
+    this.flags.set(flagName, !current)
+    await state.save(this)
+    return !current
+  }
+
+  async list() {
+    return Object.fromEntries(this.flags)
+  }
+}
+
+// Usage
+const flags = await state.get($.FeatureFlags, 'global')
+await flags.enable('dark-mode')
+await flags.enable('beta-features')
+await flags.disable('legacy-ui')
+
+const isDarkMode = await flags.isEnabled('dark-mode') // true
+const isNewFeature = await flags.isEnabled('new-feature', false) // false (default)
+
+const allFlags = await flags.list()
+console.log(allFlags) // { 'dark-mode': true, 'beta-features': true, 'legacy-ui': false }
+```
+
+## Example 7: Simple Queue
+
+FIFO queue implementation:
+
+```typescript
+import { $, state } from 'sdk.do'
+
+export class SimpleQueue {
+  items: any[] = []
+
+  async enqueue(item: any) {
+    this.items.push(item)
+    await state.save(this)
+    return this.items.length
+  }
+
+  async dequeue() {
+    if (this.items.length === 0) return null
+
+    const item = this.items.shift()
+    await state.save(this)
+    return item
+  }
+
+  async peek() {
+    return this.items[0] ?? null
+  }
+
+  async size() {
+    return this.items.length
+  }
+
+  async isEmpty() {
+    return this.items.length === 0
+  }
+
+  async clear() {
+    this.items = []
+    await state.save(this)
+  }
+}
+
+// Usage
+const queue = await state.get($.SimpleQueue, 'task-queue')
+await queue.enqueue({ task: 'send-email', to: 'user@example.com' })
+await queue.enqueue({ task: 'process-image', id: '123' })
+await queue.enqueue({ task: 'generate-report', date: '2025-10-10' })
+
+const size = await queue.size() // 3
+const next = await queue.dequeue() // { task: 'send-email', to: 'user@example.com' }
+const peek = await queue.peek() // { task: 'process-image', id: '123' }
+```
+
+## Example 8: Settings Store
+
+Application settings storage:
+
+```typescript
+import { $, state } from 'sdk.do'
+
+export class Settings {
+  data: Record<string, any> = {}
+
+  async get(key: string, defaultValue?: any) {
+    return this.data[key] ?? defaultValue
+  }
+
+  async set(key: string, value: any) {
+    this.data[key] = value
+    await state.save(this)
+  }
+
+  async update(updates: Record<string, any>) {
+    Object.assign(this.data, updates)
+    await state.save(this)
+  }
+
+  async delete(key: string) {
+    delete this.data[key]
+    await state.save(this)
+  }
+
+  async getAll() {
+    return { ...this.data }
+  }
+
+  async reset() {
+    this.data = {}
+    await state.save(this)
+  }
+}
+
+// Usage
+const settings = await state.get($.Settings, 'app-settings')
+await settings.set('theme', 'dark')
+await settings.set('language', 'en')
+await settings.set('notifications', true)
+
+await settings.update({
+  theme: 'light',
+  fontSize: 14,
+})
+
+const theme = await settings.get('theme') // 'light'
+const all = await settings.getAll()
+console.log(all) // { theme: 'light', language: 'en', notifications: true, fontSize: 14 }
+```
+
+## Example 9: Rate Limiter
+
+Simple rate limiting:
+
+```typescript
+import { $, state } from 'sdk.do'
+
+export class RateLimiter {
+  requests: number[] = []
+  limit: number = 100
+  window: number = 60000 // 1 minute
+
+  async check(): Promise<{ allowed: boolean; remaining: number }> {
+    const now = Date.now()
+
+    // Remove old requests
+    this.requests = this.requests.filter((time) => now - time < this.window)
+
+    if (this.requests.length >= this.limit) {
+      return {
+        allowed: false,
+        remaining: 0,
+      }
+    }
+
+    this.requests.push(now)
+    await state.save(this)
+
+    return {
+      allowed: true,
+      remaining: this.limit - this.requests.length,
+    }
+  }
+
+  async reset() {
+    this.requests = []
+    await state.save(this)
+  }
+
+  async getStats() {
+    const now = Date.now()
+    this.requests = this.requests.filter((time) => now - time < this.window)
+
+    return {
+      current: this.requests.length,
+      limit: this.limit,
+      remaining: this.limit - this.requests.length,
+      window: this.window,
+    }
+  }
+}
+
+// Usage
+const limiter = await state.get($.RateLimiter, 'api:user:123')
+
+const result = await limiter.check()
+if (result.allowed) {
+  console.log(`Request allowed. ${result.remaining} remaining.`)
+  // Process request
+} else {
+  console.log('Rate limit exceeded')
+  // Return 429 Too Many Requests
+}
+
+const stats = await limiter.getStats()
+console.log(stats) // { current: 1, limit: 100, remaining: 99, window: 60000 }
+```
+
+## Example 10: Scoreboard
+
+Simple scoreboard for tracking scores:
+
+```typescript
+import { $, state } from 'sdk.do'
+
+export class Scoreboard {
+  scores: Map<string, number> = new Map()
+
+  async setScore(playerId: string, score: number) {
+    this.scores.set(playerId, score)
+    await state.save(this)
+  }
+
+  async getScore(playerId: string): Promise<number> {
+    return this.scores.get(playerId) ?? 0
+  }
+
+  async incrementScore(playerId: string, points: number = 1) {
+    const current = this.scores.get(playerId) ?? 0
+    this.scores.set(playerId, current + points)
+    await state.save(this)
+    return current + points
+  }
+
+  async getTop(limit: number = 10) {
+    return Array.from(this.scores.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit)
+      .map(([playerId, score]) => ({ playerId, score }))
+  }
+
+  async getRank(playerId: string): Promise<number> {
+    const sorted = Array.from(this.scores.entries()).sort((a, b) => b[1] - a[1])
+
+    const index = sorted.findIndex(([id]) => id === playerId)
+    return index === -1 ? -1 : index + 1
+  }
+
+  async reset() {
+    this.scores.clear()
+    await state.save(this)
+  }
+}
+
+// Usage
+const scoreboard = await state.get($.Scoreboard, 'game:level-1')
+await scoreboard.setScore('player-1', 100)
+await scoreboard.setScore('player-2', 150)
+await scoreboard.setScore('player-3', 75)
+
+await scoreboard.incrementScore('player-1', 25) // 125
+
+const top = await scoreboard.getTop(3)
+console.log(top)
+// [
+//   { playerId: 'player-2', score: 150 },
+//   { playerId: 'player-1', score: 125 },
+//   { playerId: 'player-3', score: 75 }
+// ]
+
+const rank = await scoreboard.getRank('player-1') // 2
+```
+
+## Next Steps
+
+- Explore [Advanced Patterns](./advanced-patterns) for complex use cases
+- Learn about [Integration](./integration) with other .do services
+- Study [Real-World Use Cases](./real-world-use-case) for production examples
+- Review [Best Practices](../docs/best-practices) for optimization tips
+
+---
+
+Documentation licensed under [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/).
+Code examples licensed under MIT.

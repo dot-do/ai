@@ -1,0 +1,739 @@
+---
+$id: https://agi.do/docs/best-practices
+$type: TechArticle
+title: AGI Agent Best Practices
+description: Best practices for effective prompt engineering, feedback loops, performance optimization, and safety with AGI agents
+keywords: [agi, best practices, optimization, prompts, feedback, performance, safety]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Best Practices
+
+Learn how to build effective, safe, and performant AGI agents.
+
+## Effective Prompt Engineering
+
+### 1. Provide Clear Context
+
+AGI agents perform better with comprehensive context:
+
+```typescript
+import { $, agent } from 'sdk.do'
+
+const agiAgent = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['advanced_reasoning'],
+})
+
+// Good: Rich context
+const result = await agiAgent.execute({
+  task: 'Design a caching strategy',
+  context: {
+    system: 'e-commerce platform',
+    scale: '10M users, 1B requests/month',
+    currentArchitecture: 'microservices with Redis',
+    constraints: ['low latency', 'high availability', 'cost-effective'],
+    metrics: { cacheHitRate: 0.65, p99Latency: '200ms' },
+  },
+})
+
+// Avoid: Vague context
+const result = await agiAgent.execute({
+  task: 'Design a caching strategy',
+})
+```
+
+**Impact**: 40-60% improvement in solution quality
+
+### 2. Break Down Complex Tasks
+
+Decompose large tasks for better results:
+
+```typescript
+import { $, agent } from 'sdk.do'
+
+const agiAgent = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['advanced_reasoning'],
+  decomposition: {
+    strategy: 'hierarchical',
+    max_depth: 4,
+  },
+})
+
+// Good: Task decomposition enabled
+const result = await agiAgent.execute({
+  task: 'Launch new product',
+  autonomy_level: 'supervised', // Agent breaks down task automatically
+})
+
+console.log(result.task_tree)
+// Shows hierarchical breakdown of tasks
+```
+
+### 3. Specify Expected Output Format
+
+Define clear output expectations:
+
+```typescript
+import { $, agent, llm } from 'sdk.do'
+
+const agiAgent = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['strategic_thinking'],
+})
+
+// Good: Structured output
+const strategy = await agiAgent.plan({
+  objective: 'Market entry strategy',
+  deliverable: {
+    format: 'structured',
+    schema: $.Strategy,
+    include: ['phases', 'milestones', 'risks', 'metrics', 'budget'],
+  },
+})
+
+console.log(strategy.phases) // Clear structured data
+console.log(strategy.milestones) // Easy to parse
+```
+
+### 4. Use Domain-Specific Language
+
+Leverage domain expertise effectively:
+
+```typescript
+import { $, agent } from 'sdk.do'
+
+const expert = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['multi_domain_expertise'],
+  domains: ['software_engineering', 'system_design'],
+})
+
+// Good: Domain-specific terminology
+const design = await expert.analyze({
+  problem: 'Design distributed transaction coordinator',
+  technical_requirements: {
+    consistency: 'strong',
+    isolation: 'serializable',
+    availability: '99.99%',
+    partition_tolerance: 'required',
+  },
+  consider: ['2PC', '3PC', 'Saga pattern', 'TCC'],
+})
+
+// Avoid: Generic terminology
+const design = await expert.analyze({
+  problem: 'Make transactions work across services',
+})
+```
+
+## Feedback Loop Implementation
+
+### 1. Collect Comprehensive Feedback
+
+Provide rich feedback for learning:
+
+```typescript
+import { $, agent } from 'sdk.do'
+
+const learner = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['self_improvement'],
+  learning: { enabled: true },
+})
+
+const result = await learner.execute({
+  task: 'Code review',
+})
+
+// Good: Comprehensive feedback
+await learner.feedback({
+  task_id: result.id,
+  outcome: 'success',
+  metrics: {
+    accuracy: 0.95,
+    completeness: 0.9,
+    actionability: 0.92,
+    falsePositives: 0.05,
+  },
+  qualitative: {
+    strengths: ['Identified critical security issue', 'Suggested clear fixes'],
+    weaknesses: ['Missed performance optimization', 'Too verbose'],
+    improvements: ['Add performance analysis', 'Concise suggestions'],
+  },
+  user_rating: 4.5,
+})
+
+// Avoid: Minimal feedback
+await learner.feedback({
+  task_id: result.id,
+  outcome: 'success',
+})
+```
+
+### 2. Implement Automated Feedback
+
+Automate feedback collection:
+
+```typescript
+import { $, agent, db } from 'sdk.do'
+
+class FeedbackCollector {
+  async collectFeedback(result: ExecutionResult): Promise<Feedback> {
+    // Automated metrics
+    const metrics = {
+      latency: result.executionTime,
+      cost: result.llmCost,
+      accuracy: await this.evaluateAccuracy(result),
+      completeness: await this.evaluateCompleteness(result),
+    }
+
+    // User feedback (if available)
+    const userFeedback = await this.getUserFeedback(result.id)
+
+    // Business metrics
+    const businessMetrics = await this.getBusinessMetrics(result)
+
+    return {
+      task_id: result.id,
+      outcome: metrics.accuracy > 0.8 ? 'success' : 'failure',
+      metrics,
+      userFeedback,
+      businessMetrics,
+      timestamp: Date.now(),
+    }
+  }
+}
+```
+
+### 3. Create Feedback Loops
+
+Implement continuous learning:
+
+```typescript
+import { $, agent, on } from 'sdk.do'
+
+const agiAgent = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['advanced_reasoning', 'self_improvement'],
+  learning: {
+    enabled: true,
+    update_frequency: 'task',
+  },
+})
+
+// Automatic feedback loop
+on($.Task.completed, async (task) => {
+  // Execute task
+  const result = await agiAgent.execute(task)
+
+  // Collect feedback
+  const feedback = await collectFeedback(result)
+
+  // Feed back to agent
+  await agiAgent.feedback(feedback)
+
+  // Agent automatically adapts strategy
+})
+```
+
+## Performance Optimization
+
+### 1. Choose Appropriate Reasoning Depth
+
+Balance reasoning depth with performance:
+
+```typescript
+import { $, agent } from 'sdk.do'
+
+// Simple tasks: Shallow reasoning
+const simple = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['advanced_reasoning'],
+  reasoning: {
+    strategy: 'chain-of-thought',
+    depth: 3, // Fast: ~2-3 seconds
+  },
+})
+
+// Complex tasks: Deep reasoning
+const complex = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['advanced_reasoning'],
+  reasoning: {
+    strategy: 'graph-of-thought',
+    depth: 7, // Thorough: ~10-15 seconds
+    breadth: 4,
+  },
+})
+```
+
+**Trade-off**:
+
+- Shallow reasoning: 2-3s latency, 85-90% accuracy
+- Deep reasoning: 10-15s latency, 95-98% accuracy
+
+### 2. Use Parallel Execution
+
+Execute independent subtasks in parallel:
+
+```typescript
+import { $, agent } from 'sdk.do'
+
+const agiAgent = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['advanced_reasoning'],
+  execution: {
+    mode: 'parallel', // Execute independent subtasks concurrently
+    max_parallel: 5,
+  },
+})
+
+// Tasks decomposed and executed in parallel
+const result = await agiAgent.execute({
+  task: 'Analyze competitors',
+  context: {
+    competitors: ['A', 'B', 'C', 'D', 'E'],
+  },
+})
+
+// Each competitor analyzed in parallel: 5x faster
+```
+
+### 3. Enable Caching
+
+Cache reasoning chains for similar problems:
+
+```typescript
+import { $, agent } from 'sdk.do'
+
+const agiAgent = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['advanced_reasoning'],
+  caching: {
+    enabled: true,
+    ttl: 3600,
+    strategy: 'semantic', // Match similar problems
+  },
+})
+
+// First call: 10 seconds
+await agiAgent.reason({ problem: 'Design API rate limiter' })
+
+// Similar problem: < 1 second (cached reasoning chain)
+await agiAgent.reason({ problem: 'Design request throttling system' })
+```
+
+### 4. Optimize Model Selection
+
+Choose appropriate models for each capability:
+
+```typescript
+import { $, agent } from 'sdk.do'
+
+const agiAgent = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['advanced_reasoning', 'research_synthesis'],
+  models: {
+    reasoning: 'claude-sonnet-4.5', // Best for reasoning
+    research: 'gpt-5', // Good for research
+    planning: 'claude-sonnet-4.5', // Best for planning
+  },
+})
+```
+
+### 5. Monitor Performance
+
+Track and optimize performance metrics:
+
+```typescript
+import { $, agent, db } from 'sdk.do'
+
+// Track execution metrics
+const result = await agiAgent.execute(task)
+
+await db.create($.PerformanceMetric, {
+  agent_id: agiAgent.$id,
+  task_type: task.type,
+  latency: result.executionTime,
+  cost: result.llmCost,
+  accuracy: result.accuracy,
+  timestamp: Date.now(),
+})
+
+// Analyze performance trends
+const metrics = await db.list($.PerformanceMetric, {
+  where: { agent_id: agiAgent.$id },
+  last: 100,
+})
+
+const avgLatency = metrics.reduce((sum, m) => sum + m.latency, 0) / metrics.length
+console.log(`Average latency: ${avgLatency}ms`)
+```
+
+## Safety and Alignment
+
+### 1. Set Clear Boundaries
+
+Define operational boundaries:
+
+```typescript
+import { $, agent } from 'sdk.do'
+
+const agiAgent = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['strategic_thinking'],
+  safety: {
+    boundaries: {
+      // Resource limits
+      max_cost: 10.0, // $10 per execution
+      max_time: 300000, // 5 minutes
+      max_api_calls: 50,
+
+      // Capability limits
+      allowed_actions: ['read', 'analyze', 'recommend'],
+      forbidden_actions: ['execute', 'deploy', 'delete'],
+
+      // Domain limits
+      allowed_domains: ['software', 'business', 'data'],
+      forbidden_domains: ['medical', 'legal', 'financial'],
+    },
+  },
+})
+```
+
+### 2. Implement Human-in-the-Loop
+
+Require approval for critical decisions:
+
+```typescript
+import { $, agent, send } from 'sdk.do'
+
+const agiAgent = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['strategic_thinking'],
+  approval: {
+    required_for: ['high_cost_decisions', 'strategic_changes'],
+    threshold: { cost: 1000, risk: 'medium' },
+  },
+})
+
+const strategy = await agiAgent.plan({
+  objective: 'Market expansion',
+})
+
+// High-impact decision requires approval
+if (strategy.estimatedCost > 1000) {
+  await send($.Approval.required, {
+    agent: agiAgent.$id,
+    strategy,
+    reason: 'High-cost strategic decision',
+  })
+
+  // Wait for approval before proceeding
+  const approval = await waitForApproval(strategy.$id)
+
+  if (approval.status === 'approved') {
+    // Proceed with strategy
+  }
+}
+```
+
+### 3. Monitor and Audit
+
+Track all agent actions:
+
+```typescript
+import { $, agent, db } from 'sdk.do'
+
+const agiAgent = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['advanced_reasoning'],
+  audit: {
+    enabled: true,
+    log_level: 'detailed',
+  },
+})
+
+// All actions automatically logged
+const result = await agiAgent.execute(task)
+
+// Review audit trail
+const auditLog = await db.list($.AuditLog, {
+  where: { agent_id: agiAgent.$id },
+  orderBy: 'timestamp DESC',
+})
+
+console.log(auditLog)
+// [{
+//   timestamp: 1234567890,
+//   action: 'execute_task',
+//   input: {...},
+//   output: {...},
+//   reasoning: [...],
+//   cost: 0.05,
+//   latency: 5000
+// }]
+```
+
+### 4. Validate Outputs
+
+Validate agent outputs before use:
+
+```typescript
+import { $, agent } from 'sdk.do'
+
+class OutputValidator {
+  async validate(result: ExecutionResult): Promise<ValidationResult> {
+    const checks = {
+      // Completeness
+      hasRequiredFields: this.checkRequiredFields(result),
+
+      // Consistency
+      isInternallyConsistent: this.checkConsistency(result),
+
+      // Safety
+      withinSafetyBounds: this.checkSafetyBounds(result),
+
+      // Quality
+      meetsQualityThreshold: this.checkQuality(result),
+    }
+
+    return {
+      valid: Object.values(checks).every((v) => v),
+      checks,
+      issues: this.identifyIssues(checks),
+    }
+  }
+}
+
+// Use validator
+const result = await agiAgent.execute(task)
+const validation = await validator.validate(result)
+
+if (!validation.valid) {
+  console.error('Validation failed:', validation.issues)
+  // Re-execute or escalate
+}
+```
+
+## Resource Management
+
+### 1. Set Resource Limits
+
+Prevent resource exhaustion:
+
+```typescript
+import { $, agent } from 'sdk.do'
+
+const agiAgent = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['advanced_reasoning', 'research_synthesis'],
+  resources: {
+    max_memory: 1000, // 1000 experiences
+    max_llm_tokens: 100000, // Per execution
+    max_execution_time: 60000, // 1 minute
+    max_cost_per_task: 1.0, // $1 per task
+  },
+})
+```
+
+### 2. Implement Rate Limiting
+
+Control API usage:
+
+```typescript
+import { $, agent } from 'sdk.do'
+
+const agiAgent = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['research_synthesis'],
+  rateLimit: {
+    llm_calls_per_minute: 20,
+    api_calls_per_minute: 100,
+    embeddings_per_hour: 1000,
+  },
+})
+```
+
+### 3. Clean Up Resources
+
+Manage memory and storage:
+
+```typescript
+import { $, agent } from 'sdk.do'
+
+const agiAgent = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['self_improvement'],
+  learning: {
+    enabled: true,
+    memory_size: 10000,
+    cleanup: {
+      strategy: 'lru', // Least recently used
+      frequency: 'daily',
+    },
+  },
+})
+
+// Manual cleanup if needed
+await agiAgent.cleanup({
+  removeExperiencesOlderThan: 30 * 24 * 60 * 60 * 1000, // 30 days
+  keepTopPerforming: 1000,
+})
+```
+
+## Testing Strategies
+
+### 1. Unit Test Capabilities
+
+Test individual capabilities:
+
+```typescript
+import { $, agent } from 'sdk.do'
+
+describe('AGI Agent Reasoning', () => {
+  it('should solve simple logical problems', async () => {
+    const agiAgent = await agent.create({
+      $role: $.AGIAgent,
+      capabilities: ['advanced_reasoning'],
+    })
+
+    const result = await agiAgent.reason({
+      problem: 'If A > B and B > C, what is the relationship between A and C?',
+    })
+
+    expect(result.final).toContain('A > C')
+    expect(result.confidence).toBeGreaterThan(0.95)
+  })
+})
+```
+
+### 2. Integration Testing
+
+Test capability composition:
+
+```typescript
+import { $, agent } from 'sdk.do'
+
+describe('AGI Agent Multi-Capability', () => {
+  it('should research and analyze', async () => {
+    const agiAgent = await agent.create({
+      $role: $.AGIAgent,
+      capabilities: ['research_synthesis', 'advanced_reasoning'],
+    })
+
+    const result = await agiAgent.execute({
+      task: 'Research and analyze market trends',
+    })
+
+    expect(result.research).toBeDefined()
+    expect(result.analysis).toBeDefined()
+    expect(result.reasoning).toBeDefined()
+  })
+})
+```
+
+### 3. Performance Testing
+
+Measure performance under load:
+
+```typescript
+import { $, agent } from 'sdk.do'
+
+describe('AGI Agent Performance', () => {
+  it('should handle 100 tasks within budget', async () => {
+    const agiAgent = await agent.create({
+      $role: $.AGIAgent,
+      capabilities: ['advanced_reasoning'],
+    })
+
+    const start = Date.now()
+    const results = await Promise.all(Array.from({ length: 100 }, () => agiAgent.execute({ task: 'Simple analysis' })))
+    const duration = Date.now() - start
+
+    const totalCost = results.reduce((sum, r) => sum + r.cost, 0)
+
+    expect(duration).toBeLessThan(60000) // < 1 minute
+    expect(totalCost).toBeLessThan(10.0) // < $10
+  })
+})
+```
+
+## Common Pitfalls
+
+### 1. Over-Engineering
+
+Avoid unnecessary complexity:
+
+```typescript
+// Avoid: Too many capabilities
+const bloated = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['advanced_reasoning', 'multi_domain_expertise', 'self_improvement', 'meta_learning', 'research_synthesis', 'strategic_thinking'],
+})
+
+// Good: Only what you need
+const focused = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['advanced_reasoning'],
+})
+```
+
+### 2. Insufficient Context
+
+Always provide adequate context:
+
+```typescript
+// Avoid: Missing context
+const result = await agiAgent.execute({
+  task: 'Optimize the system',
+})
+
+// Good: Rich context
+const result = await agiAgent.execute({
+  task: 'Optimize API latency',
+  context: {
+    currentLatency: '200ms p99',
+    targetLatency: '100ms p99',
+    architecture: 'microservices',
+    bottlenecks: ['database queries', 'network hops'],
+  },
+})
+```
+
+### 3. Ignoring Feedback
+
+Always implement feedback loops:
+
+```typescript
+// Avoid: No learning
+const agent = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['advanced_reasoning'],
+  learning: { enabled: false },
+})
+
+// Good: Enable learning
+const agent = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['advanced_reasoning'],
+  learning: {
+    enabled: true,
+    strategy: 'experience_replay',
+  },
+})
+```
+
+## Next Steps
+
+- [Troubleshooting](./troubleshooting) - Common issues and solutions
+- [API Reference](../api/reference) - Complete API documentation
+- [Examples](../examples/) - Practical implementation examples
+
+## License
+
+MIT (Open Source)

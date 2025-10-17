@@ -1,0 +1,1022 @@
+---
+$id: https://context.do/api/reference
+$type: https://schema.org/APIReference
+name: Context Management API Reference
+description: Complete API documentation for context.do - types, functions, options, and error codes
+version: 1.0.0
+license: CC-BY-4.0
+author:
+  $type: https://schema.org/Organization
+  name: .do
+  url: https://do.inc
+keywords:
+  - api reference
+  - documentation
+  - types
+  - functions
+  - errors
+---
+
+# API Reference
+
+Complete API documentation for `context.do`.
+
+## Core Functions
+
+### $.Context.create()
+
+Create a context with optional token limits and overflow handling.
+
+```typescript
+$.Context.create(options: ContextOptions): Promise<Context>
+```
+
+**Parameters:**
+
+```typescript
+interface ContextOptions {
+  content: Message[] | string
+  maxTokens?: number
+  overflow?: 'compress' | 'truncate' | 'error' | 'split'
+  compressionStrategy?: CompressionStrategy
+  preserveFirst?: number
+  preserveRecent?: number
+  model?: string
+  onTokenCountChange?: (tokens: number) => void
+  debug?: boolean
+}
+```
+
+**Returns:**
+
+```typescript
+interface Context {
+  content: Message[]
+  tokenCount: number
+  compressionApplied: boolean
+  compressionStrategy?: CompressionStrategy
+  debug: () => ContextDebugInfo
+  addMessage: (message: Message) => Promise<void>
+  optimize: (options: OptimizeOptions) => Promise<Context>
+}
+```
+
+**Example:**
+
+```typescript
+const context = await $.Context.create({
+  content: messages,
+  maxTokens: 100000,
+  overflow: 'compress',
+  compressionStrategy: 'semantic',
+})
+```
+
+**Errors:**
+
+- `CONTEXT_OVERFLOW`: Content exceeds maxTokens and overflow is 'error'
+- `INVALID_CONTENT`: Content format is invalid
+- `INVALID_MODEL`: Specified model is not supported
+
+---
+
+### $.Context.compress()
+
+Compress context using specified strategy.
+
+```typescript
+$.Context.compress(options: CompressionOptions): Promise<CompressedContext>
+```
+
+**Parameters:**
+
+```typescript
+interface CompressionOptions {
+  messages: Message[]
+  targetTokens?: number
+  strategy: 'sliding' | 'summarize' | 'hierarchical' | 'semantic'
+
+  // Sliding window options
+  windowSize?: number
+
+  // Summarization options
+  preserveRecent?: number
+  summaryTokens?: number
+
+  // Hierarchical options
+  levels?: {
+    recent: number
+    medium: number
+    old: 'summary' | 'discard'
+  }
+
+  // Semantic memory options
+  extractFacts?: boolean
+  factTypes?: string[]
+
+  // Common options
+  preserveFirst?: number
+  compressMiddle?: boolean
+  model?: string
+  onCompressionComplete?: (metrics: CompressionMetrics) => void
+}
+```
+
+**Returns:**
+
+```typescript
+interface CompressedContext {
+  messages: Message[]
+  tokens: number
+  originalTokens: number
+  originalCount: number
+  compressedCount: number
+  strategy: CompressionStrategy
+  summary?: string
+  facts?: Record<string, any>
+  levels?: {
+    recent: number
+    medium: number
+    old: number
+  }
+  metadata: {
+    compressionRatio: number
+    durationMs: number
+    timestamp: string
+  }
+}
+```
+
+**Example:**
+
+```typescript
+const compressed = await $.Context.compress({
+  messages: conversation,
+  targetTokens: 4000,
+  strategy: 'semantic',
+  extractFacts: true,
+  factTypes: ['$.Customer.Name', '$.Order.ID'],
+})
+```
+
+**Errors:**
+
+- `INSUFFICIENT_MESSAGES`: Not enough messages for selected strategy
+- `TARGET_TOKENS_TOO_LOW`: Target tokens is unrealistically low
+- `COMPRESSION_FAILED`: AI-powered compression failed
+
+---
+
+### $.Context.countTokens()
+
+Count tokens in text or messages.
+
+```typescript
+$.Context.countTokens(options: CountTokensOptions): Promise<number>
+```
+
+**Parameters:**
+
+```typescript
+interface CountTokensOptions {
+  text?: string
+  messages?: Message[]
+  model: string
+}
+```
+
+**Returns:** `Promise<number>` - Token count
+
+**Example:**
+
+```typescript
+const tokens = await $.Context.countTokens({
+  text: 'Hello world',
+  model: 'gpt-5',
+})
+
+const messageTokens = await $.Context.countTokens({
+  messages: conversation,
+  model: 'gpt-5',
+})
+```
+
+**Errors:**
+
+- `INVALID_MODEL`: Model not supported
+- `MISSING_CONTENT`: Neither text nor messages provided
+
+---
+
+### $.Context.countTokensBatch()
+
+Count tokens for multiple texts efficiently.
+
+```typescript
+$.Context.countTokensBatch(options: CountTokensBatchOptions): Promise<TokenCountResult[]>
+```
+
+**Parameters:**
+
+```typescript
+interface CountTokensBatchOptions {
+  texts: string[]
+  model: string
+}
+
+interface TokenCountResult {
+  text: string
+  tokens: number
+}
+```
+
+**Returns:** `Promise<TokenCountResult[]>`
+
+**Example:**
+
+```typescript
+const results = await $.Context.countTokensBatch({
+  texts: ['Text 1', 'Text 2', 'Text 3'],
+  model: 'gpt-5',
+})
+
+results.forEach((result) => {
+  console.log(`${result.text}: ${result.tokens} tokens`)
+})
+```
+
+---
+
+### $.Context.optimize()
+
+Optimize context for specific token budget.
+
+```typescript
+$.Context.optimize(options: OptimizeOptions): Promise<Context>
+```
+
+**Parameters:**
+
+```typescript
+interface OptimizeOptions {
+  messages: Message[]
+  targetTokens: number
+  strategy?: CompressionStrategy
+  preserveFirst?: number
+  preserveRecent?: number
+  removeRedundant?: boolean
+  removeFiller?: boolean
+  consolidate?: boolean
+  prioritizeBy?: 'priority' | 'recency' | 'relevance'
+}
+```
+
+**Returns:** `Promise<Context>`
+
+**Example:**
+
+```typescript
+const optimized = await $.Context.optimize({
+  messages: conversation,
+  targetTokens: 6000,
+  strategy: 'semantic',
+  removeRedundant: true,
+  prioritizeBy: 'relevance',
+})
+```
+
+---
+
+### $.Context.extractFacts()
+
+Extract structured facts from messages.
+
+```typescript
+$.Context.extractFacts(options: ExtractFactsOptions): Promise<Record<string, any>>
+```
+
+**Parameters:**
+
+```typescript
+interface ExtractFactsOptions {
+  messages: Message[]
+  factTypes: string[]
+  schema?: Record<string, any>
+  model?: string
+}
+```
+
+**Returns:** `Promise<Record<string, any>>`
+
+**Example:**
+
+```typescript
+const facts = await $.Context.extractFacts({
+  messages: conversation,
+  factTypes: ['$.Customer.Name', '$.Customer.Email', '$.Order.ID', '$.Issue.Type'],
+})
+
+console.log(facts)
+// {
+//   '$.Customer.Name': 'John Smith',
+//   '$.Customer.Email': 'john@example.com',
+//   '$.Order.ID': 'ORD-12345',
+//   '$.Issue.Type': 'billing'
+// }
+```
+
+---
+
+### $.Context.merge()
+
+Merge multiple contexts with priorities.
+
+```typescript
+$.Context.merge(options: MergeOptions): Promise<MergedContext>
+```
+
+**Parameters:**
+
+```typescript
+interface MergeOptions {
+  contexts: Array<{
+    name: string
+    content: Message[]
+    priority: 'critical' | 'high' | 'medium' | 'low'
+    maxTokens: number
+  }>
+  totalMaxTokens: number
+  strategy: 'prioritized' | 'proportional' | 'equal'
+}
+
+interface MergedContext {
+  messages: Message[]
+  totalTokens: number
+  contexts: Record<
+    string,
+    {
+      tokens: number
+      included: boolean
+    }
+  >
+}
+```
+
+**Example:**
+
+```typescript
+const merged = await $.Context.merge({
+  contexts: [
+    {
+      name: 'conversation',
+      content: conversationMessages,
+      priority: 'high',
+      maxTokens: 4000,
+    },
+    {
+      name: 'document',
+      content: documentMessages,
+      priority: 'medium',
+      maxTokens: 2000,
+    },
+  ],
+  totalMaxTokens: 6000,
+  strategy: 'prioritized',
+})
+```
+
+---
+
+## Conversation Management
+
+### $.Conversation.create()
+
+Create managed conversation with automatic context management.
+
+```typescript
+$.Conversation.create(options: ConversationOptions): Promise<Conversation>
+```
+
+**Parameters:**
+
+```typescript
+interface ConversationOptions {
+  systemPrompt: string
+  model?: string
+  windowSize?: number
+  compressionThreshold?: number
+  compressionStrategy?: CompressionStrategy
+  semanticMemory?: boolean
+  factTypes?: string[]
+  onTokenCountChange?: (tokens: number) => void
+}
+```
+
+**Returns:**
+
+```typescript
+interface Conversation {
+  id: string
+  turns: Message[]
+  currentTokens: number
+  compressedTurns: number
+  addTurn: (message: Message) => Promise<void>
+  generate: (options?: GenerateOptions) => Promise<Message>
+  getContext: () => Promise<Message[]>
+  getHistory: () => Message[]
+  getFacts: () => Record<string, any>
+  getSummary: () => string | null
+}
+```
+
+**Example:**
+
+```typescript
+const conversation = await $.Conversation.create({
+  systemPrompt: 'You are a helpful assistant',
+  windowSize: 10,
+  compressionThreshold: 15,
+  compressionStrategy: 'semantic',
+  semanticMemory: true,
+})
+
+await conversation.addTurn({
+  role: 'user',
+  content: 'Hello',
+})
+
+const response = await conversation.generate()
+```
+
+---
+
+### conversation.addTurn()
+
+Add a turn to the conversation.
+
+```typescript
+conversation.addTurn(message: Message): Promise<void>
+```
+
+**Parameters:**
+
+```typescript
+interface Message {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+  priority?: 'critical' | 'high' | 'medium' | 'low'
+}
+```
+
+**Example:**
+
+```typescript
+await conversation.addTurn({
+  role: 'user',
+  content: 'What is AI?',
+})
+```
+
+---
+
+### conversation.generate()
+
+Generate response from AI.
+
+```typescript
+conversation.generate(options?: GenerateOptions): Promise<Message>
+```
+
+**Parameters:**
+
+```typescript
+interface GenerateOptions {
+  model?: string
+  temperature?: number
+  maxTokens?: number
+}
+```
+
+**Returns:** `Promise<Message>`
+
+**Example:**
+
+```typescript
+const response = await conversation.generate({
+  model: 'gpt-5',
+  temperature: 0.7,
+})
+
+console.log(response.content)
+```
+
+---
+
+### conversation.getContext()
+
+Get current context that will be sent to AI.
+
+```typescript
+conversation.getContext(): Promise<Message[]>
+```
+
+**Returns:** `Promise<Message[]>`
+
+**Example:**
+
+```typescript
+const context = await conversation.getContext()
+
+console.log(`Context has ${context.length} messages`)
+```
+
+---
+
+### conversation.getHistory()
+
+Get full conversation history (uncompressed).
+
+```typescript
+conversation.getHistory(): Message[]
+```
+
+**Returns:** `Message[]`
+
+---
+
+### conversation.getFacts()
+
+Get extracted facts from conversation.
+
+```typescript
+conversation.getFacts(): Record<string, any>
+```
+
+**Returns:** `Record<string, any>`
+
+**Example:**
+
+```typescript
+const facts = conversation.getFacts()
+
+console.log('Customer name:', facts['$.Customer.Name'])
+console.log('Order ID:', facts['$.Order.ID'])
+```
+
+---
+
+### conversation.getSummary()
+
+Get conversation summary (if compression applied).
+
+```typescript
+conversation.getSummary(): string | null
+```
+
+**Returns:** `string | null`
+
+---
+
+## Workflow Context
+
+### $.WorkflowContext.create()
+
+Create workflow context for inter-agent communication.
+
+```typescript
+$.WorkflowContext.create(data: Record<string, any>, metadata?: ContextMetadata): Promise<WorkflowContext>
+```
+
+**Parameters:**
+
+```typescript
+interface ContextMetadata {
+  $type?: string
+  timestamp?: string
+  priority?: string
+  [key: string]: any
+}
+```
+
+**Returns:**
+
+```typescript
+interface WorkflowContext {
+  data: Record<string, any>
+  metadata: ContextMetadata
+  compress: (options: CompressOptions) => Promise<WorkflowContext>
+  expand: () => Promise<WorkflowContext>
+  toJSON: () => any
+}
+```
+
+**Example:**
+
+```typescript
+const context = await $.WorkflowContext.create({
+  $type: '$.Order.Context',
+  order: orderData,
+  customer: customerData,
+})
+
+const compressed = await context.compress({ targetTokens: 2000 })
+
+await $.send({
+  event: '$.Order.created',
+  context: compressed.toJSON(),
+})
+```
+
+---
+
+### workflowContext.compress()
+
+Compress workflow context for efficient transfer.
+
+```typescript
+workflowContext.compress(options: CompressOptions): Promise<WorkflowContext>
+```
+
+**Parameters:**
+
+```typescript
+interface CompressOptions {
+  targetTokens: number
+  strategy?: 'semantic' | 'hierarchical' | 'truncate'
+  preserveFields?: string[]
+}
+```
+
+**Returns:** `Promise<WorkflowContext>`
+
+---
+
+### workflowContext.expand()
+
+Expand compressed workflow context.
+
+```typescript
+workflowContext.expand(): Promise<WorkflowContext>
+```
+
+**Returns:** `Promise<WorkflowContext>`
+
+---
+
+### $.WorkflowContext.fromJSON()
+
+Create workflow context from JSON.
+
+```typescript
+$.WorkflowContext.fromJSON(json: any): Promise<WorkflowContext>
+```
+
+**Parameters:** JSON object
+
+**Returns:** `Promise<WorkflowContext>`
+
+**Example:**
+
+```typescript
+$.on('$.Order.created', async ({ context }) => {
+  const workflowContext = await $.WorkflowContext.fromJSON(context)
+  const data = workflowContext.data
+
+  // Process with context
+})
+```
+
+---
+
+## Configuration
+
+### $.Context.configure()
+
+Set global context configuration.
+
+```typescript
+$.Context.configure(config: ContextConfig): void
+```
+
+**Parameters:**
+
+```typescript
+interface ContextConfig {
+  defaultStrategy?: CompressionStrategy
+  defaultMaxTokens?: number
+  defaultModel?: string
+  compressionCacheTTL?: number
+  enableMetrics?: boolean
+  enableDebug?: boolean
+  tokenCountCache?: boolean
+}
+```
+
+**Example:**
+
+```typescript
+$.Context.configure({
+  defaultStrategy: 'semantic',
+  defaultMaxTokens: 100000,
+  defaultModel: 'gpt-5',
+  compressionCacheTTL: 3600,
+  enableMetrics: true,
+  tokenCountCache: true,
+})
+```
+
+---
+
+## Types
+
+### Message
+
+```typescript
+interface Message {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+  priority?: 'critical' | 'high' | 'medium' | 'low'
+}
+```
+
+### CompressionStrategy
+
+```typescript
+type CompressionStrategy = 'sliding' | 'summarize' | 'hierarchical' | 'semantic'
+```
+
+### Context
+
+```typescript
+interface Context {
+  content: Message[]
+  tokenCount: number
+  compressionApplied: boolean
+  compressionStrategy?: CompressionStrategy
+  debug: () => ContextDebugInfo
+  addMessage: (message: Message) => Promise<void>
+  optimize: (options: OptimizeOptions) => Promise<Context>
+}
+```
+
+### CompressedContext
+
+```typescript
+interface CompressedContext {
+  messages: Message[]
+  tokens: number
+  originalTokens: number
+  originalCount: number
+  compressedCount: number
+  strategy: CompressionStrategy
+  summary?: string
+  facts?: Record<string, any>
+  metadata: CompressionMetadata
+}
+```
+
+### CompressionMetadata
+
+```typescript
+interface CompressionMetadata {
+  compressionRatio: number
+  durationMs: number
+  timestamp: string
+}
+```
+
+### ContextDebugInfo
+
+```typescript
+interface ContextDebugInfo {
+  totalTokens: number
+  messageCount: number
+  compressionApplied: boolean
+  compressionStrategy?: CompressionStrategy
+  tokensByMessage: Array<{
+    index: number
+    role: string
+    tokens: number
+  }>
+  tokenDistribution: {
+    system: number
+    user: number
+    assistant: number
+  }
+}
+```
+
+---
+
+## Error Codes
+
+### CONTEXT_OVERFLOW
+
+Content exceeds maximum token limit.
+
+```typescript
+{
+  code: 'CONTEXT_OVERFLOW',
+  message: 'Context exceeds maximum tokens',
+  actualTokens: number,
+  maxTokens: number
+}
+```
+
+**Solution:** Compress context or increase maxTokens
+
+### CONTEXT_LENGTH_EXCEEDED
+
+Context exceeds model's limit (from AI provider).
+
+```typescript
+{
+  code: 'context_length_exceeded',
+  message: "This model's maximum context length is 128000 tokens",
+  actualTokens: number,
+  maxTokens: number
+}
+```
+
+**Solution:** Compress context before sending to AI
+
+### INSUFFICIENT_MESSAGES
+
+Not enough messages for selected compression strategy.
+
+```typescript
+{
+  code: 'INSUFFICIENT_MESSAGES',
+  message: 'Strategy requires at least N messages',
+  minimumMessages: number,
+  actualMessages: number
+}
+```
+
+**Solution:** Use different strategy or add more messages
+
+### COMPRESSION_FAILED
+
+AI-powered compression failed.
+
+```typescript
+{
+  code: 'COMPRESSION_FAILED',
+  message: 'Failed to compress context',
+  reason: string
+}
+```
+
+**Solution:** Retry with different strategy or check AI service status
+
+### TARGET_TOKENS_TOO_LOW
+
+Target token count is unrealistically low.
+
+```typescript
+{
+  code: 'TARGET_TOKENS_TOO_LOW',
+  message: 'Target tokens too low for content',
+  targetTokens: number,
+  minimumTokens: number
+}
+```
+
+**Solution:** Increase targetTokens
+
+### INVALID_MODEL
+
+Specified model is not supported.
+
+```typescript
+{
+  code: 'INVALID_MODEL',
+  message: 'Model not supported',
+  model: string,
+  supportedModels: string[]
+}
+```
+
+**Solution:** Use supported model (gpt-5, claude-sonnet-4.5, etc.)
+
+### INVALID_CONTENT
+
+Content format is invalid.
+
+```typescript
+{
+  code: 'INVALID_CONTENT',
+  message: 'Content must be Message[] or string',
+  receivedType: string
+}
+```
+
+**Solution:** Provide valid content format
+
+### RATE_LIMIT_EXCEEDED
+
+AI provider rate limit exceeded.
+
+```typescript
+{
+  code: 'rate_limit_exceeded',
+  message: 'Rate limit exceeded. Please retry after N seconds',
+  retryAfter: number
+}
+```
+
+**Solution:** Implement retry with exponential backoff
+
+---
+
+## Constants
+
+### Model Limits
+
+```typescript
+const MODEL_LIMITS: Record<string, number> = {
+  'gpt-5': 128000,
+  'gpt-5-mini': 128000,
+  'gpt-5-nano': 32000,
+  'claude-sonnet-4.5': 200000,
+}
+```
+
+### Compression Strategies
+
+```typescript
+const COMPRESSION_STRATEGIES = {
+  SLIDING: 'sliding',
+  SUMMARIZE: 'summarize',
+  HIERARCHICAL: 'hierarchical',
+  SEMANTIC: 'semantic',
+} as const
+```
+
+### Default Configuration
+
+```typescript
+const DEFAULT_CONFIG = {
+  defaultStrategy: 'semantic',
+  defaultMaxTokens: 100000,
+  defaultModel: 'gpt-5',
+  compressionCacheTTL: 3600,
+  enableMetrics: true,
+  enableDebug: false,
+  tokenCountCache: true,
+}
+```
+
+---
+
+## Migration Guide
+
+### From v0.9 to v1.0
+
+**Breaking Changes:**
+
+1. `$.Context.create()` now requires `content` instead of `messages`:
+
+   ```typescript
+   // Old
+   await $.Context.create({ messages })
+
+   // New
+   await $.Context.create({ content: messages })
+   ```
+
+2. Compression strategies renamed:
+
+   ```typescript
+   // Old: 'window'
+   // New: 'sliding'
+
+   // Old: 'summary'
+   // New: 'summarize'
+   ```
+
+3. `overflow` option changed:
+   ```typescript
+   // Old: 'auto'
+   // New: 'compress'
+   ```
+
+**New Features:**
+
+- Workflow context management
+- Semantic memory extraction
+- Context merging
+- Batch token counting
+- Enhanced debugging
+
+---
+
+## Support
+
+- **Documentation**: https://context.do
+- **Issues**: https://github.com/dot-do/platform/issues
+- **Discord**: https://discord.gg/dotdo
+
+---
+
+Built with [sdk.do](https://sdk.do) - The semantic SDK for Business-as-Code

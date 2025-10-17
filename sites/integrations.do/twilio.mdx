@@ -1,0 +1,1220 @@
+---
+$id: https://integrations.do/twilio
+$type: Integration
+name: Twilio
+service: twilio
+description: Cloud communications platform for SMS, voice, video, and authentication
+category: communication
+sdkBased: true
+sdkPackage: twilio
+sdkVersion: ^5.3.4
+sdkImport: Twilio
+
+auth:
+  type: api-key
+  location: header
+  headerName: Authorization
+  scheme: Basic
+
+resources:
+  - name: Message
+    plural: Messages
+    sdkPath: messages
+    description: Send and receive SMS and MMS messages
+    operations:
+      - name: create
+        method: create
+        params:
+          - name: from
+            type: string
+            required: true
+            description: Phone number to send from (E.164 format)
+          - name: to
+            type: string
+            required: true
+            description: Phone number to send to (E.164 format)
+          - name: body
+            type: string
+            required: true
+            description: Message body (up to 1600 characters)
+          - name: mediaUrl
+            type: string[]
+            required: false
+            description: Media URLs for MMS
+          - name: statusCallback
+            type: string
+            required: false
+            description: URL to receive status callbacks
+          - name: messagingServiceSid
+            type: string
+            required: false
+            description: Messaging Service SID (alternative to from)
+          - name: maxPrice
+            type: number
+            required: false
+            description: Maximum price willing to pay for message
+          - name: validityPeriod
+            type: number
+            required: false
+            description: Number of seconds message is valid
+        returns: SMSMessage
+
+      - name: get
+        method: fetch
+        params:
+          - name: sid
+            type: string
+            required: true
+            description: Message SID
+        returns: SMSMessage
+
+      - name: list
+        method: list
+        params:
+          - name: to
+            type: string
+            required: false
+            description: Filter by to phone number
+          - name: from
+            type: string
+            required: false
+            description: Filter by from phone number
+          - name: dateSent
+            type: Date
+            required: false
+            description: Filter by date sent
+          - name: limit
+            type: number
+            required: false
+            description: Maximum number of messages to return
+        returns: SMSMessage[]
+        pagination:
+          type: cursor
+          cursorField: pageToken
+          limitField: limit
+          defaultLimit: 50
+          maxLimit: 1000
+
+      - name: delete
+        method: remove
+        params:
+          - name: sid
+            type: string
+            required: true
+            description: Message SID
+        returns: boolean
+
+  - name: Call
+    plural: Calls
+    sdkPath: calls
+    description: Make and manage voice calls
+    operations:
+      - name: create
+        method: create
+        params:
+          - name: from
+            type: string
+            required: true
+            description: Phone number to call from (E.164 format)
+          - name: to
+            type: string
+            required: true
+            description: Phone number to call (E.164 format)
+          - name: url
+            type: string
+            required: false
+            description: TwiML instructions URL
+          - name: twiml
+            type: string
+            required: false
+            description: Inline TwiML instructions
+          - name: statusCallback
+            type: string
+            required: false
+            description: URL to receive call status callbacks
+          - name: timeout
+            type: number
+            required: false
+            description: Timeout in seconds before call is considered unanswered
+          - name: record
+            type: boolean
+            required: false
+            description: Record the call
+          - name: machineDetection
+            type: string
+            required: false
+            description: Machine detection (Enable or DetectMessageEnd)
+        returns: Call
+
+      - name: get
+        method: fetch
+        params:
+          - name: sid
+            type: string
+            required: true
+            description: Call SID
+        returns: Call
+
+      - name: update
+        method: update
+        params:
+          - name: sid
+            type: string
+            required: true
+            description: Call SID
+          - name: url
+            type: string
+            required: false
+            description: New TwiML instructions URL
+          - name: twiml
+            type: string
+            required: false
+            description: New TwiML instructions
+          - name: status
+            type: string
+            required: false
+            description: New call status (canceled or completed)
+        returns: Call
+
+      - name: list
+        method: list
+        params:
+          - name: to
+            type: string
+            required: false
+            description: Filter by to phone number
+          - name: from
+            type: string
+            required: false
+            description: Filter by from phone number
+          - name: status
+            type: string
+            required: false
+            description: Filter by call status
+          - name: limit
+            type: number
+            required: false
+            description: Maximum number of calls to return
+        returns: Call[]
+        pagination:
+          type: cursor
+          cursorField: pageToken
+          limitField: limit
+          defaultLimit: 50
+          maxLimit: 1000
+
+  - name: PhoneNumber
+    plural: PhoneNumbers
+    sdkPath: incomingPhoneNumbers
+    description: Manage phone numbers in your account
+    operations:
+      - name: create
+        method: create
+        params:
+          - name: phoneNumber
+            type: string
+            required: true
+            description: Phone number to purchase (E.164 format)
+          - name: friendlyName
+            type: string
+            required: false
+            description: Friendly name for the number
+          - name: voiceUrl
+            type: string
+            required: false
+            description: Voice URL for incoming calls
+          - name: smsUrl
+            type: string
+            required: false
+            description: SMS URL for incoming messages
+        returns: PhoneNumber
+
+      - name: get
+        method: fetch
+        params:
+          - name: sid
+            type: string
+            required: true
+            description: Phone number SID
+        returns: PhoneNumber
+
+      - name: list
+        method: list
+        params:
+          - name: limit
+            type: number
+            required: false
+            description: Maximum number of phone numbers to return
+        returns: PhoneNumber[]
+        pagination:
+          type: cursor
+          cursorField: pageToken
+          limitField: limit
+          defaultLimit: 50
+
+      - name: delete
+        method: remove
+        params:
+          - name: sid
+            type: string
+            required: true
+            description: Phone number SID
+        returns: boolean
+
+  - name: MessagingService
+    plural: MessagingServices
+    sdkPath: messaging.v1.services
+    description: Manage messaging services for scaled SMS operations
+    operations:
+      - name: create
+        method: create
+        params:
+          - name: friendlyName
+            type: string
+            required: true
+            description: Friendly name for the service
+          - name: inboundRequestUrl
+            type: string
+            required: false
+            description: URL for inbound message requests
+          - name: statusCallback
+            type: string
+            required: false
+            description: URL for status callbacks
+        returns: MessagingService
+
+      - name: get
+        method: fetch
+        params:
+          - name: sid
+            type: string
+            required: true
+            description: Service SID
+        returns: MessagingService
+
+      - name: list
+        method: list
+        params:
+          - name: limit
+            type: number
+            required: false
+            description: Maximum number of services to return
+        returns: MessagingService[]
+        pagination:
+          type: cursor
+          cursorField: pageToken
+          limitField: limit
+
+  - name: Verification
+    plural: Verifications
+    sdkPath: verify.v2.services
+    description: Send and verify codes for two-factor authentication
+    operations:
+      - name: sendCode
+        method: verifications.create
+        params:
+          - name: serviceSid
+            type: string
+            required: true
+            description: Verify service SID
+          - name: to
+            type: string
+            required: true
+            description: Phone number to verify (E.164 format)
+          - name: channel
+            type: string
+            required: true
+            description: Verification channel (sms, call, or email)
+          - name: codeLength
+            type: number
+            required: false
+            description: Custom code length (4-10 digits)
+          - name: locale
+            type: string
+            required: false
+            description: Locale for message
+        returns: any
+
+      - name: checkCode
+        method: verificationChecks.create
+        params:
+          - name: serviceSid
+            type: string
+            required: true
+            description: Verify service SID
+          - name: to
+            type: string
+            required: true
+            description: Phone number being verified (E.164 format)
+          - name: code
+            type: string
+            required: true
+            description: Verification code to check
+        returns: VerificationCheck
+
+  - name: Conference
+    plural: Conferences
+    sdkPath: conferences
+    description: Manage conference calls
+    operations:
+      - name: create
+        method: create
+        params:
+          - name: friendlyName
+            type: string
+            required: true
+            description: Friendly name for the conference
+          - name: statusCallback
+            type: string
+            required: false
+            description: Status callback URL
+          - name: record
+            type: boolean
+            required: false
+            description: Record the conference
+        returns: Conference
+
+      - name: get
+        method: fetch
+        params:
+          - name: sid
+            type: string
+            required: true
+            description: Conference SID
+        returns: Conference
+
+      - name: list
+        method: list
+        params:
+          - name: friendlyName
+            type: string
+            required: false
+            description: Filter by conference name
+          - name: status
+            type: string
+            required: false
+            description: Filter by conference status
+          - name: limit
+            type: number
+            required: false
+            description: Maximum number of conferences to return
+        returns: Conference[]
+        pagination:
+          type: cursor
+          cursorField: pageToken
+          limitField: limit
+
+      - name: listParticipants
+        method: participants.list
+        params:
+          - name: conferenceSid
+            type: string
+            required: true
+            description: Conference SID
+        returns: ConferenceParticipant[]
+
+  - name: Recording
+    plural: Recordings
+    sdkPath: recordings
+    description: Manage call and conference recordings
+    operations:
+      - name: get
+        method: fetch
+        params:
+          - name: sid
+            type: string
+            required: true
+            description: Recording SID
+        returns: Recording
+
+      - name: list
+        method: list
+        params:
+          - name: callSid
+            type: string
+            required: false
+            description: Filter by call SID
+          - name: conferenceSid
+            type: string
+            required: false
+            description: Filter by conference SID
+          - name: limit
+            type: number
+            required: false
+            description: Maximum number of recordings to return
+        returns: Recording[]
+        pagination:
+          type: cursor
+          cursorField: pageToken
+          limitField: limit
+
+      - name: delete
+        method: remove
+        params:
+          - name: sid
+            type: string
+            required: true
+            description: Recording SID
+        returns: boolean
+
+webhooks:
+  enabled: true
+  signatureHeader: X-Twilio-Signature
+  signatureAlgorithm: sha1
+  verificationMethod: signature
+  events:
+    - name: message.sent
+      type: message.sent
+      description: SMS message has been sent
+    - name: message.delivered
+      type: message.delivered
+      description: SMS message has been delivered to recipient
+    - name: message.failed
+      type: message.failed
+      description: SMS message failed to send
+    - name: message.undelivered
+      type: message.undelivered
+      description: SMS message could not be delivered
+    - name: message.received
+      type: message.received
+      description: Incoming SMS message received
+    - name: call.initiated
+      type: call.initiated
+      description: Call has been initiated
+    - name: call.ringing
+      type: call.ringing
+      description: Phone is ringing
+    - name: call.answered
+      type: call.answered
+      description: Call has been answered
+    - name: call.completed
+      type: call.completed
+      description: Call has been completed
+    - name: call.failed
+      type: call.failed
+      description: Call failed
+    - name: call.busy
+      type: call.busy
+      description: Called number is busy
+    - name: call.no_answer
+      type: call.no_answer
+      description: Called number did not answer
+    - name: recording.available
+      type: recording.available
+      description: Recording is available for download
+    - name: recording.failed
+      type: recording.failed
+      description: Recording failed
+    - name: conference.start
+      type: conference.start
+      description: Conference has started
+    - name: conference.end
+      type: conference.end
+      description: Conference has ended
+    - name: conference.participant.join
+      type: conference.participant.join
+      description: Participant joined conference
+    - name: conference.participant.leave
+      type: conference.participant.leave
+      description: Participant left conference
+
+errors:
+  mapping:
+    - code: 20003
+      type: authentication
+      statusCode: 401
+      message: Authentication failed - invalid Account SID or Auth Token
+      retryable: false
+    - code: 20008
+      type: authorization
+      statusCode: 403
+      message: Account is not active or has been suspended
+      retryable: false
+    - code: 20009
+      type: authorization
+      statusCode: 403
+      message: Account is not authorized for this request
+      retryable: false
+    - code: 21211
+      type: validation
+      statusCode: 400
+      message: Invalid phone number format
+      retryable: false
+    - code: 21408
+      type: authorization
+      statusCode: 403
+      message: Permission to send SMS has not been enabled
+      retryable: false
+    - code: 21604
+      type: validation
+      statusCode: 400
+      message: Phone number not available for purchase
+      retryable: false
+    - code: 21606
+      type: not_found
+      statusCode: 404
+      message: Phone number is not a valid Twilio number
+      retryable: false
+    - code: 21610
+      type: validation
+      statusCode: 400
+      message: Message cannot be sent to landline
+      retryable: false
+    - code: 21614
+      type: validation
+      statusCode: 400
+      message: Phone number does not have SMS capability
+      retryable: false
+    - code: 30001
+      type: rate_limit
+      statusCode: 429
+      message: Queue overflow - too many concurrent messages
+      retryable: true
+    - code: 30003
+      type: validation
+      statusCode: 400
+      message: Unreachable destination - carrier or network issue
+      retryable: false
+    - code: 30004
+      type: validation
+      statusCode: 400
+      message: Message blocked by carrier
+      retryable: false
+    - code: 30005
+      type: validation
+      statusCode: 400
+      message: Unknown destination phone number
+      retryable: false
+    - code: 30006
+      type: validation
+      statusCode: 400
+      message: Landline or unreachable carrier
+      retryable: false
+    - code: 30007
+      type: validation
+      statusCode: 400
+      message: Message filtered by carrier
+      retryable: false
+    - code: 30008
+      type: server
+      statusCode: 500
+      message: Unknown error from carrier
+      retryable: true
+    - code: 30009
+      type: validation
+      statusCode: 400
+      message: Missing required parameters
+      retryable: false
+    - code: 30010
+      type: validation
+      statusCode: 400
+      message: Message price exceeds max price
+      retryable: false
+    - code: 63003
+      type: validation
+      statusCode: 402
+      message: Insufficient funds in account
+      retryable: false
+    - code: 63004
+      type: validation
+      statusCode: 400
+      message: Invalid Verify service configuration
+      retryable: false
+    - code: 63005
+      type: rate_limit
+      statusCode: 429
+      message: Max send attempts reached
+      retryable: false
+    - code: 63006
+      type: rate_limit
+      statusCode: 429
+      message: Max check attempts reached
+      retryable: false
+    - code: 20429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded - too many requests
+      retryable: true
+  retryable: [30001, 30008, 20429, QUEUE_OVERFLOW, CARRIER_ERROR, CONNECTION_ERROR, RATE_LIMIT]
+  nonRetryable: [20003, 20008, 20009, 21211, 21408, 21604, 21606, 21610, 21614, 30003, 30004, 30005, 30006, 30007, 30009, 30010, 63003, 63004, 63005, 63006]
+
+tests:
+  enabled: true
+  cleanup: true
+  scenarios:
+    - name: SMS Operations
+      description: Test SMS message CRUD operations
+      steps:
+        - action: create
+          resource: Message
+        - action: retrieve
+          resource: Message
+        - action: list
+          resource: Message
+        - action: delete
+          resource: Message
+    - name: SMS with Media (MMS)
+      description: Test sending MMS with media attachments
+      steps:
+        - action: create
+          resource: Message
+        - action: retrieve
+          resource: Message
+    - name: Voice Call Operations
+      description: Test voice call lifecycle
+      steps:
+        - action: create
+          resource: Call
+        - action: retrieve
+          resource: Call
+        - action: update
+          resource: Call
+        - action: list
+          resource: Call
+    - name: Phone Number Management
+      description: Test phone number operations
+      steps:
+        - action: list
+          resource: PhoneNumber
+        - action: create
+          resource: PhoneNumber
+        - action: retrieve
+          resource: PhoneNumber
+        - action: delete
+          resource: PhoneNumber
+    - name: Verification Flow
+      description: Test two-factor authentication verification
+      steps:
+        - action: custom
+          resource: Verification
+        - action: custom
+          resource: Verification
+    - name: Conference Operations
+      description: Test conference call management
+      steps:
+        - action: create
+          resource: Conference
+        - action: retrieve
+          resource: Conference
+        - action: list
+          resource: Conference
+        - action: custom
+          resource: Conference
+    - name: Recording Operations
+      description: Test recording retrieval and deletion
+      steps:
+        - action: list
+          resource: Recording
+        - action: retrieve
+          resource: Recording
+        - action: delete
+          resource: Recording
+    - name: Webhook Verification
+      description: Test webhook signature verification
+      steps:
+        - action: assert
+          expects:
+            status: 200
+
+docs:
+  homepage: https://twilio.com
+  apiDocs: https://www.twilio.com/docs/api
+  sdkDocs: https://github.com/twilio/twilio-node
+  guides:
+    quickstart: https://www.twilio.com/docs/quickstart
+    webhooks: https://www.twilio.com/docs/usage/webhooks
+    authentication: https://www.twilio.com/docs/iam/credentials/api
+    sms: https://www.twilio.com/docs/sms
+    voice: https://www.twilio.com/docs/voice
+    verify: https://www.twilio.com/docs/verify
+---
+
+# Twilio Cloud Communications
+
+Twilio is the leading cloud communications platform that enables developers to programmatically make and receive phone calls, send and receive text messages, and perform other communication functions using web service APIs.
+
+## Features
+
+- **SMS & MMS**: Send and receive text messages with media attachments globally
+- **Voice**: Make and receive voice calls with programmable call flows (TwiML)
+- **Verify**: Two-factor authentication and phone number verification
+- **Video**: Programmable video for web and mobile applications
+- **Conversations**: Multi-channel messaging (SMS, WhatsApp, Facebook Messenger)
+- **Phone Numbers**: Purchase and manage phone numbers in 100+ countries
+- **Call Recording**: Record and store voice conversations
+- **Conferences**: Multi-party conference calls with programmable controls
+
+## Quick Start
+
+```typescript
+import { TwilioClient } from '@dotdo/sdk.do/integrations/twilio'
+
+const twilio = new TwilioClient({
+  accountSid: process.env.TWILIO_ACCOUNT_SID,
+  authToken: process.env.TWILIO_AUTH_TOKEN,
+})
+
+// Send an SMS
+const message = await twilio.sendSMS({
+  from: '+15551234567',
+  to: '+15559876543',
+  body: 'Hello from Twilio!',
+})
+
+// Make a call
+const call = await twilio.makeCall({
+  from: '+15551234567',
+  to: '+15559876543',
+  twiml: '<Response><Say>Hello World</Say></Response>',
+})
+```
+
+## Authentication
+
+Twilio uses Account SID and Auth Token for authentication. Set these as environment variables:
+
+```bash
+export TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+export TWILIO_AUTH_TOKEN=your_auth_token_here
+```
+
+**Important**: Never expose your Auth Token in client-side code or public repositories.
+
+## Resources
+
+### SMS Messages
+
+Send and receive text messages:
+
+```typescript
+// Send SMS
+const message = await twilio.sendSMS({
+  from: '+15551234567',
+  to: '+15559876543',
+  body: 'Hello from Twilio!',
+})
+
+// Send MMS with media
+const mms = await twilio.sendSMS({
+  from: '+15551234567',
+  to: '+15559876543',
+  body: 'Check out this image!',
+  mediaUrl: ['https://example.com/image.jpg'],
+})
+
+// Get message details
+const retrieved = await twilio.getSMS(message.sid)
+
+// List messages
+const messages = await twilio.listSMS({
+  from: '+15551234567',
+  limit: 20,
+})
+
+// Delete message
+await twilio.deleteSMS(message.sid)
+```
+
+### Voice Calls
+
+Make and manage phone calls:
+
+```typescript
+// Make a call with TwiML
+const call = await twilio.makeCall({
+  from: '+15551234567',
+  to: '+15559876543',
+  twiml: `
+    <Response>
+      <Say voice="alice">Thanks for calling!</Say>
+      <Play>https://example.com/music.mp3</Play>
+    </Response>
+  `,
+})
+
+// Make a call with URL
+const call = await twilio.makeCall({
+  from: '+15551234567',
+  to: '+15559876543',
+  url: 'https://example.com/twiml/greeting',
+  statusCallback: 'https://example.com/webhooks/call-status',
+})
+
+// Get call details
+const callDetails = await twilio.getCall(call.sid)
+
+// Update call (modify or hang up)
+await twilio.updateCall(call.sid, {
+  status: 'completed', // Hang up the call
+})
+
+// List calls
+const calls = await twilio.listCalls({
+  status: 'in-progress',
+  limit: 50,
+})
+```
+
+### Phone Numbers
+
+Purchase and manage phone numbers:
+
+```typescript
+// List phone numbers in your account
+const numbers = await twilio.listPhoneNumbers()
+
+// Get phone number details
+const number = await twilio.getPhoneNumber('PN1234567890')
+
+// Buy a phone number
+const purchased = await twilio.buyPhoneNumber({
+  phoneNumber: '+15551234567',
+  friendlyName: 'My Business Line',
+  voiceUrl: 'https://example.com/voice',
+  smsUrl: 'https://example.com/sms',
+})
+
+// Release a phone number
+await twilio.releasePhoneNumber(purchased.sid)
+```
+
+### Messaging Services
+
+Manage messaging services for scaled SMS operations:
+
+```typescript
+// Create messaging service
+const service = await twilio.createMessagingService({
+  friendlyName: 'My Messaging Service',
+  inboundRequestUrl: 'https://example.com/inbound',
+  statusCallback: 'https://example.com/status',
+})
+
+// Get service details
+const retrieved = await twilio.getMessagingService(service.sid)
+
+// Send SMS using messaging service
+const message = await twilio.sendSMS({
+  messagingServiceSid: service.sid,
+  to: '+15559876543',
+  body: 'Message from service',
+})
+
+// List messaging services
+const services = await twilio.listMessagingServices()
+```
+
+### Two-Factor Authentication (Verify)
+
+Send and verify codes for 2FA:
+
+```typescript
+// Send verification code
+const verification = await twilio.sendVerificationCode('VSxxxxxxxxxx', {
+  to: '+15559876543',
+  channel: 'sms',
+})
+
+// Check verification code
+const check = await twilio.checkVerificationCode('VSxxxxxxxxxx', {
+  to: '+15559876543',
+  code: '123456',
+})
+
+if (check.valid) {
+  console.log('Verification successful!')
+}
+```
+
+### Conference Calls
+
+Manage multi-party conference calls:
+
+```typescript
+// Create conference
+const conference = await twilio.createConference({
+  friendlyName: 'Team Meeting',
+  statusCallback: 'https://example.com/conference-status',
+  record: true,
+})
+
+// Get conference details
+const details = await twilio.getConference(conference.sid)
+
+// List conferences
+const conferences = await twilio.listConferences()
+
+// List participants
+const participants = await twilio.listParticipants(conference.sid)
+```
+
+### Recordings
+
+Manage call and conference recordings:
+
+```typescript
+// Get recording details
+const recording = await twilio.getRecording('RExxxxxxxxxx')
+
+// List recordings
+const recordings = await twilio.listRecordings({
+  callSid: 'CAxxxxxxxxxx',
+  limit: 20,
+})
+
+// Delete recording
+await twilio.deleteRecording(recording.sid)
+```
+
+## Webhooks
+
+Twilio sends webhooks for asynchronous events. Always verify webhook signatures:
+
+```typescript
+import { TwilioWebhooks } from '@dotdo/sdk.do/integrations/twilio'
+
+// Verify webhook signature
+const isValid = TwilioWebhooks.verifySignature(
+  'https://example.com/webhook', // Full URL
+  req.body, // Webhook parameters
+  req.headers['x-twilio-signature'],
+  process.env.TWILIO_AUTH_TOKEN
+)
+
+if (!isValid) {
+  return res.status(403).send('Invalid signature')
+}
+
+// Parse webhook event
+const event = TwilioWebhooks.parseEvent(req.body)
+
+// Handle event
+switch (event.type) {
+  case 'message.delivered':
+    console.log('Message delivered:', event.data.MessageSid)
+    break
+  case 'call.completed':
+    console.log('Call completed:', event.data.CallSid)
+    break
+}
+```
+
+### Common Webhook Events
+
+**SMS/Message Events**:
+
+- `message.sent` - Message has been sent
+- `message.delivered` - Message delivered to recipient
+- `message.failed` - Message failed to send
+- `message.received` - Incoming message received
+
+**Call Events**:
+
+- `call.initiated` - Call initiated
+- `call.ringing` - Phone is ringing
+- `call.answered` - Call answered
+- `call.completed` - Call completed
+- `call.failed` - Call failed
+
+**Recording Events**:
+
+- `recording.available` - Recording available for download
+- `recording.failed` - Recording failed
+
+**Conference Events**:
+
+- `conference.start` - Conference started
+- `conference.end` - Conference ended
+- `conference.participant.join` - Participant joined
+- `conference.participant.leave` - Participant left
+
+## TwiML (Twilio Markup Language)
+
+TwiML is Twilio's XML-based language for controlling voice and messaging:
+
+```typescript
+import { createTwiML, say, play, hangup } from '@dotdo/sdk.do/integrations/twilio'
+
+// Simple greeting
+const twiml = say('Welcome to our service!')
+
+// Complex call flow
+const twiml = createTwiML(`
+  <Say voice="alice">Thank you for calling</Say>
+  <Pause length="1"/>
+  <Gather action="/handle-input" method="POST" numDigits="1">
+    <Say>Press 1 for sales, 2 for support</Say>
+  </Gather>
+  <Say>We didn't receive any input</Say>
+  <Redirect>/main-menu</Redirect>
+`)
+```
+
+## Error Handling
+
+```typescript
+import { TwilioIntegrationError } from '@dotdo/sdk.do/integrations/twilio'
+
+try {
+  await twilio.sendSMS({
+    from: '+15551234567',
+    to: 'invalid-number',
+    body: 'Test',
+  })
+} catch (error) {
+  if (error instanceof TwilioIntegrationError) {
+    console.error('Twilio Error:', error.code, error.message)
+
+    if (error.isPhoneNumberError()) {
+      // Handle phone number validation errors
+    } else if (error.isAuthenticationError()) {
+      // Handle authentication errors
+    } else if (error.isRetriable()) {
+      // Retry the operation
+    }
+  }
+}
+```
+
+## Rate Limits
+
+Twilio enforces rate limits based on your account type:
+
+- **Default**: 60 requests per second
+- **High Volume**: 1000+ requests per second (contact sales)
+
+Handle rate limit errors with exponential backoff.
+
+## Best Practices
+
+1. **Phone Number Format**: Always use E.164 format (+15551234567)
+2. **Webhook Security**: Always verify webhook signatures
+3. **Error Handling**: Implement comprehensive error handling with retries
+4. **Cost Optimization**: Use messaging services for bulk SMS
+5. **TwiML URLs**: Host TwiML endpoints for dynamic call flows
+6. **Status Callbacks**: Monitor message and call status via webhooks
+7. **Test Credentials**: Use test credentials for development
+8. **Compliance**: Follow telecommunications regulations (TCPA, GDPR, etc.)
+
+## Testing
+
+Twilio provides test credentials for development:
+
+- **Test Account SID**: Starts with `AC` followed by test credentials
+- **Test Phone Numbers**: Use Twilio's test numbers that don't send real SMS/calls
+- **Test Cards**: Use test phone numbers that simulate different behaviors
+
+```typescript
+// Test mode
+const testTwilio = new TwilioClient({
+  accountSid: 'ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', // Test Account SID
+  authToken: 'test_auth_token',
+})
+
+// Simulate SMS delivery
+const testMessage = await testTwilio.sendSMS({
+  from: '+15005550006', // Twilio test number
+  to: '+15005550006',
+  body: 'Test message',
+})
+```
+
+## Common Use Cases
+
+### Send Notification SMS
+
+```typescript
+async function sendNotification(phoneNumber: string, message: string) {
+  return await twilio.sendSMS({
+    from: '+15551234567',
+    to: phoneNumber,
+    body: message,
+    statusCallback: 'https://example.com/sms-status',
+  })
+}
+```
+
+### Implement Two-Factor Authentication
+
+```typescript
+async function send2FACode(phoneNumber: string) {
+  return await twilio.sendVerificationCode('VSxxxxxxxxxx', {
+    to: phoneNumber,
+    channel: 'sms',
+  })
+}
+
+async function verify2FACode(phoneNumber: string, code: string) {
+  const check = await twilio.checkVerificationCode('VSxxxxxxxxxx', {
+    to: phoneNumber,
+    code,
+  })
+
+  return check.valid
+}
+```
+
+### Make Automated Reminder Call
+
+```typescript
+async function sendReminderCall(phoneNumber: string, reminderText: string) {
+  return await twilio.makeCall({
+    from: '+15551234567',
+    to: phoneNumber,
+    twiml: `
+      <Response>
+        <Say voice="alice">${reminderText}</Say>
+        <Say>Press any key to confirm</Say>
+        <Gather numDigits="1" action="/confirm-reminder"/>
+      </Response>
+    `,
+  })
+}
+```
+
+### Set Up Conference Call
+
+```typescript
+async function setupConferenceCall(participants: string[]) {
+  const conferenceName = `Meeting-${Date.now()}`
+
+  // Call each participant
+  for (const participant of participants) {
+    await twilio.makeCall({
+      from: '+15551234567',
+      to: participant,
+      twiml: `
+        <Response>
+          <Say>Joining conference call</Say>
+          <Dial>
+            <Conference>${conferenceName}</Conference>
+          </Dial>
+        </Response>
+      `,
+    })
+  }
+
+  return conferenceName
+}
+```
+
+## API Reference
+
+Full API documentation: https://www.twilio.com/docs/api
+
+**Key Resources**:
+
+- Messages: https://www.twilio.com/docs/sms/api/message-resource
+- Calls: https://www.twilio.com/docs/voice/api/call-resource
+- Phone Numbers: https://www.twilio.com/docs/phone-numbers/api/incomingphonenumber-resource
+- Verify: https://www.twilio.com/docs/verify/api
+- Conferences: https://www.twilio.com/docs/voice/api/conference-resource
+- Recordings: https://www.twilio.com/docs/voice/api/recording
+
+## Support
+
+- **Documentation**: https://www.twilio.com/docs
+- **API Reference**: https://www.twilio.com/docs/api
+- **Support**: https://support.twilio.com
+- **Status**: https://status.twilio.com
+- **Community**: https://community.twilio.com

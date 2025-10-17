@@ -1,0 +1,111 @@
+---
+$id: https://integrations.do/zendesk
+$type: Integration
+name: Zendesk
+service: zendesk
+description: Zendesk provides customer support software with ticketing, live chat, and knowledge base features, enabling efficient helpdesk operations and customer engagement
+category: crm
+sdkBased: false
+baseUrl: https://api.zendesk.com
+
+auth:
+  type: oauth2
+  authorizationUrl: https://{{subdomain}}.zendesk.com/oauth/authorizations/new
+  tokenUrl: https://{{subdomain}}.zendesk.com/oauth/tokens
+  scopes:
+    - organizations:read
+    - organizations:write
+    - tickets:read
+    - tickets:write
+    - users:read
+    - users:write
+    - webhooks:read
+    - webhooks:write
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Zendesk actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: true
+  verificationMethod: none
+  events:
+    - name: generic_trigger
+      type: trigger
+      description: Generic webhook trigger
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://www.zendesk.com/
+  apiDocs: https://www.zendesk.com/
+---
+
+# Zendesk Integration
+
+Zendesk provides customer support software with ticketing, live chat, and knowledge base features, enabling efficient helpdesk operations and customer engagement
+
+## Quick Start
+
+```typescript
+import { ZendeskClient } from '@dotdo/sdk.do/integrations/zendesk'
+
+const zendesk = new ZendeskClient({
+  apiKey: process.env.ZENDESK_API_KEY,
+})
+
+const result = await zendesk.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Zendesk provides 12 actions through the Composio API.
+
+## Webhooks
+
+Zendesk supports 2 webhook triggers for real-time event notifications.
+
+## License
+
+MIT

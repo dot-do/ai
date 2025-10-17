@@ -1,0 +1,887 @@
+---
+$id: https://apis.do/examples/routing
+$type: HowTo
+title: Advanced Routing Examples
+description: Advanced API routing patterns and techniques for the apis.do gateway
+keywords: [examples, routing, semantic, patterns, graphql, relationships]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Advanced Routing Examples
+
+Advanced examples demonstrating sophisticated routing patterns, semantic relationships, and GraphQL queries.
+
+## Example 1: Semantic Pattern Routing
+
+Use semantic patterns for type-safe routing:
+
+```typescript
+import $, { api } from 'sdk.do'
+
+async function semanticRoutingExample() {
+  // List entities with semantic patterns
+  const businesses = await api($.Business.list, {
+    where: {
+      industry: 'Technology',
+      revenue: { $gte: 1000000 },
+    },
+    limit: 10,
+    sort: { revenue: 'desc' },
+  })
+
+  console.log(`Found ${businesses.length} tech businesses`)
+
+  // Get single entity
+  const business = await api($.Business.get, {
+    id: 'business-123',
+  })
+
+  console.log(`Business: ${business.name}`)
+
+  // Create entity
+  const newBusiness = await api($.Business.create, {
+    name: 'AI Innovations',
+    industry: 'Technology',
+    foundingDate: '2025-01-01',
+  })
+
+  console.log(`Created: ${newBusiness.$id}`)
+
+  // Update entity
+  await api($.Business.update, {
+    id: newBusiness.$id,
+    data: {
+      revenue: 5000000,
+      employees: 50,
+    },
+  })
+
+  console.log('Business updated')
+
+  return businesses
+}
+
+semanticRoutingExample()
+```
+
+### Output
+
+```
+Found 10 tech businesses
+Business: Acme Corporation
+Created: business-456
+Business updated
+```
+
+## Example 2: Relationship Routing
+
+Navigate entity relationships using semantic patterns:
+
+```typescript
+import $, { api } from 'sdk.do'
+
+async function relationshipRoutingExample() {
+  // Get organization's employees
+  const employees = await api($.Organization.employs.Person, {
+    organizationId: 'org-123',
+  })
+
+  console.log(`Organization has ${employees.length} employees:`)
+  employees.forEach((emp) => {
+    console.log(`- ${emp.name} (${emp.jobTitle})`)
+  })
+
+  // Get person's employer
+  const employer = await api($.Person.worksFor.Organization, {
+    personId: 'person-456',
+  })
+
+  console.log(`\n${employees[0]?.name} works for: ${employer?.name}`)
+
+  // Get organization's brands
+  const brands = await api($.Organization.owns.Brand, {
+    organizationId: 'org-123',
+  })
+
+  console.log(`\nOrganization owns ${brands.length} brands:`)
+  brands.forEach((brand) => {
+    console.log(`- ${brand.name}`)
+  })
+
+  // Get business's products
+  const products = await api($.Business.sells.Product, {
+    businessId: 'business-789',
+  })
+
+  console.log(`\nBusiness sells ${products.length} products:`)
+  products.forEach((product) => {
+    console.log(`- ${product.name}: $${product.price}`)
+  })
+}
+
+relationshipRoutingExample()
+```
+
+### Output
+
+```
+Organization has 25 employees:
+- John Doe (Software Engineer)
+- Jane Smith (Product Manager)
+- Bob Johnson (Designer)
+...
+
+John Doe works for: Acme Corporation
+
+Organization owns 3 brands:
+- Acme Pro
+- Acme Enterprise
+- Acme Cloud
+
+Business sells 15 products:
+- Smart Widget: $99.99
+- Pro Dashboard: $199.99
+- Enterprise Suite: $999.99
+...
+```
+
+## Example 3: Nested Resource Routing
+
+Access nested resources through parent-child relationships:
+
+```typescript
+import { api } from 'sdk.do'
+
+async function nestedResourceRoutingExample() {
+  const businessId = 'business-123'
+
+  // Get business's employees
+  const employees = await api(`https://apis.do/businesses/${businessId}/employees`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+    },
+  })
+
+  console.log(`Business has ${employees.length} employees`)
+
+  // Get business's orders
+  const orders = await api(`https://apis.do/businesses/${businessId}/orders`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+    },
+    query: {
+      status: 'pending',
+      limit: 10,
+    },
+  })
+
+  console.log(`Business has ${orders.length} pending orders`)
+
+  // Get specific employee's orders
+  const employeeId = employees[0].$id
+  const employeeOrders = await api(`https://apis.do/businesses/${businessId}/employees/${employeeId}/orders`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+    },
+  })
+
+  console.log(`Employee ${employees[0].name} has ${employeeOrders.length} orders`)
+}
+
+nestedResourceRoutingExample()
+```
+
+### Output
+
+```
+Business has 25 employees
+Business has 10 pending orders
+Employee John Doe has 5 orders
+```
+
+## Example 4: GraphQL Query Routing
+
+Use GraphQL for complex queries with relationships:
+
+```typescript
+import { api } from 'sdk.do'
+
+async function graphqlQueryExample() {
+  const query = `
+    query BusinessWithRelationships($id: ID!) {
+      business(id: $id) {
+        id
+        name
+        industry
+        revenue
+
+        employees(limit: 5) {
+          id
+          name
+          jobTitle
+          email
+        }
+
+        products(where: { active: true }) {
+          id
+          name
+          price
+          description
+        }
+
+        orders(where: { status: "pending" }) {
+          id
+          orderNumber
+          total
+          customer {
+            id
+            name
+            email
+          }
+          items {
+            product {
+              name
+            }
+            quantity
+            price
+          }
+        }
+      }
+    }
+  `
+
+  const result = await api('https://apis.do/graphql', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: {
+      query,
+      variables: {
+        id: 'business-123',
+      },
+    },
+  })
+
+  const { business } = result.data
+
+  console.log(`Business: ${business.name}`)
+  console.log(`Revenue: $${business.revenue.toLocaleString()}`)
+  console.log(`\nEmployees (${business.employees.length}):`)
+  business.employees.forEach((emp) => {
+    console.log(`- ${emp.name} (${emp.jobTitle})`)
+  })
+
+  console.log(`\nProducts (${business.products.length}):`)
+  business.products.forEach((product) => {
+    console.log(`- ${product.name}: $${product.price}`)
+  })
+
+  console.log(`\nPending Orders (${business.orders.length}):`)
+  business.orders.forEach((order) => {
+    console.log(`- ${order.orderNumber}: $${order.total} (${order.customer.name})`)
+  })
+
+  return business
+}
+
+graphqlQueryExample()
+```
+
+### Output
+
+```
+Business: Acme Corporation
+Revenue: $5,000,000
+
+Employees (5):
+- John Doe (Software Engineer)
+- Jane Smith (Product Manager)
+- Bob Johnson (Designer)
+- Alice Williams (Marketing Manager)
+- Charlie Brown (Sales Representative)
+
+Products (8):
+- Smart Widget: $99.99
+- Pro Dashboard: $199.99
+- Enterprise Suite: $999.99
+- Analytics Tool: $149.99
+- Collaboration Platform: $299.99
+...
+
+Pending Orders (3):
+- ORD-001: $1,299.97 (Tech Startup Inc)
+- ORD-002: $599.98 (Innovation Labs)
+- ORD-003: $2,499.95 (Digital Solutions)
+```
+
+## Example 5: Dynamic Route Building
+
+Build routes dynamically based on context:
+
+```typescript
+import { api } from 'sdk.do'
+
+class ApiRouter {
+  private baseUrl = 'https://apis.do'
+  private apiKey = process.env.APIS_API_KEY
+
+  async get(resource: string, id?: string, nested?: { resource: string; id?: string }) {
+    let url = `${this.baseUrl}/${resource}`
+
+    if (id) url += `/${id}`
+    if (nested) {
+      url += `/${nested.resource}`
+      if (nested.id) url += `/${nested.id}`
+    }
+
+    return await api(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+      },
+    })
+  }
+
+  async post(resource: string, data: any, parentId?: string) {
+    let url = `${this.baseUrl}/${resource}`
+    if (parentId) url = `${this.baseUrl}/businesses/${parentId}/${resource}`
+
+    return await api(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: data,
+    })
+  }
+}
+
+async function dynamicRoutingExample() {
+  const router = new ApiRouter()
+
+  // Simple get
+  const businesses = await router.get('businesses')
+  console.log(`Found ${businesses.length} businesses`)
+
+  // Get by ID
+  const business = await router.get('businesses', 'business-123')
+  console.log(`Business: ${business.name}`)
+
+  // Get nested resource
+  const employees = await router.get('businesses', 'business-123', {
+    resource: 'employees',
+  })
+  console.log(`Employees: ${employees.length}`)
+
+  // Get specific nested resource
+  const employee = await router.get('businesses', 'business-123', {
+    resource: 'employees',
+    id: 'emp-456',
+  })
+  console.log(`Employee: ${employee.name}`)
+
+  // Create nested resource
+  const newEmployee = await router.post(
+    'employees',
+    {
+      name: 'New Employee',
+      jobTitle: 'Engineer',
+      email: 'new@example.com',
+    },
+    'business-123'
+  )
+  console.log(`Created employee: ${newEmployee.$id}`)
+}
+
+dynamicRoutingExample()
+```
+
+### Output
+
+```
+Found 50 businesses
+Business: Acme Corporation
+Employees: 25
+Employee: John Doe
+Created employee: emp-789
+```
+
+## Example 6: Event Routing
+
+Route events using semantic patterns:
+
+```typescript
+import $, { api } from 'sdk.do'
+
+async function eventRoutingExample() {
+  // Publish order created event
+  await api($.Order.created.send, {
+    orderId: 'order-123',
+    customerId: 'customer-456',
+    total: 299.99,
+    items: [
+      { productId: 'product-1', quantity: 2, price: 99.99 },
+      { productId: 'product-2', quantity: 1, price: 100.0 },
+    ],
+  })
+
+  console.log('Order.created event published')
+
+  // Publish payment completed event
+  await api($.Payment.completed.send, {
+    paymentId: 'payment-789',
+    orderId: 'order-123',
+    amount: 299.99,
+    method: 'credit_card',
+  })
+
+  console.log('Payment.completed event published')
+
+  // Get event history
+  const events = await api($.Order.created.history, {
+    since: new Date(Date.now() - 24 * 60 * 60 * 1000), // Last 24 hours
+    limit: 10,
+  })
+
+  console.log(`\nLast ${events.length} Order.created events:`)
+  events.forEach((event) => {
+    console.log(`- Order ${event.data.orderId}: $${event.data.total}`)
+  })
+
+  // Subscribe to event stream
+  const stream = await api($.Order.created.subscribe)
+  console.log('\nSubscribed to Order.created events')
+}
+
+eventRoutingExample()
+```
+
+### Output
+
+```
+Order.created event published
+Payment.completed event published
+
+Last 10 Order.created events:
+- Order order-123: $299.99
+- Order order-122: $499.99
+- Order order-121: $199.99
+...
+
+Subscribed to Order.created events
+```
+
+## Example 7: Batch Request Routing
+
+Execute multiple requests efficiently:
+
+```typescript
+import { api } from 'sdk.do'
+
+async function batchRequestExample() {
+  // Method 1: Batch API endpoint
+  const batchResults = await api('https://apis.do/batch', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: {
+      requests: [
+        {
+          method: 'GET',
+          url: '/businesses',
+          query: { industry: 'Technology' },
+        },
+        {
+          method: 'GET',
+          url: '/products',
+          query: { category: 'Software' },
+        },
+        {
+          method: 'GET',
+          url: '/orders',
+          query: { status: 'pending' },
+        },
+      ],
+    },
+  })
+
+  console.log('Batch results:')
+  console.log(`- Businesses: ${batchResults[0].data.length}`)
+  console.log(`- Products: ${batchResults[1].data.length}`)
+  console.log(`- Orders: ${batchResults[2].data.length}`)
+
+  // Method 2: Parallel requests with Promise.all
+  const [businesses, products, orders] = await Promise.all([
+    api('https://apis.do/businesses', {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${process.env.APIS_API_KEY}` },
+      query: { industry: 'Technology' },
+    }),
+    api('https://apis.do/products', {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${process.env.APIS_API_KEY}` },
+      query: { category: 'Software' },
+    }),
+    api('https://apis.do/orders', {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${process.env.APIS_API_KEY}` },
+      query: { status: 'pending' },
+    }),
+  ])
+
+  console.log('\nParallel results:')
+  console.log(`- Businesses: ${businesses.length}`)
+  console.log(`- Products: ${products.length}`)
+  console.log(`- Orders: ${orders.length}`)
+}
+
+batchRequestExample()
+```
+
+### Output
+
+```
+Batch results:
+- Businesses: 15
+- Products: 30
+- Orders: 8
+
+Parallel results:
+- Businesses: 15
+- Products: 30
+- Orders: 8
+```
+
+## Example 8: Conditional Routing
+
+Route based on runtime conditions:
+
+```typescript
+import $, { api } from 'sdk.do'
+
+async function conditionalRoutingExample() {
+  const entityType = 'business' // Could be: business, product, order, person
+  const entityId = '123'
+  const action = 'update' // Could be: get, create, update, delete
+
+  // Route map
+  const routes = {
+    business: $.Business,
+    product: $.Product,
+    order: $.Order,
+    person: $.Person,
+  }
+
+  const actions = {
+    get: 'get',
+    create: 'create',
+    update: 'update',
+    delete: 'delete',
+  }
+
+  // Build semantic pattern dynamically
+  const resource = routes[entityType]
+  const method = actions[action]
+
+  if (!resource || !method) {
+    throw new Error(`Invalid entity type or action`)
+  }
+
+  let result
+
+  switch (action) {
+    case 'get':
+      result = await api(resource.get, { id: entityId })
+      console.log(`Retrieved ${entityType}:`, result.name)
+      break
+
+    case 'create':
+      result = await api(resource.create, {
+        name: `New ${entityType}`,
+        // ... other fields
+      })
+      console.log(`Created ${entityType}:`, result.$id)
+      break
+
+    case 'update':
+      result = await api(resource.update, {
+        id: entityId,
+        data: { updatedAt: new Date().toISOString() },
+      })
+      console.log(`Updated ${entityType}:`, result.$id)
+      break
+
+    case 'delete':
+      await api(resource.delete, { id: entityId })
+      console.log(`Deleted ${entityType}:`, entityId)
+      break
+  }
+
+  return result
+}
+
+conditionalRoutingExample()
+```
+
+### Output
+
+```
+Updated business: business-123
+```
+
+## Example 9: Route Middleware Pipeline
+
+Apply middleware to routes for cross-cutting concerns:
+
+```typescript
+import { api } from 'sdk.do'
+
+type Middleware = (url: string, options: any, next: () => Promise<any>) => Promise<any>
+
+class MiddlewareRouter {
+  private middlewares: Middleware[] = []
+
+  use(middleware: Middleware) {
+    this.middlewares.push(middleware)
+    return this
+  }
+
+  async request(url: string, options: any = {}) {
+    let index = 0
+
+    const next = async (): Promise<any> => {
+      if (index >= this.middlewares.length) {
+        return await api(url, options)
+      }
+
+      const middleware = this.middlewares[index++]
+      return await middleware(url, options, next)
+    }
+
+    return await next()
+  }
+}
+
+// Logging middleware
+const loggingMiddleware: Middleware = async (url, options, next) => {
+  console.log(`[${options.method || 'GET'}] ${url}`)
+  const start = Date.now()
+  const result = await next()
+  const duration = Date.now() - start
+  console.log(`[${options.method || 'GET'}] ${url} - ${duration}ms`)
+  return result
+}
+
+// Auth middleware
+const authMiddleware: Middleware = async (url, options, next) => {
+  options.headers = {
+    ...options.headers,
+    Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+  }
+  return await next()
+}
+
+// Retry middleware
+const retryMiddleware: Middleware = async (url, options, next) => {
+  let attempts = 0
+  const maxAttempts = 3
+
+  while (attempts < maxAttempts) {
+    try {
+      return await next()
+    } catch (error) {
+      attempts++
+      if (attempts >= maxAttempts) throw error
+      console.log(`Retry ${attempts}/${maxAttempts}`)
+      await new Promise((resolve) => setTimeout(resolve, 1000 * attempts))
+    }
+  }
+}
+
+async function middlewareExample() {
+  const router = new MiddlewareRouter()
+
+  router.use(loggingMiddleware).use(authMiddleware).use(retryMiddleware)
+
+  const businesses = await router.request('https://apis.do/businesses', {
+    method: 'GET',
+  })
+
+  console.log(`Found ${businesses.length} businesses`)
+}
+
+middlewareExample()
+```
+
+### Output
+
+```
+[GET] https://apis.do/businesses
+[GET] https://apis.do/businesses - 145ms
+Found 50 businesses
+```
+
+## Example 10: Service Discovery Routing
+
+Route to services dynamically based on discovery:
+
+```typescript
+import { api } from 'sdk.do'
+
+class ServiceDiscoveryRouter {
+  private serviceMap = new Map<string, string>()
+
+  async discoverServices() {
+    // Get service registry
+    const services = await api('https://apis.do/services', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+      },
+    })
+
+    // Build service map
+    services.forEach((service) => {
+      this.serviceMap.set(service.name, service.url)
+    })
+
+    console.log(`Discovered ${services.length} services`)
+  }
+
+  async routeToService(serviceName: string, path: string, options: any = {}) {
+    const serviceUrl = this.serviceMap.get(serviceName)
+
+    if (!serviceUrl) {
+      throw new Error(`Service not found: ${serviceName}`)
+    }
+
+    const url = `${serviceUrl}${path}`
+
+    return await api(url, {
+      ...options,
+      headers: {
+        ...options.headers,
+        Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+      },
+    })
+  }
+}
+
+async function serviceDiscoveryExample() {
+  const router = new ServiceDiscoveryRouter()
+
+  // Discover available services
+  await router.discoverServices()
+
+  // Route to database service
+  const businesses = await router.routeToService('database', '/businesses', {
+    method: 'GET',
+  })
+  console.log(`Database service: ${businesses.length} businesses`)
+
+  // Route to AI service
+  const analysis = await router.routeToService('ai', '/generate', {
+    method: 'POST',
+    body: {
+      prompt: 'Analyze business data',
+      data: businesses[0],
+    },
+  })
+  console.log('AI service: Generated analysis')
+
+  // Route to event service
+  await router.routeToService('events', '/send', {
+    method: 'POST',
+    body: {
+      type: 'Analysis.completed',
+      data: { analysis },
+    },
+  })
+  console.log('Event service: Published event')
+}
+
+serviceDiscoveryExample()
+```
+
+### Output
+
+```
+Discovered 5 services
+Database service: 50 businesses
+AI service: Generated analysis
+Event service: Published event
+```
+
+## Best Practices
+
+### Use Semantic Patterns
+
+```typescript
+// Good - semantic and type-safe
+const employees = await api($.Organization.employs.Person, {
+  organizationId: 'org-123',
+})
+
+// Avoid - string-based
+const employees = await api('/organizations/org-123/employees')
+```
+
+### Leverage GraphQL for Complex Queries
+
+```typescript
+// Good - single GraphQL query
+const result = await api('/graphql', {
+  method: 'POST',
+  body: {
+    query: `
+      query {
+        business(id: "business-123") {
+          name
+          employees { name }
+          products { name }
+          orders { orderNumber }
+        }
+      }
+    `,
+  },
+})
+
+// Avoid - multiple REST requests
+const business = await api('/businesses/business-123')
+const employees = await api('/businesses/business-123/employees')
+const products = await api('/businesses/business-123/products')
+const orders = await api('/businesses/business-123/orders')
+```
+
+### Batch Parallel Requests
+
+```typescript
+// Good - parallel execution
+const [businesses, products, orders] = await Promise.all([api('/businesses'), api('/products'), api('/orders')])
+
+// Avoid - sequential execution
+const businesses = await api('/businesses')
+const products = await api('/products')
+const orders = await api('/orders')
+```
+
+## Related Documentation
+
+- [Getting Started](../docs/getting-started) - Basic API usage
+- [Routing Guide](../docs/routing) - Routing documentation
+- [API Reference](../api/) - Complete API reference
+- [Basic Examples](./basic) - Simple examples
+
+---
+
+For more advanced patterns, see the [complete documentation](https://apis.do).

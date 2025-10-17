@@ -1,0 +1,527 @@
+---
+$id: https://agents.do
+$type: WebSite
+title: agents.do - Agent Framework for Autonomous Digital Workers
+description: Build autonomous Business-as-Code agents with the .do platform agent framework. Create digital workers that perceive, reason, act, and collaborate.
+keywords: [agents, autonomous agents, digital workers, multi-agent systems, Business-as-Code, AI automation, agent framework]
+author:
+  $type: Organization
+  name: .do Platform
+license: MIT
+---
+
+# agents.do
+
+**Agent Framework for Autonomous Digital Workers**
+
+agents.do is the agent framework for the `.do` platform, enabling you to build autonomous Business-as-Code agents that act as digital workers in your organization. Create agents with personas, capabilities, and goals that can perceive their environment, reason about decisions, execute actions, and collaborate with other agents.
+
+## What are Agents?
+
+Agents are autonomous software entities that:
+
+- **Perceive**: Observe their environment through sensors and data
+- **Reason**: Make decisions based on goals, context, and knowledge
+- **Act**: Execute actions through tools and APIs
+- **Learn**: Improve performance through experience and feedback
+- **Collaborate**: Work with other agents to accomplish complex tasks
+
+Unlike traditional software that follows explicit instructions, agents are goal-oriented systems that autonomously determine how to achieve objectives.
+
+## Quick Start
+
+```bash
+pnpm add sdk.do
+```
+
+```typescript
+import $, { agent } from 'sdk.do'
+
+// Define a simple agent
+const salesAgent = await agent.create({
+  $type: 'Agent',
+  name: 'Sarah - SDR Agent',
+  role: 'Sales Development Representative',
+  goal: 'Qualify leads and book meetings',
+  capabilities: ['research', 'outreach', 'qualification'],
+  tools: ['email', 'crm', 'calendar'],
+  model: 'claude-sonnet-4.5',
+})
+
+// Execute agent task
+const result = await salesAgent.execute({
+  task: 'Research and qualify lead',
+  input: { company: 'Acme Corp', contact: 'john@acme.com' },
+})
+```
+
+## Key Features
+
+### Agent Personas
+
+Create agents with rich personas that define their identity, role, and behavior:
+
+```typescript
+const agent = {
+  $type: 'Agent',
+  name: 'Sarah Chen',
+  role: 'Sales Development Representative',
+  persona: {
+    background: 'Former tech recruiter with 5 years in B2B SaaS sales',
+    expertise: ['lead qualification', 'cold outreach', 'discovery calls'],
+    style: 'consultative, relationship-focused, data-driven',
+    communication: 'Professional yet personable, concise, value-focused',
+  },
+  goals: ['Qualify 20 leads per week', 'Book 10 discovery calls per week', 'Maintain 50% meeting show rate'],
+}
+```
+
+### Autonomous Decision Making
+
+Agents autonomously decide how to accomplish goals:
+
+```typescript
+// Agent perceives environment
+const context = await agent.perceive({
+  lead: { name: 'John Doe', company: 'Acme Corp' },
+  recent_activity: 'Downloaded whitepaper',
+  company_signals: ['hiring', 'funding_round'],
+})
+
+// Agent reasons about next action
+const decision = await agent.reason(context)
+// → "High intent signals. Prioritize personalized outreach."
+
+// Agent acts on decision
+await agent.act({
+  action: 'send_personalized_email',
+  personalization: context.company_signals,
+})
+```
+
+### Multi-Agent Systems
+
+Orchestrate multiple agents working together:
+
+```typescript
+const salesTeam = await agent.createTeam({
+  name: 'Sales Development Team',
+  agents: [
+    { role: 'researcher', agent: researchAgent },
+    { role: 'outreach', agent: outreachAgent },
+    { role: 'qualifier', agent: qualifierAgent },
+  ],
+  workflow: {
+    stages: [
+      { agent: 'researcher', task: 'research_lead' },
+      { agent: 'outreach', task: 'initial_contact' },
+      { agent: 'qualifier', task: 'qualification_call' },
+    ],
+  },
+})
+
+// Execute multi-agent workflow
+const result = await salesTeam.process({
+  lead: { company: 'Acme Corp', contact: 'john@acme.com' },
+})
+```
+
+### Agent Communication
+
+Agents communicate using semantic messages:
+
+```typescript
+// Agent-to-agent communication
+await agentA.send({
+  to: agentB,
+  type: 'request',
+  content: {
+    $type: 'TaskRequest',
+    task: 'research_company',
+    params: { company: 'Acme Corp' },
+  },
+})
+
+// Agent receives and processes
+await agentB.on('request', async (message) => {
+  const result = await agentB.execute(message.content.task)
+  await agentB.send({
+    to: message.from,
+    type: 'response',
+    content: { $type: 'TaskResult', result },
+  })
+})
+```
+
+### Tool Integration
+
+Agents use tools to interact with systems:
+
+```typescript
+const agent = await agent.create({
+  name: 'Sales Agent',
+  tools: {
+    email: {
+      $type: 'Tool',
+      name: 'email',
+      description: 'Send and receive emails',
+      functions: ['send', 'read', 'search'],
+    },
+    crm: {
+      $type: 'Tool',
+      name: 'crm',
+      description: 'Manage customer relationships',
+      functions: ['create_lead', 'update_lead', 'log_activity'],
+    },
+    calendar: {
+      $type: 'Tool',
+      name: 'calendar',
+      description: 'Schedule meetings',
+      functions: ['check_availability', 'book_meeting', 'send_invite'],
+    },
+  },
+})
+
+// Agent autonomously selects and uses tools
+await agent.execute({
+  task: 'Book a meeting with John Doe',
+  context: { lead: 'john@acme.com' },
+})
+// Agent will: check calendar, send email, book meeting
+```
+
+## Semantic Patterns
+
+agents.do uses semantic `$.Subject.predicate.Object` patterns:
+
+```typescript
+import $ from 'sdk.do'
+
+// Agent types
+$.Agent
+$.AgentTeam
+$.AgentCapability
+$.AgentTool
+
+// Agent operations
+$.Agent.perceives.Environment
+$.Agent.reasons.about.Decision
+$.Agent.acts.on.Action
+$.Agent.learns.from.Experience
+$.Agent.collaborates.with.Agent
+
+// Agent relationships
+$.Agent.has.Capability
+$.Agent.uses.Tool
+$.Agent.achieves.Goal
+$.Agent.belongs.to.Team
+$.Agent.communicates.with.Agent
+```
+
+## Agent Lifecycle
+
+### 1. Define Agent
+
+```typescript
+const agentDef = {
+  $type: 'Agent',
+  name: 'Sarah - SDR Agent',
+  role: 'Sales Development Representative',
+  capabilities: ['research', 'outreach', 'qualification'],
+  tools: ['email', 'crm', 'calendar'],
+  model: 'claude-sonnet-4.5',
+}
+```
+
+### 2. Create Agent Instance
+
+```typescript
+const agent = await agent.create(agentDef)
+```
+
+### 3. Configure Agent Behavior
+
+```typescript
+await agent.configure({
+  temperature: 0.7,
+  maxIterations: 10,
+  autonomy: 'supervised', // 'autonomous' | 'supervised' | 'manual'
+  notifications: ['task_complete', 'decision_required'],
+})
+```
+
+### 4. Execute Agent Tasks
+
+```typescript
+const result = await agent.execute({
+  task: 'qualify_lead',
+  input: { lead: leadData },
+})
+```
+
+### 5. Monitor Agent Performance
+
+```typescript
+const metrics = await agent.getMetrics()
+// {
+//   tasks_completed: 150,
+//   success_rate: 0.85,
+//   avg_execution_time: 45000,
+//   tools_used: { email: 120, crm: 150, calendar: 80 }
+// }
+```
+
+## Architecture
+
+### Agent Core
+
+Every agent has a core structure:
+
+```typescript
+interface Agent {
+  $type: 'Agent'
+  $id: string
+  name: string
+  role: string
+  persona?: AgentPersona
+  goals: string[]
+  capabilities: AgentCapability[]
+  tools: AgentTool[]
+  model: string
+  memory: AgentMemory
+  state: AgentState
+}
+```
+
+### Perception Layer
+
+How agents observe their environment:
+
+```typescript
+interface Perception {
+  sensors: Sensor[]
+  inputs: DataSource[]
+  context: Context
+  filters: Filter[]
+}
+```
+
+### Reasoning Engine
+
+How agents make decisions:
+
+```typescript
+interface ReasoningEngine {
+  strategy: 'reactive' | 'deliberative' | 'hybrid'
+  planner: Planner
+  evaluator: Evaluator
+  learner: Learner
+}
+```
+
+### Action Executor
+
+How agents execute actions:
+
+```typescript
+interface ActionExecutor {
+  tools: Tool[]
+  apis: API[]
+  workflows: Workflow[]
+  validators: Validator[]
+}
+```
+
+### Communication Protocol
+
+How agents communicate:
+
+```typescript
+interface Communication {
+  protocol: 'semantic' | 'rest' | 'graphql' | 'rpc'
+  channels: Channel[]
+  messages: MessageQueue
+  handlers: MessageHandler[]
+}
+```
+
+## Use Cases
+
+### Sales Development Representatives (SDR)
+
+Automate lead qualification and meeting booking:
+
+```typescript
+const sdrAgent = await agent.create({
+  name: 'SDR Agent',
+  role: 'Sales Development Representative',
+  tasks: ['research_lead', 'personalized_outreach', 'qualify_lead', 'book_meeting'],
+  kpis: {
+    leads_qualified: 20,
+    meetings_booked: 10,
+    show_rate: 0.5,
+  },
+})
+```
+
+### Customer Support Representatives
+
+Handle customer inquiries autonomously:
+
+```typescript
+const supportAgent = await agent.create({
+  name: 'Support Agent',
+  role: 'Customer Support Representative',
+  tasks: ['categorize_ticket', 'resolve_issue', 'escalate_complex', 'follow_up'],
+  knowledge_base: 'support_docs',
+  escalation_criteria: ['unresolved_after_3_attempts', 'customer_frustration_detected'],
+})
+```
+
+### Data Analysts
+
+Analyze data and generate insights:
+
+```typescript
+const analystAgent = await agent.create({
+  name: 'Analyst Agent',
+  role: 'Data Analyst',
+  tasks: ['collect_data', 'analyze_patterns', 'generate_insights', 'create_report'],
+  tools: ['sql', 'python', 'visualization'],
+  reporting_schedule: '$.Daily',
+})
+```
+
+### DevOps Engineers
+
+Monitor systems and respond to incidents:
+
+```typescript
+const devopsAgent = await agent.create({
+  name: 'DevOps Agent',
+  role: 'DevOps Engineer',
+  tasks: ['monitor_systems', 'detect_anomalies', 'diagnose_issues', 'apply_fixes'],
+  on_call: true,
+  auto_remediation: true,
+  escalation_threshold: 'critical',
+})
+```
+
+## Integration with .do Platform
+
+agents.do integrates with all `.do` platform services:
+
+```typescript
+import $, { agent, db, on, send, every } from 'sdk.do'
+
+// Agent with database access
+const agent = await agent.create({
+  name: 'Data Agent',
+  tools: {
+    database: db,
+  },
+})
+
+await agent.execute({
+  task: 'Analyze customer churn',
+  actions: [() => db.list($.Customer, { where: { churn_risk: 'high' } })],
+})
+
+// Agent with event handling
+await on($.Lead.created, async (lead) => {
+  await salesAgent.execute({
+    task: 'Qualify new lead',
+    input: lead,
+  })
+})
+
+// Agent with scheduled tasks
+await every($.Daily, async () => {
+  await analystAgent.execute({
+    task: 'Generate daily report',
+  })
+})
+```
+
+## Documentation
+
+- [Getting Started](./docs/getting-started) - Setup and first agent
+- [Creating Agents](./docs/creating-agents) - Define agents with personas and capabilities
+- [Agent Communication](./docs/agent-communication) - Agent-to-agent patterns
+- [API Reference](./api/) - Complete API documentation
+- [Examples](./examples/) - Real-world agent examples
+
+## Examples
+
+- [Basic Agent](./examples/basic-agent) - Simple autonomous agent
+- [Sales Agent](./examples/sales-agent) - SDR/BDR agent example
+- [Multi-Agent System](./examples/multi-agent) - Multiple agents working together
+
+## Best Practices
+
+### 1. Clear Goals
+
+Define specific, measurable goals:
+
+```typescript
+goals: ['Qualify 20 leads per week', 'Book 10 meetings per week', 'Achieve 50% meeting show rate']
+```
+
+### 2. Rich Personas
+
+Give agents detailed personas:
+
+```typescript
+persona: {
+  background: 'Former recruiter with 5 years in B2B SaaS',
+  expertise: ['lead qualification', 'cold outreach'],
+  style: 'consultative, relationship-focused',
+  communication: 'professional yet personable'
+}
+```
+
+### 3. Appropriate Autonomy
+
+Choose the right autonomy level:
+
+```typescript
+autonomy: 'supervised' // Start supervised, move to autonomous
+```
+
+### 4. Observability
+
+Monitor agent behavior:
+
+```typescript
+notifications: ['task_complete', 'decision_required', 'error'],
+logging: 'detailed',
+metrics: ['success_rate', 'execution_time', 'tool_usage']
+```
+
+### 5. Graceful Degradation
+
+Handle failures gracefully:
+
+```typescript
+error_handling: {
+  retry: { attempts: 3, backoff: 'exponential' },
+  fallback: 'escalate_to_human',
+  notification: true
+}
+```
+
+## Related Projects
+
+- [agents.org.ai](https://agents.org.ai) - Agent ontology and vocabulary
+- [actions.org.ai](https://actions.org.ai) - Actions and triggers ontology
+- [sdk.do](https://sdk.do) - Core SDK with agent support
+- [workflows.do](https://workflows.do) - Workflow orchestration
+- [functions.do](https://functions.do) - Function execution
+
+## License
+
+MIT (Open Source)
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

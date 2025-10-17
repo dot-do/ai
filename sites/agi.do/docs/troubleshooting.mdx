@@ -1,0 +1,707 @@
+---
+$id: https://agi.do/docs/troubleshooting
+$type: TechArticle
+title: AGI Agent Troubleshooting
+description: Common issues and solutions when working with AGI agents
+keywords: [agi, troubleshooting, errors, debugging, solutions, performance]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Troubleshooting
+
+Common issues and solutions when working with AGI agents.
+
+## Configuration Issues
+
+### "Insufficient Capabilities" Error
+
+**Problem**: Agent lacks required capabilities for the requested task.
+
+**Solutions**:
+
+```typescript
+import { $, agent } from 'sdk.do'
+
+// Error: Agent without required capability
+try {
+  const simple = await agent.create({
+    $role: $.AGIAgent,
+    capabilities: ['advanced_reasoning'],
+  })
+
+  await simple.research({ topic: 'AI trends' }) // Requires research_synthesis!
+} catch (error) {
+  console.error(error.code) // INSUFFICIENT_CAPABILITIES
+}
+
+// Solution 1: Add required capability
+const capable = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['advanced_reasoning', 'research_synthesis'],
+})
+
+await capable.research({ topic: 'AI trends' }) // Works!
+
+// Solution 2: Use appropriate method for capabilities
+const reasoner = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['advanced_reasoning'],
+})
+
+await reasoner.reason({ problem: 'Design system' }) // Works!
+```
+
+### "API Key Not Set" Error
+
+**Problem**: LLM provider API keys are not configured.
+
+**Solutions**:
+
+```bash
+# Check if API keys are set
+echo $ANTHROPIC_API_KEY
+echo $OPENAI_API_KEY
+
+# Set API keys
+export ANTHROPIC_API_KEY=sk-ant-...
+export OPENAI_API_KEY=sk-...
+
+# Add to .env file
+echo "ANTHROPIC_API_KEY=sk-ant-..." >> .env
+echo "OPENAI_API_KEY=sk-..." >> .env
+```
+
+```typescript
+import { agent } from 'sdk.do'
+
+// Verify API keys before creating agent
+if (!process.env.ANTHROPIC_API_KEY && !process.env.OPENAI_API_KEY) {
+  throw new Error('At least one LLM provider API key must be set')
+}
+
+// Test connection
+try {
+  const testAgent = await agent.create({
+    $role: $.AGIAgent,
+    capabilities: ['advanced_reasoning'],
+    model: 'claude-sonnet-4.5',
+  })
+  console.log('API key valid')
+} catch (error) {
+  console.error('API key invalid:', error.message)
+}
+```
+
+## Performance Problems
+
+### Slow Reasoning
+
+**Problem**: Reasoning takes too long to complete.
+
+**Solutions**:
+
+```typescript
+import { $, agent } from 'sdk.do'
+
+// Problem: Deep reasoning is too slow
+const slow = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['advanced_reasoning'],
+  reasoning: {
+    strategy: 'graph-of-thought',
+    depth: 10, // Too deep!
+    breadth: 5, // Too broad!
+  },
+})
+
+// Solution 1: Reduce reasoning depth/breadth
+const faster = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['advanced_reasoning'],
+  reasoning: {
+    strategy: 'chain-of-thought', // Simpler strategy
+    depth: 5, // Reduced depth
+    breadth: 3, // Reduced breadth
+  },
+})
+
+// Solution 2: Use simpler strategy for simple tasks
+const adaptive = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['advanced_reasoning'],
+  reasoning: {
+    strategy: 'auto', // Automatically chooses based on task
+    depth: 7,
+  },
+})
+
+// Solution 3: Enable parallel execution
+const parallel = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['advanced_reasoning'],
+  execution: {
+    mode: 'parallel',
+    max_parallel: 5,
+  },
+})
+```
+
+**Performance Comparison**:
+
+- Chain-of-thought (depth 3): ~2-3 seconds
+- Chain-of-thought (depth 7): ~5-10 seconds
+- Tree-of-thought (depth 5, breadth 3): ~10-15 seconds
+- Graph-of-thought (depth 7, breadth 4): ~15-30 seconds
+
+### High LLM Costs
+
+**Problem**: Agent is consuming too many LLM tokens.
+
+**Solutions**:
+
+```typescript
+import { $, agent } from 'sdk.do'
+
+// Problem: Expensive model for all operations
+const expensive = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['advanced_reasoning'],
+  model: 'claude-opus-4', // Most expensive!
+})
+
+// Solution 1: Use cost-effective models
+const economical = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['advanced_reasoning'],
+  model: 'claude-sonnet-4.5', // Balanced cost/performance
+})
+
+// Solution 2: Set token limits
+const limited = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['advanced_reasoning'],
+  model: 'claude-sonnet-4.5',
+  maxTokens: 4096, // Limit output tokens
+  resources: {
+    max_cost_per_task: 0.5, // $0.50 limit per task
+  },
+})
+
+// Solution 3: Enable caching
+const cached = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['advanced_reasoning'],
+  caching: {
+    enabled: true,
+    ttl: 3600,
+    strategy: 'semantic',
+  },
+})
+
+// Solution 4: Monitor and alert on costs
+import { db } from 'sdk.do'
+
+const result = await agiAgent.execute(task)
+
+if (result.llmCost > 1.0) {
+  console.warn(`High cost task: $${result.llmCost}`)
+}
+```
+
+### Memory Issues
+
+**Problem**: Agent running out of memory with large experience buffers.
+
+**Solutions**:
+
+```typescript
+import { $, agent } from 'sdk.do'
+
+// Problem: Unbounded memory growth
+const unbounded = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['self_improvement'],
+  learning: {
+    enabled: true,
+    memory_size: Number.MAX_SAFE_INTEGER, // Too large!
+  },
+})
+
+// Solution 1: Set reasonable memory limits
+const bounded = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['self_improvement'],
+  learning: {
+    enabled: true,
+    memory_size: 10000, // Reasonable limit
+    cleanup: {
+      strategy: 'lru', // Remove least recently used
+      frequency: 'daily',
+    },
+  },
+})
+
+// Solution 2: Manually clean up old experiences
+await agiAgent.cleanup({
+  removeExperiencesOlderThan: 30 * 24 * 60 * 60 * 1000, // 30 days
+  keepTopPerforming: 1000,
+})
+
+// Solution 3: Use external storage for experiences
+import { db } from 'sdk.do'
+
+const persistent = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['self_improvement'],
+  learning: {
+    enabled: true,
+    storage: {
+      type: 'external',
+      store: db,
+    },
+  },
+})
+```
+
+## Learning Loop Issues
+
+### Agent Not Improving
+
+**Problem**: Agent performance not improving over time despite feedback.
+
+**Solutions**:
+
+```typescript
+import { $, agent } from 'sdk.do'
+
+// Problem 1: Learning not enabled
+const noLearning = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['advanced_reasoning'],
+  learning: { enabled: false }, // Not learning!
+})
+
+// Solution: Enable learning
+const learner = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['advanced_reasoning', 'self_improvement'],
+  learning: {
+    enabled: true,
+    strategy: 'experience_replay',
+  },
+})
+
+// Problem 2: Insufficient feedback
+await learner.feedback({
+  task_id: result.id,
+  outcome: 'success', // Too minimal!
+})
+
+// Solution: Provide comprehensive feedback
+await learner.feedback({
+  task_id: result.id,
+  outcome: 'success',
+  metrics: {
+    accuracy: 0.95,
+    latency: 5000,
+    cost: 0.1,
+    user_satisfaction: 4.5,
+  },
+  qualitative: {
+    strengths: ['Clear reasoning', 'Practical solution'],
+    weaknesses: ['Missed edge case', 'Verbose explanation'],
+    improvements: ['Add edge case handling', 'Be more concise'],
+  },
+})
+
+// Problem 3: Update frequency too low
+const infrequent = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['self_improvement'],
+  learning: {
+    enabled: true,
+    update_frequency: 'monthly', // Too infrequent!
+  },
+})
+
+// Solution: Increase update frequency
+const frequent = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['self_improvement'],
+  learning: {
+    enabled: true,
+    update_frequency: 'task', // Update after each task
+  },
+})
+```
+
+### Overfitting to Recent Tasks
+
+**Problem**: Agent performs well on recent tasks but poorly on older task types.
+
+**Solutions**:
+
+```typescript
+import { $, agent } from 'sdk.do'
+
+// Problem: Only using recent experiences
+const recencyBias = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['self_improvement'],
+  learning: {
+    enabled: true,
+    strategy: 'online', // Only recent experiences
+    memory_size: 100, // Small memory
+  },
+})
+
+// Solution: Use experience replay with diverse sampling
+const balanced = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['self_improvement', 'meta_learning'],
+  learning: {
+    enabled: true,
+    strategy: 'experience_replay',
+    memory_size: 10000,
+    sampling: 'diverse', // Sample from all experience types
+  },
+})
+
+// Monitor performance across task types
+import { db } from 'sdk.do'
+
+const metrics = await db.list($.PerformanceMetric, {
+  where: { agent_id: agiAgent.$id },
+  groupBy: 'task_type',
+})
+
+for (const taskType in metrics) {
+  const avg = metrics[taskType].reduce((sum, m) => sum + m.accuracy, 0) / metrics[taskType].length
+  console.log(`${taskType}: ${avg} accuracy`)
+
+  if (avg < 0.85) {
+    console.warn(`Low performance on ${taskType}, may need retraining`)
+  }
+}
+```
+
+## Knowledge Graph Issues
+
+### Slow Knowledge Graph Queries
+
+**Problem**: Knowledge graph queries taking too long.
+
+**Solutions**:
+
+```typescript
+import { $, agent, db } from 'sdk.do'
+
+// Problem: Large unindexed knowledge graph
+const unindexed = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['multi_domain_expertise'],
+  knowledge_graph: {
+    enabled: true,
+    store: db,
+  },
+})
+
+// Solution 1: Add indexes on frequently queried fields
+await db.createIndex($.Entity, ['type', 'domain'])
+await db.createIndex($.Relationship, ['from', 'to', 'type'])
+
+// Solution 2: Use semantic search instead of full scans
+const embedded = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['multi_domain_expertise'],
+  knowledge_graph: {
+    enabled: true,
+    store: db,
+    search: {
+      strategy: 'semantic', // Use embeddings
+      indexEmbeddings: true,
+    },
+  },
+})
+
+// Solution 3: Limit query depth
+const results = await agiAgent.knowledge.query({
+  pattern: '$.Company.competes.with.$.Company',
+  maxDepth: 2, // Limit traversal depth
+})
+```
+
+### Knowledge Graph Growing Too Large
+
+**Problem**: Knowledge graph consuming excessive storage.
+
+**Solutions**:
+
+```typescript
+import { $, agent, db } from 'sdk.do'
+
+// Solution 1: Implement retention policies
+const managed = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['multi_domain_expertise'],
+  knowledge_graph: {
+    enabled: true,
+    store: db,
+    retention: {
+      maxEntities: 100000,
+      maxAge: 90 * 24 * 60 * 60 * 1000, // 90 days
+      cleanupFrequency: 'weekly',
+    },
+  },
+})
+
+// Solution 2: Manually prune unused entities
+const unusedEntities = await db.list($.Entity, {
+  where: {
+    lastAccessed: { $lt: Date.now() - 60 * 24 * 60 * 60 * 1000 }, // > 60 days
+  },
+})
+
+for (const entity of unusedEntities) {
+  await db.delete(entity.$id)
+}
+
+// Solution 3: Archive old knowledge to cold storage
+const oldKnowledge = await db.list($.Entity, {
+  where: {
+    createdAt: { $lt: Date.now() - 365 * 24 * 60 * 60 * 1000 }, // > 1 year
+  },
+})
+
+await archiveToS3(oldKnowledge)
+await db.deleteMany(oldKnowledge.map((e) => e.$id))
+```
+
+## Debugging Techniques
+
+### Enable Detailed Logging
+
+```typescript
+import { $, agent } from 'sdk.do'
+
+const agiAgent = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['advanced_reasoning'],
+  logging: {
+    enabled: true,
+    level: 'debug', // verbose, debug, info, warn, error
+    includeReasoningSteps: true,
+    includeLLMRequests: true,
+  },
+})
+
+const result = await agiAgent.execute(task)
+
+console.log(result.logs)
+// Detailed execution trace
+```
+
+### Inspect Reasoning Chain
+
+```typescript
+import { $, agent } from 'sdk.do'
+
+const agiAgent = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['advanced_reasoning'],
+  reasoning: {
+    explainSteps: true,
+  },
+})
+
+const result = await agiAgent.reason({
+  problem: 'Design caching strategy',
+})
+
+console.log('Reasoning steps:')
+result.steps.forEach((step, i) => {
+  console.log(`${i + 1}. ${step.thought}`)
+  console.log(`   Confidence: ${step.confidence}`)
+  console.log(`   Alternatives: ${step.alternatives.length}`)
+})
+```
+
+### Monitor Execution Metrics
+
+```typescript
+import { $, agent, db } from 'sdk.do'
+
+const agiAgent = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['advanced_reasoning'],
+  monitoring: {
+    enabled: true,
+    trackMetrics: ['latency', 'cost', 'accuracy', 'tokenUsage'],
+  },
+})
+
+const result = await agiAgent.execute(task)
+
+// Save metrics for analysis
+await db.create($.ExecutionMetric, {
+  agent_id: agiAgent.$id,
+  task_id: task.id,
+  timestamp: Date.now(),
+  latency: result.executionTime,
+  cost: result.llmCost,
+  tokensUsed: result.tokensUsed,
+  reasoningSteps: result.reasoning.steps.length,
+})
+
+// Query metrics trends
+const recentMetrics = await db.list($.ExecutionMetric, {
+  where: { agent_id: agiAgent.$id },
+  orderBy: 'timestamp DESC',
+  limit: 100,
+})
+
+const avgLatency = recentMetrics.reduce((sum, m) => sum + m.latency, 0) / recentMetrics.length
+console.log(`Average latency: ${avgLatency}ms`)
+```
+
+### Test with Simplified Tasks
+
+```typescript
+import { $, agent } from 'sdk.do'
+
+// Start with simple tasks to isolate issues
+const agiAgent = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['advanced_reasoning'],
+})
+
+// Test 1: Simple reasoning
+try {
+  const result = await agiAgent.reason({
+    problem: 'If A > B, is A > A?',
+  })
+  console.log('Simple reasoning: ✓')
+} catch (error) {
+  console.error('Simple reasoning failed:', error.message)
+}
+
+// Test 2: Medium complexity
+try {
+  const result = await agiAgent.reason({
+    problem: 'Design a rate limiting strategy for an API with 1000 req/s',
+  })
+  console.log('Medium reasoning: ✓')
+} catch (error) {
+  console.error('Medium reasoning failed:', error.message)
+}
+
+// Test 3: Complex reasoning
+try {
+  const result = await agiAgent.reason({
+    problem: 'Design a globally distributed transaction coordinator',
+  })
+  console.log('Complex reasoning: ✓')
+} catch (error) {
+  console.error('Complex reasoning failed:', error.message)
+}
+```
+
+## Common Error Codes
+
+### Error Code Reference
+
+- `INSUFFICIENT_CAPABILITIES`: Agent lacks required capability for task
+- `REASONING_DEPTH_EXCEEDED`: Reasoning depth limit reached
+- `PROVIDER_UNAVAILABLE`: LLM provider is not available
+- `RATE_LIMIT_EXCEEDED`: Rate limit exceeded
+- `COST_LIMIT_EXCEEDED`: Cost limit for task exceeded
+- `TIMEOUT`: Execution timeout exceeded
+- `INVALID_CONFIGURATION`: Agent configuration is invalid
+- `KNOWLEDGE_GRAPH_ERROR`: Knowledge graph operation failed
+
+### Error Handling Pattern
+
+```typescript
+import { $, agent } from 'sdk.do'
+
+async function executeWithErrorHandling(agiAgent: AGIAgent, task: Task) {
+  try {
+    return await agiAgent.execute(task)
+  } catch (error) {
+    switch (error.code) {
+      case 'INSUFFICIENT_CAPABILITIES':
+        console.error('Add required capabilities to agent')
+        break
+
+      case 'REASONING_DEPTH_EXCEEDED':
+        console.error('Reduce reasoning depth or simplify task')
+        break
+
+      case 'PROVIDER_UNAVAILABLE':
+        console.error('LLM provider unavailable, try alternative')
+        break
+
+      case 'RATE_LIMIT_EXCEEDED':
+        console.error('Rate limit hit, implement exponential backoff')
+        break
+
+      case 'COST_LIMIT_EXCEEDED':
+        console.error('Task too expensive, increase limit or optimize')
+        break
+
+      case 'TIMEOUT':
+        console.error('Execution timeout, increase limit or parallelize')
+        break
+
+      default:
+        console.error('Unexpected error:', error.message)
+    }
+    throw error
+  }
+}
+```
+
+## Getting Help
+
+### Collect Diagnostic Information
+
+```typescript
+import { $, agent } from 'sdk.do'
+
+async function collectDiagnostics(agiAgent: AGIAgent) {
+  return {
+    agentConfig: {
+      capabilities: agiAgent.capabilities,
+      model: agiAgent.model,
+      reasoningConfig: agiAgent.reasoning,
+      learningConfig: agiAgent.learning,
+    },
+    systemInfo: {
+      nodeVersion: process.version,
+      platform: process.platform,
+      memory: process.memoryUsage(),
+    },
+    recentExecutions: await db.list($.ExecutionMetric, {
+      where: { agent_id: agiAgent.$id },
+      orderBy: 'timestamp DESC',
+      limit: 10,
+    }),
+  }
+}
+
+const diagnostics = await collectDiagnostics(agiAgent)
+console.log(JSON.stringify(diagnostics, null, 2))
+```
+
+### Support Resources
+
+- [GitHub Issues](https://github.com/dot-do/ai/issues) - Report bugs
+- [Discord Community](https://discord.gg/dotdo) - Get help
+- [API Reference](../api/reference) - Complete API documentation
+- [Examples](../examples/) - Practical examples
+
+## License
+
+MIT (Open Source)

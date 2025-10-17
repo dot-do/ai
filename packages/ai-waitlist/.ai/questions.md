@@ -1,0 +1,5 @@
+- What is your primary use case?
+- What problems are you trying to solve?
+- How are you currently solving this problem?
+- How large is your team?
+- What is your timeline for implementing a solution?

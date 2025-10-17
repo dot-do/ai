@@ -1,0 +1,332 @@
+---
+$id: https://oauth.do
+$type: WebSite
+name: oauth.do
+description: OAuth 2.0 authentication framework for Business-as-Code applications with authorization code flow, PKCE, scopes, tokens, and provider integration
+license: CC-BY-4.0
+keywords: [oauth, oauth2, authorization, pkce, scopes, tokens, providers, business-as-code]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# oauth.do
+
+**OAuth 2.0 authentication framework for Business-as-Code applications**
+
+oauth.do provides comprehensive OAuth 2.0 implementation in the `.do` platform's Business-as-Code SDK. It enables OAuth flows (authorization code, implicit, client credentials, PKCE), scope management, token handling, and integration with OAuth providers using semantic patterns.
+
+## Quick Start
+
+```bash
+pnpm add sdk.do
+```
+
+```typescript
+import { oauth } from 'sdk.do'
+
+// Configure OAuth provider
+await oauth.configure({
+  google: {
+    clientId: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    redirectUri: 'https://app.example.com/auth/callback',
+  },
+})
+
+// Start OAuth flow
+const authUrl = await oauth.authorize({
+  provider: 'google',
+  scopes: ['email', 'profile'],
+  state: generateState(),
+})
+
+console.log('Redirect user to:', authUrl)
+
+// Handle callback
+const tokens = await oauth.callback({
+  provider: 'google',
+  code: authCode,
+  state: state,
+})
+
+console.log(tokens)
+// {
+//   accessToken: "ya29.a0AfH6SMBx...",
+//   refreshToken: "1//0gZ...",
+//   expiresIn: 3600,
+//   tokenType: "Bearer",
+//   scope: "email profile"
+// }
+
+// Get user info
+const userInfo = await oauth.getUserInfo('google', tokens.accessToken)
+```
+
+## Key Features
+
+### Authorization Code Flow
+
+Standard OAuth 2.0 authorization code flow:
+
+```typescript
+import { oauth } from 'sdk.do'
+
+// 1. Start authorization
+const authUrl = await oauth.authorize({
+  provider: 'google',
+  scopes: ['email', 'profile', 'https://www.googleapis.com/auth/calendar'],
+  state: generateState(),
+  redirectUri: 'https://app.example.com/auth/callback',
+})
+
+// 2. User authenticates and approves
+
+// 3. Handle callback
+const tokens = await oauth.callback({
+  provider: 'google',
+  code: authCode,
+  state: state,
+})
+
+// 4. Use access token
+const calendar = await fetch('https://www.googleapis.com/calendar/v3/calendars', {
+  headers: { Authorization: `Bearer ${tokens.accessToken}` },
+})
+```
+
+### PKCE (Proof Key for Code Exchange)
+
+Enhanced security for public clients:
+
+```typescript
+import { oauth } from 'sdk.do'
+
+// Generate code verifier and challenge
+const codeVerifier = oauth.generateCodeVerifier()
+const codeChallenge = await oauth.generateCodeChallenge(codeVerifier)
+
+// Start authorization with PKCE
+const authUrl = await oauth.authorize({
+  provider: 'google',
+  scopes: ['email', 'profile'],
+  codeChallenge,
+  codeChallengeMethod: 'S256',
+})
+
+// Exchange code for tokens with verifier
+const tokens = await oauth.callback({
+  provider: 'google',
+  code: authCode,
+  codeVerifier,
+})
+```
+
+### Scope Management
+
+Request and manage OAuth scopes:
+
+```typescript
+import { oauth } from 'sdk.do'
+
+// Request specific scopes
+const authUrl = await oauth.authorize({
+  provider: 'github',
+  scopes: ['user', 'repo', 'gist'],
+  scopeDelimiter: ' ', // GitHub uses space
+})
+
+// Check granted scopes
+const tokens = await oauth.callback({ provider: 'github', code })
+console.log(tokens.scope) // "user repo gist"
+
+// Verify specific scope
+const hasRepoScope = tokens.scope.split(' ').includes('repo')
+```
+
+### Token Management
+
+Handle access and refresh tokens:
+
+```typescript
+import { oauth } from 'sdk.do'
+
+// Refresh access token
+const newTokens = await oauth.refresh({
+  provider: 'google',
+  refreshToken: tokens.refreshToken,
+})
+
+// Revoke token
+await oauth.revoke({
+  provider: 'google',
+  token: tokens.accessToken,
+})
+
+// Validate token
+const isValid = await oauth.validate({
+  provider: 'google',
+  token: tokens.accessToken,
+})
+```
+
+### Provider Integration
+
+Support for major OAuth providers:
+
+```typescript
+import { oauth } from 'sdk.do'
+
+// Google OAuth
+await oauth.configure({
+  google: {
+    clientId: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    redirectUri: 'https://app.example.com/auth/google/callback',
+  },
+})
+
+// GitHub OAuth
+await oauth.configure({
+  github: {
+    clientId: process.env.GITHUB_CLIENT_ID,
+    clientSecret: process.env.GITHUB_CLIENT_SECRET,
+    redirectUri: 'https://app.example.com/auth/github/callback',
+  },
+})
+
+// Microsoft OAuth
+await oauth.configure({
+  microsoft: {
+    clientId: process.env.MICROSOFT_CLIENT_ID,
+    clientSecret: process.env.MICROSOFT_CLIENT_SECRET,
+    redirectUri: 'https://app.example.com/auth/microsoft/callback',
+    tenant: 'common',
+  },
+})
+
+// Custom OAuth provider
+await oauth.configure({
+  custom: {
+    clientId: process.env.CUSTOM_CLIENT_ID,
+    clientSecret: process.env.CUSTOM_CLIENT_SECRET,
+    authorizationEndpoint: 'https://provider.com/oauth/authorize',
+    tokenEndpoint: 'https://provider.com/oauth/token',
+    redirectUri: 'https://app.example.com/auth/custom/callback',
+  },
+})
+```
+
+## Features
+
+- **Authorization Code Flow**: Standard OAuth 2.0 flow
+- **PKCE Support**: Enhanced security for public clients
+- **Scope Management**: Request and verify scopes
+- **Token Handling**: Access, refresh, and revocation
+- **Provider Integration**: Google, GitHub, Microsoft, custom providers
+- **State Parameter**: CSRF protection
+- **Token Refresh**: Automatic token renewal
+- **User Info**: Get user data from providers
+- **Type Safety**: Full TypeScript support
+- **Semantic Patterns**: Use $.Subject.predicate.Object patterns
+- **AI-Native**: Designed for AI agents
+
+## Documentation
+
+- [Getting Started](./docs/getting-started) - Installation and setup
+- [Architecture](./docs/architecture) - OAuth architecture
+- [Best Practices](./docs/best-practices) - Security best practices
+- [Troubleshooting](./docs/troubleshooting) - Common issues
+- [API Reference](./api/) - Complete API documentation
+
+## Examples
+
+- [Basic Usage](./examples/basic-usage) - Simple OAuth flow
+- [Advanced Patterns](./examples/advanced-patterns) - Complex scenarios
+- [Integration](./examples/integration) - Integration examples
+- [Real-World Use Case](./examples/real-world-use-case) - Production setup
+
+## Use Cases
+
+### Social Login
+
+```typescript
+import { oauth, db, $ } from 'sdk.do'
+
+export async function socialLogin(provider: string) {
+  const authUrl = await oauth.authorize({
+    provider,
+    scopes: ['email', 'profile'],
+    state: generateState(),
+  })
+
+  return { authUrl }
+}
+
+export async function handleCallback(provider: string, code: string) {
+  const tokens = await oauth.callback({ provider, code })
+  const userInfo = await oauth.getUserInfo(provider, tokens.accessToken)
+
+  let user = await db
+    .list($.Person, {
+      where: { email: userInfo.email },
+    })
+    .then((users) => users[0])
+
+  if (!user) {
+    user = await db.create($.Person, {
+      email: userInfo.email,
+      name: userInfo.name,
+      image: userInfo.picture,
+    })
+  }
+
+  return { user, tokens }
+}
+```
+
+## Integration with `.do` Platform
+
+```typescript
+import { $, oauth, auth, identity, db } from 'sdk.do'
+
+// Complete OAuth + Auth + Identity flow
+export async function oauthLogin(provider: string, code: string) {
+  // Get OAuth tokens
+  const tokens = await oauth.callback({ provider, code })
+
+  // Get user info
+  const userInfo = await oauth.getUserInfo(provider, tokens.accessToken)
+
+  // Create/get user
+  let user = await identity.findByEmail(userInfo.email)
+  if (!user) {
+    user = await identity.create({
+      email: userInfo.email,
+      name: userInfo.name,
+      provider,
+    })
+  }
+
+  // Create auth session
+  const session = await auth.createSession(user.$id)
+
+  return { session, user }
+}
+```
+
+## Related Domains
+
+- **[auth.do](https://auth.do)** - Authentication framework
+- **[identity.do](https://identity.do)** - Identity management
+- **[user.do](https://user.do)** - User context
+- **[session.do](https://session.do)** - Session management
+- **[sdk.do](https://sdk.do)** - Core SDK
+
+## License
+
+CC-BY-4.0 (Open Source)
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

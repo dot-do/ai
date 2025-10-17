@@ -1,0 +1,561 @@
+---
+$id: https://analytics.do/api/reference
+$type: APIReference
+title: analytics.do API Reference
+description: Complete API reference for analytics.do functions, types, and interfaces
+keywords: [api reference, functions, types, interfaces, documentation]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# API Reference
+
+Complete API reference for analytics.do.
+
+## Core Functions
+
+### track()
+
+Track an event with semantic context.
+
+**Signature**:
+
+```typescript
+async function track(event: SemanticType, data: EventData, options?: TrackOptions): Promise<TrackResult>
+```
+
+**Parameters**:
+
+- `event` - Semantic event type (e.g., `$.Order.created`)
+- `data` - Event data object
+- `options` - Optional tracking options
+
+**Returns**: Promise resolving to track result
+
+**Example**:
+
+```typescript
+await analytics.track($.Order.created, {
+  orderId: 'order-123',
+  amount: 1299.99,
+  timestamp: new Date(),
+})
+```
+
+### metric()
+
+Record a metric with dimensions.
+
+**Signature**:
+
+```typescript
+async function metric(metric: SemanticType, data: MetricData, options?: MetricOptions): Promise<MetricResult>
+```
+
+**Parameters**:
+
+- `metric` - Semantic metric type (e.g., `$.Revenue`)
+- `data` - Metric data with value and dimensions
+- `options` - Optional metric options
+
+**Returns**: Promise resolving to metric result
+
+**Example**:
+
+```typescript
+await analytics.metric($.Revenue, {
+  value: 1299.99,
+  dimensions: {
+    product: 'enterprise',
+    region: 'us-west',
+  },
+})
+```
+
+### counter()
+
+Increment a counter metric.
+
+**Signature**:
+
+```typescript
+async function counter(metric: SemanticType, increment?: number): Promise<void>
+```
+
+**Parameters**:
+
+- `metric` - Semantic metric type
+- `increment` - Amount to increment (default: 1)
+
+**Example**:
+
+```typescript
+await analytics.counter($.Orders, 1)
+await analytics.counter($.PageViews, 1)
+```
+
+### gauge()
+
+Set a gauge metric to a specific value.
+
+**Signature**:
+
+```typescript
+async function gauge(metric: SemanticType, value: number, dimensions?: Record<string, string>): Promise<void>
+```
+
+**Parameters**:
+
+- `metric` - Semantic metric type
+- `value` - Current value
+- `dimensions` - Optional dimensions
+
+**Example**:
+
+```typescript
+await analytics.gauge($.ActiveUsers, 142)
+await analytics.gauge($.QueueDepth, 25)
+```
+
+### histogram()
+
+Record a histogram metric for value distributions.
+
+**Signature**:
+
+```typescript
+async function histogram(metric: SemanticType, value: number, options?: HistogramOptions): Promise<void>
+```
+
+**Parameters**:
+
+- `metric` - Semantic metric type
+- `value` - Value to record
+- `options` - Histogram options (buckets)
+
+**Example**:
+
+```typescript
+await analytics.histogram($.ResponseTime, 235, {
+  buckets: [50, 100, 250, 500, 1000, 5000],
+})
+```
+
+### summary()
+
+Record a summary metric with percentiles.
+
+**Signature**:
+
+```typescript
+async function summary(metric: SemanticType, value: number, options?: SummaryOptions): Promise<void>
+```
+
+**Parameters**:
+
+- `metric` - Semantic metric type
+- `value` - Value to record
+- `options` - Summary options (quantiles)
+
+**Example**:
+
+```typescript
+await analytics.summary($.RequestDuration, 150, {
+  quantiles: [0.5, 0.9, 0.95, 0.99],
+})
+```
+
+### query()
+
+Query metrics with filters and aggregations.
+
+**Signature**:
+
+```typescript
+async function query(query: Query): Promise<QueryResult>
+```
+
+**Parameters**:
+
+- `query` - Query configuration object
+
+**Returns**: Promise resolving to query result
+
+**Example**:
+
+```typescript
+const result = await analytics.query({
+  metric: $.Revenue,
+  timeframe: 'last_30_days',
+  groupBy: ['product'],
+  aggregation: 'sum',
+})
+```
+
+### dashboard()
+
+Create or update a dashboard.
+
+**Signature**:
+
+```typescript
+async function dashboard(config: DashboardConfig): Promise<Dashboard>
+```
+
+**Parameters**:
+
+- `config` - Dashboard configuration
+
+**Returns**: Promise resolving to dashboard object
+
+**Example**:
+
+```typescript
+const dashboard = await analytics.dashboard({
+  name: 'Sales Dashboard',
+  widgets: [
+    { type: 'counter', metric: $.Revenue },
+    { type: 'timeseries', metric: $.Orders },
+  ],
+})
+```
+
+### alert()
+
+Create or update an alert.
+
+**Signature**:
+
+```typescript
+async function alert(config: AlertConfig): Promise<Alert>
+```
+
+**Parameters**:
+
+- `config` - Alert configuration
+
+**Returns**: Promise resolving to alert object
+
+**Example**:
+
+```typescript
+await analytics.alert({
+  name: 'High Error Rate',
+  metric: $.ErrorRate,
+  condition: { gt: 0.05 },
+  severity: 'critical',
+  notifications: ['pagerduty'],
+})
+```
+
+### report()
+
+Create a report template.
+
+**Signature**:
+
+```typescript
+async function report(config: ReportConfig): Promise<Report>
+```
+
+**Parameters**:
+
+- `config` - Report configuration
+
+**Returns**: Promise resolving to report object
+
+**Example**:
+
+```typescript
+const report = await analytics.report({
+  name: 'Weekly Report',
+  sections: [
+    { title: 'Summary', metrics: [...] }
+  ],
+  format: 'pdf'
+})
+```
+
+## Types
+
+### EventData
+
+```typescript
+interface EventData {
+  [key: string]: any
+  timestamp?: Date
+}
+```
+
+### MetricData
+
+```typescript
+interface MetricData {
+  value: number
+  dimensions?: Record<string, string>
+  timestamp?: Date
+}
+```
+
+### Query
+
+```typescript
+interface Query {
+  metric: SemanticType
+  timeframe: Timeframe
+  where?: Filters
+  groupBy?: string[]
+  aggregation?: Aggregation
+  orderBy?: OrderBy
+  limit?: number
+  offset?: number
+  interval?: Interval
+}
+```
+
+### Timeframe
+
+```typescript
+type Timeframe =
+  | 'today'
+  | 'yesterday'
+  | 'last_7_days'
+  | 'last_30_days'
+  | 'last_90_days'
+  | 'this_month'
+  | 'last_month'
+  | 'this_year'
+  | 'last_year'
+  | { start: string; end: string }
+  | { last: number; unit: 'minutes' | 'hours' | 'days' | 'months' }
+```
+
+### Aggregation
+
+```typescript
+type Aggregation = 'sum' | 'avg' | 'min' | 'max' | 'count' | 'p50' | 'p90' | 'p95' | 'p99' | 'p99.9'
+```
+
+### DashboardConfig
+
+```typescript
+interface DashboardConfig {
+  $type?: 'Dashboard'
+  name: string
+  description?: string
+  refresh_interval?: number
+  widgets: Widget[]
+  sections?: Section[]
+}
+```
+
+### Widget
+
+```typescript
+interface Widget {
+  type: 'counter' | 'gauge' | 'timeseries' | 'pie' | 'table' | 'funnel'
+  title?: string
+  metric?: SemanticType
+  query?: Query
+  timeframe?: Timeframe
+  aggregation?: Aggregation
+  [key: string]: any
+}
+```
+
+### AlertConfig
+
+```typescript
+interface AlertConfig {
+  $type?: 'Alert'
+  name: string
+  metric: SemanticType
+  timeframe?: Timeframe
+  where?: Filters
+  condition: AlertCondition
+  severity: 'low' | 'medium' | 'high' | 'critical'
+  notifications: Notification[]
+  cooldown?: number
+  consecutive_breaches?: number
+}
+```
+
+### AlertCondition
+
+```typescript
+interface AlertCondition {
+  gt?: number
+  lt?: number
+  gte?: number
+  lte?: number
+  eq?: number
+  increase?: number
+  decrease?: number
+  p50?: { gt?: number; lt?: number }
+  p95?: { gt?: number; lt?: number }
+  p99?: { gt?: number; lt?: number }
+}
+```
+
+### ReportConfig
+
+```typescript
+interface ReportConfig {
+  $type?: 'Report'
+  name: string
+  description?: string
+  sections: ReportSection[]
+  format?: 'pdf' | 'excel' | 'html'
+  delivery?: ReportDelivery
+}
+```
+
+### QueryResult
+
+```typescript
+interface QueryResult {
+  metric: string
+  value?: number
+  data?: DataPoint[]
+  timeseries?: TimeSeriesPoint[]
+  aggregation?: string
+  timeframe?: Timeframe
+}
+```
+
+### DataPoint
+
+```typescript
+interface DataPoint {
+  value: number
+  dimensions: Record<string, string>
+}
+```
+
+### TimeSeriesPoint
+
+```typescript
+interface TimeSeriesPoint {
+  timestamp: Date
+  value: number
+}
+```
+
+## Configuration
+
+### createAnalytics()
+
+Create an analytics client.
+
+**Signature**:
+
+```typescript
+function createAnalytics(config: AnalyticsConfig): Analytics
+```
+
+**Parameters**:
+
+```typescript
+interface AnalyticsConfig {
+  apiKey: string
+  endpoint?: string
+  debug?: boolean
+  testMode?: boolean
+  flushInterval?: number
+  flushSize?: number
+  retry?: RetryConfig
+}
+```
+
+**Example**:
+
+```typescript
+const analytics = createAnalytics({
+  apiKey: process.env.ANALYTICS_API_KEY,
+  debug: true,
+  flushInterval: 1000,
+  flushSize: 100,
+})
+```
+
+## Utility Functions
+
+### flush()
+
+Flush pending events and metrics.
+
+**Signature**:
+
+```typescript
+async function flush(): Promise<void>
+```
+
+**Example**:
+
+```typescript
+await analytics.flush()
+```
+
+### getDashboardUrl()
+
+Get the URL for a dashboard.
+
+**Signature**:
+
+```typescript
+async function getDashboardUrl(dashboardId: string): Promise<string>
+```
+
+**Example**:
+
+```typescript
+const url = await analytics.getDashboardUrl('dashboard-123')
+```
+
+### generateReport()
+
+Generate a report from a template.
+
+**Signature**:
+
+```typescript
+async function generateReport(reportId: string, options?: ReportOptions): Promise<GeneratedReport>
+```
+
+**Example**:
+
+```typescript
+const report = await analytics.generateReport('weekly-report', {
+  timeframe: 'last_7_days',
+})
+```
+
+### deliverReport()
+
+Deliver a generated report.
+
+**Signature**:
+
+```typescript
+async function deliverReport(report: GeneratedReport, delivery?: ReportDelivery): Promise<void>
+```
+
+**Example**:
+
+```typescript
+await analytics.deliverReport(report, {
+  email: ['team@company.com'],
+  slack: '#reports',
+})
+```
+
+## Related Documentation
+
+- [Getting Started](../docs/getting-started.mdx) - Setup and basics
+- [Examples](../examples/) - Code examples
+- [Best Practices](../docs/best-practices.mdx) - Recommended patterns
+
+---
+
+For more examples, see the [Examples](../examples/) section.

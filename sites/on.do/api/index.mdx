@@ -1,0 +1,563 @@
+---
+$id: https://on.do/api
+$type: APIReference
+title: on.do API Reference
+description: Complete API reference for the on SDK function
+keywords: [api, reference, documentation, on, event-listeners]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# API Reference
+
+Complete API reference for the `on` SDK function for subscribing to business events.
+
+## on()
+
+Subscribe to business events and execute a handler when they occur.
+
+### Signature
+
+```typescript
+function on<T = any>(pattern: string | string[] | SemanticPattern, handler: EventHandler<T>): Unsubscribe
+
+function on<T = any>(pattern: string | string[] | SemanticPattern, options: EventListenerOptions, handler: EventHandler<T>): Unsubscribe
+```
+
+### Parameters
+
+#### `pattern`
+
+**Type**: `string | string[] | SemanticPattern`
+
+The event pattern to subscribe to. Can be:
+
+- **Single event name**: `'Order.created'`
+- **Array of event names**: `['Order.created', 'Order.updated']`
+- **Wildcard pattern**: `'Order.*'` or `'*.created'` or `'*'`
+- **Semantic pattern**: `$.Order.created` (requires semantic `$` proxy)
+
+**Examples**:
+
+```typescript
+// Single event
+on('Order.created', handler)
+
+// Multiple events
+on(['Order.created', 'Order.updated'], handler)
+
+// Wildcard - all Order events
+on('Order.*', handler)
+
+// Wildcard - all created events
+on('*.created', handler)
+
+// All events
+on('*', handler)
+
+// Semantic pattern
+on($.Order.created, handler)
+```
+
+#### `options` (optional)
+
+**Type**: `EventListenerOptions`
+
+Configuration options for the event listener.
+
+```typescript
+interface EventListenerOptions {
+  // Filter function to selectively process events
+  filter?: (event: Event<T>) => boolean
+
+  // Maximum retry attempts for failed handlers
+  maxRetries?: number
+
+  // Retry delay in milliseconds
+  retryDelay?: number
+
+  // Handler timeout in milliseconds
+  timeout?: number
+
+  // Priority (higher priority handlers execute first)
+  priority?: number
+}
+```
+
+**Example**:
+
+```typescript
+on(
+  'Order.created',
+  {
+    filter: (event) => event.data.total > 1000,
+    maxRetries: 3,
+    retryDelay: 1000,
+    timeout: 5000,
+    priority: 10,
+  },
+  handler
+)
+```
+
+#### `handler`
+
+**Type**: `EventHandler<T>`
+
+The function to execute when an event matches the pattern.
+
+```typescript
+type EventHandler<T = any> = (event: Event<T>) => Promise<void> | void
+```
+
+**Parameters**:
+
+- `event` - The event object containing type, data, and metadata
+
+**Returns**: `Promise<void>` or `void`
+
+**Example**:
+
+```typescript
+async function handleOrderCreated(event: Event<Order>) {
+  console.log('Order created:', event.data.id)
+  await processOrder(event.data)
+}
+
+on('Order.created', handleOrderCreated)
+```
+
+### Returns
+
+**Type**: `Unsubscribe`
+
+A function that unsubscribes the event listener when called.
+
+```typescript
+type Unsubscribe = () => void
+```
+
+**Example**:
+
+```typescript
+const unsubscribe = on('Order.created', handler)
+
+// Later, unsubscribe
+unsubscribe()
+```
+
+## Types
+
+### Event\<T\>
+
+The event object passed to event handlers.
+
+```typescript
+interface Event<T = any> {
+  // Event type (e.g., 'Order.created')
+  type: string
+
+  // Event payload
+  data: T
+
+  // Event metadata
+  metadata?: EventMetadata
+}
+```
+
+**Properties**:
+
+- **`type`** (`string`): The event type in `Object.Action` format (e.g., `'Order.created'`)
+- **`data`** (`T`): The event payload containing business data
+- **`metadata`** (`EventMetadata` | `undefined`): Optional metadata about the event
+
+**Example**:
+
+```typescript
+{
+  type: 'Order.created',
+  data: {
+    id: '12345',
+    customer: { id: 'cust-1', name: 'Acme Corp' },
+    items: [
+      { product: 'widget', quantity: 10, price: 99.99 }
+    ],
+    total: 999.90
+  },
+  metadata: {
+    timestamp: new Date('2025-01-15T10:30:00Z'),
+    source: 'checkout-service',
+    correlationId: 'session-abc123',
+    userId: 'user-456'
+  }
+}
+```
+
+### EventMetadata
+
+Metadata about the event for tracing and debugging.
+
+```typescript
+interface EventMetadata {
+  // When the event was published
+  timestamp: Date
+
+  // Source system that published the event
+  source?: string
+
+  // Correlation ID for tracking related events
+  correlationId?: string
+
+  // ID of the event that caused this event
+  causationId?: string
+
+  // User ID of the user who triggered the event
+  userId?: string
+
+  // Additional custom metadata
+  [key: string]: any
+}
+```
+
+**Properties**:
+
+- **`timestamp`** (`Date`): When the event was published
+- **`source`** (`string` | `undefined`): Source system that published the event
+- **`correlationId`** (`string` | `undefined`): Correlation ID for tracking related events across workflows
+- **`causationId`** (`string` | `undefined`): ID of the event that caused this event
+- **`userId`** (`string` | `undefined`): User ID of the user who triggered the event
+
+### EventHandler\<T\>
+
+Type for event handler functions.
+
+```typescript
+type EventHandler<T = any> = (event: Event<T>) => Promise<void> | void
+```
+
+**Parameters**:
+
+- `event` - The event object
+
+**Returns**: `Promise<void>` or `void`
+
+**Example**:
+
+```typescript
+const handleOrder: EventHandler<Order> = async (event) => {
+  console.log('Order:', event.data.id)
+  await processOrder(event.data)
+}
+```
+
+### EventListenerOptions
+
+Configuration options for event listeners.
+
+```typescript
+interface EventListenerOptions {
+  // Filter function to selectively process events
+  filter?: (event: Event) => boolean
+
+  // Maximum retry attempts for failed handlers
+  maxRetries?: number
+
+  // Retry delay in milliseconds
+  retryDelay?: number
+
+  // Handler timeout in milliseconds
+  timeout?: number
+
+  // Priority (higher priority handlers execute first)
+  priority?: number
+}
+```
+
+**Properties**:
+
+- **`filter`** (`(event: Event) => boolean` | `undefined`): Function to filter events before calling handler
+- **`maxRetries`** (`number` | `undefined`): Maximum number of retry attempts for failed handlers (default: 0)
+- **`retryDelay`** (`number` | `undefined`): Delay in milliseconds between retries (default: 1000)
+- **`timeout`** (`number` | `undefined`): Handler timeout in milliseconds (default: no timeout)
+- **`priority`** (`number` | `undefined`): Handler priority (higher executes first, default: 0)
+
+### Unsubscribe
+
+Function returned by `on()` to unsubscribe the listener.
+
+```typescript
+type Unsubscribe = () => void
+```
+
+**Example**:
+
+```typescript
+const unsubscribe = on('Order.created', handler)
+
+// Unsubscribe when done
+unsubscribe()
+```
+
+### SemanticPattern
+
+Semantic pattern created using the `$` proxy.
+
+```typescript
+type SemanticPattern = {
+  $type: string
+  $action: string
+}
+```
+
+**Example**:
+
+```typescript
+import $ from 'sdk.do'
+
+// Creates a semantic pattern
+const pattern = $.Order.created
+
+// Use in on()
+on(pattern, handler)
+```
+
+## Usage Examples
+
+### Basic Event Listener
+
+```typescript
+import { on } from 'sdk.do'
+
+on('Order.created', async (event) => {
+  console.log('New order:', event.data.id)
+  await processOrder(event.data)
+})
+```
+
+### Multiple Events
+
+```typescript
+on(['Order.created', 'Order.updated'], async (event) => {
+  await syncToAnalytics(event)
+})
+```
+
+### Wildcard Patterns
+
+```typescript
+// All Order events
+on('Order.*', async (event) => {
+  await auditLog(event)
+})
+
+// All created events
+on('*.created', async (event) => {
+  await trackCreation(event)
+})
+
+// All events
+on('*', async (event) => {
+  await logEvent(event)
+})
+```
+
+### Event Filtering
+
+```typescript
+// Only high-value orders
+on(
+  'Order.created',
+  {
+    filter: (event) => event.data.total > 1000,
+  },
+  async (event) => {
+    await flagForReview(event.data)
+  }
+)
+```
+
+### Error Handling with Retries
+
+```typescript
+on(
+  'Order.created',
+  {
+    maxRetries: 3,
+    retryDelay: 1000,
+  },
+  async (event) => {
+    // Will retry up to 3 times on failure
+    await riskyOperation(event.data)
+  }
+)
+```
+
+### Handler with Timeout
+
+```typescript
+on(
+  'Order.created',
+  {
+    timeout: 5000, // 5 second timeout
+  },
+  async (event) => {
+    await processOrder(event.data)
+  }
+)
+```
+
+### Priority Handlers
+
+```typescript
+// High priority handler (executes first)
+on(
+  'Order.created',
+  {
+    priority: 10,
+  },
+  async (event) => {
+    await criticalProcessing(event.data)
+  }
+)
+
+// Normal priority handler (executes after)
+on('Order.created', async (event) => {
+  await normalProcessing(event.data)
+})
+```
+
+### Semantic Patterns
+
+```typescript
+import $, { on } from 'sdk.do'
+
+on($.Order.created, async (event) => {
+  console.log(`Order ${event.data.$id} created`)
+})
+
+on($.Payment.completed, async (event) => {
+  console.log(`Payment of $${event.data.amount} completed`)
+})
+```
+
+### Typed Event Handlers
+
+```typescript
+import type { Event, EventHandler } from 'sdk.do'
+
+interface Order {
+  id: string
+  customer: { id: string; name: string }
+  total: number
+}
+
+interface OrderCreatedEvent extends Event<Order> {
+  type: 'Order.created'
+}
+
+const handleOrder: EventHandler<OrderCreatedEvent> = async (event) => {
+  // TypeScript knows event.data is Order
+  console.log(`Order ${event.data.id}: $${event.data.total}`)
+}
+
+on('Order.created', handleOrder)
+```
+
+### Unsubscribing
+
+```typescript
+// Save unsubscribe function
+const unsubscribe = on('Order.created', handler)
+
+// Unsubscribe when done
+unsubscribe()
+
+// Or after a delay
+const unsubscribe = on('Order.created', handler)
+setTimeout(() => unsubscribe(), 60000) // Unsubscribe after 1 minute
+```
+
+### Using Metadata
+
+```typescript
+on('Order.created', async (event) => {
+  console.log('Event metadata:', {
+    timestamp: event.metadata.timestamp,
+    source: event.metadata.source,
+    correlationId: event.metadata.correlationId,
+    userId: event.metadata.userId,
+  })
+
+  // Pass correlation ID to next event
+  await send('Order.validated', event.data, {
+    correlationId: event.metadata.correlationId,
+  })
+})
+```
+
+## Error Handling
+
+### Try-Catch Pattern
+
+```typescript
+on('Order.created', async (event) => {
+  try {
+    await processOrder(event.data)
+  } catch (error) {
+    console.error('Failed to process order:', error)
+
+    // Publish error event
+    await send('Order.processingFailed', {
+      orderId: event.data.id,
+      error: error.message,
+    })
+  }
+})
+```
+
+### Automatic Retries
+
+```typescript
+on(
+  'Order.created',
+  {
+    maxRetries: 3,
+    retryDelay: 1000,
+  },
+  async (event) => {
+    // Automatically retries up to 3 times on failure
+    await processOrder(event.data)
+  }
+)
+```
+
+## Best Practices
+
+1. **Use semantic naming**: Follow `Object.Action` pattern for event names
+2. **Keep handlers focused**: Each handler should do one thing well
+3. **Handle errors gracefully**: Use try-catch and publish error events
+4. **Use TypeScript types**: Define event interfaces for type safety
+5. **Track correlations**: Use correlation IDs for related events
+6. **Test handlers**: Write tests for event handlers
+7. **Monitor performance**: Track slow handlers
+8. **Unsubscribe when done**: Clean up unused listeners
+
+## Related Functions
+
+- **[send](https://send.do)** - Publish events that listeners receive
+- **[every](https://every.do)** - Schedule periodic events
+- **[db](https://database.do)** - Database operations that can trigger events
+- **[ai](https://ai.do)** - AI processing in event handlers
+
+## See Also
+
+- [Getting Started](../docs/getting-started) - Setup and basic usage
+- [Event Patterns](../docs/patterns) - Common patterns
+- [Event Filtering](../docs/filtering) - Advanced filtering
+- [Examples](../examples/) - Real-world examples
+- [events.do](https://events.do) - Complete event system documentation
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

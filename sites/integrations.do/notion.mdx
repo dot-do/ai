@@ -1,0 +1,104 @@
+---
+$id: https://integrations.do/notion
+$type: Integration
+name: Notion
+service: notion
+description: Notion centralizes notes, docs, wikis, and tasks in a unified workspace, letting teams build custom workflows for collaboration and knowledge management
+category: productivity
+sdkBased: false
+baseUrl: https://api.notion.com
+
+auth:
+  type: oauth2
+  authorizationUrl: https://api.notion.com/v1/oauth/authorize
+  tokenUrl: https://api.notion.com/v1/oauth/token
+  scopes:
+    -
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Notion actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: true
+  verificationMethod: none
+  events:
+    - name: generic_trigger
+      type: trigger
+      description: Generic webhook trigger
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://www.notion.so
+  apiDocs: https://www.notion.so
+---
+
+# Notion Integration
+
+Notion centralizes notes, docs, wikis, and tasks in a unified workspace, letting teams build custom workflows for collaboration and knowledge management
+
+## Quick Start
+
+```typescript
+import { NotionClient } from '@dotdo/sdk.do/integrations/notion'
+
+const notion = new NotionClient({
+  apiKey: process.env.NOTION_API_KEY,
+})
+
+const result = await notion.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Notion provides 28 actions through the Composio API.
+
+## Webhooks
+
+Notion supports 5 webhook triggers for real-time event notifications.
+
+## License
+
+MIT

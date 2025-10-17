@@ -1,0 +1,265 @@
+# wikipedia.org.ai
+
+**Canonical entity references from Wikipedia** - Structured data extraction from Wikipedia articles using `dumpster-dive` and `wtf_wikipedia`.
+
+## Overview
+
+This package provides:
+- **Canonical URLs** for Wikipedia entities: `https://wikipedia.org.ai/EntityName`
+- **Structured data** extraction from Wikipedia articles (infoboxes, categories, links, etc.)
+- **Semantic references** for entities across the `.do` platform
+
+## Canonical Entity Pattern
+
+Instead of using raw Wikipedia URLs, we use `wikipedia.org.ai` as the canonical namespace:
+
+```typescript
+// ❌ Don't use raw Wikipedia URLs
+const anthropic = { $id: 'https://en.wikipedia.org/wiki/Anthropic' }
+
+// ✅ Use canonical wikipedia.org.ai URLs
+const anthropic = { $id: 'https://wikipedia.org/wiki/Anthropic' }
+```
+
+This provides:
+- **Consistency** - Same format across all entity references
+- **Permanence** - Our URLs don't change even if Wikipedia reorganizes
+- **Integration** - Works seamlessly with our semantic triple patterns
+
+## Installation
+
+```bash
+pnpm add wikipedia.org.ai
+```
+
+## Usage
+
+### Get Sample Articles
+
+```typescript
+import { articles, getArticle, searchArticles } from 'wikipedia.org.ai/data'
+
+// Get specific article
+const anthropic = getArticle('Anthropic')
+console.log(anthropic.$id) // https://wikipedia.org.ai/Anthropic
+console.log(anthropic.summary) // First paragraph
+
+// Search articles
+const aiArticles = searchArticles('artificial intelligence')
+```
+
+### Canonical Entity URLs
+
+```typescript
+import { getEntityUrl } from 'wikipedia.org.ai/data'
+
+// Generate canonical URLs
+const url = getEntityUrl('Anthropic')
+// https://wikipedia.org.ai/Anthropic
+
+// Use in semantic triples
+const company = {
+  $type: 'Organization',
+  $id: url,
+  name: 'Anthropic',
+  sameAs: {
+    $id: 'https://en.wikipedia.org/wiki/Anthropic',
+  },
+}
+```
+
+### With sdk.do
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Reference Wikipedia entities
+const anthropic = {
+  $type: $.Organization,
+  $id: 'https://wikipedia.org.ai/Anthropic',
+  name: 'Anthropic',
+}
+
+// Query relationships
+const founders = await db.related(anthropic, $.foundedBy, $.Person)
+```
+
+## Data Import
+
+### Sample Mode (Default)
+
+Import ~10 sample articles for testing:
+
+```bash
+pnpm import
+```
+
+This uses the Wikipedia MediaWiki API to fetch sample articles.
+
+### Full Mode (Production Pipeline)
+
+For the full Wikipedia dump, we need to setup Cloudflare infrastructure:
+
+```bash
+pnpm import:full  # Shows TODO requirements
+```
+
+**Requirements for full import:**
+1. **Cloudflare Containers** - Run `dumpster-dive` workers to process dumps
+2. **Cloudflare Pipelines** - Stream processed data
+3. **R2 Storage** - Store in Apache Iceberg format
+4. **R2 SQL** - Query structured data catalog
+
+See [Cloudflare Pipeline Setup](#cloudflare-pipeline-setup) below.
+
+## Data Structure
+
+### WikipediaArticle
+
+```typescript
+interface WikipediaArticle {
+  $type: 'WikipediaArticle'
+  $id: string // https://wikipedia.org.ai/PageTitle
+  title: string
+  pageId?: number
+  wikiUrl: string // Original Wikipedia URL
+  summary?: string // Lead paragraph
+  infobox?: Infobox // Structured data
+  categories?: Category[]
+  images?: Image[]
+  links?: Link[]
+  citations?: Citation[]
+  sameAs?: Ref[] // Wikidata, DBpedia, etc.
+}
+```
+
+### WikipediaEntity
+
+Canonical entity reference with extracted data:
+
+```typescript
+interface WikipediaEntity {
+  $type: string // Person, Organization, Place, etc.
+  $id: string // https://wikipedia.org.ai/EntityName
+  wikipediaArticle: string // Link to WikipediaArticle
+  wikiUrl: string
+  infobox?: Infobox
+  summary?: string
+  wikidataId?: string
+  dbpediaUri?: string
+}
+```
+
+## Cloudflare Pipeline Setup
+
+For production deployment with full Wikipedia data:
+
+### 1. **Download Wikipedia Dump**
+
+```bash
+# English Wikipedia (13GB compressed, ~60GB uncompressed)
+wget https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-pages-articles.xml.bz2
+```
+
+### 2. **Setup Cloudflare Containers**
+
+Create workers to process the dump using `dumpster-dive`:
+
+```typescript
+// workers/wikipedia-import/src/index.ts
+import { dumpsterDive } from 'dumpster-dive'
+
+export default {
+  async scheduled(event: ScheduledEvent, env: Env) {
+    // Process Wikipedia dump in chunks
+    await dumpsterDive({
+      file: env.WIKIPEDIA_DUMP,
+      output: env.WIKIPEDIA_PIPELINE,
+      workers: 8, // Parallel processing
+    })
+  },
+}
+```
+
+### 3. **Configure Pipelines**
+
+Setup Cloudflare Pipelines for streaming:
+
+```toml
+# wrangler.toml
+[[pipelines]]
+name = "wikipedia-structured-data"
+source = { binding = "WIKIPEDIA_DUMP" }
+destination = { r2_bucket = "wikipedia-catalog" }
+transform = "workers/wikipedia-transform"
+```
+
+### 4. **Apache Iceberg Schema**
+
+Define schema for R2 storage:
+
+```sql
+CREATE TABLE wikipedia.articles (
+  id STRING,
+  title STRING,
+  page_id INT,
+  summary STRING,
+  infobox STRUCT<type: STRING, data: MAP<STRING, STRING>>,
+  categories ARRAY<STRING>,
+  links ARRAY<STRING>,
+  last_modified TIMESTAMP
+)
+USING iceberg
+LOCATION 'r2://wikipedia-catalog/articles'
+PARTITIONED BY (days(last_modified))
+```
+
+### 5. **R2 SQL Catalog**
+
+Query the catalog:
+
+```sql
+-- Find all AI companies
+SELECT title, infobox.data
+FROM wikipedia.articles
+WHERE infobox.type = 'company'
+  AND array_contains(categories, 'Artificial intelligence companies')
+```
+
+## Issues to Create
+
+Create these GitHub issues for full implementation:
+
+1. **Setup Cloudflare Pipeline for Wikipedia ingestion**
+   - Configure containers for `dumpster-dive` workers
+   - Setup scheduled dump processing
+   - Configure streaming to R2
+
+2. **Apache Iceberg schema for Wikipedia structured data**
+   - Design table schema for articles
+   - Define partitioning strategy
+   - Setup catalog in R2
+
+3. **R2 SQL catalog for Wikipedia entities**
+   - Configure SQL access to Iceberg tables
+   - Create views for common queries
+   - Setup entity resolution
+
+## License
+
+MIT
+
+## Attribution
+
+This package uses data from Wikipedia, which is licensed under CC BY-SA 3.0.
+
+When using Wikipedia data, include attribution:
+> This page uses content from Wikipedia. The original article can be found at [URL]. Wikipedia content is licensed under CC BY-SA 3.0.
+
+## Resources
+
+- **Wikipedia Dumps**: https://dumps.wikimedia.org/
+- **dumpster-dive**: https://github.com/spencermountain/dumpster-dive
+- **wtf_wikipedia**: https://github.com/spencermountain/wtf_wikipedia
+- **Cloudflare Pipelines**: https://developers.cloudflare.com/pipelines/
+- **Apache Iceberg**: https://iceberg.apache.org/

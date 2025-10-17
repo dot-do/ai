@@ -1,0 +1,524 @@
+---
+$id: https://sdk.do/docs/quickstart
+$type: TechArticle
+title: Quick Start - Build Your First Business-as-Code App
+description: Build a complete Business-as-Code application in 5 minutes with sdk.do
+keywords: [quickstart, tutorial, example, business-as-code, semantic]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Quick Start
+
+Build a complete Business-as-Code application in 5 minutes using sdk.do.
+
+## What We'll Build
+
+A customer management system with:
+
+- Customer database with semantic types
+- AI-powered customer insights
+- Event-driven welcome emails
+- Daily reporting workflow
+
+## Prerequisites
+
+- Node.js 18+ installed
+- 5 minutes of your time
+
+## Step 1: Create Project (30 seconds)
+
+```bash
+mkdir customer-app
+cd customer-app
+pnpm init
+pnpm add sdk.do schema.org.ai tsx
+```
+
+## Step 2: Configure Environment (30 seconds)
+
+Create `.env`:
+
+```bash
+SDK_DATABASE_URL=postgres://user:pass@localhost:5432/customers
+SDK_OPENAI_API_KEY=sk-your-api-key-here
+SDK_AI_MODEL=gpt-5
+```
+
+## Step 3: Write Application Code (2 minutes)
+
+Create `index.ts`:
+
+```typescript
+import $, { db, ai, on, send, every } from 'sdk.do'
+
+// ============================================
+// 1. Database Operations
+// ============================================
+
+async function createCustomer(name: string, email: string) {
+  const customer = await db.create($.Customer, {
+    name,
+    email,
+    dateCreated: new Date().toISOString(),
+    customerStatus: 'Active',
+  })
+
+  console.log('✓ Created customer:', customer.$id)
+
+  // Trigger welcome event
+  send($.Customer.created, customer)
+
+  return customer
+}
+
+async function listCustomers() {
+  const customers = await db.list($.Customer, {
+    where: { customerStatus: 'Active' },
+    limit: 100,
+  })
+
+  console.log(`✓ Found ${customers.length} active customers`)
+  return customers
+}
+
+// ============================================
+// 2. AI-Powered Insights
+// ============================================
+
+async function analyzeCustomer(customer: any) {
+  const insights = await ai.generate(
+    `Analyze this customer and provide business insights:
+     Name: ${customer.name}
+     Email: ${customer.email}
+     Status: ${customer.customerStatus}
+
+     Provide: segment, value tier, engagement recommendations`,
+    { schema: $.AnalysisReport }
+  )
+
+  console.log('✓ Generated insights:', insights)
+
+  // Update customer with AI insights
+  await db.update(customer, {
+    segment: insights.segment,
+    valueTier: insights.valueTier,
+  })
+
+  return insights
+}
+
+// ============================================
+// 3. Event Handlers
+// ============================================
+
+// Welcome new customers
+on($.Customer.created, async (customer) => {
+  console.log('→ New customer event:', customer.name)
+
+  // Generate personalized welcome message
+  const welcomeMessage = await ai.generate(`Write a personalized welcome email for ${customer.name}`)
+
+  // Send welcome email event
+  send($.Email.send, {
+    to: customer.email,
+    subject: `Welcome, ${customer.name}!`,
+    body: welcomeMessage,
+  })
+
+  console.log('✓ Sent welcome email to:', customer.email)
+})
+
+// Handle email sending
+on($.Email.send, async (email) => {
+  console.log('→ Email queued:', email.to)
+  // In production, integrate with email service (SendGrid, etc.)
+  console.log('✓ Email sent:', email.subject)
+})
+
+// ============================================
+// 4. Scheduled Workflows
+// ============================================
+
+// Daily customer report
+every($.Daily, async () => {
+  console.log('→ Running daily report...')
+
+  const customers = await listCustomers()
+
+  // Calculate metrics
+  const newToday = customers.filter((c) => {
+    const created = new Date(c.dateCreated)
+    const today = new Date()
+    return created.toDateString() === today.toDateString()
+  })
+
+  console.log(`
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    📊 DAILY CUSTOMER REPORT
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    Total Active: ${customers.length}
+    New Today: ${newToday.length}
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  `)
+})
+
+// ============================================
+// 5. Main Application
+// ============================================
+
+async function main() {
+  console.log('\n🚀 Starting Customer Management System...\n')
+
+  // Create sample customers
+  console.log('Creating customers...')
+  const alice = await createCustomer('Alice Johnson', 'alice@example.com')
+  const bob = await createCustomer('Bob Smith', 'bob@example.com')
+  const carol = await createCustomer('Carol Williams', 'carol@example.com')
+
+  console.log('\n─────────────────────────────────\n')
+
+  // Generate AI insights
+  console.log('Generating AI insights...')
+  await analyzeCustomer(alice)
+  await analyzeCustomer(bob)
+
+  console.log('\n─────────────────────────────────\n')
+
+  // List all customers
+  const allCustomers = await listCustomers()
+
+  console.log('\n─────────────────────────────────\n')
+
+  // Create customer relationships
+  console.log('Creating customer relationships...')
+
+  const organization = await db.create($.Organization, {
+    name: 'Acme Corporation',
+    industry: 'Technology',
+  })
+
+  await db.relate(alice, $.memberOf, organization)
+  console.log('✓ Associated Alice with Acme Corporation')
+
+  // Query relationships
+  const orgMembers = await db.related(organization, $.member, $.Person)
+  console.log(`✓ Organization has ${orgMembers.length} members`)
+
+  console.log('\n─────────────────────────────────\n')
+
+  // Batch AI processing
+  console.log('Batch processing customer insights...')
+  const batchResults = await ai.batch(
+    allCustomers.slice(0, 3).map((customer) => ({
+      prompt: `Generate a one-line insight for customer: ${customer.name}`,
+    }))
+  )
+
+  batchResults.forEach((result, i) => {
+    console.log(`✓ ${allCustomers[i].name}: ${result}`)
+  })
+
+  console.log('\n✅ Customer Management System Ready!\n')
+}
+
+// Run the application
+main().catch((error) => {
+  console.error('❌ Error:', error)
+  process.exit(1)
+})
+```
+
+## Step 4: Run Application (30 seconds)
+
+```bash
+tsx index.ts
+```
+
+## Expected Output
+
+```
+🚀 Starting Customer Management System...
+
+Creating customers...
+✓ Created customer: customer-abc123
+→ New customer event: Alice Johnson
+✓ Sent welcome email to: alice@example.com
+✓ Created customer: customer-def456
+→ New customer event: Bob Smith
+✓ Sent welcome email to: bob@example.com
+✓ Created customer: customer-ghi789
+→ New customer event: Carol Williams
+✓ Sent welcome email to: carol@example.com
+
+─────────────────────────────────
+
+Generating AI insights...
+✓ Generated insights: { segment: 'Enterprise', valueTier: 'High', ... }
+✓ Generated insights: { segment: 'SMB', valueTier: 'Medium', ... }
+
+─────────────────────────────────
+
+✓ Found 3 active customers
+
+─────────────────────────────────
+
+Creating customer relationships...
+✓ Associated Alice with Acme Corporation
+✓ Organization has 1 members
+
+─────────────────────────────────
+
+Batch processing customer insights...
+✓ Alice Johnson: High-value enterprise customer with strong engagement
+✓ Bob Smith: Growing SMB customer with expansion potential
+✓ Carol Williams: New customer in onboarding phase
+
+✅ Customer Management System Ready!
+```
+
+## What Just Happened?
+
+### 1. Semantic Database Operations
+
+```typescript
+// Created customers with Schema.org types
+const customer = await db.create($.Customer, {
+  name: 'Alice Johnson',
+  email: 'alice@example.com',
+})
+
+// Listed customers with filters
+const customers = await db.list($.Customer, {
+  where: { customerStatus: 'Active' },
+})
+```
+
+### 2. AI-Powered Insights
+
+```typescript
+// Generated structured insights with schema
+const insights = await ai.generate(prompt, {
+  schema: $.AnalysisReport
+})
+
+// Batch processed for 50% cost savings
+const results = await ai.batch([...])
+```
+
+### 3. Event-Driven Architecture
+
+```typescript
+// Published events
+send($.Customer.created, customer)
+
+// Listened to events
+on($.Customer.created, async (customer) => {
+  // Handle event
+})
+```
+
+### 4. Scheduled Workflows
+
+```typescript
+// Daily reports
+every($.Daily, async () => {
+  await generateReport()
+})
+```
+
+### 5. Semantic Relationships
+
+```typescript
+// Created relationships
+await db.relate(person, $.memberOf, organization)
+
+// Queried relationships
+const members = await db.related(org, $.member, $.Person)
+```
+
+## Next Steps
+
+### Add More Features
+
+**Customer Search**:
+
+```typescript
+import { ai } from 'sdk.do'
+
+async function searchCustomers(query: string) {
+  const embedding = await ai.embed(query)
+
+  const results = await db.list($.Customer, {
+    where: {
+      $semantic: {
+        embedding,
+        threshold: 0.8,
+      },
+    },
+  })
+
+  return results
+}
+```
+
+**Customer Segmentation**:
+
+```typescript
+async function segmentCustomers() {
+  const segments = {
+    enterprise: [],
+    smb: [],
+    individual: [],
+  }
+
+  const customers = await db.list($.Customer)
+
+  for (const customer of customers) {
+    const segment = await ai.generate(`Classify customer segment: ${customer.name}`, { schema: { type: 'string', enum: ['enterprise', 'smb', 'individual'] } })
+
+    segments[segment].push(customer)
+  }
+
+  return segments
+}
+```
+
+**Customer Lifecycle Events**:
+
+```typescript
+// Listen for lifecycle events
+on($.Customer.upgraded, async (customer) => {
+  console.log('Customer upgraded:', customer.name)
+  send($.Email.send, {
+    to: customer.email,
+    template: 'upgrade-confirmation',
+  })
+})
+
+on($.Customer.churned, async (customer) => {
+  console.log('Customer churned:', customer.name)
+  send($.Task.create, {
+    title: 'Win-back campaign',
+    description: `Reach out to ${customer.name}`,
+  })
+})
+```
+
+## Learn More
+
+Explore these guides to deepen your knowledge:
+
+- **[Getting Started](./getting-started)** - Comprehensive setup guide
+- **[API Reference](./api-reference)** - Complete API documentation
+- **[Database Examples](../examples/database)** - Advanced database patterns
+- **[Event Examples](../examples/events)** - Event-driven architectures
+- **[AI Examples](../examples/ai-generation)** - AI integration patterns
+- **[Workflow Examples](../examples/workflows)** - Workflow orchestration
+
+## Real-World Examples
+
+### E-commerce Order Processing
+
+```typescript
+import $, { db, ai, on, send } from 'sdk.do'
+
+on($.Order.created, async (order) => {
+  // Validate order with AI
+  const validation = await ai.generate(`Validate order for fraud: ${JSON.stringify(order)}`, { schema: { isValid: 'boolean', reason: 'string' } })
+
+  if (validation.isValid) {
+    send($.Order.approved, order)
+  } else {
+    send($.Order.flagged, { ...order, reason: validation.reason })
+  }
+})
+
+on($.Order.approved, async (order) => {
+  // Process payment
+  send($.Payment.process, { orderId: order.$id, amount: order.total })
+
+  // Update inventory
+  for (const item of order.items) {
+    const product = await db.get($.Product, item.productId)
+    await db.update(product, {
+      inventory: product.inventory - item.quantity,
+    })
+  }
+
+  // Send confirmation
+  send($.Email.send, {
+    to: order.customerEmail,
+    template: 'order-confirmation',
+    data: order,
+  })
+})
+```
+
+### Content Publishing Workflow
+
+```typescript
+import $, { db, ai, on, every } from 'sdk.do'
+
+on($.Article.drafted, async (article) => {
+  // AI content review
+  const review = await ai.generate(`Review article for quality, SEO, and readability: ${article.content}`, { schema: $.ReviewReport })
+
+  await db.update(article, {
+    reviewScore: review.score,
+    suggestions: review.suggestions,
+  })
+
+  if (review.score >= 8) {
+    send($.Article.readyForPublish, article)
+  } else {
+    send($.Article.needsRevision, article)
+  }
+})
+
+every($.Daily, async () => {
+  // Auto-publish scheduled articles
+  const scheduled = await db.list($.Article, {
+    where: {
+      status: 'scheduled',
+      publishDate: { $lte: new Date() },
+    },
+  })
+
+  for (const article of scheduled) {
+    await db.update(article, { status: 'published' })
+    send($.Article.published, article)
+  }
+})
+```
+
+## Production Checklist
+
+Before deploying to production:
+
+- [ ] Set environment variables securely
+- [ ] Configure database connection pooling
+- [ ] Implement error handling and retries
+- [ ] Add logging and monitoring
+- [ ] Set up rate limiting for AI calls
+- [ ] Configure batch processing for cost savings
+- [ ] Add authentication and authorization
+- [ ] Set up database backups
+- [ ] Configure CORS and security headers
+- [ ] Test event handlers thoroughly
+
+## Support
+
+Need help?
+
+- **Documentation**: [sdk.do](https://sdk.do)
+- **Examples**: [sdk.do/examples](https://sdk.do/examples)
+- **API Reference**: [sdk.do/api](https://sdk.do/api)
+- **GitHub**: [github.com/dot-do/ai](https://github.com/dot-do/ai)
+
+---
+
+Congratulations! You've built your first Business-as-Code application with sdk.do.
+
+Continue to [API Reference](./api-reference) to explore all available functions.

@@ -1,0 +1,127 @@
+---
+$id: https://bdr.do/examples/real-world-use-case
+$type: TechArticle
+title: BDR Real-World Use Case
+description: Real-world use case for BDR agents
+keywords: [BDR, real-world, use case, partnerships, production]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Real-World Use Case
+
+Production implementation of BDR agents for a SaaS company building strategic partnerships.
+
+## Scenario
+
+A B2B SaaS company needs to build 10 strategic partnerships per year to expand into new markets and increase revenue by $2M annually.
+
+## Implementation
+
+### 1. Create BDR Team
+
+```typescript
+import { $, bdr } from 'sdk.do'
+
+const bdTeam = await Promise.all([
+  bdr.create({
+    name: 'Alex Morgan',
+    focus: { verticals: ['FinTech'], partnershipTypes: ['Strategic Alliances'] },
+    quota: { partnershipsSignedPerYear: 10, revenueFromPartners: 2000000 },
+    model: 'claude-sonnet-4.5',
+  }),
+  bdr.create({
+    name: 'Jamie Chen',
+    focus: { verticals: ['Healthcare'], partnershipTypes: ['Integration Partners'] },
+    quota: { partnershipsSignedPerYear: 8, revenueFromPartners: 1500000 },
+    model: 'gpt-5',
+  }),
+])
+```
+
+### 2. Automated Opportunity Pipeline
+
+```typescript
+import { $, bdr, on, every } from 'sdk.do'
+
+// Weekly opportunity identification
+every($.Weekly, async () => {
+  for (const agent of bdTeam) {
+    const opportunities = await agent.identifyOpportunities({
+      criteria: agent.focus,
+      limit: 5,
+    })
+
+    for (const opp of opportunities) {
+      await send($.Partnership.opportunity_identified, { agent, opportunity: opp })
+    }
+  }
+})
+
+// Automated research and outreach
+on($.Partnership.opportunity_identified, async (event) => {
+  const { agent, opportunity } = event
+  await agent.researchPartner(opportunity.company)
+  await agent.createOutreachStrategy(opportunity)
+})
+```
+
+### 3. Partnership Development Workflow
+
+```typescript
+async function developPartnershipWorkflow(agent, opportunity) {
+  // Stage 1: Research (Week 1-2)
+  const research = await agent.researchPartner(opportunity.company)
+  const stakeholders = await agent.mapStakeholders(opportunity.company)
+
+  // Stage 2: Initial Outreach (Week 3-4)
+  await agent.createPersonalizedOutreach({ stakeholders, research })
+
+  // Stage 3: Qualification (Week 5-8)
+  const qualified = await agent.qualifyOpportunity(opportunity)
+  if (!qualified) return
+
+  // Stage 4: Proposal (Week 9-12)
+  const proposal = await agent.createProposal(opportunity)
+  await agent.sendProposal(proposal)
+
+  // Stage 5: Negotiation (Week 13-16)
+  const negotiation = await agent.manageNegotiation(proposal)
+
+  // Stage 6: Close (Week 17-20)
+  return await agent.closePartnership(negotiation)
+}
+```
+
+### 4. Performance Monitoring
+
+```typescript
+import { $, bdr, db } from 'sdk.do'
+
+// Daily health checks
+every($.Daily, async () => {
+  for (const agent of bdTeam) {
+    const metrics = await agent.getMetrics({ period: 'last_30_days' })
+
+    if (metrics.partnerships.pipelineValue < agent.quota.pipelineValue * 0.5) {
+      await send($.Alert.created, {
+        severity: 'warning',
+        message: `${agent.name} pipeline below target`,
+        action: 'increase_prospecting',
+      })
+    }
+  }
+})
+```
+
+## Results
+
+- **10 strategic partnerships** closed in first year
+- **$2.1M revenue** from partner channel
+- **65% win rate** on qualified opportunities
+- **90 days average** time to close
+
+## License
+
+MIT (Open Source)

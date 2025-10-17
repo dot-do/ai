@@ -1,0 +1,830 @@
+---
+$id: https://user.do/docs/authentication
+$type: TechArticle
+title: User Authentication
+description: Authentication patterns and user management in the .do platform
+keywords: [authentication, login, logout, session, oauth, jwt, magic-link]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Authentication
+
+Learn how to implement user authentication in your Business-as-Code applications.
+
+## Overview
+
+user.do provides flexible authentication patterns that work with multiple authentication providers while maintaining a consistent API for checking authentication state and accessing user context.
+
+## Authentication Methods
+
+### OAuth 2.0
+
+OAuth 2.0 is the recommended authentication method for most applications. It provides secure, delegated authentication with third-party providers.
+
+#### Configuration
+
+```bash
+# .env
+AUTH_PROVIDER=oauth
+AUTH_DOMAIN=auth.example.com
+OAUTH_CLIENT_ID=your-client-id
+OAUTH_CLIENT_SECRET=your-client-secret
+OAUTH_REDIRECT_URI=https://app.example.com/auth/callback
+```
+
+#### Implementation
+
+```typescript
+import { user } from 'sdk.do'
+
+// Initiate OAuth login
+export async function loginWithOAuth() {
+  const authUrl = await user.login({
+    provider: 'oauth',
+    redirectUri: 'https://app.example.com/auth/callback',
+  })
+
+  // Redirect user to OAuth provider
+  return Response.redirect(authUrl)
+}
+
+// Handle OAuth callback
+export async function handleOAuthCallback(code: string) {
+  try {
+    // Exchange code for user session
+    const session = await user.authenticateOAuth(code)
+
+    // Get authenticated user
+    const currentUser = await user.current()
+
+    return {
+      success: true,
+      user: currentUser,
+      session,
+    }
+  } catch (error) {
+    console.error('OAuth authentication failed:', error)
+    throw error
+  }
+}
+```
+
+#### Supported OAuth Providers
+
+```typescript
+// Google OAuth
+await user.login({
+  provider: 'google',
+  redirectUri: '/auth/callback',
+})
+
+// GitHub OAuth
+await user.login({
+  provider: 'github',
+  redirectUri: '/auth/callback',
+})
+
+// Microsoft OAuth
+await user.login({
+  provider: 'microsoft',
+  redirectUri: '/auth/callback',
+})
+
+// Custom OAuth provider
+await user.login({
+  provider: 'custom',
+  authUrl: 'https://oauth.example.com/authorize',
+  tokenUrl: 'https://oauth.example.com/token',
+  redirectUri: '/auth/callback',
+})
+```
+
+### Email and Password
+
+Traditional email and password authentication for simple use cases.
+
+#### Configuration
+
+```bash
+# .env
+AUTH_PROVIDER=local
+PASSWORD_MIN_LENGTH=8
+PASSWORD_REQUIRE_SPECIAL=true
+PASSWORD_REQUIRE_NUMBER=true
+```
+
+#### Implementation
+
+```typescript
+import { user, db, $ } from 'sdk.do'
+
+// Register new user
+export async function register(email: string, password: string, name: string) {
+  // Validate password requirements
+  if (password.length < 8) {
+    throw new Error('Password must be at least 8 characters')
+  }
+
+  // Hash password
+  const hashedPassword = await hashPassword(password)
+
+  // Create user
+  const newUser = await db.create($.Person, {
+    email,
+    name,
+    password: hashedPassword,
+    createdAt: new Date(),
+  })
+
+  // Create session
+  const session = await user.createSession(newUser.$id)
+
+  return { user: newUser, session }
+}
+
+// Login with email and password
+export async function login(email: string, password: string) {
+  try {
+    // Authenticate user
+    await user.login({
+      email,
+      password,
+    })
+
+    // Get authenticated user
+    const currentUser = await user.current()
+
+    return { success: true, user: currentUser }
+  } catch (error) {
+    console.error('Login failed:', error)
+    throw new Error('Invalid email or password')
+  }
+}
+
+// Helper function to hash password
+async function hashPassword(password: string): Promise<string> {
+  // Use bcrypt, argon2, or similar
+  // Example placeholder:
+  return `hashed:${password}`
+}
+```
+
+### Magic Link
+
+Passwordless authentication via email magic links.
+
+#### Configuration
+
+```bash
+# .env
+AUTH_PROVIDER=magic-link
+MAGIC_LINK_EXPIRY=600000  # 10 minutes
+EMAIL_FROM=noreply@example.com
+```
+
+#### Implementation
+
+```typescript
+import { user, send } from 'sdk.do'
+
+// Send magic link
+export async function sendMagicLink(email: string) {
+  try {
+    // Generate magic link
+    const magicLink = await user.sendMagicLink({
+      email,
+      redirectUri: 'https://app.example.com/auth/verify',
+    })
+
+    // Send email with magic link
+    await send($.Email.sent, {
+      to: email,
+      from: 'noreply@example.com',
+      subject: 'Login to Your Account',
+      html: `
+        <h1>Login to Your Account</h1>
+        <p>Click the link below to login:</p>
+        <a href="${magicLink.url}">Login</a>
+        <p>This link expires in 10 minutes.</p>
+      `,
+    })
+
+    return { success: true, message: 'Magic link sent to your email' }
+  } catch (error) {
+    console.error('Failed to send magic link:', error)
+    throw error
+  }
+}
+
+// Verify magic link token
+export async function verifyMagicLink(token: string) {
+  try {
+    // Verify token and create session
+    const session = await user.verifyMagicLink(token)
+
+    // Get authenticated user
+    const currentUser = await user.current()
+
+    return {
+      success: true,
+      user: currentUser,
+      session,
+    }
+  } catch (error) {
+    console.error('Magic link verification failed:', error)
+    throw new Error('Invalid or expired magic link')
+  }
+}
+```
+
+### JSON Web Tokens (JWT)
+
+JWT-based authentication for stateless sessions.
+
+#### Configuration
+
+```bash
+# .env
+AUTH_PROVIDER=jwt
+JWT_SECRET=your-jwt-secret-key
+JWT_ALGORITHM=HS256
+JWT_EXPIRES_IN=24h
+JWT_ISSUER=https://api.example.com
+```
+
+#### Implementation
+
+```typescript
+import { user } from 'sdk.do'
+
+// Generate JWT for user
+export async function generateToken(userId: string) {
+  const token = await user.generateJWT({
+    userId,
+    expiresIn: '24h',
+    claims: {
+      iss: 'https://api.example.com',
+      aud: 'https://app.example.com',
+    },
+  })
+
+  return token
+}
+
+// Verify JWT token
+export async function verifyToken(token: string) {
+  try {
+    const decoded = await user.verifyJWT(token)
+
+    return {
+      valid: true,
+      userId: decoded.userId,
+      claims: decoded,
+    }
+  } catch (error) {
+    return {
+      valid: false,
+      error: error.message,
+    }
+  }
+}
+
+// Authenticate with JWT
+export async function authenticateWithJWT(request: Request) {
+  const authHeader = request.headers.get('Authorization')
+  const token = authHeader?.replace('Bearer ', '')
+
+  if (!token) {
+    throw new Error('No token provided')
+  }
+
+  // Verify and authenticate
+  await user.authenticateJWT(token)
+
+  // Get authenticated user
+  const currentUser = await user.current()
+
+  return currentUser
+}
+```
+
+### API Key
+
+API key authentication for service-to-service communication.
+
+#### Configuration
+
+```bash
+# .env
+AUTH_PROVIDER=api-key
+API_KEY_PREFIX=sk_
+API_KEY_LENGTH=32
+```
+
+#### Implementation
+
+```typescript
+import { user, db, $ } from 'sdk.do'
+
+// Generate API key for user
+export async function createApiKey(userId: string, name: string) {
+  const apiKey = await user.generateApiKey({
+    userId,
+    name,
+    scopes: ['read', 'write'],
+  })
+
+  // Store API key
+  await db.create($.ApiKey, {
+    key: apiKey.key,
+    userId,
+    name,
+    scopes: apiKey.scopes,
+    createdAt: new Date(),
+  })
+
+  return apiKey
+}
+
+// Authenticate with API key
+export async function authenticateApiKey(apiKey: string) {
+  try {
+    // Verify API key
+    await user.authenticateApiKey(apiKey)
+
+    // Get authenticated user
+    const currentUser = await user.current()
+
+    return { success: true, user: currentUser }
+  } catch (error) {
+    console.error('API key authentication failed:', error)
+    throw new Error('Invalid API key')
+  }
+}
+
+// Revoke API key
+export async function revokeApiKey(apiKey: string) {
+  await user.revokeApiKey(apiKey)
+
+  return { success: true, message: 'API key revoked' }
+}
+```
+
+## Session Management
+
+### Create Session
+
+Create a new user session after successful authentication:
+
+```typescript
+import { user } from 'sdk.do'
+
+// Create session
+const session = await user.createSession(userId, {
+  duration: 86400000, // 24 hours
+  metadata: {
+    device: 'Desktop',
+    browser: 'Chrome',
+    ip: '192.168.1.1',
+  },
+})
+
+console.log(session)
+// {
+//   id: "session_abc123",
+//   userId: "user_123",
+//   createdAt: "2025-10-10T12:00:00Z",
+//   expiresAt: "2025-10-11T12:00:00Z",
+//   isActive: true,
+//   metadata: { ... }
+// }
+```
+
+### Get Session
+
+Retrieve current session details:
+
+```typescript
+import { user } from 'sdk.do'
+
+// Get session
+const session = await user.session()
+
+console.log(session.id)
+console.log(session.expiresAt)
+console.log(session.isActive)
+```
+
+### Refresh Session
+
+Extend session expiration:
+
+```typescript
+import { user } from 'sdk.do'
+
+// Refresh session
+await user.refreshSession()
+
+// Get updated session
+const session = await user.session()
+console.log('New expiration:', session.expiresAt)
+```
+
+### End Session
+
+Logout and terminate session:
+
+```typescript
+import { user } from 'sdk.do'
+
+// End session (logout)
+await user.endSession()
+
+// Verify logout
+const isAuthenticated = await user.isAuthenticated()
+console.log(isAuthenticated) // false
+```
+
+### Session Middleware
+
+Implement session management middleware:
+
+```typescript
+import { user } from 'sdk.do'
+
+export async function sessionMiddleware(request: Request, next: Function) {
+  try {
+    // Check if session exists and is active
+    const session = await user.session()
+
+    if (!session.isActive) {
+      // Session expired, redirect to login
+      return Response.redirect('/login')
+    }
+
+    // Refresh session if close to expiration (< 1 hour remaining)
+    const timeRemaining = new Date(session.expiresAt).getTime() - Date.now()
+    if (timeRemaining < 3600000) {
+      await user.refreshSession()
+    }
+
+    // Proceed to next middleware
+    return await next(request)
+  } catch (error) {
+    // No active session, redirect to login
+    return Response.redirect('/login')
+  }
+}
+```
+
+## User Context Provider
+
+Configure how user context is extracted from requests:
+
+### HTTP Request Context
+
+```typescript
+import { user, db, $ } from 'sdk.do'
+
+// Set provider for HTTP requests
+user.setProvider(async (context) => {
+  // Extract token from Authorization header
+  const authHeader = context.headers.get('Authorization')
+  const token = authHeader?.replace('Bearer ', '')
+
+  if (!token) {
+    return null // No authenticated user
+  }
+
+  try {
+    // Verify JWT token
+    const decoded = await verifyJWT(token)
+
+    // Get user from database
+    const currentUser = await db.get($.Person, decoded.userId)
+
+    return currentUser
+  } catch (error) {
+    console.error('Invalid token:', error)
+    return null
+  }
+})
+```
+
+### Cookie-Based Sessions
+
+```typescript
+import { user, db, $ } from 'sdk.do'
+
+// Set provider for cookie sessions
+user.setProvider(async (context) => {
+  // Extract session ID from cookie
+  const cookies = context.headers.get('Cookie')
+  const sessionId = parseCookie(cookies, 'session_id')
+
+  if (!sessionId) {
+    return null
+  }
+
+  try {
+    // Get session from database
+    const session = await db.get($.Session, sessionId)
+
+    if (!session.isActive || new Date(session.expiresAt) < new Date()) {
+      return null // Session expired
+    }
+
+    // Get user from session
+    const currentUser = await db.get($.Person, session.userId)
+
+    return currentUser
+  } catch (error) {
+    console.error('Invalid session:', error)
+    return null
+  }
+})
+```
+
+## Authentication State
+
+### Check Authentication
+
+```typescript
+import { user } from 'sdk.do'
+
+// Check if user is authenticated
+if (await user.isAuthenticated()) {
+  console.log('User is logged in')
+} else {
+  console.log('User is not logged in')
+}
+```
+
+### Get Current User
+
+```typescript
+import { user } from 'sdk.do'
+
+try {
+  // Get authenticated user
+  const currentUser = await user.current()
+  console.log(`Logged in as: ${currentUser.name}`)
+} catch (error) {
+  if (error.code === 'UNAUTHENTICATED') {
+    console.log('No user is logged in')
+  }
+}
+```
+
+### Require Authentication
+
+```typescript
+import { user } from 'sdk.do'
+
+// Require authentication
+export async function requireAuth() {
+  if (!(await user.isAuthenticated())) {
+    throw new Error('Authentication required')
+  }
+
+  return await user.current()
+}
+
+// Usage
+export async function protectedEndpoint() {
+  const currentUser = await requireAuth()
+  // Proceed with authenticated logic
+}
+```
+
+## Multi-Factor Authentication
+
+### Setup MFA
+
+```typescript
+import { user } from 'sdk.do'
+
+// Enable MFA for user
+export async function enableMFA(userId: string) {
+  const mfaSetup = await user.setupMFA(userId, {
+    method: 'totp', // Time-based One-Time Password
+    issuer: 'MyApp',
+  })
+
+  return {
+    secret: mfaSetup.secret,
+    qrCode: mfaSetup.qrCode,
+    backupCodes: mfaSetup.backupCodes,
+  }
+}
+```
+
+### Verify MFA
+
+```typescript
+import { user } from 'sdk.do'
+
+// Verify MFA code during login
+export async function loginWithMFA(email: string, password: string, mfaCode: string) {
+  // First, authenticate with email/password
+  await user.login({ email, password })
+
+  // Then verify MFA code
+  const verified = await user.verifyMFA(mfaCode)
+
+  if (!verified) {
+    throw new Error('Invalid MFA code')
+  }
+
+  // Get authenticated user
+  const currentUser = await user.current()
+
+  return { success: true, user: currentUser }
+}
+```
+
+## Best Practices
+
+### 1. Always Use HTTPS
+
+Never transmit credentials over unencrypted connections:
+
+```typescript
+// Good: HTTPS required
+if (request.url.protocol !== 'https:') {
+  throw new Error('HTTPS required')
+}
+
+// Proceed with authentication
+await user.login({ email, password })
+```
+
+### 2. Implement Rate Limiting
+
+Prevent brute force attacks with rate limiting:
+
+```typescript
+const loginAttempts = new Map<string, number>()
+
+export async function rateLimitedLogin(email: string, password: string) {
+  const attempts = loginAttempts.get(email) || 0
+
+  if (attempts >= 5) {
+    throw new Error('Too many login attempts. Try again in 15 minutes.')
+  }
+
+  try {
+    await user.login({ email, password })
+    loginAttempts.delete(email) // Reset on success
+  } catch (error) {
+    loginAttempts.set(email, attempts + 1)
+    throw error
+  }
+}
+```
+
+### 3. Use Secure Session Storage
+
+Store sessions securely with encryption:
+
+```typescript
+import { user } from 'sdk.do'
+
+// Configure secure session storage
+user.configureSession({
+  secret: process.env.SESSION_SECRET,
+  secure: true, // HTTPS only
+  httpOnly: true, // Prevent JavaScript access
+  sameSite: 'strict', // CSRF protection
+  maxAge: 86400000, // 24 hours
+})
+```
+
+### 4. Handle Token Expiration
+
+Gracefully handle expired tokens:
+
+```typescript
+import { user } from 'sdk.do'
+
+export async function handleRequest(request: Request) {
+  try {
+    await user.authenticateJWT(getToken(request))
+    const currentUser = await user.current()
+    return processRequest(currentUser)
+  } catch (error) {
+    if (error.code === 'TOKEN_EXPIRED') {
+      // Attempt to refresh token
+      const newToken = await user.refreshToken()
+      return Response.json({ token: newToken })
+    }
+    throw error
+  }
+}
+```
+
+### 5. Log Authentication Events
+
+Track authentication for security auditing:
+
+```typescript
+import { user, db, $ } from 'sdk.do'
+
+export async function login(email: string, password: string) {
+  try {
+    await user.login({ email, password })
+    const currentUser = await user.current()
+
+    // Log successful login
+    await db.create($.AuthLog, {
+      userId: currentUser.$id,
+      event: 'login',
+      success: true,
+      timestamp: new Date(),
+      ip: getClientIP(),
+    })
+
+    return { success: true, user: currentUser }
+  } catch (error) {
+    // Log failed login
+    await db.create($.AuthLog, {
+      email,
+      event: 'login',
+      success: false,
+      reason: error.message,
+      timestamp: new Date(),
+      ip: getClientIP(),
+    })
+
+    throw error
+  }
+}
+```
+
+## Security Considerations
+
+### Password Hashing
+
+Always hash passwords before storing:
+
+```typescript
+import bcrypt from 'bcrypt'
+
+// Hash password
+const hashedPassword = await bcrypt.hash(password, 10)
+
+// Verify password
+const isValid = await bcrypt.compare(password, hashedPassword)
+```
+
+### CSRF Protection
+
+Implement CSRF tokens for state-changing requests:
+
+```typescript
+import { user } from 'sdk.do'
+
+// Generate CSRF token
+const csrfToken = await user.generateCSRFToken()
+
+// Verify CSRF token
+export async function protectedAction(request: Request) {
+  const token = request.headers.get('X-CSRF-Token')
+
+  if (!(await user.verifyCSRFToken(token))) {
+    throw new Error('Invalid CSRF token')
+  }
+
+  // Proceed with action
+}
+```
+
+### Session Fixation Prevention
+
+Regenerate session ID after login:
+
+```typescript
+import { user } from 'sdk.do'
+
+export async function login(email: string, password: string) {
+  await user.login({ email, password })
+
+  // Regenerate session to prevent fixation attacks
+  await user.regenerateSession()
+
+  return { success: true }
+}
+```
+
+## See Also
+
+- [Getting Started](./getting-started) - Setup and basic usage
+- [Permissions](./permissions) - Permission checking
+- [API Reference](../api/) - Complete API documentation
+- [Examples](../examples/) - Code examples
+
+## License
+
+CC-BY-4.0 (Open Source)

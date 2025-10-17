@@ -1,0 +1,121 @@
+---
+$id: https://integrations.do/jira
+$type: Integration
+name: Jira
+service: jira
+description: A tool for bug tracking, issue tracking, and agile project management.
+category: productivity
+sdkBased: false
+baseUrl: https://api.jira.com
+
+auth:
+  type: oauth2
+  authorizationUrl: https://auth.atlassian.com/authorize
+  tokenUrl: https://auth.atlassian.com/oauth/token
+  scopes:
+    - read:jira-work
+    - write:jira-work
+    - manage:jira-project
+    - manage:jira-configuration
+    - read:jira-user
+    - manage:jira-webhook
+    - manage:jira-data-provider
+    - read:servicedesk-request
+    - manage:servicedesk-customer
+    - write:servicedesk-request
+    - read:servicemanagement-insight-objects
+    - offline_access
+    - read:sprint:jira-software
+    - write:sprint:jira-software
+    - read:board-scope:jira-software
+    - write:board-scope:jira-software
+    - read:project:jira
+    - read:issue-type-scheme:jira
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Jira actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: true
+  verificationMethod: none
+  events:
+    - name: generic_trigger
+      type: trigger
+      description: Generic webhook trigger
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://www.atlassian.com/software/jira
+  apiDocs: https://www.atlassian.com/software/jira
+---
+
+# Jira Integration
+
+A tool for bug tracking, issue tracking, and agile project management.
+
+## Quick Start
+
+```typescript
+import { JiraClient } from '@dotdo/sdk.do/integrations/jira'
+
+const jira = new JiraClient({
+  apiKey: process.env.JIRA_API_KEY,
+})
+
+const result = await jira.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Jira provides 49 actions through the Composio API.
+
+## Webhooks
+
+Jira supports 3 webhook triggers for real-time event notifications.
+
+## License
+
+MIT

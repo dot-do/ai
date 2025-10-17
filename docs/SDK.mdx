@@ -1,0 +1,5435 @@
+---
+title: SDK.do - Complete Platform Guide
+description: The .do platform enables autonomous Business-as-Code with AI-delivered Services-as-Software. This guide covers all core SDK primitives with production-ready examples.
+keywords: [sdk, api, business-as-code, semantic graph, ai, typescript]
+author: .do Team
+lastUpdated: 2025-10-12
+readingTime: 30 min
+---
+
+# SDK.do - Complete Platform Guide
+
+The `.do` platform enables autonomous Business-as-Code with AI-delivered Services-as-Software. This guide covers all core SDK primitives with production-ready examples.
+
+## Table of Contents
+
+- [Quick Start](#quick-start)
+- [Core Primitives](#core-primitives)
+  - [$ - Semantic Context](#-semantic-context)
+  - [ai - AI Services](#ai-ai-services)
+  - [db - Database Operations](#db-database-operations)
+  - [on - Event Listeners](#on-event-listeners)
+  - [send - Event Publishing](#send-event-publishing)
+  - [every - Scheduled Tasks](#every-scheduled-tasks)
+  - [api - External Integrations](#api-external-integrations)
+  - [user - User Context](#user-user-context)
+- [Real-World Examples](#real-world-examples)
+- [Best Practices](#best-practices)
+
+## Quick Start
+
+```bash
+pnpm install sdk.do
+```
+
+```typescript
+import $, { ai, api, db, on, send, every, user } from 'sdk.do'
+
+// Semantic event patterns using $.Subject.predicate.Object
+on($.Order.created, async (order) => {
+  await send($.Invoice.generate, { orderId: order.id })
+})
+
+// Semantic database queries
+const businesses = await db.list($.Business)
+
+// AI with semantic types
+const content = await ai.generate({
+  prompt: 'Write a blog post about AI',
+  schema: $.BlogPosting,
+})
+```
+
+## Core Primitives
+
+### `$` - Semantic Context
+
+The `$` proxy creates semantic paths using the `$.Subject.predicate.Object` pattern:
+
+```typescript
+import $ from 'sdk.do'
+
+// Create semantic paths
+$.Person.worksFor.Organization
+$.Order.created.Customer
+$.Invoice.paid.StripeCustomer
+$.Business.owns.Brand
+
+// Use in events
+on($.Order.created, handler)
+send($.Invoice.paid, data)
+
+// Use in database queries
+await db.list($.Business)
+await db.get($.Person, 'john-doe')
+
+// Access with brackets for dynamic keys
+$.Person['john-doe'].worksFor.Organization['acme']
+```
+
+**Common Semantic Patterns:**
+
+```typescript
+// Business relationships
+$.Organization.owns.Brand
+$.Organization.employs.Person
+$.Person.worksFor.Organization
+$.Product.manufacturer.Organization
+
+// Lifecycle events
+$.Entity.created
+$.Entity.updated
+$.Entity.deleted
+
+// Business events
+$.Order.created
+$.Order.confirmed
+$.Order.shipped
+$.Invoice.paid
+$.User.registered
+```
+
+### `ai` - AI Services
+
+The `ai` primitive provides access to AI capabilities including text generation, structured output, and embeddings.
+
+#### Basic Text Generation
+
+```typescript
+import { ai } from 'sdk.do'
+
+const text = await ai.generate({
+  prompt: 'Write a haiku about code',
+  model: 'claude-sonnet-4.5',
+})
+```
+
+#### Structured Output with Schema
+
+```typescript
+const content = await ai.generate({
+  prompt: 'Create a blog post about AI',
+  schema: $.BlogPosting,
+})
+// Returns: { title, description, articleBody, author, datePublished, ... }
+```
+
+#### Embeddings for Semantic Search
+
+```typescript
+// Create embeddings
+const embedding = await ai.embed('Hello world')
+
+// Batch embeddings
+const embeddings = await ai.batch([{ prompt: 'Document 1' }, { prompt: 'Document 2' }])
+```
+
+#### Real-World AI Example
+
+```typescript
+// AI-powered content moderation
+on($.Comment.created, async (comment) => {
+  const analysis = await ai.generate({
+    prompt: `Analyze this comment for toxicity and sentiment: "${comment.text}"`,
+    schema: {
+      isToxic: 'boolean',
+      sentiment: 'positive | negative | neutral',
+      score: 'number',
+      reasoning: 'string',
+    },
+  })
+
+  if (analysis.isToxic) {
+    await send($.Comment.flagged, { commentId: comment.id, reason: analysis.reasoning })
+  }
+})
+```
+
+### `db` - Database Operations
+
+The `db` primitive provides semantic database operations using `.md`/`.mdx` files as the data layer.
+
+#### List Entities
+
+```typescript
+import { db } from 'sdk.do'
+
+// List all of a type
+const businesses = await db.list($.Business)
+
+// List with filters
+const engineers = await db.list($.Person, {
+  where: { jobTitle: 'Engineer' },
+})
+
+// List with pagination
+const products = await db.list($.Product, {
+  limit: 10,
+  offset: 0,
+})
+```
+
+#### Get Entity by ID
+
+```typescript
+const business = await db.get($.Business, 'acme-corp')
+const person = await db.get($.Person, 'john-doe')
+```
+
+#### Create Entity
+
+```typescript
+await db.create($.Blog, {
+  $id: 'engineering-blog',
+  $type: $.Blog,
+  name: 'Engineering Blog',
+  publisher: $.Brand['acme'],
+})
+```
+
+#### Update Entity
+
+```typescript
+await db.update($.Person, 'john-doe', {
+  jobTitle: 'Senior Engineer',
+  salary: 150000,
+})
+```
+
+#### Delete Entity
+
+```typescript
+await db.delete($.Person, 'john-doe')
+```
+
+#### Query Relationships
+
+```typescript
+// Get related entities
+const brands = await db.related(business, $.owns, $.Brand)
+const employees = await db.related(business, $.employs, $.Person)
+
+// Create relationships
+await db.relate(business, $.owns, brand)
+await db.relate(person, $.worksFor, organization)
+```
+
+#### Real-World Database Example
+
+```typescript
+// Multi-tenant customer management
+async function createCustomerAccount(data: { email: string; name: string; organizationId: string }) {
+  // Create person entity
+  const person = await db.create($.Person, {
+    $id: `person-${Date.now()}`,
+    $type: $.Person,
+    email: data.email,
+    name: data.name,
+  })
+
+  // Get organization
+  const org = await db.get($.Organization, data.organizationId)
+
+  // Create relationship
+  await db.relate(person, $.memberOf, org)
+
+  // Send welcome event
+  await send($.Customer.registered, person)
+
+  return person
+}
+```
+
+### `on` - Event Listeners
+
+The `on` primitive registers handlers for semantic events, enabling event-driven architecture.
+
+#### Basic Event Listener
+
+```typescript
+import { on } from 'sdk.do'
+
+on($.Order.created, async (order) => {
+  console.log('Order created:', order)
+  await processOrder(order)
+})
+```
+
+#### Multiple Event Types
+
+```typescript
+on([$.Order.created, $.Order.updated], async (order) => {
+  await updateInventory(order)
+})
+```
+
+#### Pattern Matching
+
+```typescript
+// Listen to all creation events
+on($.*.created, async (entity) => {
+  console.log('Entity created:', entity.$type, entity.$id)
+  await send($.Analytics.track, { event: 'entity_created', entity })
+})
+```
+
+#### Real-World Event-Driven Example
+
+```typescript
+// Order processing workflow
+on($.Order.created, async (order) => {
+  // Validate order
+  const validation = await validateOrder(order)
+  if (!validation.valid) {
+    await send($.Order.rejected, { orderId: order.id, reason: validation.reason })
+    return
+  }
+
+  // Process payment
+  await send($.Payment.process, { orderId: order.id, amount: order.total })
+})
+
+on($.Payment.succeeded, async (payment) => {
+  // Reserve inventory
+  await send($.Inventory.reserve, { orderId: payment.orderId })
+})
+
+on($.Inventory.reserved, async (reservation) => {
+  // Create shipment
+  await send($.Shipment.create, { orderId: reservation.orderId })
+})
+
+on($.Shipment.created, async (shipment) => {
+  // Send confirmation email
+  await send($.Email.send, {
+    to: shipment.customerEmail,
+    template: 'order-confirmed',
+    data: shipment,
+  })
+})
+```
+
+### `send` - Event Publishing
+
+The `send` primitive publishes semantic events to trigger `on` listeners.
+
+#### Basic Event Publishing
+
+```typescript
+import { send } from 'sdk.do'
+
+await send($.Order.created, {
+  $type: $.Order,
+  $id: 'order-123',
+  customer: 'customer-456',
+  total: 99.99,
+  items: [...]
+})
+```
+
+#### Broadcasting Events
+
+```typescript
+// Broadcast to multiple listeners
+await send($.Customer.registered, {
+  $type: $.Person,
+  $id: 'customer-456',
+  email: 'customer@example.com',
+  createdAt: new Date().toISOString(),
+})
+```
+
+#### Real-World Event Publishing Example
+
+```typescript
+// User registration with parallel workflows
+async function registerUser(userData: { email: string; password: string; name: string }) {
+  // Create user account
+  const user = await db.create($.Person, {
+    $id: `user-${Date.now()}`,
+    $type: $.Person,
+    ...userData,
+  })
+
+  // Send registration event (triggers multiple listeners)
+  await send($.User.registered, user)
+  // This triggers:
+  // - Welcome email
+  // - Stripe customer creation
+  // - Analytics tracking
+  // - Account verification email
+
+  return user
+}
+
+// Listeners
+on($.User.registered, async (user) => {
+  await api.sendgrid.send({
+    to: user.email,
+    template: 'welcome',
+    data: { name: user.name },
+  })
+})
+
+on($.User.registered, async (user) => {
+  await api.stripe.customers.create({
+    email: user.email,
+    metadata: { userId: user.$id },
+  })
+})
+
+on($.User.registered, async (user) => {
+  await send($.Analytics.track, {
+    event: 'user_registered',
+    userId: user.$id,
+    properties: { email: user.email },
+  })
+})
+```
+
+### `every` - Scheduled Tasks
+
+The `every` primitive schedules recurring workflows using semantic time periods or cron expressions.
+
+#### Semantic Time Periods
+
+```typescript
+import { every } from 'sdk.do'
+
+every($.Daily, async () => {
+  await send($.Report.generate, { type: 'daily' })
+})
+
+every($.Hourly, async () => {
+  await send($.Metrics.collect, { interval: 'hourly' })
+})
+
+every($.Weekly, async () => {
+  await send($.Newsletter.send, { day: 'monday' })
+})
+```
+
+#### Cron Expressions
+
+```typescript
+// Every day at midnight
+every('0 0 * * *', async () => {
+  await send($.Backup.create, { type: 'full' })
+})
+
+// Every 15 minutes
+every('*/15 * * * *', async () => {
+  await send($.HealthCheck.run, {})
+})
+
+// Every Monday at 9am
+every('0 9 * * 1', async () => {
+  await send($.Report.weekly, {})
+})
+```
+
+#### Real-World Scheduling Example
+
+```typescript
+// Automated report generation and delivery
+every($.Daily, async () => {
+  // Generate daily sales report
+  const orders = await db.list($.Order, {
+    where: {
+      createdAt: {
+        gte: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+      },
+    },
+  })
+
+  const report = await ai.generate({
+    prompt: `Generate a sales report for these orders: ${JSON.stringify(orders)}`,
+    schema: {
+      totalSales: 'number',
+      orderCount: 'number',
+      averageOrderValue: 'number',
+      topProducts: 'array',
+      insights: 'string',
+    },
+  })
+
+  // Save report
+  await db.create($.Report, {
+    $id: `report-${Date.now()}`,
+    $type: $.Report,
+    reportType: 'daily-sales',
+    date: new Date().toISOString(),
+    ...report,
+  })
+
+  // Email to stakeholders
+  await send($.Email.send, {
+    to: ['ceo@company.com', 'cfo@company.com'],
+    subject: `Daily Sales Report - ${new Date().toLocaleDateString()}`,
+    template: 'daily-sales-report',
+    data: report,
+  })
+})
+
+// Weekly customer engagement digest
+every($.Weekly, async () => {
+  const users = await db.list($.Person)
+
+  for (const user of users) {
+    const engagement = await calculateEngagement(user.$id)
+
+    if (engagement.score > 0) {
+      await send($.Email.send, {
+        to: user.email,
+        template: 'weekly-digest',
+        data: {
+          name: user.name,
+          activities: engagement.activities,
+          recommendations: engagement.recommendations,
+        },
+      })
+    }
+  }
+})
+
+// Monthly data cleanup
+every('0 0 1 * *', async () => {
+  // Archive old logs
+  const oldLogs = await db.list($.Log, {
+    where: {
+      createdAt: {
+        lt: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
+      },
+    },
+  })
+
+  for (const log of oldLogs) {
+    await db.delete($.Log, log.$id)
+  }
+})
+```
+
+### `api` - External Integrations
+
+The `api` primitive provides access to external services and APIs with built-in error handling.
+
+#### Basic API Calls
+
+```typescript
+import { api } from 'sdk.do'
+
+// Generic HTTP requests
+const data = await api.fetch('https://api.example.com/data', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ key: 'value' }),
+})
+```
+
+#### Pre-configured Integrations
+
+```typescript
+// Stripe
+const customer = await api.stripe.customers.create({
+  email: 'customer@example.com',
+  metadata: { $type: $.Person, $id: 'customer-123' },
+})
+
+// SendGrid
+await api.sendgrid.send({
+  to: 'user@example.com',
+  from: 'noreply@company.com',
+  subject: 'Welcome!',
+  html: '<h1>Welcome to our platform</h1>',
+})
+
+// Twilio
+await api.twilio.messages.create({
+  to: '+1234567890',
+  from: '+0987654321',
+  body: 'Your verification code is: 123456',
+})
+
+// Slack
+await api.slack.chat.postMessage({
+  channel: '#general',
+  text: 'New order received!',
+})
+```
+
+#### Real-World Integration Example
+
+```typescript
+// Payment processing with Stripe
+on($.Order.created, async (order) => {
+  try {
+    // Get or create Stripe customer
+    let stripeCustomer = order.stripeCustomerId
+    if (!stripeCustomer) {
+      const customer = await api.stripe.customers.create({
+        email: order.customerEmail,
+        metadata: {
+          orderId: order.$id,
+          customerId: order.customerId,
+        },
+      })
+      stripeCustomer = customer.id
+
+      // Update order with Stripe customer ID
+      await db.update($.Order, order.$id, {
+        stripeCustomerId: stripeCustomer,
+      })
+    }
+
+    // Create payment intent
+    const paymentIntent = await api.stripe.paymentIntents.create({
+      amount: Math.round(order.total * 100), // Convert to cents
+      currency: 'usd',
+      customer: stripeCustomer,
+      metadata: {
+        orderId: order.$id,
+      },
+    })
+
+    // Send payment intent to customer
+    await send($.Payment.intentCreated, {
+      orderId: order.$id,
+      clientSecret: paymentIntent.client_secret,
+    })
+  } catch (error) {
+    // Handle payment errors
+    await send($.Payment.failed, {
+      orderId: order.$id,
+      error: error.message,
+    })
+  }
+})
+
+// Multi-channel notification system
+async function sendNotification(message: string, channels: string[]) {
+  const promises = []
+
+  if (channels.includes('email')) {
+    promises.push(
+      api.sendgrid.send({
+        to: 'user@example.com',
+        subject: 'Notification',
+        text: message,
+      })
+    )
+  }
+
+  if (channels.includes('sms')) {
+    promises.push(
+      api.twilio.messages.create({
+        to: '+1234567890',
+        body: message,
+      })
+    )
+  }
+
+  if (channels.includes('slack')) {
+    promises.push(
+      api.slack.chat.postMessage({
+        channel: '#notifications',
+        text: message,
+      })
+    )
+  }
+
+  // Send all notifications in parallel
+  await Promise.allSettled(promises)
+}
+```
+
+### `user` - User Context
+
+The `user` primitive provides access to the current user's session, permissions, and context.
+
+#### Get Current User
+
+```typescript
+import { user } from 'sdk.do'
+
+const currentUser = await user.current()
+console.log(currentUser.id, currentUser.email, currentUser.roles)
+```
+
+#### Session Management
+
+```typescript
+const session = await user.session()
+console.log(session.id, session.expiresAt)
+```
+
+#### Permission Checking
+
+```typescript
+// Check general permission
+const canEdit = await user.can('edit', $.Blog)
+
+// Check specific resource permission
+const canDelete = await user.can('delete', $.Blog, 'blog-123')
+
+// Check multiple permissions
+const permissions = await user.permissions($.Blog, 'blog-123')
+// Returns: { read: true, write: true, delete: false }
+```
+
+#### User Properties
+
+```typescript
+const userId = user.id
+const userEmail = user.email
+const userRoles = user.roles // ['admin', 'editor']
+const userName = user.name
+const userOrganization = user.organization
+```
+
+#### Real-World RBAC Example
+
+```typescript
+// Role-based access control for blog platform
+async function createBlogPost(postData: { title: string; content: string; published: boolean }) {
+  // Check if user can create posts
+  if (!(await user.can('create', $.BlogPosting))) {
+    throw new Error('Unauthorized: Cannot create blog posts')
+  }
+
+  // Create draft post
+  const post = await db.create($.BlogPosting, {
+    $id: `post-${Date.now()}`,
+    $type: $.BlogPosting,
+    ...postData,
+    author: user.id,
+    createdAt: new Date().toISOString(),
+    published: false,
+  })
+
+  // If user wants to publish and has permission
+  if (postData.published) {
+    if (!(await user.can('publish', $.BlogPosting))) {
+      // Save as draft and notify editor
+      await send($.BlogPost.needsReview, {
+        postId: post.$id,
+        authorId: user.id,
+      })
+    } else {
+      // Publish directly
+      await db.update($.BlogPosting, post.$id, { published: true })
+      await send($.BlogPost.published, post)
+    }
+  }
+
+  return post
+}
+
+// Multi-tenancy with organization scoping
+async function getCustomerOrders() {
+  // Get current user's organization
+  const org = await db.get($.Organization, user.organization)
+
+  // Only return orders for this organization
+  const orders = await db.list($.Order, {
+    where: {
+      organizationId: org.$id,
+    },
+  })
+
+  return orders
+}
+
+// Activity tracking
+async function trackUserAction(action: string, resource: any) {
+  await db.create($.Action, {
+    $id: `action-${Date.now()}`,
+    $type: $.Action,
+    agent: user.id,
+    actionType: action,
+    object: resource.$id,
+    timestamp: new Date().toISOString(),
+    ipAddress: user.session().ipAddress,
+  })
+}
+```
+
+### `auth` - Authentication
+
+The `auth` primitive provides authentication, session management, and user operations via WorkOS AuthKit.
+
+#### Sign In
+
+```typescript
+import { auth } from 'sdk.do'
+
+// Redirect to OAuth provider
+await auth.signIn({
+  redirectUri: 'https://myapp.com/callback',
+  provider: 'authkit', // 'authkit' | 'google' | 'github' | 'microsoft'
+  scopes: ['profile', 'email'],
+})
+```
+
+#### Get Current User
+
+```typescript
+const user = await auth.getCurrentUser()
+console.log({
+  id: user.id,
+  email: user.email,
+  emailVerified: user.emailVerified,
+  organizationId: user.organizationId,
+})
+```
+
+#### Session Management
+
+```typescript
+// Get current session
+const session = await auth.getSession()
+console.log({
+  id: session.id,
+  userId: session.userId,
+  expiresAt: session.expiresAt,
+})
+
+// Refresh session token
+const refreshed = await auth.refreshToken()
+console.log(refreshed.accessToken, refreshed.expiresAt)
+
+// Sign out
+await auth.signOut()
+
+// Sign out from all devices
+await auth.signOut({ revokeAll: true })
+```
+
+#### Check Authentication
+
+```typescript
+// Check if user is authenticated
+const isAuthenticated = await auth.isAuthenticated()
+
+if (!isAuthenticated) {
+  await auth.signIn()
+}
+```
+
+#### Real-World Auth Example
+
+```typescript
+// Protected API route with authentication
+async function handleRequest(request: Request) {
+  // Check authentication
+  const user = await auth.getCurrentUser()
+
+  if (!user) {
+    return new Response('Unauthorized', { status: 401 })
+  }
+
+  // Check email verification
+  if (!user.emailVerified) {
+    return new Response('Email not verified', { status: 403 })
+  }
+
+  // Proceed with request
+  const data = await processRequest(request, user)
+  return new Response(JSON.stringify(data), {
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
+// Auto-refresh tokens
+async function ensureValidSession() {
+  const session = await auth.getSession()
+
+  // Refresh if expiring within 5 minutes
+  if (session.expiresAt && session.expiresAt < Date.now() + 5 * 60 * 1000) {
+    await auth.refreshToken()
+  }
+}
+
+// Multi-tenant organization access
+async function getOrganizationData() {
+  const user = await auth.getCurrentUser()
+
+  if (!user.organizationId) {
+    throw new Error('User not part of an organization')
+  }
+
+  const org = await db.get($.Organization, user.organizationId)
+  return org
+}
+```
+
+### `storage` - File Storage
+
+The `storage` primitive provides R2 object storage operations for file uploads, downloads, and management.
+
+#### Upload File
+
+```typescript
+import { storage } from 'sdk.do'
+
+// Upload from buffer
+const file = new Uint8Array([
+  /* ... */
+])
+const result = await storage.upload('documents/report.pdf', file, {
+  contentType: 'application/pdf',
+  metadata: {
+    author: 'John Doe',
+    department: 'Engineering',
+  },
+})
+console.log(result.url) // Public URL
+
+// Upload from stream
+const stream = readableStream // ReadableStream
+await storage.upload('videos/demo.mp4', stream, {
+  contentType: 'video/mp4',
+  cacheControl: 'public, max-age=31536000',
+})
+```
+
+#### Download File
+
+```typescript
+const file = await storage.download('documents/report.pdf')
+console.log({
+  data: file.data, // ArrayBuffer
+  contentType: file.contentType,
+  size: file.size,
+  metadata: file.metadata,
+})
+```
+
+#### List Files
+
+```typescript
+// List all files in a prefix
+const files = await storage.list('documents/')
+for (const file of files) {
+  console.log(`${file.key} - ${file.size} bytes`)
+}
+
+// List with pagination
+const page1 = await storage.list('images/', {
+  limit: 100,
+})
+
+if (page1.cursor) {
+  const page2 = await storage.list('images/', {
+    limit: 100,
+    cursor: page1.cursor,
+  })
+}
+```
+
+#### Delete File
+
+```typescript
+// Delete single file
+await storage.delete('documents/old-report.pdf')
+
+// Delete multiple files
+await storage.deleteMany(['temp/file1.txt', 'temp/file2.txt', 'temp/file3.txt'])
+```
+
+#### Get File Metadata
+
+```typescript
+const metadata = await storage.head('documents/report.pdf')
+console.log({
+  size: metadata.size,
+  etag: metadata.etag,
+  lastModified: metadata.lastModified,
+  contentType: metadata.contentType,
+  customMetadata: metadata.metadata,
+})
+```
+
+#### Multipart Upload (Large Files)
+
+```typescript
+// Start multipart upload
+const upload = await storage.multipart.start('videos/large-file.mp4', {
+  contentType: 'video/mp4',
+})
+
+// Upload parts (can be done in parallel)
+const part1 = await storage.multipart.uploadPart(upload, 1, chunk1)
+const part2 = await storage.multipart.uploadPart(upload, 2, chunk2)
+const part3 = await storage.multipart.uploadPart(upload, 3, chunk3)
+
+// Complete upload
+await storage.multipart.complete(upload, [part1, part2, part3])
+
+// Abort upload if needed
+// await storage.multipart.abort(upload)
+```
+
+#### Pre-signed URLs
+
+```typescript
+// Generate temporary upload URL
+const uploadUrl = await storage.getUploadUrl('uploads/user-avatar.jpg', {
+  expiresIn: 3600, // 1 hour
+  maxSize: 5 * 1024 * 1024, // 5MB
+  contentType: 'image/jpeg',
+})
+
+// Client uploads directly to R2
+await fetch(uploadUrl, {
+  method: 'PUT',
+  body: avatarFile,
+  headers: { 'Content-Type': 'image/jpeg' },
+})
+
+// Generate temporary download URL
+const downloadUrl = await storage.getDownloadUrl('private/document.pdf', {
+  expiresIn: 300, // 5 minutes
+})
+```
+
+#### Real-World Storage Example
+
+```typescript
+// Image upload with thumbnail generation
+async function uploadImage(file: File, userId: string) {
+  // Upload original
+  const key = `images/${userId}/${Date.now()}-${file.name}`
+  const result = await storage.upload(key, await file.arrayBuffer(), {
+    contentType: file.type,
+    metadata: {
+      userId,
+      originalName: file.name,
+      uploadedAt: new Date().toISOString(),
+    },
+  })
+
+  // Generate thumbnail (via AI worker or image processing)
+  const thumbnail = await generateThumbnail(result.url)
+  const thumbnailKey = key.replace(/\.[^.]+$/, '-thumb.jpg')
+  await storage.upload(thumbnailKey, thumbnail, {
+    contentType: 'image/jpeg',
+    cacheControl: 'public, max-age=31536000',
+  })
+
+  // Save to database
+  await db.create($.ImageObject, {
+    $id: `image-${Date.now()}`,
+    $type: $.ImageObject,
+    contentUrl: result.url,
+    thumbnailUrl: await storage.getDownloadUrl(thumbnailKey),
+    creator: userId,
+    uploadDate: new Date().toISOString(),
+  })
+
+  return result
+}
+
+// Secure file access
+async function getSecureDownload(fileKey: string, userId: string) {
+  // Check permissions
+  const file = await db.get($.ImageObject, fileKey)
+  if (file.creator !== userId) {
+    throw new Error('Unauthorized')
+  }
+
+  // Generate temporary download URL
+  return await storage.getDownloadUrl(fileKey, { expiresIn: 300 })
+}
+```
+
+### `cache` - Caching
+
+The `cache` primitive provides distributed caching via Cloudflare's Cache API and KV/D1 storage tiers.
+
+#### Set Cache Value
+
+```typescript
+import { cache } from 'sdk.do'
+
+// Set with TTL
+await cache.set(
+  'user:123',
+  {
+    id: '123',
+    name: 'John Doe',
+    email: 'john@example.com',
+  },
+  {
+    ttl: 3600, // 1 hour
+    tier: 'hot', // 'hot' (KV) | 'cold' (D1) | 'auto'
+  }
+)
+
+// Set without TTL (persists until deleted)
+await cache.set('config:app', { theme: 'dark', lang: 'en' })
+```
+
+#### Get Cache Value
+
+```typescript
+// Get value
+const user = await cache.get('user:123')
+
+// Get with options
+const data = await cache.get('product:456', {
+  promote: true, // Promote from cold to hot tier
+  refreshTTL: true, // Reset TTL on access
+})
+
+// Get with default value
+const config = await cache.get('config:theme', { default: 'light' })
+```
+
+#### Delete Cache Value
+
+```typescript
+// Delete single key
+await cache.delete('user:123')
+
+// Delete multiple keys
+await cache.deleteMany(['user:123', 'user:456', 'user:789'])
+
+// Delete by pattern (prefix)
+await cache.deletePattern('user:*')
+```
+
+#### Batch Operations
+
+```typescript
+// Batch set
+await cache.batchSet({
+  entries: [
+    { key: 'user:1', value: { name: 'Alice' }, ttl: 3600 },
+    { key: 'user:2', value: { name: 'Bob' }, ttl: 3600 },
+    { key: 'user:3', value: { name: 'Charlie' }, ttl: 3600 },
+  ],
+})
+
+// Batch get
+const users = await cache.batchGet({
+  keys: ['user:1', 'user:2', 'user:3'],
+})
+```
+
+#### Cache Metrics
+
+```typescript
+// Get cache metrics
+const metrics = await cache.getMetrics()
+console.log({
+  hits: metrics.summary.hits,
+  misses: metrics.summary.misses,
+  hitRate: metrics.summary.hitRatePercent,
+  hotTierSize: metrics.tiers.hot.size,
+  coldTierSize: metrics.tiers.cold.size,
+})
+
+// Get per-pattern metrics
+const patterns = await cache.getPatternMetrics()
+for (const pattern of patterns) {
+  console.log(`${pattern.pattern}: ${pattern.hitRate}% hit rate`)
+}
+```
+
+#### Cache Invalidation
+
+```typescript
+// Invalidate by URL pattern
+await cache.invalidate('/v1/users/*')
+await cache.invalidate('/v1/products/*/reviews')
+
+// Invalidate by collection
+await cache.invalidateCollection('users')
+await cache.invalidateCollection('products')
+
+// Invalidate all
+await cache.invalidateAll()
+```
+
+#### Real-World Cache Example
+
+```typescript
+// Cache-aside pattern
+async function getUser(userId: string) {
+  const cacheKey = `user:${userId}`
+
+  // Try cache first
+  let user = await cache.get(cacheKey)
+
+  if (!user) {
+    // Cache miss - fetch from database
+    user = await db.get($.Person, userId)
+
+    // Store in cache
+    await cache.set(cacheKey, user, { ttl: 3600 })
+  }
+
+  return user
+}
+
+// Write-through caching
+async function updateUser(userId: string, updates: Partial<User>) {
+  // Update database
+  const user = await db.update($.Person, userId, updates)
+
+  // Update cache
+  await cache.set(`user:${userId}`, user, { ttl: 3600 })
+
+  return user
+}
+
+// Multi-tier caching strategy
+async function getProduct(productId: string) {
+  const cacheKey = `product:${productId}`
+
+  // Try hot cache (KV) first
+  let product = await cache.get(cacheKey, { tier: 'hot' })
+
+  if (!product) {
+    // Try cold cache (D1)
+    product = await cache.get(cacheKey, {
+      tier: 'cold',
+      promote: true, // Promote to hot if found
+    })
+
+    if (!product) {
+      // Cache miss - fetch from database
+      product = await db.get($.Product, productId)
+
+      // Store in both tiers
+      await cache.set(cacheKey, product, {
+        ttl: 86400, // 24 hours
+        tier: 'auto', // Automatically choose tier
+      })
+    }
+  }
+
+  return product
+}
+
+// Cache invalidation on updates
+on($.Product.updated, async (event) => {
+  await cache.delete(`product:${event.productId}`)
+  await cache.invalidate(`/v1/products/${event.productId}`)
+})
+```
+
+### `http` - HTTP Client
+
+The `http` primitive provides a generic HTTP client for making REST API calls with automatic retries and error handling.
+
+#### GET Request
+
+```typescript
+import { http } from 'sdk.do'
+
+// Simple GET
+const users = await http.get('/v1/users')
+
+// GET with query parameters
+const filtered = await http.get('/v1/products', {
+  params: {
+    category: 'electronics',
+    minPrice: 100,
+    limit: 20,
+  },
+})
+```
+
+#### POST Request
+
+```typescript
+// Create resource
+const user = await http.post('/v1/users', {
+  name: 'John Doe',
+  email: 'john@example.com',
+  role: 'editor',
+})
+
+// POST with custom headers
+const result = await http.post('/v1/data', payload, {
+  headers: {
+    'X-API-Key': 'secret-key',
+    'X-Request-ID': crypto.randomUUID(),
+  },
+})
+```
+
+#### PUT/PATCH Requests
+
+```typescript
+// Full update (PUT)
+await http.put('/v1/users/123', {
+  name: 'Jane Doe',
+  email: 'jane@example.com',
+  role: 'admin',
+})
+
+// Partial update (PATCH)
+await http.patch('/v1/users/123', {
+  role: 'admin',
+})
+```
+
+#### DELETE Request
+
+```typescript
+// Delete resource
+await http.delete('/v1/users/123')
+
+// Delete with confirmation
+await http.delete('/v1/users/123', {
+  params: { confirm: 'true' },
+})
+```
+
+#### Custom Request
+
+```typescript
+// Full control over request
+const response = await http.request({
+  method: 'POST',
+  url: '/v1/batch',
+  headers: {
+    'Content-Type': 'application/json',
+    'X-Batch-Size': '100',
+  },
+  data: batchData,
+  timeout: 30000,
+  retry: {
+    maxAttempts: 3,
+    initialDelay: 1000,
+    maxDelay: 5000,
+    backoff: 2,
+  },
+})
+
+console.log(response.status, response.data)
+```
+
+#### Error Handling
+
+```typescript
+import { http, HTTPError } from 'sdk.do'
+
+try {
+  const user = await http.get('/v1/users/999')
+} catch (error) {
+  if (error instanceof HTTPError) {
+    console.error(`HTTP ${error.status}: ${error.message}`)
+    console.error('Response:', error.response)
+
+    // Handle specific errors
+    switch (error.status) {
+      case 404:
+        console.log('User not found')
+        break
+      case 429:
+        console.log('Rate limited')
+        break
+      case 500:
+        console.log('Server error')
+        break
+    }
+  }
+}
+```
+
+#### Timeouts and Abort
+
+```typescript
+// Request with timeout
+const data = await http.get('/v1/slow-endpoint', {
+  timeout: 5000, // 5 seconds
+})
+
+// Request with abort signal
+const controller = new AbortController()
+
+setTimeout(() => controller.abort(), 3000)
+
+await http.get('/v1/data', {
+  signal: controller.signal,
+})
+```
+
+#### Real-World HTTP Example
+
+```typescript
+// API client wrapper
+class GitHubClient {
+  constructor(private token: string) {}
+
+  async getUser(username: string) {
+    return await http.get(`/users/${username}`, {
+      headers: {
+        Authorization: `Bearer ${this.token}`,
+        Accept: 'application/vnd.github.v3+json',
+      },
+    })
+  }
+
+  async createIssue(
+    owner: string,
+    repo: string,
+    data: {
+      title: string
+      body: string
+      labels?: string[]
+    }
+  ) {
+    return await http.post(`/repos/${owner}/${repo}/issues`, data, {
+      headers: {
+        Authorization: `Bearer ${this.token}`,
+        Accept: 'application/vnd.github.v3+json',
+      },
+    })
+  }
+}
+
+// Retry failed requests
+async function fetchWithRetry(url: string) {
+  return await http.get(url, {
+    retry: {
+      maxAttempts: 3,
+      initialDelay: 1000,
+      maxDelay: 10000,
+      backoff: 2,
+    },
+  })
+}
+
+// Parallel requests
+async function fetchMultiple(urls: string[]) {
+  const requests = urls.map((url) => http.get(url))
+  return await Promise.all(requests)
+}
+
+// Stream large response
+async function downloadLargeFile(url: string) {
+  const response = await fetch(url) // Use native fetch for streaming
+  const reader = response.body?.getReader()
+
+  while (true) {
+    const { done, value } = await reader!.read()
+    if (done) break
+    // Process chunk
+    await processChunk(value)
+  }
+}
+```
+
+### `queue` - Message Queues
+
+The `queue` primitive provides message queue operations for async processing via Cloudflare Queues.
+
+#### Publish Message
+
+```typescript
+import { queue } from 'sdk.do'
+
+// Publish single message
+await queue.publish('tasks', {
+  type: 'send-email',
+  to: 'user@example.com',
+  subject: 'Welcome!',
+  body: 'Thanks for signing up.',
+})
+
+// Publish with delay
+await queue.publish(
+  'tasks',
+  {
+    type: 'reminder',
+    userId: '123',
+    message: 'Your trial ends in 3 days',
+  },
+  {
+    delaySeconds: 259200, // 3 days
+  }
+)
+```
+
+#### Batch Publish
+
+```typescript
+// Publish multiple messages
+const result = await queue.batch('events', [
+  { type: 'user.created', userId: '123' },
+  { type: 'user.updated', userId: '456' },
+  { type: 'user.deleted', userId: '789' },
+])
+
+console.log({
+  success: result.successCount,
+  failed: result.failedCount,
+  messageIds: result.messageIds,
+})
+```
+
+#### Queue Stats
+
+```typescript
+// Get queue statistics
+const stats = await queue.stats('tasks')
+console.log({
+  pending: stats.pending,
+  delayed: stats.delayed,
+  processing: stats.processing,
+  completed: stats.completed,
+  failed: stats.failed,
+})
+```
+
+#### Consumer Configuration
+
+```typescript
+// Configure queue consumer (in wrangler.jsonc)
+{
+  "queues": {
+    "consumers": [
+      {
+        "queue": "tasks",
+        "max_batch_size": 10,
+        "max_batch_timeout": 30,
+        "max_retries": 3,
+        "dead_letter_queue": "tasks-dlq"
+      }
+    ]
+  }
+}
+
+// Handle queue messages in worker
+export default {
+  async queue(batch: MessageBatch, env: Env) {
+    for (const message of batch.messages) {
+      try {
+        await processTask(message.body)
+        message.ack()
+      } catch (error) {
+        message.retry()
+      }
+    }
+  }
+}
+```
+
+#### Real-World Queue Example
+
+```typescript
+// Email queue with priority
+async function sendEmail(to: string, subject: string, body: string, priority: 'high' | 'normal' | 'low' = 'normal') {
+  const queueName = priority === 'high' ? 'emails-priority' : 'emails'
+
+  await queue.publish(queueName, {
+    type: 'send-email',
+    to,
+    subject,
+    body,
+    priority,
+    timestamp: Date.now(),
+  })
+}
+
+// Bulk operations
+async function processBulkUpdate(records: any[]) {
+  // Break into batches of 100
+  const batches = []
+  for (let i = 0; i < records.length; i += 100) {
+    batches.push(records.slice(i, i + 100))
+  }
+
+  // Queue each batch
+  for (const batch of batches) {
+    await queue.publish('bulk-updates', {
+      type: 'bulk-update',
+      records: batch,
+      batchId: crypto.randomUUID(),
+    })
+  }
+}
+
+// Scheduled job with queues
+every($.Daily, async () => {
+  // Generate daily reports
+  const users = await db.list($.Person)
+
+  await queue.batch(
+    'reports',
+    users.map((user) => ({
+      type: 'daily-report',
+      userId: user.$id,
+      date: new Date().toISOString(),
+    }))
+  )
+})
+
+// Dead letter queue monitoring
+async function monitorDLQ() {
+  const stats = await queue.stats('tasks-dlq')
+
+  if (stats.pending > 0) {
+    // Alert team
+    await send($.Alert.created, {
+      type: 'dlq-messages',
+      count: stats.pending,
+      queue: 'tasks-dlq',
+    })
+  }
+}
+
+// Event-driven queue processing
+on($.Order.created, async (order) => {
+  // Queue fulfillment workflow
+  await queue.publish('order-fulfillment', {
+    orderId: order.$id,
+    customerId: order.customer,
+    items: order.items,
+    priority: order.express ? 'high' : 'normal',
+  })
+})
+```
+
+---
+
+## Phase 2: Advanced Services
+
+Phase 2 services provide advanced capabilities for building sophisticated applications with serverless functions, AI agents, workflows, search, and media management.
+
+### `functions` - Serverless Functions
+
+The `functions` service enables you to deploy and execute serverless functions on Cloudflare Workers.
+
+#### Deploy Function
+
+```typescript
+import { functions } from 'sdk.do'
+
+// Deploy a simple function
+const fn = await functions.deploy({
+  name: 'calculate-shipping',
+  handler: async ({ weight, destination }) => {
+    const rate = weight * 0.5
+    const distance = calculateDistance(destination)
+    return rate * distance
+  },
+  timeout: 30000, // 30 seconds
+  memory: 256, // MB
+  description: 'Calculate shipping cost based on weight and destination',
+  runtime: 'workers',
+})
+
+console.log(`Function deployed: ${fn.name} (${fn.id})`)
+```
+
+#### Execute Function
+
+```typescript
+// Execute the deployed function
+const result = await functions.execute('calculate-shipping', {
+  weight: 5.5,
+  destination: { lat: 37.7749, lng: -122.4194 },
+})
+
+console.log(`Shipping cost: $${result.toFixed(2)}`)
+```
+
+#### List Functions
+
+```typescript
+// List all deployed functions
+const { functions: fns } = await functions.list({
+  runtime: 'workers',
+  limit: 50,
+})
+
+for (const fn of fns) {
+  console.log(`${fn.name}: ${fn.description}`)
+}
+```
+
+#### Get Function Metadata
+
+```typescript
+// Get details about a function
+const metadata = await functions.get('calculate-shipping')
+
+console.log({
+  name: metadata.name,
+  runtime: metadata.runtime,
+  timeout: metadata.timeout,
+  lastExecuted: metadata.lastExecuted,
+  createdAt: metadata.createdAt,
+})
+```
+
+#### Delete Function
+
+```typescript
+// Remove a deployed function
+await functions.delete('calculate-shipping')
+```
+
+#### Schedule Function
+
+```typescript
+// Schedule function to run periodically
+await functions.schedule('daily-report', {
+  cron: '0 9 * * *', // Daily at 9 AM
+  timezone: 'America/Los_Angeles',
+  description: 'Generate daily sales report',
+})
+```
+
+#### Get Function Logs
+
+```typescript
+// Retrieve execution logs
+const logs = await functions.logs('calculate-shipping', {
+  limit: 100,
+  level: 'error',
+  startDate: '2025-01-01',
+  endDate: '2025-01-31',
+})
+
+for (const log of logs) {
+  console.log(`[${log.level}] ${log.timestamp}: ${log.message}`)
+}
+```
+
+#### Real-World Functions Example
+
+```typescript
+// API endpoint as a function
+const api = await functions.deploy({
+  name: 'user-api',
+  handler: async ({ method, path, body }) => {
+    switch (`${method} ${path}`) {
+      case 'GET /users':
+        return await db.list($.Person)
+      case 'POST /users':
+        return await db.create($.Person, body)
+      case 'GET /users/:id':
+        return await db.get($.Person, path.split('/')[2])
+      default:
+        return { error: 'Not found', status: 404 }
+    }
+  },
+  timeout: 60000,
+  runtime: 'workers',
+})
+
+// Execute API requests
+const users = await api.execute({ method: 'GET', path: '/users' })
+const newUser = await api.execute({
+  method: 'POST',
+  path: '/users',
+  body: { name: 'Alice', email: 'alice@example.com' },
+})
+
+// Data transformation pipeline
+const transform = await functions.deploy({
+  name: 'transform-orders',
+  handler: async ({ orders }) => {
+    return orders.map((order) => ({
+      ...order,
+      total: order.items.reduce((sum, item) => sum + item.price * item.quantity, 0),
+      tax: order.taxRate * order.subtotal,
+      shipping: calculateShipping(order.weight, order.destination),
+    }))
+  },
+})
+
+// Webhook processor
+const webhook = await functions.deploy({
+  name: 'stripe-webhook',
+  handler: async ({ event }) => {
+    switch (event.type) {
+      case 'payment.succeeded':
+        await send($.Payment.completed, event.data)
+        break
+      case 'payment.failed':
+        await send($.Payment.failed, event.data)
+        break
+      case 'subscription.created':
+        await db.create($.Subscription, event.data)
+        break
+    }
+    return { received: true }
+  },
+})
+```
+
+### `workflows` - Multi-Step Orchestration
+
+The `workflows` service enables you to create and manage multi-step workflows with both Payload CMS and Cloudflare Workflows engines.
+
+#### Create Workflow
+
+```typescript
+import { workflows } from 'sdk.do'
+
+// Create workflow instance
+const instance = await workflows.create(
+  'order-fulfillment',
+  {
+    orderId: 'order_123',
+    items: [
+      { sku: 'WIDGET-A', quantity: 2 },
+      { sku: 'WIDGET-B', quantity: 1 },
+    ],
+    destination: {
+      address: '123 Main St',
+      city: 'San Francisco',
+      state: 'CA',
+      zip: '94102',
+    },
+  },
+  {
+    engine: 'cloudflare', // or 'payload'
+    metadata: {
+      priority: 'high',
+      customerId: 'cust_456',
+    },
+  }
+)
+
+console.log(`Workflow created: ${instance.id}`)
+console.log(`Status: ${instance.status}`)
+```
+
+#### Get Workflow Status
+
+```typescript
+// Check workflow progress
+const status = await workflows.get(instance.id)
+
+console.log({
+  id: status.id,
+  status: status.status, // 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
+  workflowType: status.workflowType,
+  createdAt: status.createdAt,
+  completedAt: status.completedAt,
+  output: status.output,
+  error: status.error,
+})
+```
+
+#### List Workflows
+
+```typescript
+// List workflow instances
+const { instances } = await workflows.list({
+  workflowType: 'order-fulfillment',
+  status: 'running',
+  limit: 50,
+})
+
+for (const workflow of instances) {
+  console.log(`${workflow.id}: ${workflow.status}`)
+}
+```
+
+#### Cancel Workflow
+
+```typescript
+// Cancel a running workflow
+await workflows.cancel(instance.id)
+```
+
+#### Queue Workflow (Async)
+
+```typescript
+// Queue workflow for async execution
+const queued = await workflows.queue(
+  'data-import',
+  {
+    source: 'https://example.com/data.csv',
+    destination: 'products',
+  },
+  {
+    engine: 'cloudflare',
+    metadata: { batchId: 'batch_789' },
+  }
+)
+
+console.log(`Workflow queued: ${queued.id}`)
+```
+
+#### Real-World Workflows Example
+
+```typescript
+// Multi-step order fulfillment
+const fulfillment = await workflows.create('order-fulfillment', {
+  orderId: 'order_123',
+  customerId: 'cust_456',
+  items: [{ sku: 'WIDGET-A', qty: 2 }],
+})
+
+// Monitor workflow progress
+const checkProgress = setInterval(async () => {
+  const status = await workflows.get(fulfillment.id)
+
+  if (status.status === 'completed') {
+    console.log('Order fulfilled successfully!')
+    clearInterval(checkProgress)
+  } else if (status.status === 'failed') {
+    console.error('Fulfillment failed:', status.error)
+    clearInterval(checkProgress)
+  } else {
+    console.log(`Progress: ${status.status}`)
+  }
+}, 5000)
+
+// Customer onboarding workflow
+const onboarding = await workflows.create('customer-onboarding', {
+  email: 'new-customer@example.com',
+  plan: 'pro',
+  source: 'website',
+})
+
+// Data processing pipeline
+const dataPipeline = await workflows.create('data-pipeline', {
+  source: 's3://bucket/raw-data.csv',
+  transformations: [
+    { type: 'clean', config: { removeNulls: true } },
+    { type: 'enrich', config: { useAI: true } },
+    { type: 'validate', config: { schema: 'Product' } },
+  ],
+  destination: 'postgres://db/products',
+})
+
+// Long-running batch job
+const batchJob = await workflows.queue('email-campaign', {
+  campaignId: 'camp_789',
+  recipients: 50000,
+  template: 'welcome-series',
+  schedule: {
+    startDate: '2025-02-01',
+    batchSize: 1000,
+    intervalMinutes: 5,
+  },
+})
+
+// Workflow orchestration with dependencies
+async function processOrderWorkflow(orderId: string) {
+  // Step 1: Validate order
+  const validation = await workflows.create('validate-order', { orderId })
+  await waitForCompletion(validation.id)
+
+  // Step 2: Process payment
+  const payment = await workflows.create('process-payment', { orderId })
+  await waitForCompletion(payment.id)
+
+  // Step 3: Ship order
+  const shipping = await workflows.create('ship-order', { orderId })
+  return shipping.id
+}
+
+async function waitForCompletion(workflowId: string) {
+  let status
+  do {
+    status = await workflows.get(workflowId)
+    if (status.status === 'failed') {
+      throw new Error(`Workflow failed: ${status.error?.message}`)
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+  } while (status.status !== 'completed')
+}
+```
+
+### `agents` - AI Agents
+
+The `agents` service enables you to define, deploy, and execute autonomous AI agents on the Cloudflare agents framework.
+
+#### Define Agent
+
+```typescript
+import { agents } from 'sdk.do'
+
+// Define an AI agent
+const agent = agents.define({
+  name: 'customer-support',
+  description: 'Handles customer support queries with access to order and account data',
+  autonomyLevel: 'semi-autonomous', // 'supervised' | 'semi-autonomous' | 'autonomous'
+  tools: [
+    {
+      name: 'get_order',
+      description: 'Retrieve order details by order ID',
+      parameters: {
+        type: 'object',
+        properties: {
+          orderId: { type: 'string', description: 'The order ID' },
+        },
+        required: ['orderId'],
+      },
+      requiresApproval: false,
+      execute: async ({ orderId }) => {
+        return await db.get($.Order, orderId)
+      },
+    },
+    {
+      name: 'refund_order',
+      description: 'Issue a full or partial refund for an order',
+      parameters: {
+        type: 'object',
+        properties: {
+          orderId: { type: 'string' },
+          amount: { type: 'number' },
+          reason: { type: 'string' },
+        },
+        required: ['orderId', 'amount'],
+      },
+      requiresApproval: true, // Requires human approval
+      execute: async ({ orderId, amount, reason }) => {
+        return await api.stripe.refunds.create({
+          payment_intent: orderId,
+          amount,
+          reason,
+        })
+      },
+    },
+  ],
+  model: 'claude-sonnet-4.5',
+  systemPrompt: `You are a helpful customer support agent. Be empathetic, professional, and solution-oriented. You have access to order data and can process refunds with approval.`,
+  temperature: 0.7,
+  maxTokens: 2000,
+  rateLimits: {
+    perMinute: 10,
+    perHour: 100,
+  },
+})
+```
+
+#### Deploy Agent
+
+```typescript
+// Deploy agent to production
+await agent.deploy({
+  apiKey: process.env.DO_API_KEY,
+  environment: 'production',
+  logging: true,
+})
+
+console.log(`Agent ${agent.name} deployed successfully`)
+```
+
+#### Execute Agent
+
+```typescript
+// Execute agent with user input
+const result = await agent.execute({
+  input: 'I need help with order ORD-12345. It arrived damaged.',
+  context: {
+    userId: 'user_789',
+    sessionId: 'session_abc'
+  },
+  timeout: 30, // seconds
+  onApprovalRequired: async (action) => {
+    // Handle approval request
+    console.log(`Approval needed: ${action.tool}`)
+    console.log(`Reasoning: ${action.reasoning}`)
+    console.log(`Risk: ${action.risk}`)
+
+    // In production, prompt user via UI
+    const approved = await promptUser({
+      message: `Allow agent to ${action.tool}?`,
+      details: action.parameters
+    })
+
+    return approved
+  }
+})
+
+console.log({
+  response: result.response,
+  actionsT
+
+aken: result.actions,
+  tokensUsed: result.tokensUsed,
+  duration: result.duration
+})
+```
+
+#### Stream Agent Response
+
+```typescript
+// Stream agent responses for real-time UI
+await agent.execute({
+  input: 'What are the top 5 trending products this week?',
+  stream: true,
+  onStream: (chunk) => {
+    // Update UI in real-time
+    process.stdout.write(chunk)
+  },
+})
+```
+
+#### List Agents
+
+```typescript
+// List all deployed agents
+const { agents: allAgents } = await agents.list({
+  environment: 'production',
+  autonomyLevel: 'semi-autonomous',
+})
+
+for (const agent of allAgents) {
+  console.log(`${agent.name}: ${agent.description}`)
+  console.log(`  Autonomy: ${agent.autonomyLevel}`)
+  console.log(`  Tools: ${agent.tools.length}`)
+}
+```
+
+#### Real-World Agents Example
+
+```typescript
+// Sales assistant agent
+const salesAgent = agents.define({
+  name: 'sales-assistant',
+  description: 'Helps customers find products and complete purchases',
+  autonomyLevel: 'semi-autonomous',
+  tools: [
+    {
+      name: 'search_products',
+      description: 'Search products by query',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string' },
+          category: { type: 'string' },
+          maxPrice: { type: 'number' },
+        },
+      },
+      requiresApproval: false,
+      execute: async (params) =>
+        await search.query(params.query, {
+          collections: ['products'],
+          filters: { category: params.category, price: { lte: params.maxPrice } },
+        }),
+    },
+    {
+      name: 'create_order',
+      description: 'Create a new order for the customer',
+      requiresApproval: true,
+      execute: async (params) => await db.create($.Order, params),
+    },
+  ],
+  model: 'gpt-5',
+  systemPrompt: 'You are a knowledgeable sales assistant. Help customers find the right products and guide them through checkout.',
+})
+
+await salesAgent.deploy({ environment: 'production' })
+
+// Content moderator agent
+const moderator = agents.define({
+  name: 'content-moderator',
+  description: 'Reviews user-generated content for policy violations',
+  autonomyLevel: 'autonomous', // Fully autonomous
+  tools: [
+    {
+      name: 'flag_content',
+      description: 'Flag content for review',
+      requiresApproval: false,
+      execute: async ({ contentId, reason }) => {
+        await db.update($.Content, contentId, {
+          status: 'flagged',
+          flagReason: reason,
+        })
+      },
+    },
+    {
+      name: 'approve_content',
+      description: 'Approve content for publication',
+      requiresApproval: false,
+      execute: async ({ contentId }) => {
+        await db.update($.Content, contentId, { status: 'approved' })
+      },
+    },
+  ],
+  model: 'claude-sonnet-4.5',
+  systemPrompt: 'Review content for hate speech, spam, and policy violations. Flag concerning content, approve safe content.',
+})
+
+// Data analyst agent
+const analyst = agents.define({
+  name: 'data-analyst',
+  description: 'Answers business questions by querying data and generating reports',
+  autonomyLevel: 'supervised',
+  tools: [
+    {
+      name: 'query_database',
+      description: 'Execute SQL query',
+      requiresApproval: true,
+      execute: async ({ sql }) => await db.query(sql),
+    },
+    {
+      name: 'generate_chart',
+      description: 'Create data visualization',
+      requiresApproval: false,
+      execute: async ({ data, type }) =>
+        await ai.generate({
+          model: 'gpt-5',
+          prompt: `Create a ${type} chart from this data: ${JSON.stringify(data)}`,
+        }),
+    },
+  ],
+  model: 'gpt-5',
+  systemPrompt: 'You are a data analyst. Answer business questions by querying data and creating visualizations.',
+})
+
+// Personal assistant agent with scheduling
+const assistant = agents.define({
+  name: 'personal-assistant',
+  description: 'Manages calendar, emails, and daily tasks',
+  autonomyLevel: 'semi-autonomous',
+  tools: [
+    {
+      name: 'schedule_meeting',
+      description: 'Schedule a calendar event',
+      requiresApproval: true,
+      execute: async (params) => await api.google.calendar.events.create(params),
+    },
+    {
+      name: 'send_email',
+      description: 'Send an email',
+      requiresApproval: true,
+      execute: async (params) => await api.sendgrid.send(params),
+    },
+    {
+      name: 'create_task',
+      description: 'Create a new task',
+      requiresApproval: false,
+      execute: async (params) => await db.create($.Task, params),
+    },
+  ],
+  model: 'claude-sonnet-4.5',
+})
+```
+
+### `search` - Search Capabilities
+
+The `search` service provides full-text and semantic search across all platform collections.
+
+#### Basic Search
+
+```typescript
+import { search } from 'sdk.do'
+
+// Search across all collections
+const results = await search.query('react hooks tutorial', {
+  limit: 20,
+})
+
+for (const result of results.results) {
+  console.log({
+    title: result.title,
+    collection: result.collection,
+    score: result.score,
+    url: result.url,
+  })
+}
+```
+
+#### Filtered Search
+
+```typescript
+// Search specific collections
+const products = await search.query('laptop', {
+  collections: ['products', 'inventory'],
+  filters: {
+    category: 'electronics',
+    inStock: true,
+    price: { gte: 500, lte: 2000 },
+  },
+  limit: 50,
+})
+
+console.log(`Found ${products.pagination.total} products`)
+```
+
+#### Semantic Search
+
+```typescript
+// Use AI embeddings for semantic similarity
+const similar = await search.query('how to build scalable APIs', {
+  semantic: true, // Enable vector search
+  collections: ['docs', 'tutorials', 'blog'],
+  limit: 10,
+})
+
+// Results ranked by semantic similarity, not just keyword matching
+for (const doc of similar.results) {
+  console.log(`${doc.title} (similarity: ${doc.score.toFixed(2)})`)
+}
+```
+
+#### Faceted Search
+
+```typescript
+// Get facet counts
+const faceted = await search.query('camera', {
+  collections: ['products'],
+  facets: ['brand', 'category', 'priceRange'],
+})
+
+// Display facets for filtering
+console.log('Brands:', faceted.facets.brand) // [{ value: 'Canon', count: 15 }, ...]
+console.log('Categories:', faceted.facets.category)
+console.log('Price ranges:', faceted.facets.priceRange)
+```
+
+#### Autocomplete
+
+```typescript
+// Get search suggestions
+const suggestions = await search.suggest('reac', {
+  limit: 5,
+  collections: ['docs'],
+})
+
+console.log(suggestions.suggestions) // ['react', 'react hooks', 'react router', ...]
+```
+
+#### Get Searchable Collections
+
+```typescript
+// List available collections
+const { collections } = await search.collections()
+
+for (const collection of collections) {
+  console.log({
+    name: collection.name,
+    searchFields: collection.searchFields,
+    titleField: collection.titleField,
+  })
+}
+```
+
+#### Get Search Stats
+
+```typescript
+// Get search statistics
+const stats = await search.stats()
+
+console.log({
+  totalDocuments: stats.total,
+  collections: stats.collections,
+  byCollection: stats.byCollection, // [{ collection: 'products', count: 1523 }, ...]
+})
+```
+
+#### Real-World Search Example
+
+```typescript
+// E-commerce product search
+async function searchProducts(query: string, filters: any = {}) {
+  const results = await search.query(query, {
+    collections: ['products'],
+    filters: {
+      inStock: true,
+      ...filters,
+    },
+    facets: ['category', 'brand', 'priceRange', 'rating'],
+    limit: 24,
+    sort: filters.sortBy || 'relevance',
+  })
+
+  return {
+    products: results.results.map((r) => ({
+      id: r.id,
+      title: r.title,
+      price: r.metadata.price,
+      image: r.imageUrl,
+      rating: r.metadata.rating,
+    })),
+    facets: results.facets,
+    pagination: results.pagination,
+  }
+}
+
+// Multi-collection knowledge base search
+async function searchDocs(query: string) {
+  // Semantic search for better results
+  const semantic = await search.query(query, {
+    semantic: true,
+    collections: ['docs', 'tutorials', 'api-reference', 'blog'],
+    limit: 10,
+  })
+
+  // Also do keyword search for exact matches
+  const keyword = await search.query(query, {
+    semantic: false,
+    collections: ['docs', 'tutorials', 'api-reference', 'blog'],
+    limit: 5,
+  })
+
+  // Merge and deduplicate
+  const allResults = [...semantic.results, ...keyword.results]
+  const unique = Array.from(new Map(allResults.map((r) => [r.id, r])).values())
+
+  return unique.slice(0, 10)
+}
+
+// Search with autocomplete
+async function searchWithAutocomplete(query: string) {
+  if (query.length < 3) {
+    // Show suggestions for short queries
+    return await search.suggest(query, { limit: 10 })
+  } else {
+    // Full search for longer queries
+    return await search.query(query, {
+      collections: ['products', 'docs'],
+      limit: 20,
+    })
+  }
+}
+
+// Admin search across all collections
+async function adminSearch(query: string) {
+  return await search.query(query, {
+    // No collection filter - search everything
+    limit: 50,
+    facets: ['collection', 'updatedAt'],
+    sort: 'date',
+    order: 'desc',
+  })
+}
+
+// Customer support search
+async function supportSearch(query: string, customerId?: string) {
+  const results = await search.query(query, {
+    collections: ['tickets', 'knowledge-base', 'faq'],
+    filters: customerId ? { customerId } : {},
+    semantic: true,
+    limit: 15,
+  })
+
+  // Prioritize customer's own tickets
+  return results.results.sort((a, b) => {
+    if (a.collection === 'tickets' && b.collection !== 'tickets') return -1
+    if (b.collection === 'tickets' && a.collection !== 'tickets') return 1
+    return b.score - a.score
+  })
+}
+```
+
+### `media` - Media Management
+
+The `media` service handles file uploads, management, and transformations using R2 storage.
+
+#### Upload File
+
+```typescript
+import { media } from 'sdk.do'
+
+// Upload image
+const file = await media.upload(imageBlob, {
+  alt: 'Product photo',
+  title: 'Blue Widget',
+  description: 'High-quality blue widget product image',
+  tags: ['product', 'widget', 'blue'],
+  folder: 'products/widgets',
+  customMetadata: {
+    sku: 'WIDGET-B-001',
+    photographer: 'Jane Doe',
+  },
+})
+
+console.log({
+  id: file.id,
+  url: file.url,
+  size: file.size,
+  mimeType: file.mimeType,
+})
+```
+
+#### Get File
+
+```typescript
+// Retrieve file by ID
+const image = await media.get(file.id)
+
+console.log({
+  filename: image.filename,
+  url: image.url,
+  alt: image.alt,
+  folder: image.folder,
+  uploaded: image.uploaded,
+})
+```
+
+#### List Files
+
+```typescript
+// List files in folder
+const { files, pagination } = await media.list({
+  folder: 'products/widgets',
+  limit: 50,
+  page: 1,
+})
+
+for (const file of files) {
+  console.log(`${file.filename} (${file.size} bytes)`)
+}
+
+console.log(`Page ${pagination.page} of ${pagination.totalPages}`)
+```
+
+#### Update File Metadata
+
+```typescript
+// Update file properties
+await media.update(file.id, {
+  alt: 'Updated alt text',
+  tags: ['product', 'widget', 'blue', 'featured'],
+  folder: 'products/featured',
+})
+```
+
+#### Delete File
+
+```typescript
+// Delete file
+await media.delete(file.id)
+```
+
+#### Transform Image
+
+```typescript
+// Resize and optimize image
+const transformed = await media.transform(file.id, {
+  width: 800,
+  height: 600,
+  fit: 'cover',
+  format: 'webp',
+  quality: 85,
+})
+
+console.log(`Transformed image URL: ${transformed.url}`)
+```
+
+#### Generate Thumbnail
+
+```typescript
+// Create thumbnail
+const thumb = await media.thumbnail(file.id, {
+  width: 200,
+  height: 200,
+  fit: 'cover',
+  format: 'webp',
+})
+```
+
+#### Real-World Media Example
+
+```typescript
+// Product image upload pipeline
+async function uploadProductImages(productId: string, images: File[]) {
+  const uploaded = []
+
+  for (let i = 0; i < images.length; i++) {
+    const file = images[i]
+
+    // Upload original
+    const original = await media.upload(file, {
+      folder: `products/${productId}`,
+      tags: ['product', productId],
+      customMetadata: {
+        productId,
+        position: i.toString(),
+      },
+    })
+
+    // Generate multiple sizes
+    const sizes = {
+      thumbnail: await media.transform(original.id, {
+        width: 200,
+        height: 200,
+        fit: 'cover',
+        format: 'webp',
+      }),
+      medium: await media.transform(original.id, {
+        width: 600,
+        height: 600,
+        fit: 'contain',
+        format: 'webp',
+      }),
+      large: await media.transform(original.id, {
+        width: 1200,
+        height: 1200,
+        fit: 'contain',
+        format: 'webp',
+        quality: 90,
+      }),
+    }
+
+    uploaded.push({
+      original: original.url,
+      sizes,
+      alt: `${productId} image ${i + 1}`,
+    })
+  }
+
+  // Update product with image URLs
+  await db.update($.Product, productId, {
+    images: uploaded,
+  })
+
+  return uploaded
+}
+
+// User avatar upload with validation
+async function uploadAvatar(userId: string, file: File) {
+  // Validate file
+  if (!file.type.startsWith('image/')) {
+    throw new Error('File must be an image')
+  }
+
+  if (file.size > 5 * 1024 * 1024) {
+    throw new Error('File must be under 5MB')
+  }
+
+  // Upload original
+  const avatar = await media.upload(file, {
+    folder: `avatars/${userId}`,
+    alt: `${userId} avatar`,
+    tags: ['avatar', userId],
+  })
+
+  // Generate sizes
+  const thumbnail = await media.transform(avatar.id, {
+    width: 100,
+    height: 100,
+    fit: 'cover',
+    format: 'webp',
+  })
+
+  const medium = await media.transform(avatar.id, {
+    width: 300,
+    height: 300,
+    fit: 'cover',
+    format: 'webp',
+  })
+
+  // Update user
+  await db.update($.Person, userId, {
+    avatar: {
+      original: avatar.url,
+      thumbnail: thumbnail.url,
+      medium: medium.url,
+    },
+  })
+
+  return {
+    original: avatar.url,
+    thumbnail: thumbnail.url,
+    medium: medium.url,
+  }
+}
+
+// Blog post images
+async function uploadBlogImage(postId: string, image: File) {
+  // Upload
+  const uploaded = await media.upload(image, {
+    folder: `blog/${postId}`,
+    tags: ['blog', postId],
+    customMetadata: { postId },
+  })
+
+  // Generate responsive sizes
+  const sizes = [400, 800, 1200, 1600]
+  const srcset = await Promise.all(
+    sizes.map(async (width) => {
+      const transformed = await media.transform(uploaded.id, {
+        width,
+        format: 'webp',
+        quality: 85,
+      })
+      return `${transformed.url} ${width}w`
+    })
+  )
+
+  return {
+    src: uploaded.url,
+    srcset: srcset.join(', '),
+    alt: uploaded.alt || '',
+  }
+}
+
+// Bulk upload with progress
+async function bulkUpload(files: File[], options: { folder: string; tags: string[] }) {
+  const results = []
+  let completed = 0
+
+  for (const file of files) {
+    try {
+      const uploaded = await media.upload(file, {
+        ...options,
+        customMetadata: {
+          batch: Date.now().toString(),
+        },
+      })
+
+      results.push({ success: true, file: uploaded })
+      completed++
+
+      console.log(`Progress: ${completed}/${files.length}`)
+    } catch (error) {
+      results.push({ success: false, error: error.message, filename: file.name })
+    }
+  }
+
+  return {
+    total: files.length,
+    succeeded: results.filter((r) => r.success).length,
+    failed: results.filter((r) => !r.success).length,
+    results,
+  }
+}
+
+// Media gallery management
+async function getGallery(folder: string) {
+  let allFiles = []
+  let page = 1
+  let hasMore = true
+
+  while (hasMore) {
+    const { files, pagination } = await media.list({
+      folder,
+      limit: 100,
+      page,
+    })
+
+    allFiles = [...allFiles, ...files]
+    hasMore = pagination.hasMore
+    page++
+  }
+
+  // Group by tags
+  const byTag = allFiles.reduce((acc, file) => {
+    for (const tag of file.tags || []) {
+      if (!acc[tag]) acc[tag] = []
+      acc[tag].push(file)
+    }
+    return acc
+  }, {})
+
+  return {
+    files: allFiles,
+    byTag,
+    total: allFiles.length,
+  }
+}
+```
+
+---
+
+## Phase 3: Platform Services
+
+Phase 3 services provide specialized capabilities for secrets management, analytics, experimentation, event triggers, action orchestration, batch operations, and real-time streaming.
+
+### `vault` - Secrets Management
+
+The `vault` service provides secure secrets management with encryption at rest and per-organization isolation.
+
+#### Store Secret
+
+```typescript
+import { vault } from 'sdk.do'
+
+// Store API key
+await vault.store('org_123', 'stripe_secret_key', 'sk_live_...', {
+  metadata: {
+    description: 'Stripe production API key',
+    environment: 'production',
+    rotation: '90d',
+  },
+})
+```
+
+#### Retrieve Secret
+
+```typescript
+// Get secret value
+const secret = await vault.get('org_123', 'stripe_secret_key')
+console.log(secret.value) // 'sk_live_...'
+console.log(secret.metadata) // { description: '...', environment: 'production' }
+```
+
+#### List Secrets
+
+```typescript
+// List all secrets for organization
+const secrets = await vault.list('org_123')
+
+for (const secret of secrets) {
+  console.log(`${secret.key}: ${secret.createdAt}`)
+}
+
+// List with prefix filter
+const apiKeys = await vault.list('org_123', { prefix: 'api_' })
+```
+
+#### Update Secret
+
+```typescript
+// Rotate secret value
+await vault.update('org_123', 'stripe_secret_key', 'sk_live_new_value', {
+  metadata: {
+    rotatedAt: new Date().toISOString(),
+    rotatedBy: 'system',
+  },
+})
+```
+
+#### Delete Secret
+
+```typescript
+// Remove secret
+await vault.delete('org_123', 'stripe_secret_key')
+```
+
+#### Real-World Vault Example
+
+```typescript
+// API key rotation system
+async function rotateApiKey(orgId: string, service: string) {
+  // Generate new key
+  const newKey = crypto.randomUUID()
+
+  // Store with rotation metadata
+  await vault.store(orgId, `${service}_api_key`, newKey, {
+    metadata: {
+      service,
+      rotatedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
+      rotationPolicy: '90d',
+    },
+  })
+
+  // Archive old key
+  const oldKey = await vault.get(orgId, `${service}_api_key_previous`)
+  if (oldKey) {
+    await vault.delete(orgId, `${service}_api_key_previous`)
+  }
+
+  return newKey
+}
+
+// Multi-tenant secrets management
+async function getServiceCredentials(orgId: string, service: string) {
+  const secrets = await vault.list(orgId, { prefix: `${service}_` })
+
+  return secrets.reduce((acc, secret) => {
+    const key = secret.key.replace(`${service}_`, '')
+    acc[key] = secret.value
+    return acc
+  }, {})
+}
+
+// Secure configuration loader
+async function loadConfig(orgId: string, environment: 'dev' | 'staging' | 'prod') {
+  const secrets = await vault.list(orgId, { prefix: `${environment}_` })
+
+  const config = {}
+  for (const secret of secrets) {
+    const key = secret.key.replace(`${environment}_`, '')
+    config[key] = secret.value
+  }
+
+  return config
+}
+
+// Secrets audit log
+async function auditSecrets(orgId: string) {
+  const secrets = await vault.list(orgId)
+
+  return secrets.map((secret) => ({
+    key: secret.key,
+    createdAt: secret.createdAt,
+    updatedAt: secret.updatedAt,
+    metadata: secret.metadata,
+    needsRotation: isRotationNeeded(secret),
+  }))
+}
+
+function isRotationNeeded(secret: any): boolean {
+  if (!secret.metadata?.rotation) return false
+
+  const rotationDays = parseInt(secret.metadata.rotation)
+  const daysSinceUpdate = Math.floor((Date.now() - new Date(secret.updatedAt).getTime()) / (24 * 60 * 60 * 1000))
+
+  return daysSinceUpdate >= rotationDays
+}
+```
+
+### `analytics` - Event Tracking
+
+The `analytics` service provides event tracking, page views, conversions, and analytics queries.
+
+#### Track Event
+
+```typescript
+import { analytics } from 'sdk.do'
+
+// Track custom event
+await analytics.track('button_clicked', {
+  buttonId: 'cta-signup',
+  page: '/pricing',
+  variant: 'blue',
+  userId: 'user_123',
+})
+```
+
+#### Track Page View
+
+```typescript
+// Track page view
+await analytics.page('/dashboard', {
+  title: 'User Dashboard',
+  referrer: '/login',
+  userId: 'user_123',
+  utm: {
+    source: 'google',
+    medium: 'cpc',
+    campaign: 'spring-sale',
+  },
+})
+```
+
+#### Identify User
+
+```typescript
+// Associate events with user
+await analytics.identify('user_123', {
+  email: 'user@example.com',
+  plan: 'pro',
+  signupDate: '2025-01-01',
+  traits: {
+    company: 'Acme Inc',
+    role: 'developer',
+  },
+})
+```
+
+#### Track Conversion
+
+```typescript
+// Track conversion with value
+await analytics.track('purchase', {
+  orderId: 'order_456',
+  value: 99.99,
+  currency: 'USD',
+  items: [{ sku: 'WIDGET-A', quantity: 2, price: 49.99 }],
+  userId: 'user_123',
+})
+```
+
+#### Query Analytics
+
+```typescript
+// Query event data
+const results = await analytics.query({
+  events: ['button_clicked', 'purchase'],
+  dateRange: {
+    start: '2025-01-01',
+    end: '2025-01-31',
+  },
+  groupBy: ['page', 'variant'],
+  aggregate: ['count', 'sum(value)'],
+})
+
+console.log(results.data) // Aggregated results
+```
+
+#### Real-World Analytics Example
+
+```typescript
+// E-commerce funnel tracking
+async function trackCheckoutFunnel(userId: string, step: string, data: any) {
+  await analytics.track(`checkout_${step}`, {
+    ...data,
+    userId,
+    funnel: 'checkout',
+    step,
+    timestamp: new Date().toISOString(),
+  })
+}
+
+// Usage
+await trackCheckoutFunnel('user_123', 'started', { cartTotal: 299.99 })
+await trackCheckoutFunnel('user_123', 'shipping', { method: 'express' })
+await trackCheckoutFunnel('user_123', 'payment', { method: 'card' })
+await trackCheckoutFunnel('user_123', 'completed', { orderId: 'order_456' })
+
+// Marketing attribution
+async function trackAttribution(userId: string, conversion: any) {
+  // Get user's first touch
+  const user = await db.get($.Person, userId)
+
+  await analytics.track('conversion', {
+    ...conversion,
+    userId,
+    attribution: {
+      firstTouch: user.firstTouchUtm,
+      lastTouch: user.lastTouchUtm,
+      touchpoints: user.touchpoints?.length || 0,
+    },
+  })
+}
+
+// Product analytics
+async function trackFeatureUsage(feature: string, userId: string, properties: any = {}) {
+  await analytics.track('feature_used', {
+    feature,
+    userId,
+    ...properties,
+    sessionId: analytics.getSessionId(),
+    timestamp: new Date().toISOString(),
+  })
+
+  // Update user's feature usage count
+  await db.update($.Person, userId, {
+    [`features.${feature}.count`]: db.increment(1),
+    [`features.${feature}.lastUsed`]: new Date(),
+  })
+}
+
+// Real-time dashboard metrics
+async function getDashboardMetrics(orgId: string, period: '24h' | '7d' | '30d' = '24h') {
+  const now = new Date()
+  const start = new Date(now.getTime() - getPeriodMs(period))
+
+  const [pageViews, uniqueUsers, conversions, revenue] = await Promise.all([
+    analytics.query({
+      events: ['page_viewed'],
+      dateRange: { start: start.toISOString(), end: now.toISOString() },
+      filters: { organizationId: orgId },
+      aggregate: ['count'],
+    }),
+    analytics.query({
+      events: ['*'],
+      dateRange: { start: start.toISOString(), end: now.toISOString() },
+      filters: { organizationId: orgId },
+      aggregate: ['count_distinct(userId)'],
+    }),
+    analytics.query({
+      events: ['purchase'],
+      dateRange: { start: start.toISOString(), end: now.toISOString() },
+      filters: { organizationId: orgId },
+      aggregate: ['count'],
+    }),
+    analytics.query({
+      events: ['purchase'],
+      dateRange: { start: start.toISOString(), end: now.toISOString() },
+      filters: { organizationId: orgId },
+      aggregate: ['sum(value)'],
+    }),
+  ])
+
+  return {
+    pageViews: pageViews.data[0].count,
+    uniqueUsers: uniqueUsers.data[0].unique_users,
+    conversions: conversions.data[0].count,
+    revenue: revenue.data[0].total_value,
+  }
+}
+
+function getPeriodMs(period: string): number {
+  const durations = { '24h': 86400000, '7d': 604800000, '30d': 2592000000 }
+  return durations[period] || durations['24h']
+}
+```
+
+### `experiments` - A/B Testing
+
+The `experiments` service enables A/B testing, feature flags, and experimentation.
+
+#### Assign to Experiment
+
+```typescript
+import { experiments } from 'sdk.do'
+
+// Get experiment bucket assignment
+const decision = await experiments.decide('homepage-hero', {
+  userId: 'user_123',
+  context: {
+    country: 'US',
+    device: 'mobile',
+  },
+})
+
+console.log(decision.bucket) // 'control' or 'treatment'
+console.log(decision.payload) // Variant configuration
+
+// Render based on assignment
+if (decision.bucket === 'treatment') {
+  renderNewHero(decision.payload)
+} else {
+  renderOriginalHero()
+}
+```
+
+#### Track Conversion
+
+```typescript
+// Track experiment conversion
+await experiments.send('homepage-hero', 'conversion', {
+  value: 99.99,
+  orderId: 'order_456',
+  userId: 'user_123',
+})
+```
+
+#### Track Custom Metric
+
+```typescript
+// Track any metric
+await experiments.send('homepage-hero', 'clicked_cta', {
+  userId: 'user_123',
+  ctaPosition: 'above-fold',
+})
+```
+
+#### Create Experiment
+
+```typescript
+// Create new experiment
+const experiment = await experiments.create({
+  key: 'checkout-flow',
+  name: 'Streamlined Checkout Flow',
+  description: 'Test single-page vs multi-step checkout',
+  variants: [
+    { key: 'control', name: 'Multi-step', traffic: 50 },
+    { key: 'treatment', name: 'Single-page', traffic: 50 },
+  ],
+  targeting: {
+    include: {
+      country: ['US', 'CA'],
+      device: ['mobile', 'desktop'],
+    },
+  },
+  metrics: {
+    primary: 'conversion_rate',
+    secondary: ['time_to_complete', 'abandonment_rate'],
+  },
+})
+```
+
+#### Get Experiment Results
+
+```typescript
+// Query experiment results
+const results = await experiments.results('homepage-hero', {
+  dateRange: {
+    start: '2025-01-01',
+    end: '2025-01-31',
+  },
+})
+
+console.log({
+  control: results.variants.control,
+  treatment: results.variants.treatment,
+  lift: results.lift, // % improvement
+  confidence: results.confidence, // Statistical significance
+  winner: results.winner,
+})
+```
+
+#### Real-World Experiments Example
+
+```typescript
+// Feature flag with gradual rollout
+async function isFeatureEnabled(featureKey: string, userId: string): Promise<boolean> {
+  const decision = await experiments.decide(featureKey, { userId })
+  return decision.bucket === 'enabled'
+}
+
+// Usage
+if (await isFeatureEnabled('new-dashboard', userId)) {
+  return <NewDashboard />
+} else {
+  return <LegacyDashboard />
+}
+
+// Multivariate testing
+async function getPricingVariant(userId: string) {
+  const decision = await experiments.decide('pricing-test', {
+    userId,
+    context: { source: 'landing-page' }
+  })
+
+  // decision.payload contains variant configuration
+  return {
+    monthlyPrice: decision.payload.monthlyPrice,
+    annualPrice: decision.payload.annualPrice,
+    features: decision.payload.features,
+    cta: decision.payload.ctaText
+  }
+}
+
+// Auto-winner selection
+async function checkAndPromoteWinner(experimentKey: string) {
+  const results = await experiments.results(experimentKey)
+
+  if (results.confidence > 0.95 && results.lift > 0.10) {
+    // 95% confidence, 10%+ lift - promote winner
+    await experiments.promote(experimentKey, results.winner)
+
+    console.log(`Promoted ${results.winner} to 100% traffic`)
+
+    // Notify team
+    await send($.Notification.created, {
+      type: 'experiment-winner',
+      experiment: experimentKey,
+      winner: results.winner,
+      lift: results.lift,
+      confidence: results.confidence
+    })
+  }
+}
+
+// Segment-based experiments
+async function runSegmentedExperiment(userId: string) {
+  const user = await db.get($.Person, userId)
+
+  const decision = await experiments.decide('personalized-onboarding', {
+    userId,
+    context: {
+      userSegment: user.segment, // 'enterprise', 'smb', 'individual'
+      accountAge: user.accountAgeDays,
+      plan: user.plan
+    }
+  })
+
+  // Different onboarding flows per segment
+  return decision.payload.onboardingSteps
+}
+```
+
+### `triggers` - Event Triggers
+
+The `triggers` service provides event-based triggers for workflows and automation.
+
+#### Define Trigger
+
+```typescript
+import { triggers } from 'sdk.do'
+
+// Listen for event pattern
+await triggers.on('$.Order.created', async (event) => {
+  // Execute workflow
+  await workflows.create('process-order', event.payload)
+})
+```
+
+#### Pattern Matching
+
+```typescript
+// Glob pattern - all order events
+await triggers.on('$.Order.*', async (event) => {
+  console.log(`Order event: ${event.type}`)
+})
+
+// Regex pattern
+await triggers.on(/^$.Payment\.(success|failed)$/, async (event) => {
+  if (event.type === '$.Payment.success') {
+    await send($.Email.send, { template: 'payment-success', ...event.payload })
+  } else {
+    await send($.Email.send, { template: 'payment-failed', ...event.payload })
+  }
+})
+```
+
+#### Conditional Triggers
+
+```typescript
+// Execute only if condition is met
+await triggers.when('$.User.login', {
+  condition: (event) => event.payload.isNewDevice === true,
+  action: async (event) => {
+    await send($.Alert.created, {
+      type: 'security',
+      message: 'New device login detected',
+      userId: event.payload.userId,
+    })
+  },
+})
+```
+
+#### Schedule-Based Triggers
+
+```typescript
+// Cron schedule
+await triggers.every('0 9 * * *', {
+  action: async () => {
+    // Daily report at 9 AM
+    await workflows.create('daily-report', {
+      date: new Date().toISOString(),
+    })
+  },
+})
+
+// Semantic intervals
+await triggers.every($.Daily, async () => {
+  console.log('Daily task executed')
+})
+```
+
+#### Register Trigger
+
+```typescript
+// Create trigger with full configuration
+const trigger = await triggers.register({
+  name: 'high-value-order-alert',
+  description: 'Alert when order exceeds $1000',
+  event: '$.Order.created',
+  condition: async (event) => event.payload.total > 1000,
+  action: async (event) => {
+    await send($.Notification.created, {
+      type: 'high-value-order',
+      orderId: event.payload.id,
+      total: event.payload.total,
+    })
+  },
+  priority: 'high',
+  retry: {
+    max: 3,
+    delay: '5s',
+    backoff: 'exponential',
+  },
+})
+
+console.log(`Trigger registered: ${trigger.id}`)
+```
+
+#### Manage Triggers
+
+```typescript
+// List active triggers
+const activeTriggers = await triggers.list({ status: 'active' })
+
+// Pause trigger
+await triggers.pause(trigger.id)
+
+// Resume trigger
+await triggers.resume(trigger.id)
+
+// Delete trigger
+await triggers.delete(trigger.id)
+```
+
+#### Real-World Triggers Example
+
+```typescript
+// Real-time inventory alerts
+await triggers.on('$.Product.updated', async (event) => {
+  if (event.payload.stock < event.payload.lowStockThreshold) {
+    await workflows.create('reorder-inventory', {
+      productId: event.payload.id,
+      currentStock: event.payload.stock,
+      reorderQuantity: event.payload.reorderQuantity,
+    })
+  }
+})
+
+// Customer lifecycle automation
+await triggers.on('$.User.created', async (event) => {
+  // Start onboarding workflow
+  await workflows.create('user-onboarding', {
+    userId: event.payload.id,
+    email: event.payload.email,
+    source: event.payload.signupSource,
+  })
+})
+
+// Fraud detection
+await triggers.when('$.Payment.submitted', {
+  condition: async (event) => {
+    const score = await ai.generate({
+      model: 'gpt-5',
+      prompt: `Fraud risk score for: ${JSON.stringify(event.payload)}`,
+    })
+    return parseFloat(score) > 0.8
+  },
+  action: async (event) => {
+    await workflows.create('fraud-review', {
+      paymentId: event.payload.id,
+      riskScore: event.metadata.fraudScore,
+      reviewType: 'manual',
+    })
+  },
+})
+
+// SLA monitoring
+await triggers.on('$.Ticket.created', async (event) => {
+  const priority = event.payload.priority
+  const slaMinutes = priority === 'critical' ? 30 : priority === 'high' ? 120 : 480
+
+  // Schedule SLA check
+  setTimeout(
+    async () => {
+      const ticket = await db.get($.Ticket, event.payload.id)
+      if (ticket.status === 'open') {
+        await send($.Alert.created, {
+          type: 'sla-breach',
+          ticketId: ticket.id,
+          priority,
+          openedAt: event.payload.createdAt,
+        })
+      }
+    },
+    slaMinutes * 60 * 1000
+  )
+})
+
+// Churn prevention
+await triggers.when('$.User.activity', {
+  condition: (event) => event.payload.daysSinceLastActivity > 7,
+  action: async (event) => {
+    await workflows.create('winback-campaign', {
+      userId: event.payload.userId,
+      email: event.payload.email,
+      plan: event.payload.plan,
+      lastActivity: event.payload.lastActivityDate,
+    })
+  },
+})
+```
+
+### `actions` - Action System
+
+The `actions` service provides reusable actions for workflows and automation.
+
+#### Define Action
+
+```typescript
+import { actions } from 'sdk.do'
+
+// Define custom action
+const sendWelcomeEmail = actions.define({
+  name: 'send-welcome-email',
+  description: 'Send welcome email to new user',
+  parameters: {
+    userId: { type: 'string', required: true },
+    template: { type: 'string', default: 'welcome' },
+  },
+  handler: async ({ userId, template }) => {
+    const user = await db.get($.Person, userId)
+    await send($.Email.send, {
+      to: user.email,
+      template,
+      data: { name: user.name },
+    })
+    return { sent: true, userId, email: user.email }
+  },
+  retry: {
+    max: 3,
+    delay: '5s',
+    backoff: 'exponential',
+  },
+})
+```
+
+#### Execute Action
+
+```typescript
+// Execute action
+const result = await sendWelcomeEmail.execute({
+  userId: 'user_123',
+  template: 'welcome-pro',
+})
+
+console.log(result) // { sent: true, userId: 'user_123', email: '...' }
+```
+
+#### Compose Actions
+
+```typescript
+// Sequential composition
+const pipeline = actions.compose([
+  actions.database.get($.Person, 'user_123'),
+  actions.transform((user) => ({ ...user, verified: true })),
+  actions.database.update($.Person, 'user_123'),
+])
+
+await pipeline.execute()
+
+// Parallel composition
+const results = await actions.parallel([
+  actions.database.get($.Person, 'user_123'),
+  actions.database.get($.Order, 'order_456'),
+  actions.database.get($.Product, 'prod_789'),
+])
+```
+
+#### Built-in Actions
+
+```typescript
+// Database actions
+await actions.database.create($.Person, {
+  name: 'Alice',
+  email: 'alice@example.com',
+})
+
+await actions.database.update($.Person, 'user_123', {
+  verified: true,
+})
+
+// HTTP actions
+const response = await actions.http.get('https://api.example.com/users')
+await actions.http.post('https://api.example.com/webhooks', { data })
+
+// Transform actions
+const users = await actions.transform.map(users, (user) => ({
+  ...user,
+  fullName: `${user.firstName} ${user.lastName}`,
+}))
+
+const filtered = await actions.transform.filter(orders, (order) => order.total > 100)
+
+// Email actions
+await actions.email.send({
+  to: 'user@example.com',
+  subject: 'Welcome!',
+  template: 'welcome',
+  data: { name: 'Alice' },
+})
+```
+
+#### Register Action
+
+```typescript
+// Register action for discovery
+await actions.register(sendWelcomeEmail)
+
+// List registered actions
+const allActions = await actions.list()
+
+// Get action by name
+const action = await actions.get('send-welcome-email')
+```
+
+#### Real-World Actions Example
+
+```typescript
+// Data enrichment action
+const enrichUser = actions.define({
+  name: 'enrich-user-data',
+  description: 'Enrich user data with external APIs',
+  parameters: {
+    userId: { type: 'string', required: true },
+  },
+  handler: async ({ userId }) => {
+    const user = await db.get($.Person, userId)
+
+    // Enrich with multiple data sources
+    const [geo, company, social] = await Promise.all([
+      actions.http.get(`https://geo-api.com/lookup?email=${user.email}`),
+      actions.http.get(`https://company-api.com/enrich?domain=${user.email.split('@')[1]}`),
+      actions.http.get(`https://social-api.com/profile?email=${user.email}`),
+    ])
+
+    // Update user with enriched data
+    await db.update($.Person, userId, {
+      location: geo.city,
+      company: company.name,
+      linkedIn: social.linkedInUrl,
+      enrichedAt: new Date().toISOString(),
+    })
+
+    return { enriched: true, userId }
+  },
+  timeout: 30000,
+})
+
+// Workflow composition
+const onboardingWorkflow = actions.compose([
+  // Step 1: Create user account
+  actions.define({
+    name: 'create-account',
+    handler: async ({ email, password }) => {
+      return await db.create($.Person, { email, password: hashPassword(password) })
+    },
+  }),
+
+  // Step 2: Send verification email
+  actions.define({
+    name: 'send-verification',
+    handler: async ({ userId }) => {
+      const token = generateToken()
+      await actions.email.send({
+        to: userId,
+        template: 'verify-email',
+        data: { token },
+      })
+      return { tokenSent: true }
+    },
+  }),
+
+  // Step 3: Enrich user data
+  enrichUser,
+
+  // Step 4: Assign to onboarding sequence
+  actions.define({
+    name: 'start-onboarding',
+    handler: async ({ userId }) => {
+      await workflows.create('onboarding-sequence', { userId })
+      return { workflowStarted: true }
+    },
+  }),
+])
+
+// Error handling action
+const withErrorHandling = (action: any) => {
+  return actions.define({
+    name: `${action.name}-with-error-handling`,
+    handler: async (params) => {
+      try {
+        return await action.execute(params)
+      } catch (error) {
+        // Log error
+        await db.create($.ErrorLog, {
+          action: action.name,
+          error: error.message,
+          params,
+          timestamp: new Date(),
+        })
+
+        // Notify team
+        await send($.Alert.created, {
+          type: 'action-error',
+          action: action.name,
+          error: error.message,
+        })
+
+        throw error
+      }
+    },
+    retry: action.retry,
+  })
+}
+
+// Conditional action execution
+const conditionalAction = actions.define({
+  name: 'conditional-email',
+  handler: async ({ userId, condition }) => {
+    const shouldSend = typeof condition === 'function' ? await condition() : condition
+
+    if (shouldSend) {
+      return await sendWelcomeEmail.execute({ userId })
+    }
+
+    return { skipped: true, reason: 'condition not met' }
+  },
+})
+```
+
+### `batch` - Batch Operations
+
+The `batch` service enables executing multiple API requests in a single call.
+
+#### Execute Batch
+
+```typescript
+import { batch } from 'sdk.do'
+
+// Execute multiple requests in parallel
+const result = await batch.execute({
+  requests: [
+    {
+      id: 'create-user',
+      method: 'POST',
+      path: '/v1/database/create',
+      body: { collection: '$.Person', data: { name: 'Alice' } },
+    },
+    {
+      id: 'create-order',
+      method: 'POST',
+      path: '/v1/database/create',
+      body: { collection: '$.Order', data: { userId: 'user_123', total: 99.99 } },
+    },
+    {
+      id: 'send-event',
+      method: 'POST',
+      path: '/v1/events/publish',
+      body: { type: '$.Order.created', data: { orderId: 'order_456' } },
+    },
+  ],
+})
+
+console.log({
+  successful: result.summary.successful,
+  failed: result.summary.failed,
+  duration: result.summary.duration,
+})
+
+// Check individual responses
+for (const response of result.responses) {
+  console.log(`${response.id}: ${response.status}`)
+  if (response.error) {
+    console.error(`Error: ${response.error.message}`)
+  }
+}
+```
+
+#### Sequential Execution
+
+```typescript
+// Execute requests sequentially
+const result = await batch.execute({
+  requests: [
+    { id: 'step1', method: 'POST', path: '/v1/workflow/create', body: {...} },
+    { id: 'step2', method: 'GET', path: '/v1/workflow/{workflowId}/status' },
+    { id: 'step3', method: 'POST', path: '/v1/workflow/{workflowId}/cancel' }
+  ],
+  sequential: true
+})
+```
+
+#### Dependency Management
+
+```typescript
+// Requests with dependencies
+const result = await batch.execute({
+  requests: [
+    {
+      id: 'create-user',
+      method: 'POST',
+      path: '/v1/database/create',
+      body: { collection: '$.Person', data: { name: 'Alice' } },
+    },
+    {
+      id: 'create-order',
+      method: 'POST',
+      path: '/v1/database/create',
+      body: { collection: '$.Order', data: { userId: '{{create-user.id}}' } },
+      dependsOn: ['create-user'], // Wait for user creation
+    },
+    {
+      id: 'send-email',
+      method: 'POST',
+      path: '/v1/emails/send',
+      body: { to: '{{create-user.email}}', template: 'welcome' },
+      dependsOn: ['create-user'],
+    },
+  ],
+})
+```
+
+#### Error Handling
+
+```typescript
+// Stop on first error
+const result = await batch.execute({
+  requests: [...],
+  stopOnError: true
+})
+
+// Continue on errors
+const result = await batch.execute({
+  requests: [...],
+  continueOnError: true
+})
+
+// Check for errors
+if (result.summary.failed > 0) {
+  const errors = result.responses.filter(r => r.error)
+  console.error('Failed requests:', errors)
+}
+```
+
+#### Real-World Batch Example
+
+```typescript
+// Bulk user import
+async function bulkImportUsers(users: any[]) {
+  const requests = users.map((user, index) => ({
+    id: `user-${index}`,
+    method: 'POST' as const,
+    path: '/v1/database/create',
+    body: {
+      collection: '$.Person',
+      data: user,
+    },
+  }))
+
+  const result = await batch.execute({
+    requests,
+    continueOnError: true, // Import all that succeed
+  })
+
+  return {
+    imported: result.summary.successful,
+    failed: result.summary.failed,
+    errors: result.responses
+      .filter((r) => r.error)
+      .map((r) => ({
+        user: users[parseInt(r.id.split('-')[1])],
+        error: r.error?.message,
+      })),
+  }
+}
+
+// Multi-step data pipeline
+async function processDataPipeline(dataId: string) {
+  const result = await batch.execute({
+    requests: [
+      {
+        id: 'fetch-data',
+        method: 'GET',
+        path: `/v1/storage/get?key=raw-${dataId}`,
+      },
+      {
+        id: 'transform',
+        method: 'POST',
+        path: '/v1/functions/execute',
+        body: {
+          function: 'transform-data',
+          params: { data: '{{fetch-data.body}}' },
+        },
+        dependsOn: ['fetch-data'],
+      },
+      {
+        id: 'validate',
+        method: 'POST',
+        path: '/v1/functions/execute',
+        body: {
+          function: 'validate-data',
+          params: { data: '{{transform.result}}' },
+        },
+        dependsOn: ['transform'],
+      },
+      {
+        id: 'store',
+        method: 'POST',
+        path: '/v1/database/create',
+        body: {
+          collection: '$.ProcessedData',
+          data: '{{validate.result}}',
+        },
+        dependsOn: ['validate'],
+      },
+    ],
+    sequential: true,
+    stopOnError: true,
+  })
+
+  return result.responses[result.responses.length - 1].body
+}
+
+// Parallel data fetching
+async function fetchDashboardData(userId: string) {
+  const result = await batch.execute({
+    requests: [
+      { id: 'user', method: 'GET', path: `/v1/database/get?collection=$.Person&id=${userId}` },
+      { id: 'orders', method: 'GET', path: `/v1/database/list?collection=$.Order&userId=${userId}` },
+      { id: 'analytics', method: 'GET', path: `/v1/analytics/query?userId=${userId}` },
+      { id: 'notifications', method: 'GET', path: `/v1/database/list?collection=$.Notification&userId=${userId}` },
+    ],
+  })
+
+  return {
+    user: result.responses[0].body,
+    orders: result.responses[1].body,
+    analytics: result.responses[2].body,
+    notifications: result.responses[3].body,
+  }
+}
+```
+
+### `stream` - Real-Time Streaming
+
+The `stream` service provides real-time data streams using Server-Sent Events (SSE).
+
+#### Stream Events
+
+```typescript
+import { stream } from 'sdk.do'
+
+// Stream real-time events
+const eventStream = stream.events({
+  types: ['$.Order.created', '$.Order.updated'],
+  onEvent: (event) => {
+    console.log('New event:', event)
+    updateUI(event)
+  },
+  onError: (error) => {
+    console.error('Stream error:', error)
+  },
+})
+
+// Stop streaming
+eventStream.close()
+```
+
+#### Stream Search Results
+
+```typescript
+// Live search with real-time updates
+const searchStream = stream.search({
+  query: 'laptop',
+  collections: ['products'],
+  interval: 5000, // Poll every 5 seconds
+  onResults: (results) => {
+    console.log('Updated results:', results)
+    updateSearchResults(results)
+  },
+})
+
+// Stop search stream
+searchStream.close()
+```
+
+#### Stream Batch Progress
+
+```typescript
+// Monitor batch operation progress
+const batchStream = stream.batch({
+  batchId: 'batch_789',
+  interval: 500, // Poll every 500ms
+  onProgress: (progress) => {
+    console.log(`Progress: ${progress.completed}/${progress.total}`)
+    updateProgressBar(progress.percent)
+  },
+  onComplete: (result) => {
+    console.log('Batch complete:', result)
+    showCompletionMessage()
+  },
+})
+```
+
+#### Stream Health Status
+
+```typescript
+// Monitor system health
+const healthStream = stream.health({
+  interval: 10000, // Check every 10 seconds
+  onStatus: (status) => {
+    console.log('System status:', status)
+    updateHealthIndicator(status)
+  },
+  onError: (error) => {
+    console.error('Health check failed:', error)
+    showErrorAlert()
+  },
+})
+```
+
+#### Custom Stream
+
+```typescript
+// Create custom stream
+const customStream = stream.custom({
+  url: 'https://api.do/v1/stream/custom',
+  params: { filter: 'important' },
+  onData: (data) => {
+    console.log('Stream data:', data)
+  },
+  onConnected: () => {
+    console.log('Stream connected')
+  },
+  onClosed: (data) => {
+    console.log('Stream closed:', data)
+  },
+})
+```
+
+#### Real-World Streaming Example
+
+```typescript
+// Live dashboard with multiple streams
+class DashboardStreams {
+  private streams: any[] = []
+
+  async start(userId: string) {
+    // Stream user's orders
+    this.streams.push(
+      stream.events({
+        types: ['$.Order.*'],
+        filters: { userId },
+        onEvent: (event) => this.handleOrderEvent(event),
+      })
+    )
+
+    // Stream notifications
+    this.streams.push(
+      stream.events({
+        types: ['$.Notification.created'],
+        filters: { userId },
+        onEvent: (event) => this.showNotification(event.payload),
+      })
+    )
+
+    // Stream analytics
+    this.streams.push(
+      stream.custom({
+        url: `/v1/analytics/stream?userId=${userId}`,
+        interval: 30000,
+        onData: (data) => this.updateMetrics(data),
+      })
+    )
+  }
+
+  stop() {
+    this.streams.forEach((s) => s.close())
+    this.streams = []
+  }
+
+  private handleOrderEvent(event: any) {
+    switch (event.type) {
+      case '$.Order.created':
+        this.addNewOrder(event.payload)
+        break
+      case '$.Order.updated':
+        this.updateOrder(event.payload)
+        break
+      case '$.Order.cancelled':
+        this.removeOrder(event.payload.id)
+        break
+    }
+  }
+}
+
+// Live collaboration
+async function setupLiveCollaboration(documentId: string) {
+  const presenceStream = stream.custom({
+    url: `/v1/documents/${documentId}/presence`,
+    onData: (presence) => {
+      updateActiveUsers(presence.users)
+      updateCursors(presence.cursors)
+    },
+  })
+
+  const changesStream = stream.events({
+    types: ['$.Document.changed'],
+    filters: { documentId },
+    onEvent: (event) => {
+      applyRemoteChanges(event.payload.changes)
+    },
+  })
+
+  return {
+    close: () => {
+      presenceStream.close()
+      changesStream.close()
+    },
+  }
+}
+
+// Real-time monitoring
+async function monitorWorkflow(workflowId: string) {
+  return stream.custom({
+    url: `/v1/workflows/${workflowId}/stream`,
+    onData: (update) => {
+      console.log(`Workflow ${workflowId}:`, update.status)
+
+      if (update.step) {
+        console.log(`  Step ${update.step.name}: ${update.step.status}`)
+      }
+
+      if (update.status === 'completed') {
+        console.log('Workflow completed:', update.output)
+      } else if (update.status === 'failed') {
+        console.error('Workflow failed:', update.error)
+      }
+    },
+  })
+}
+
+// Live search with debouncing
+class LiveSearch {
+  private stream: any
+  private debounceTimer: any
+
+  search(query: string) {
+    // Close existing stream
+    if (this.stream) {
+      this.stream.close()
+    }
+
+    // Debounce search
+    clearTimeout(this.debounceTimer)
+    this.debounceTimer = setTimeout(() => {
+      this.stream = stream.search({
+        query,
+        collections: ['products', 'docs'],
+        interval: 3000,
+        onResults: (results) => {
+          updateSearchResults(results)
+        },
+      })
+    }, 300)
+  }
+
+  close() {
+    if (this.stream) {
+      this.stream.close()
+    }
+    clearTimeout(this.debounceTimer)
+  }
+}
+```
+
+---
+
+## Phase 4: Advanced Services
+
+### `llm` - Multi-Provider LLM Operations
+
+The `llm` service provides unified access to multiple LLM providers (OpenAI, Anthropic, Google, Meta, xAI, Workers AI) with support for chat completions, streaming, function calling, embeddings, and batch processing.
+
+#### Generate Text
+
+```typescript
+import { llm } from 'sdk.do'
+
+const response = await llm.generate('Write a haiku about TypeScript', {
+  model: 'claude-sonnet-4.5',
+  temperature: 0.7,
+  maxTokens: 100,
+})
+console.log(response.text)
+```
+
+#### Chat Completions
+
+```typescript
+const response = await llm.chat(
+  [
+    { role: 'system', content: 'You are a helpful assistant' },
+    { role: 'user', content: 'What is TypeScript?' },
+  ],
+  {
+    provider: 'openai',
+    model: 'gpt-5',
+    temperature: 0.7,
+  }
+)
+console.log(response.message.content)
+```
+
+#### Function Calling
+
+```typescript
+const tools = [
+  {
+    type: 'function' as const,
+    function: {
+      name: 'get_weather',
+      description: 'Get the current weather',
+      parameters: {
+        type: 'object',
+        properties: {
+          location: { type: 'string' },
+          unit: { type: 'string', enum: ['celsius', 'fahrenheit'] },
+        },
+        required: ['location'],
+      },
+    },
+  },
+]
+
+const response = await llm.chat([{ role: 'user', content: 'What is the weather in Paris?' }], {
+  tools,
+  tool_choice: 'auto',
+})
+
+if (response.message.tool_calls) {
+  for (const call of response.message.tool_calls) {
+    console.log(`Calling function: ${call.function.name}`)
+    console.log(`Arguments:`, JSON.parse(call.function.arguments))
+  }
+}
+```
+
+#### Streaming Responses
+
+```typescript
+const stream = await llm.stream('Write a long story about AI', {
+  onChunk: (chunk) => {
+    if (chunk.text) process.stdout.write(chunk.text)
+    if (chunk.done) console.log('\n\nStream complete!')
+  },
+})
+
+for await (const chunk of stream) {
+  process.stdout.write(chunk.text || '')
+}
+```
+
+#### Embeddings
+
+```typescript
+// Single embedding
+const embedding = await llm.embed('Hello world', {
+  model: 'text-embedding-ada-002',
+  provider: 'openai',
+})
+console.log(embedding.dimensions) // 1536
+
+// Batch embeddings
+const embeddings = await llm.embed(['First document', 'Second document', 'Third document'])
+```
+
+#### Model Management
+
+```typescript
+// List available models
+const models = await llm.models('anthropic')
+console.log(models.map((m) => m.id))
+
+// Get model details
+const model = await llm.model('claude-sonnet-4.5')
+console.log(`Context window: ${model.contextWindow}`)
+console.log(`Input price: $${model.inputPrice} per 1M tokens`)
+
+// Check availability
+const available = await llm.isAvailable('gpt-5')
+```
+
+#### Batch Processing
+
+```typescript
+// Create batch job (50% cost savings)
+const batch = await llm.batch(
+  [
+    { custom_id: '1', prompt: 'Summarize this document...' },
+    { custom_id: '2', prompt: 'Translate this text...' },
+    { custom_id: '3', prompt: 'Generate code for...' },
+  ],
+  {
+    model: 'gpt-5',
+    temperature: 0.7,
+  }
+)
+
+// Check status
+const status = await llm.batchStatus(batch.id)
+console.log(`Completed: ${status.completedRequests}/${status.totalRequests}`)
+
+// Get results
+if (status.status === 'completed') {
+  const results = await llm.batchResults(batch.id)
+  for (const result of results) {
+    console.log(`${result.custom_id}: ${result.text}`)
+  }
+}
+
+// Cancel batch
+await llm.cancelBatch(batch.id)
+```
+
+#### Real-World LLM Example
+
+```typescript
+// Multi-provider content generation with fallback
+async function generateContent(prompt: string) {
+  const providers: Array<{ provider: LLMProvider; model: string }> = [
+    { provider: 'anthropic', model: 'claude-sonnet-4.5' },
+    { provider: 'openai', model: 'gpt-5' },
+    { provider: 'workers-ai', model: 'llama-4' },
+  ]
+
+  for (const { provider, model } of providers) {
+    try {
+      const response = await llm.generate(prompt, {
+        provider,
+        model,
+        temperature: 0.7,
+        maxTokens: 1000,
+      })
+
+      return {
+        text: response.text,
+        provider,
+        model,
+        usage: response.usage,
+      }
+    } catch (error) {
+      console.warn(`Provider ${provider} failed, trying next...`)
+      continue
+    }
+  }
+
+  throw new Error('All LLM providers failed')
+}
+
+// Semantic search with embeddings
+async function semanticSearch(query: string, documents: string[]) {
+  // Generate query embedding
+  const queryEmbedding = await llm.embed(query)
+
+  // Generate document embeddings
+  const docEmbeddings = await llm.embed(documents)
+
+  // Calculate cosine similarity
+  const similarities = docEmbeddings.map((docEmb, i) => ({
+    index: i,
+    document: documents[i],
+    similarity: cosineSimilarity(queryEmbedding.embedding, docEmb.embedding),
+  }))
+
+  // Return top 3 results
+  return similarities.sort((a, b) => b.similarity - a.similarity).slice(0, 3)
+}
+
+function cosineSimilarity(a: number[], b: number[]): number {
+  const dotProduct = a.reduce((sum, val, i) => sum + val * b[i], 0)
+  const magnitudeA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0))
+  const magnitudeB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0))
+  return dotProduct / (magnitudeA * magnitudeB)
+}
+```
+
+---
+
+### `oauth` - OAuth 2.0 Authentication
+
+The `oauth` service provides a complete OAuth 2.0 implementation with support for Authorization Code flow (with PKCE), Client Credentials flow, Refresh Token flow, token validation, API key management, and OpenID Connect.
+
+#### Authorization Code Flow
+
+```typescript
+import { oauth, generateCodeVerifier, generateCodeChallenge } from 'sdk.do'
+
+// Generate PKCE verifier and challenge
+const codeVerifier = generateCodeVerifier()
+const codeChallenge = await generateCodeChallenge(codeVerifier)
+
+// Start authorization flow
+const authUrl = await oauth.authorize({
+  clientId: 'your-client-id',
+  redirectUri: 'https://yourapp.com/callback',
+  scope: ['read', 'write', 'profile'],
+  state: crypto.randomUUID(),
+  codeChallenge,
+  codeChallengeMethod: 'S256',
+})
+
+// Redirect user to authUrl
+```
+
+#### Exchange Code for Tokens
+
+```typescript
+// After user authorizes and returns with code
+const tokens = await oauth.exchangeCode({
+  code: 'authorization-code-from-callback',
+  clientId: 'your-client-id',
+  clientSecret: 'your-client-secret',
+  redirectUri: 'https://yourapp.com/callback',
+  codeVerifier, // For PKCE
+})
+
+console.log('Access token:', tokens.accessToken)
+console.log('Refresh token:', tokens.refreshToken)
+console.log('Expires in:', tokens.expiresIn, 'seconds')
+```
+
+#### Refresh Tokens
+
+```typescript
+const newTokens = await oauth.refresh({
+  refreshToken: tokens.refreshToken,
+  clientId: 'your-client-id',
+  clientSecret: 'your-client-secret',
+})
+```
+
+#### Client Credentials Flow
+
+```typescript
+// Machine-to-machine authentication
+const tokens = await oauth.clientCredentials({
+  clientId: 'your-client-id',
+  clientSecret: 'your-client-secret',
+  scope: ['api:read', 'api:write'],
+})
+```
+
+#### Token Validation
+
+```typescript
+const validation = await oauth.validateToken(accessToken)
+
+if (validation.valid) {
+  console.log('Token is valid')
+  console.log('User:', validation.username)
+  console.log('Scopes:', validation.scope)
+  console.log('Expires at:', new Date(validation.expiresAt * 1000))
+} else {
+  console.log('Token is invalid')
+}
+```
+
+#### User Information
+
+```typescript
+// OpenID Connect user info endpoint
+const userInfo = await oauth.getUserInfo(accessToken)
+console.log('User ID:', userInfo.sub)
+console.log('Name:', userInfo.name)
+console.log('Email:', userInfo.email)
+console.log('Picture:', userInfo.picture)
+```
+
+#### API Key Management
+
+```typescript
+// Create API key
+const apiKey = await oauth.createApiKey({
+  name: 'Production API Key',
+  scopes: ['read', 'write'],
+  expiresIn: '90d',
+  metadata: {
+    environment: 'production',
+    purpose: 'external-api',
+  },
+  rateLimit: {
+    requestsPerMinute: 100,
+    requestsPerHour: 5000,
+  },
+})
+console.log('API Key:', apiKey.key)
+
+// List API keys
+const apiKeys = await oauth.listApiKeys()
+
+// Get specific API key
+const key = await oauth.getApiKey('key-id')
+
+// Revoke API key
+await oauth.revokeApiKey('key-id')
+```
+
+#### OAuth Client Registration
+
+```typescript
+// Register new OAuth client
+const client = await oauth.registerClient({
+  name: 'My Application',
+  redirectUris: ['https://myapp.com/callback', 'https://myapp.com/callback/mobile'],
+  grantTypes: ['authorization_code', 'refresh_token'],
+  responseTypes: ['code'],
+  scopes: ['read', 'write', 'profile'],
+  logoUri: 'https://myapp.com/logo.png',
+  clientUri: 'https://myapp.com',
+  tosUri: 'https://myapp.com/terms',
+})
+
+console.log('Client ID:', client.clientId)
+console.log('Client Secret:', client.clientSecret)
+
+// List clients
+const clients = await oauth.listClients()
+
+// Update client
+await oauth.updateClient('client-id', {
+  name: 'Updated Application Name',
+})
+
+// Delete client
+await oauth.deleteClient('client-id')
+```
+
+#### Session Management
+
+```typescript
+// Create session
+const session = await oauth.createSession({
+  userId: 'user-123',
+  expiresIn: '7d',
+  metadata: {
+    deviceType: 'mobile',
+    appVersion: '2.1.0',
+  },
+  ipAddress: '192.168.1.1',
+  userAgent: 'Mozilla/5.0...',
+})
+
+// Validate session
+const validSession = await oauth.validateSession(session.id)
+if (validSession.status === 'active') {
+  console.log('Session is valid for user:', validSession.userId)
+}
+
+// Revoke session
+await oauth.revokeSession(session.id)
+```
+
+#### Permission Management
+
+```typescript
+// Check single permission
+const hasPermission = await oauth.checkPermission('users:write')
+if (hasPermission) {
+  // User can write to users
+}
+
+// Get all user permissions
+const permissions = await oauth.getPermissions()
+console.log('User permissions:', permissions)
+```
+
+#### Real-World OAuth Example
+
+```typescript
+// Complete OAuth flow with session management
+class AuthenticationService {
+  private oauth = createOAuthService()
+
+  async initiateLogin(req: Request) {
+    // Generate PKCE parameters
+    const codeVerifier = generateCodeVerifier()
+    const codeChallenge = await generateCodeChallenge(codeVerifier)
+    const state = crypto.randomUUID()
+
+    // Store verifier and state in session
+    await this.storeAuthState(state, { codeVerifier })
+
+    // Redirect to OAuth provider
+    const authUrl = await this.oauth.authorize({
+      clientId: process.env.OAUTH_CLIENT_ID,
+      redirectUri: process.env.OAUTH_REDIRECT_URI,
+      scope: ['profile', 'email', 'openid'],
+      state,
+      codeChallenge,
+      codeChallengeMethod: 'S256',
+      prompt: 'consent',
+    })
+
+    return Response.redirect(authUrl)
+  }
+
+  async handleCallback(req: Request) {
+    const url = new URL(req.url)
+    const code = url.searchParams.get('code')
+    const state = url.searchParams.get('state')
+
+    // Verify state
+    const authState = await this.getAuthState(state)
+    if (!authState) {
+      throw new Error('Invalid state parameter')
+    }
+
+    // Exchange code for tokens
+    const tokens = await this.oauth.exchangeCode({
+      code,
+      clientId: process.env.OAUTH_CLIENT_ID,
+      clientSecret: process.env.OAUTH_CLIENT_SECRET,
+      redirectUri: process.env.OAUTH_REDIRECT_URI,
+      codeVerifier: authState.codeVerifier,
+    })
+
+    // Get user info
+    const userInfo = await this.oauth.getUserInfo(tokens.accessToken)
+
+    // Create application session
+    const session = await this.oauth.createSession({
+      userId: userInfo.sub,
+      expiresIn: '30d',
+      metadata: {
+        email: userInfo.email,
+        name: userInfo.name,
+      },
+    })
+
+    // Set session cookie
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: '/dashboard',
+        'Set-Cookie': `session=${session.token}; HttpOnly; Secure; SameSite=Strict; Max-Age=2592000`,
+      },
+    })
+  }
+
+  async refreshUserToken(refreshToken: string) {
+    return await this.oauth.refresh({
+      refreshToken,
+      clientId: process.env.OAUTH_CLIENT_ID,
+      clientSecret: process.env.OAUTH_CLIENT_SECRET,
+    })
+  }
+
+  private async storeAuthState(state: string, data: any) {
+    // Store in KV or database with 10 minute TTL
+    await kv.put(`auth:state:${state}`, JSON.stringify(data), {
+      expirationTtl: 600,
+    })
+  }
+
+  private async getAuthState(state: string) {
+    const data = await kv.get(`auth:state:${state}`)
+    return data ? JSON.parse(data) : null
+  }
+}
+```
+
+---
+
+### `events` - Unified Event System
+
+The `events` service provides a comprehensive event-driven architecture with event publishing, subscriptions, streaming, history querying, dead letter queue management, and metrics monitoring.
+
+#### Publish Events
+
+```typescript
+import { $, events } from 'sdk.do'
+
+// Publish single event
+const event = await events.publish(
+  'user.created',
+  {
+    userId: '123',
+    email: 'alice@example.com',
+    name: 'Alice Smith',
+  },
+  {
+    source: 'registration-service',
+    version: '1.0',
+  }
+)
+
+console.log('Event ID:', event.id)
+console.log('Timestamp:', event.timestamp)
+
+// Publish with semantic pattern
+await events.publish($.User.created, { userId: '123' })
+```
+
+#### Batch Publishing
+
+```typescript
+// Publish multiple events efficiently
+const result = await events.batchPublish([
+  { type: 'user.created', payload: { userId: '123' } },
+  { type: 'user.updated', payload: { userId: '456' } },
+  { type: 'order.placed', payload: { orderId: '789' } },
+])
+
+console.log(`Published: ${result.success}`)
+console.log(`Failed: ${result.failed}`)
+if (result.errors) {
+  console.log('Errors:', result.errors)
+}
+```
+
+#### Event Subscriptions
+
+```typescript
+// Subscribe to events with wildcard patterns
+const subscription = events.subscribe(
+  'user.*',
+  async (event) => {
+    console.log('User event:', event.type, event.payload)
+  },
+  {
+    durable: true, // Persist across restarts
+    group: 'user-service', // Load balancing
+    filter: { active: true }, // Filter events
+    from: 'now', // Start from current time
+  }
+)
+
+// Unsubscribe later
+subscription.unsubscribe()
+```
+
+#### Event Streaming
+
+```typescript
+// Stream events in real-time
+const stream = await events.stream('orders.*', {
+  from: 'beginning', // or 'now' or ISO timestamp
+  filter: { status: 'pending' },
+  batchSize: 100,
+})
+
+for await (const event of stream) {
+  console.log('Order event:', event.type)
+  console.log('Payload:', event.payload)
+
+  // Process event
+  await processOrder(event.payload)
+}
+```
+
+#### Event History
+
+```typescript
+// Query historical events
+const history = await events.history('user.*', {
+  from: '2025-01-01T00:00:00Z',
+  to: '2025-01-31T23:59:59Z',
+  limit: 100,
+  offset: 0,
+  filter: { country: 'US' },
+  order: 'desc',
+})
+
+for (const event of history) {
+  console.log(event.timestamp, event.type, event.payload)
+}
+```
+
+#### Dead Letter Queue Management
+
+```typescript
+// Get failed events
+const dlq = await events.dlq('user-service')
+
+for (const entry of dlq) {
+  console.log('Failed event:', entry.event.type)
+  console.log('Error:', entry.error)
+  console.log('Retry count:', entry.retryCount)
+}
+
+// Retry failed event
+await events.retry('dlq-entry-123')
+
+// Discard failed event
+await events.discard('dlq-entry-456')
+```
+
+#### Event Metrics
+
+```typescript
+// Get event metrics
+const metrics = await events.metrics('orders.*', {
+  from: '2025-01-01',
+  to: '2025-01-31',
+  granularity: 60, // minutes
+})
+
+console.log('Published:', metrics.published)
+console.log('Consumed:', metrics.consumed)
+console.log('Rate:', metrics.rate, 'events/sec')
+console.log('Latency:', metrics.latency, 'ms')
+console.log('Error rate:', metrics.errorRate)
+console.log('Top types:', metrics.topTypes)
+```
+
+#### Subscription Management
+
+```typescript
+// List all subscriptions
+const subscriptions = await events.listSubscriptions()
+
+// Get subscription details
+const subscription = await events.getSubscription('sub-123')
+console.log('Status:', subscription.status)
+console.log('Pattern:', subscription.pattern)
+console.log('Durable:', subscription.durable)
+
+// Cancel subscription
+await events.cancelSubscription('sub-123')
+```
+
+#### Real-World Events Example
+
+```typescript
+// Event-driven microservices architecture
+class OrderService {
+  private events = createEventsService({
+    apiUrl: process.env.EVENTS_API_URL,
+    apiKey: process.env.DO_TOKEN,
+  })
+
+  async initialize() {
+    // Subscribe to order events
+    this.events.subscribe(
+      'order.*',
+      async (event) => {
+        await this.handleOrderEvent(event)
+      },
+      {
+        durable: true,
+        group: 'order-service',
+        maxConcurrent: 10,
+      }
+    )
+
+    // Subscribe to payment events
+    this.events.subscribe(
+      'payment.*',
+      async (event) => {
+        await this.handlePaymentEvent(event)
+      },
+      {
+        durable: true,
+        group: 'order-service',
+      }
+    )
+
+    // Subscribe to inventory events
+    this.events.subscribe(
+      'inventory.*',
+      async (event) => {
+        await this.handleInventoryEvent(event)
+      },
+      {
+        durable: true,
+        group: 'order-service',
+      }
+    )
+  }
+
+  async createOrder(orderData: any) {
+    // Validate order
+    const order = await this.validateOrder(orderData)
+
+    // Publish order created event
+    await this.events.publish('order.created', order, {
+      source: 'order-service',
+      version: '1.0',
+    })
+
+    return order
+  }
+
+  private async handleOrderEvent(event: Event) {
+    switch (event.type) {
+      case 'order.created':
+        // Process payment
+        await this.events.publish('payment.process', {
+          orderId: event.payload.id,
+          amount: event.payload.total,
+          customerId: event.payload.customerId,
+        })
+        break
+
+      case 'order.cancelled':
+        // Refund payment
+        await this.events.publish('payment.refund', {
+          orderId: event.payload.id,
+        })
+        break
+    }
+  }
+
+  private async handlePaymentEvent(event: Event) {
+    switch (event.type) {
+      case 'payment.succeeded':
+        // Reserve inventory
+        await this.events.publish('inventory.reserve', {
+          orderId: event.payload.orderId,
+          items: event.payload.items,
+        })
+        break
+
+      case 'payment.failed':
+        // Cancel order
+        await this.events.publish('order.cancelled', {
+          orderId: event.payload.orderId,
+          reason: 'payment_failed',
+        })
+        break
+    }
+  }
+
+  private async handleInventoryEvent(event: Event) {
+    switch (event.type) {
+      case 'inventory.reserved':
+        // Create shipment
+        await this.events.publish('shipment.create', {
+          orderId: event.payload.orderId,
+        })
+        break
+
+      case 'inventory.unavailable':
+        // Refund and cancel
+        await this.events.batchPublish([
+          { type: 'payment.refund', payload: { orderId: event.payload.orderId } },
+          { type: 'order.cancelled', payload: { orderId: event.payload.orderId, reason: 'out_of_stock' } },
+        ])
+        break
+    }
+  }
+
+  async getOrderMetrics() {
+    // Get order event metrics
+    const metrics = await this.events.metrics('order.*', {
+      from: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+      to: new Date().toISOString(),
+    })
+
+    return {
+      totalOrders: metrics.published,
+      ordersPerHour: metrics.rate * 3600,
+      averageLatency: metrics.latency,
+      errorRate: metrics.errorRate,
+      topEventTypes: metrics.topTypes,
+    }
+  }
+
+  async getFailedOrders() {
+    // Check dead letter queue
+    const dlq = await this.events.dlq('order-service')
+    return dlq.map((entry) => ({
+      orderId: entry.event.payload.id,
+      error: entry.error,
+      retryCount: entry.retryCount,
+      failedAt: entry.createdAt,
+    }))
+  }
+
+  cleanup() {
+    // Cleanup subscriptions on shutdown
+    this.events.cleanup()
+  }
+}
+
+// Event replay for debugging
+async function replayEvents(pattern: string, from: string, to: string) {
+  const stream = await events.stream(pattern, { from, to })
+
+  for await (const event of stream) {
+    console.log(`Replaying event: ${event.type}`)
+    // Re-process event
+    await processEvent(event)
+  }
+}
+
+// Event sourcing example
+class OrderEventStore {
+  async getOrderHistory(orderId: string) {
+    const history = await events.history('order.*', {
+      filter: { orderId },
+      order: 'asc',
+    })
+
+    // Reconstruct order state from events
+    return history.reduce((state, event) => {
+      switch (event.type) {
+        case 'order.created':
+          return { ...event.payload, status: 'created' }
+        case 'order.confirmed':
+          return { ...state, status: 'confirmed' }
+        case 'order.shipped':
+          return { ...state, status: 'shipped', trackingNumber: event.payload.trackingNumber }
+        case 'order.delivered':
+          return { ...state, status: 'delivered', deliveredAt: event.timestamp }
+        default:
+          return state
+      }
+    }, {} as any)
+  }
+}
+```
+
+---
+
+## Real-World Examples
+
+### Event-Driven Order Processing
+
+Complete e-commerce order workflow using `on` and `send`:
+
+```typescript
+// Order validation
+on($.Order.created, async (order) => {
+  const valid = await validateOrder(order)
+  if (valid) {
+    await send($.Payment.process, order)
+  } else {
+    await send($.Order.rejected, order)
+  }
+})
+
+// Payment processing
+on($.Payment.process, async (payment) => {
+  const result = await api.stripe.paymentIntents.create({
+    amount: payment.amount,
+    customer: payment.customerId,
+  })
+
+  if (result.status === 'succeeded') {
+    await send($.Payment.succeeded, payment)
+  } else {
+    await send($.Payment.failed, payment)
+  }
+})
+
+// Inventory management
+on($.Payment.succeeded, async (payment) => {
+  await send($.Inventory.reserve, { orderId: payment.orderId })
+})
+
+// Shipping
+on($.Inventory.reserved, async (reservation) => {
+  await send($.Shipment.create, { orderId: reservation.orderId })
+})
+
+// Notifications
+on($.Shipment.created, async (shipment) => {
+  await send($.Email.send, {
+    to: shipment.customerEmail,
+    template: 'order-shipped',
+    data: shipment,
+  })
+})
+```
+
+### AI-Powered Blog Platform
+
+Content management with AI assistance:
+
+```typescript
+// AI-assisted content creation
+async function generateBlogPost(topic: string) {
+  const post = await ai.generate({
+    prompt: `Write a comprehensive blog post about: ${topic}`,
+    schema: $.BlogPosting,
+  })
+
+  // Generate SEO metadata
+  const seo = await ai.generate({
+    prompt: `Create SEO metadata for: ${post.headline}`,
+    schema: {
+      metaDescription: 'string',
+      keywords: 'array',
+      slug: 'string',
+    },
+  })
+
+  // Save draft
+  return await db.create($.BlogPosting, {
+    $id: `post-${Date.now()}`,
+    $type: $.BlogPosting,
+    ...post,
+    ...seo,
+    author: user.id,
+    published: false,
+  })
+}
+
+// Scheduled publishing
+every($.Hourly, async () => {
+  const postsToPublish = await db.list($.BlogPosting, {
+    where: {
+      published: false,
+      scheduledFor: { lte: new Date().toISOString() },
+    },
+  })
+
+  for (const post of postsToPublish) {
+    await db.update($.BlogPosting, post.$id, { published: true })
+    await send($.BlogPost.published, post)
+  }
+})
+
+// AI content moderation
+on($.Comment.created, async (comment) => {
+  const moderation = await ai.generate({
+    prompt: `Analyze this comment: "${comment.text}"`,
+    schema: {
+      appropriate: 'boolean',
+      toxicity: 'number',
+      reason: 'string',
+    },
+  })
+
+  if (!moderation.appropriate) {
+    await send($.Comment.flagged, { commentId: comment.$id })
+  }
+})
+```
+
+### Customer Support Chatbot
+
+Intelligent support system with AI:
+
+```typescript
+// Handle customer inquiry
+on($.Support.messageReceived, async (message) => {
+  // Search knowledge base
+  const embedding = await ai.embed(message.text)
+  const articles = await db.search($.Article, {
+    embedding,
+    limit: 3,
+  })
+
+  // Generate response
+  const response = await ai.generate({
+    prompt: `Answer this customer question: "${message.text}"
+             Using these knowledge base articles: ${JSON.stringify(articles)}`,
+    schema: {
+      answer: 'string',
+      confidence: 'number',
+      suggestedArticles: 'array',
+    },
+  })
+
+  // Sentiment analysis
+  const sentiment = await ai.generate({
+    prompt: `Analyze sentiment: "${message.text}"`,
+    schema: {
+      sentiment: 'positive | negative | neutral',
+      urgency: 'low | medium | high',
+    },
+  })
+
+  // Auto-respond or escalate
+  if (response.confidence > 0.8 && sentiment.urgency !== 'high') {
+    await send($.Support.autoResponse, {
+      ticketId: message.ticketId,
+      response: response.answer,
+    })
+  } else {
+    await send($.Support.escalate, {
+      ticketId: message.ticketId,
+      reason: sentiment.urgency === 'high' ? 'urgent' : 'low_confidence',
+    })
+  }
+})
+```
+
+## Best Practices
+
+### Error Handling
+
+Always wrap critical operations in try-catch blocks:
+
+```typescript
+on($.Payment.process, async (payment) => {
+  try {
+    const result = await api.stripe.paymentIntents.create({
+      amount: payment.amount,
+    })
+    await send($.Payment.succeeded, { ...payment, result })
+  } catch (error) {
+    await send($.Payment.failed, {
+      ...payment,
+      error: error.message,
+    })
+  }
+})
+```
+
+### Idempotency
+
+Ensure events can be safely reprocessed:
+
+```typescript
+on($.Order.created, async (order) => {
+  // Check if already processed
+  const existing = await db.get($.Invoice, `invoice-${order.$id}`)
+  if (existing) {
+    return // Already processed
+  }
+
+  // Process order
+  await createInvoice(order)
+})
+```
+
+### Type Safety
+
+Use semantic types consistently:
+
+```typescript
+// Good: Strongly typed
+const person = await db.create($.Person, {
+  $id: 'john-doe',
+  $type: $.Person,
+  name: 'John Doe',
+  jobTitle: 'Engineer',
+})
+
+// Bad: Untyped
+const person = await db.create('Person', {
+  id: 'john-doe',
+  name: 'John Doe',
+})
+```
+
+### Testing
+
+Test event handlers independently:
+
+```typescript
+// Test event handler
+async function testOrderCreatedHandler() {
+  const mockOrder = {
+    $id: 'test-order',
+    $type: $.Order,
+    total: 99.99,
+  }
+
+  await send($.Order.created, mockOrder)
+
+  // Verify expected side effects
+  const invoice = await db.get($.Invoice, `invoice-${mockOrder.$id}`)
+  assert(invoice !== null)
+}
+```
+
+### Performance
+
+Use batch operations when possible:
+
+```typescript
+// Good: Batch processing
+every($.Hourly, async () => {
+  const users = await db.list($.Person, { limit: 1000 })
+
+  const embeddings = await ai.batch(
+    users.map((user) => ({
+      prompt: user.bio,
+    }))
+  )
+
+  // Process all embeddings
+})
+
+// Bad: Sequential processing
+every($.Hourly, async () => {
+  const users = await db.list($.Person, { limit: 1000 })
+
+  for (const user of users) {
+    const embedding = await ai.embed(user.bio) // Slow!
+  }
+})
+```
+
+### Security
+
+Always validate user permissions:
+
+```typescript
+async function deleteResource(resourceId: string) {
+  // Check permission first
+  if (!(await user.can('delete', $.Resource, resourceId))) {
+    throw new Error('Unauthorized')
+  }
+
+  // Then perform action
+  await db.delete($.Resource, resourceId)
+}
+```
+
+### Webhooks - Signature Verification
+
+The SDK includes utilities for verifying webhook signatures from various providers.
+
+#### GitHub Webhooks
+
+```typescript
+import { verifyGitHubWebhook } from 'sdk.do'
+
+on($.Webhook.received, async (request) => {
+  const signature = request.headers.get('x-hub-signature-256')
+  const rawBody = await request.text()
+
+  const result = await verifyGitHubWebhook(rawBody, signature, process.env.GITHUB_WEBHOOK_SECRET)
+
+  if (result.valid) {
+    const payload = JSON.parse(rawBody)
+    await send($.GitHub.event, payload)
+  } else {
+    console.error('Invalid GitHub webhook signature:', result.error)
+  }
+})
+```
+
+#### Stripe Webhooks
+
+```typescript
+import { verifyStripeWebhook } from 'sdk.do'
+
+on($.Webhook.received, async (request) => {
+  const signature = request.headers.get('stripe-signature')
+  const rawBody = await request.text()
+
+  const result = await verifyStripeWebhook(rawBody, signature, process.env.STRIPE_WEBHOOK_SECRET)
+
+  if (result.valid) {
+    const event = JSON.parse(rawBody)
+    await send($.Stripe.event, event)
+  }
+})
+```
+
+#### WorkOS Webhooks
+
+```typescript
+import { verifyWorkOSWebhook } from 'sdk.do'
+
+const result = await verifyWorkOSWebhook(rawBody, signature, secret)
+if (result.valid) {
+  await processWorkOSEvent(result.payload)
+}
+```
+
+#### Zapier Webhooks
+
+```typescript
+import { verifyZapierWebhook } from 'sdk.do'
+
+const result = await verifyZapierWebhook(rawBody, signature, secret)
+if (result.valid) {
+  await processZapierEvent(result.payload)
+}
+```
+
+#### .do Platform Webhooks
+
+```typescript
+import { verifyDoWebhook, signWebhook } from 'sdk.do'
+
+// Verify incoming webhook
+const result = await verifyDoWebhook(rawBody, signature, secret)
+
+// Sign outgoing webhook
+const signature = await signWebhook(payload, secret)
+```
+
+#### Generic Webhook Verification
+
+```typescript
+import { verifyWebhook } from 'sdk.do'
+
+const result = await verifyWebhook(rawBody, signature, secret, {
+  algorithm: 'sha256', // or 'sha1'
+  encoding: 'hex', // or 'base64'
+})
+```
+
+#### Sending Webhooks
+
+```typescript
+import { sendWebhook } from 'sdk.do'
+
+await sendWebhook('https://example.com/webhook', payload, secret, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+})
+```
+
+#### Real-World Webhook Processing Example
+
+```typescript
+import { verifyGitHubWebhook, verifyStripeWebhook } from 'sdk.do'
+
+// Multi-provider webhook router
+async function handleWebhook(request: Request, provider: string) {
+  const rawBody = await request.text()
+  const signature = getSignatureHeader(request, provider)
+  const secret = getWebhookSecret(provider)
+
+  let result
+
+  switch (provider) {
+    case 'github':
+      result = await verifyGitHubWebhook(rawBody, signature, secret)
+      break
+    case 'stripe':
+      result = await verifyStripeWebhook(rawBody, signature, secret)
+      break
+    default:
+      throw new Error(`Unsupported provider: ${provider}`)
+  }
+
+  if (!result.valid) {
+    throw new Error(`Invalid webhook signature: ${result.error}`)
+  }
+
+  const payload = JSON.parse(rawBody)
+
+  // Route to appropriate handler
+  await send($.Webhook[`${provider}Event`], {
+    provider,
+    payload,
+    receivedAt: new Date().toISOString(),
+  })
+
+  return { received: true }
+}
+
+// GitHub webhook handler
+on($.Webhook.githubEvent, async (event) => {
+  const { payload } = event
+
+  if (payload.action === 'opened' && payload.pull_request) {
+    await send($.PullRequest.opened, {
+      repository: payload.repository.full_name,
+      number: payload.pull_request.number,
+      title: payload.pull_request.title,
+      author: payload.pull_request.user.login,
+    })
+  }
+})
+
+// Stripe webhook handler
+on($.Webhook.stripeEvent, async (event) => {
+  const { payload } = event
+
+  switch (payload.type) {
+    case 'payment_intent.succeeded':
+      await send($.Payment.succeeded, {
+        paymentIntentId: payload.data.object.id,
+        amount: payload.data.object.amount,
+        customer: payload.data.object.customer,
+      })
+      break
+
+    case 'customer.subscription.created':
+      await send($.Subscription.created, {
+        subscriptionId: payload.data.object.id,
+        customer: payload.data.object.customer,
+        plan: payload.data.object.items.data[0].price.id,
+      })
+      break
+  }
+})
+```
+
+## Additional Resources
+
+- [Complete API Reference](./API.mdx)
+- [Architecture Overview](./ARCHITECTURE.mdx)
+- [Deployment Guide](./DEPLOYMENT.mdx)
+- [Examples Repository](../../examples/)
+- [Webhooks Service Documentation](./webhooks.do.mdx)
+
+## Services Documentation
+
+For detailed documentation on all available services, see:
+
+- [OAuth & Authentication](./oauth.do.mdx) - OAuth provider and client
+- [Media Management](./media.do.mdx) - File uploads and transformations
+- [Search](./search.do.mdx) - Full-text and semantic search
+- [Storage (R2)](./storage.do.mdx) - Object storage operations
+- [Cache](./cache.do.mdx) - Edge caching strategies
+- [Queue](./queue.do.mdx) - Message queues
+- [Vault](./vault.do.mdx) - Secrets management
+- [Analytics](./analytics.do.mdx) - Event tracking
+- [Experiments](./experiments.do.mdx) - A/B testing
+- [Functions](./functions.do.mdx) - Serverless functions
+- [Workflows](./workflows.do.mdx) - Multi-step orchestration
+- [Agents](./agents.do.mdx) - AI agents framework
+- [Triggers](./triggers.do.mdx) - Event-driven automation
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform)

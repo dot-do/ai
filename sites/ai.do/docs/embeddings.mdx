@@ -1,0 +1,612 @@
+---
+$id: https://ai.do/docs/embeddings
+$type: TechArticle
+title: Vector Embeddings with ai.do
+description: Create vector embeddings for semantic search and similarity operations
+keywords: [ai, embeddings, vectors, semantic search, similarity]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Vector Embeddings
+
+Create vector embeddings for semantic search, similarity matching, and content clustering.
+
+## Overview
+
+Vector embeddings convert text into numerical representations that capture semantic meaning. The `ai.embed()` function generates embeddings using state-of-the-art models from OpenAI and Anthropic.
+
+## Basic Usage
+
+Generate embedding for a single text:
+
+```typescript
+import { ai } from 'sdk.do'
+
+const embedding = await ai.embed('artificial intelligence and machine learning')
+
+console.log(embedding.length) // 1536 (OpenAI) or 1024 (Anthropic)
+console.log(embedding.slice(0, 5)) // [0.123, -0.456, 0.789, -0.234, 0.567]
+```
+
+## Multiple Embeddings
+
+Generate embeddings for multiple texts efficiently:
+
+```typescript
+import { ai } from 'sdk.do'
+
+const texts = ['smartphone with great camera', 'laptop for programming', 'wireless headphones']
+
+const embeddings = await ai.embed(texts)
+
+console.log(embeddings.length) // 3
+console.log(embeddings[0].length) // 1536
+```
+
+## Semantic Search
+
+Build semantic search with embeddings:
+
+```typescript
+import { $, ai, db } from 'sdk.do'
+
+// Index products with embeddings
+async function indexProducts() {
+  const products = await db.list($.Product)
+
+  for (const product of products) {
+    // Create embedding from product data
+    const text = `${product.name} ${product.description} ${product.category}`
+    const embedding = await ai.embed(text)
+
+    // Store embedding with product
+    await db.update(product.$id, { embedding })
+  }
+}
+
+// Search products semantically
+async function searchProducts(query: string) {
+  // Create query embedding
+  const queryEmbedding = await ai.embed(query)
+
+  // Get all products
+  const products = await db.list($.Product)
+
+  // Calculate similarity scores
+  const results = products
+    .map((product) => ({
+      product,
+      similarity: cosineSimilarity(queryEmbedding, product.embedding),
+    }))
+    .sort((a, b) => b.similarity - a.similarity)
+    .slice(0, 10)
+
+  return results
+}
+
+// Usage
+await indexProducts()
+const results = await searchProducts('affordable laptop for students')
+```
+
+## Similarity Calculation
+
+Calculate similarity between embeddings:
+
+```typescript
+import { ai } from 'sdk.do'
+
+// Cosine similarity function
+function cosineSimilarity(a: number[], b: number[]): number {
+  const dotProduct = a.reduce((sum, val, i) => sum + val * b[i], 0)
+  const magnitudeA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0))
+  const magnitudeB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0))
+  return dotProduct / (magnitudeA * magnitudeB)
+}
+
+// Compare texts
+const embed1 = await ai.embed('machine learning algorithms')
+const embed2 = await ai.embed('artificial intelligence models')
+const embed3 = await ai.embed('cooking recipes')
+
+console.log(cosineSimilarity(embed1, embed2)) // ~0.85 (high similarity)
+console.log(cosineSimilarity(embed1, embed3)) // ~0.12 (low similarity)
+```
+
+## Euclidean Distance
+
+Alternative similarity metric:
+
+```typescript
+function euclideanDistance(a: number[], b: number[]): number {
+  return Math.sqrt(a.reduce((sum, val, i) => sum + Math.pow(val - b[i], 2), 0))
+}
+
+const embed1 = await ai.embed('text one')
+const embed2 = await ai.embed('text two')
+
+const distance = euclideanDistance(embed1, embed2)
+console.log(distance) // Lower values = more similar
+```
+
+## Content Clustering
+
+Group similar content using embeddings:
+
+```typescript
+import { $, ai, db } from 'sdk.do'
+
+async function clusterArticles() {
+  // Get all articles with embeddings
+  const articles = await db.list($.Article)
+
+  // Create embeddings if missing
+  for (const article of articles) {
+    if (!article.embedding) {
+      const text = `${article.headline} ${article.articleBody}`
+      article.embedding = await ai.embed(text)
+      await db.update(article.$id, { embedding: article.embedding })
+    }
+  }
+
+  // Simple clustering by similarity threshold
+  const clusters: any[][] = []
+  const used = new Set()
+
+  for (const article of articles) {
+    if (used.has(article.$id)) continue
+
+    const cluster = [article]
+    used.add(article.$id)
+
+    for (const other of articles) {
+      if (used.has(other.$id)) continue
+
+      const similarity = cosineSimilarity(article.embedding, other.embedding)
+
+      if (similarity > 0.8) {
+        cluster.push(other)
+        used.add(other.$id)
+      }
+    }
+
+    clusters.push(cluster)
+  }
+
+  return clusters
+}
+```
+
+## Recommendation System
+
+Build content recommendations:
+
+```typescript
+import { $, ai, db } from 'sdk.do'
+
+async function recommendProducts(userId: string, limit = 5) {
+  // Get user's purchase history
+  const orders = await db.list($.Order, {
+    where: { customer: userId },
+  })
+
+  // Get purchased products
+  const purchasedProducts = orders.flatMap((order) => order.orderedItem)
+
+  // Create embedding from user's preferences
+  const preferenceText = purchasedProducts.map((p) => `${p.name} ${p.description}`).join(' ')
+  const preferenceEmbedding = await ai.embed(preferenceText)
+
+  // Find similar products
+  const allProducts = await db.list($.Product)
+
+  const recommendations = allProducts
+    .filter((p) => !purchasedProducts.some((pp) => pp.$id === p.$id))
+    .map((product) => ({
+      product,
+      score: cosineSimilarity(preferenceEmbedding, product.embedding),
+    }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+
+  return recommendations
+}
+```
+
+## Duplicate Detection
+
+Find duplicate or near-duplicate content:
+
+```typescript
+import { $, ai, db } from 'sdk.do'
+
+async function findDuplicates(threshold = 0.95) {
+  const articles = await db.list($.Article)
+
+  const duplicates: Array<[any, any, number]> = []
+
+  for (let i = 0; i < articles.length; i++) {
+    for (let j = i + 1; j < articles.length; j++) {
+      const similarity = cosineSimilarity(articles[i].embedding, articles[j].embedding)
+
+      if (similarity > threshold) {
+        duplicates.push([articles[i], articles[j], similarity])
+      }
+    }
+  }
+
+  return duplicates
+}
+
+// Find duplicates
+const dupes = await findDuplicates(0.98)
+console.log(`Found ${dupes.length} potential duplicates`)
+```
+
+## Model Selection
+
+Different models produce embeddings with different dimensions:
+
+```typescript
+import { ai } from 'sdk.do'
+
+// OpenAI embeddings (1536 dimensions)
+const openaiEmbed = await ai.embed('text', {
+  model: 'text-embedding-3-large',
+})
+console.log(openaiEmbed.length) // 1536
+
+// OpenAI small model (512 dimensions)
+const smallEmbed = await ai.embed('text', {
+  model: 'text-embedding-3-small',
+})
+console.log(smallEmbed.length) // 512
+
+// Anthropic embeddings (1024 dimensions)
+const claudeEmbed = await ai.embed('text', {
+  model: 'claude-embed-v1',
+})
+console.log(claudeEmbed.length) // 1024
+```
+
+## Caching Embeddings
+
+Store embeddings to avoid regeneration:
+
+```typescript
+import { $, ai, db } from 'sdk.do'
+
+async function getOrCreateEmbedding(text: string) {
+  // Check cache
+  const cached = await db.get(`embedding:${hashText(text)}`, $.Embedding)
+
+  if (cached) {
+    return cached.vector
+  }
+
+  // Generate new embedding
+  const embedding = await ai.embed(text)
+
+  // Store in cache
+  await db.create($.Embedding, {
+    $id: `embedding:${hashText(text)}`,
+    text,
+    vector: embedding,
+    createdAt: new Date().toISOString(),
+  })
+
+  return embedding
+}
+
+function hashText(text: string): string {
+  // Simple hash function (use proper hash in production)
+  return text
+    .split('')
+    .reduce((a, b) => ((a << 5) - a + b.charCodeAt(0)) | 0, 0)
+    .toString(36)
+}
+```
+
+## Batch Embeddings
+
+Generate embeddings for large datasets efficiently:
+
+```typescript
+import { $, ai, db } from 'sdk.do'
+
+async function batchCreateEmbeddings(items: any[], textExtractor: (item: any) => string, batchSize = 100) {
+  const results = []
+
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize)
+
+    // Extract text from batch
+    const texts = batch.map(textExtractor)
+
+    // Generate embeddings for batch
+    const embeddings = await ai.embed(texts)
+
+    // Store embeddings
+    for (let j = 0; j < batch.length; j++) {
+      const item = batch[j]
+      const embedding = embeddings[j]
+
+      await db.update(item.$id, { embedding })
+      results.push({ ...item, embedding })
+    }
+
+    console.log(`Processed ${i + batch.length}/${items.length}`)
+  }
+
+  return results
+}
+
+// Usage
+const products = await db.list($.Product)
+await batchCreateEmbeddings(products, (p) => `${p.name} ${p.description}`, 100)
+```
+
+## Vector Database Integration
+
+Store embeddings in vector databases:
+
+```typescript
+import { $, ai } from 'sdk.do'
+
+// Example with Pinecone
+import { Pinecone } from '@pinecone-database/pinecone'
+
+const pinecone = new Pinecone({
+  apiKey: process.env.PINECONE_API_KEY,
+})
+
+const index = pinecone.index('products')
+
+async function indexInPinecone(products: any[]) {
+  const vectors = []
+
+  for (const product of products) {
+    const text = `${product.name} ${product.description}`
+    const embedding = await ai.embed(text)
+
+    vectors.push({
+      id: product.$id,
+      values: embedding,
+      metadata: {
+        name: product.name,
+        category: product.category,
+      },
+    })
+  }
+
+  await index.upsert(vectors)
+}
+
+async function searchInPinecone(query: string, topK = 10) {
+  const queryEmbedding = await ai.embed(query)
+
+  const results = await index.query({
+    vector: queryEmbedding,
+    topK,
+    includeMetadata: true,
+  })
+
+  return results.matches
+}
+```
+
+## Semantic Deduplication
+
+Remove semantically similar duplicates:
+
+```typescript
+import { ai } from 'sdk.do'
+
+async function deduplicateTexts(texts: string[], similarityThreshold = 0.9): Promise<string[]> {
+  // Generate embeddings
+  const embeddings = await ai.embed(texts)
+
+  // Track which texts to keep
+  const keep = new Set<number>()
+  keep.add(0) // Always keep first text
+
+  for (let i = 1; i < texts.length; i++) {
+    let isDuplicate = false
+
+    for (const keptIndex of keep) {
+      const similarity = cosineSimilarity(embeddings[i], embeddings[keptIndex])
+
+      if (similarity > similarityThreshold) {
+        isDuplicate = true
+        break
+      }
+    }
+
+    if (!isDuplicate) {
+      keep.add(i)
+    }
+  }
+
+  return Array.from(keep).map((i) => texts[i])
+}
+
+// Usage
+const articles = [
+  'AI is transforming technology',
+  'Artificial intelligence is changing tech', // Similar to first
+  'Cooking recipes for beginners',
+  'Machine learning in healthcare',
+]
+
+const unique = await deduplicateTexts(articles, 0.9)
+console.log(unique.length) // 3 (second article removed)
+```
+
+## Multilingual Embeddings
+
+Embeddings work across languages:
+
+```typescript
+import { ai } from 'sdk.do'
+
+const embeddings = await ai.embed([
+  'Hello world', // English
+  'Bonjour le monde', // French
+  'Hola mundo', // Spanish
+  'Hallo Welt', // German
+])
+
+// Calculate cross-language similarity
+const sim = cosineSimilarity(embeddings[0], embeddings[1])
+console.log(sim) // High similarity despite different languages
+```
+
+## Error Handling
+
+Handle embedding generation errors:
+
+```typescript
+import { ai } from 'sdk.do'
+
+async function safeEmbed(text: string): Promise<number[] | null> {
+  try {
+    return await ai.embed(text)
+  } catch (error) {
+    if (error.code === 'TEXT_TOO_LONG') {
+      // Truncate and retry
+      const truncated = text.slice(0, 8000)
+      return await ai.embed(truncated)
+    }
+
+    if (error.code === 'RATE_LIMIT_EXCEEDED') {
+      // Wait and retry
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+      return await ai.embed(text)
+    }
+
+    console.error('Embedding failed:', error)
+    return null
+  }
+}
+```
+
+## Best Practices
+
+### 1. Normalize Text
+
+Clean and normalize text before embedding:
+
+```typescript
+function normalizeText(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/[^\w\s]/g, '')
+}
+
+const embedding = await ai.embed(normalizeText(rawText))
+```
+
+### 2. Combine Relevant Fields
+
+Include all relevant information:
+
+```typescript
+// Good: Include all relevant fields
+const text = `${product.name} ${product.description} ${product.category} ${product.brand}`
+
+// Avoid: Missing important context
+const text = product.name
+```
+
+### 3. Cache Embeddings
+
+Store embeddings to avoid regeneration:
+
+```typescript
+// Good: Store embeddings with entities
+await db.update(product.$id, {
+  embedding: await ai.embed(text),
+})
+
+// Avoid: Regenerating every time
+const embedding = await ai.embed(text) // Expensive!
+```
+
+### 4. Batch Processing
+
+Process multiple texts together:
+
+```typescript
+// Good: Batch processing
+const embeddings = await ai.embed(texts)
+
+// Avoid: Individual requests
+for (const text of texts) {
+  await ai.embed(text) // Slow!
+}
+```
+
+### 5. Choose Appropriate Similarity Metric
+
+Use the right metric for your use case:
+
+```typescript
+// Cosine similarity: Direction matters, not magnitude
+const cos = cosineSimilarity(a, b)
+
+// Euclidean distance: Both direction and magnitude matter
+const dist = euclideanDistance(a, b)
+```
+
+## Performance Tips
+
+### Parallel Processing
+
+Process embeddings in parallel:
+
+```typescript
+import { ai } from 'sdk.do'
+
+// Process in parallel
+const embeddings = await Promise.all(texts.map((text) => ai.embed(text)))
+
+// Or use batch API
+const embeddings = await ai.embed(texts)
+```
+
+### Dimensionality Reduction
+
+Reduce embedding dimensions for faster processing:
+
+```typescript
+import { PCA } from 'ml-pca'
+
+function reduceDimensions(embeddings: number[][], targetDim = 256): number[][] {
+  const pca = new PCA(embeddings)
+  return pca.predict(embeddings, { nComponents: targetDim }).to2DArray()
+}
+```
+
+## Examples
+
+See practical examples:
+
+- [Embeddings Example](../examples/embeddings) - Semantic search and similarity
+
+## API Reference
+
+See the [API Reference](../api/) for complete function signatures and parameters.
+
+## Next Steps
+
+- [Batch Processing](./batch-processing) - Process large datasets
+- [Text Generation](./generation) - Generate AI content
+- [Examples](../examples/) - More code examples
+
+## License
+
+MIT (Open Source)

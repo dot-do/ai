@@ -1,0 +1,57 @@
+---
+$id: https://admin.do/examples/advanced-patterns
+$type: TechArticle
+title: admin.do Advanced Patterns
+description: Advanced patterns for admin.do
+keywords: [admin, advanced, patterns]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Advanced Patterns
+
+Advanced patterns for admin.do.
+
+## Custom RBAC Policies
+
+```typescript
+import { admin } from 'admin.do'
+
+await admin.policies.create({
+  name: 'department-data-access',
+  rules: [
+    {
+      effect: 'allow',
+      action: 'data.read',
+      resource: 'department:${user.department}:*',
+    },
+  ],
+})
+```
+
+## Dynamic Permission Evaluation
+
+```typescript
+const canAccess = await admin.authorize({
+  user: userId,
+  action: 'data.update',
+  resource: `project:${projectId}`,
+  context: { time: Date.now(), ip: request.ip },
+})
+```
+
+## Audit Log Analysis
+
+```typescript
+import { admin, llm } from 'admin.do'
+
+const suspiciousActivity = await llm.generate('Analyze audit log for suspicious patterns', {
+  context: await admin.audit.query({ since: '7d' }),
+  model: 'gpt-5',
+})
+```
+
+## License
+
+MIT (Open Source)

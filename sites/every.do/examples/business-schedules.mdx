@@ -1,0 +1,759 @@
+---
+$id: https://every.do/examples/business-schedules
+$type: HowTo
+title: Business Schedule Examples
+description: Real-world business workflow examples including reports, backups, and maintenance
+keywords: [examples, business, workflows, reports, backups, maintenance]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Business Schedule Examples
+
+Real-world examples of scheduled workflows for common business operations including reports, backups, maintenance, and automation.
+
+## Daily Sales Report
+
+Generate and distribute daily sales reports:
+
+```typescript
+import { $, every, db, ai, send } from 'sdk.do'
+
+every($.Daily, async () => {
+  // Get yesterday's orders
+  const yesterday = subDays(new Date(), 1)
+  const startDate = startOfDay(yesterday)
+  const endDate = endOfDay(yesterday)
+
+  const orders = await db.list($.Order, {
+    where: {
+      createdAt: { gte: startDate, lt: endDate },
+    },
+  })
+
+  // Calculate metrics
+  const totalRevenue = orders.reduce((sum, order) => sum + order.total, 0)
+  const averageOrderValue = orders.length > 0 ? totalRevenue / orders.length : 0
+
+  // Group by product category
+  const categoryBreakdown = orders.reduce(
+    (acc, order) => {
+      order.items?.forEach((item) => {
+        const category = item.category || 'Uncategorized'
+        if (!acc[category]) acc[category] = 0
+        acc[category] += item.price * item.quantity
+      })
+      return acc
+    },
+    {} as Record<string, number>
+  )
+
+  // Generate AI insights
+  const insights = await ai.generate(`Analyze daily sales performance: ${orders.length} orders, $${totalRevenue.toFixed(2)} revenue`, {
+    schema: $.AnalysisReport,
+    structured: true,
+  })
+
+  // Create report
+  const report = await db.create($.Report, {
+    type: 'daily-sales',
+    date: startDate,
+    metrics: {
+      orderCount: orders.length,
+      totalRevenue,
+      averageOrderValue,
+      categoryBreakdown,
+    },
+    insights,
+  })
+
+  // Send to stakeholders
+  await send('Report.generated', {
+    reportId: report.$id,
+    type: 'daily-sales',
+    date: startDate,
+  })
+
+  console.log(`Daily sales report generated: ${orders.length} orders, $${totalRevenue}`)
+})
+```
+
+## Automated Database Backups
+
+Schedule regular database backups with rotation:
+
+```typescript
+import { $, every, db } from 'sdk.do'
+
+// Hourly incremental backups
+every($.Hourly, async () => {
+  const lastHour = subHours(new Date(), 1)
+
+  // Get entities modified in last hour
+  const modifiedEntities = await db.list({
+    where: {
+      updatedAt: { gte: lastHour },
+    },
+  })
+
+  // Backup to cloud storage
+  const backupFile = `backup-incremental-${Date.now()}.json`
+  await uploadToS3(backupFile, {
+    type: 'incremental',
+    timestamp: new Date(),
+    entityCount: modifiedEntities.length,
+    data: modifiedEntities,
+  })
+
+  console.log(`Incremental backup: ${modifiedEntities.length} entities`)
+})
+
+// Daily full backups at 2am
+every('0 2 * * *', async () => {
+  console.log('Starting full database backup...')
+
+  // Export entire database
+  const allData = await db.export()
+
+  // Compress data
+  const compressed = await compressData(allData)
+
+  // Upload to cloud storage
+  const backupFile = `backup-full-${format(new Date(), 'yyyy-MM-dd')}.json.gz`
+  await uploadToS3(backupFile, compressed)
+
+  // Clean up old backups (keep last 30 days)
+  const oldBackups = await listS3Files('backup-full-')
+  const cutoffDate = subDays(new Date(), 30)
+
+  for (const backup of oldBackups) {
+    if (backup.lastModified < cutoffDate) {
+      await deleteFromS3(backup.key)
+    }
+  }
+
+  console.log('Full database backup completed')
+})
+
+async function uploadToS3(key: string, data: any) {
+  // S3 upload implementation
+  console.log(`Uploading to S3: ${key}`)
+}
+
+async function compressData(data: any) {
+  // Compression implementation
+  return data
+}
+
+async function listS3Files(prefix: string) {
+  // S3 list implementation
+  return []
+}
+
+async function deleteFromS3(key: string) {
+  // S3 delete implementation
+  console.log(`Deleting from S3: ${key}`)
+}
+```
+
+## Inventory Synchronization
+
+Sync inventory with warehouse management system:
+
+```typescript
+import { $, every, db, api, send } from 'sdk.do'
+
+every($.Every15Minutes, async () => {
+  console.log('Starting inventory sync...')
+
+  try {
+    // Fetch inventory from warehouse API
+    const inventory = await api.fetch('https://warehouse.example.com/api/inventory', {
+      headers: {
+        Authorization: `Bearer ${process.env.WAREHOUSE_API_KEY}`,
+      },
+    })
+
+    let updated = 0
+    let outOfStock = 0
+
+    // Update local database
+    for (const item of inventory) {
+      const product = await db.get($.Product, item.sku)
+
+      if (product) {
+        const wasInStock = product.stockQuantity > 0
+        const isInStock = item.quantity > 0
+
+        await db.update(product.$id, {
+          stockQuantity: item.quantity,
+          lastSynced: new Date(),
+        })
+
+        updated++
+
+        // Alert if went out of stock
+        if (wasInStock && !isInStock) {
+          await send('Product.outOfStock', {
+            productId: product.$id,
+            sku: product.sku,
+            name: product.name,
+          })
+          outOfStock++
+        }
+      }
+    }
+
+    // Log sync result
+    await db.create($.SyncLog, {
+      type: 'inventory',
+      timestamp: new Date(),
+      itemsProcessed: inventory.length,
+      itemsUpdated: updated,
+      outOfStockAlerts: outOfStock,
+      status: 'success',
+    })
+
+    console.log(`Inventory sync completed: ${updated} products updated, ${outOfStock} out of stock`)
+  } catch (error) {
+    console.error('Inventory sync failed:', error)
+
+    await db.create($.SyncLog, {
+      type: 'inventory',
+      timestamp: new Date(),
+      status: 'failed',
+      error: error.message,
+    })
+
+    await send('Sync.failed', {
+      type: 'inventory',
+      error: error.message,
+    })
+  }
+})
+```
+
+## Weekly Team Reports
+
+Generate and send weekly team performance reports:
+
+```typescript
+import { $, every, db, ai, send } from 'sdk.do'
+
+every($.Weekly, async () => {
+  console.log('Generating weekly team reports...')
+
+  const weekStart = startOfWeek(subWeeks(new Date(), 1))
+  const weekEnd = endOfWeek(subWeeks(new Date(), 1))
+
+  // Get all team members
+  const team = await db.list($.Employee, {
+    where: { status: 'active' },
+  })
+
+  for (const member of team) {
+    // Get member's activities for the week
+    const activities = await db.list($.Activity, {
+      where: {
+        userId: member.$id,
+        createdAt: { gte: weekStart, lte: weekEnd },
+      },
+    })
+
+    // Calculate metrics
+    const metrics = {
+      tasksCompleted: activities.filter((a) => a.type === 'task-completed').length,
+      meetingsAttended: activities.filter((a) => a.type === 'meeting').length,
+      hoursLogged: activities.reduce((sum, a) => sum + (a.duration || 0), 0) / 60,
+    }
+
+    // Generate performance summary with AI
+    const summary = await ai.generate(
+      `Summarize weekly performance: ${metrics.tasksCompleted} tasks, ${metrics.meetingsAttended} meetings, ${metrics.hoursLogged.toFixed(1)} hours`,
+      {
+        schema: $.PerformanceReview,
+        structured: true,
+      }
+    )
+
+    // Create report
+    const report = await db.create($.WeeklyReport, {
+      employeeId: member.$id,
+      weekStart,
+      weekEnd,
+      metrics,
+      summary,
+    })
+
+    // Send to manager and team member
+    await send('Report.generated', {
+      reportId: report.$id,
+      type: 'weekly-performance',
+      recipientIds: [member.$id, member.managerId],
+    })
+  }
+
+  console.log(`Weekly team reports generated for ${team.length} members`)
+})
+```
+
+## Monthly Billing
+
+Process monthly subscription billing:
+
+```typescript
+import { $, every, db, send } from 'sdk.do'
+
+every($.Monthly, async () => {
+  console.log('Processing monthly billing...')
+
+  // Get all active subscriptions
+  const subscriptions = await db.list($.Subscription, {
+    where: {
+      status: 'active',
+      billingCycle: 'monthly',
+    },
+  })
+
+  let successful = 0
+  let failed = 0
+
+  for (const subscription of subscriptions) {
+    try {
+      // Get customer
+      const customer = await db.get($.Customer, subscription.customerId)
+
+      // Create invoice
+      const invoice = await db.create($.Invoice, {
+        customerId: customer.$id,
+        subscriptionId: subscription.$id,
+        amount: subscription.price,
+        currency: subscription.currency || 'USD',
+        dueDate: addDays(new Date(), 7),
+        status: 'pending',
+      })
+
+      // Process payment
+      await send('Payment.requested', {
+        invoiceId: invoice.$id,
+        customerId: customer.$id,
+        amount: subscription.price,
+        paymentMethodId: customer.defaultPaymentMethod,
+      })
+
+      successful++
+    } catch (error) {
+      console.error(`Billing failed for subscription ${subscription.$id}:`, error)
+
+      await send('Billing.failed', {
+        subscriptionId: subscription.$id,
+        customerId: subscription.customerId,
+        error: error.message,
+      })
+
+      failed++
+    }
+  }
+
+  // Log billing run
+  await db.create($.BillingLog, {
+    timestamp: new Date(),
+    subscriptionsProcessed: subscriptions.length,
+    successful,
+    failed,
+  })
+
+  console.log(`Monthly billing completed: ${successful} successful, ${failed} failed`)
+})
+```
+
+## Customer Onboarding Workflow
+
+Automated customer onboarding sequence:
+
+```typescript
+import { $, every, db, send } from 'sdk.do'
+
+every($.Daily, async () => {
+  console.log('Processing customer onboarding...')
+
+  // Get new customers from yesterday
+  const yesterday = subDays(new Date(), 1)
+  const newCustomers = await db.list($.Customer, {
+    where: {
+      createdAt: { gte: startOfDay(yesterday), lt: endOfDay(yesterday) },
+    },
+  })
+
+  // Send welcome email (Day 1)
+  for (const customer of newCustomers) {
+    await send('Email.scheduled', {
+      to: customer.email,
+      template: 'welcome',
+      customerId: customer.$id,
+    })
+  }
+
+  // Get customers who signed up 3 days ago
+  const threeDaysAgo = subDays(new Date(), 3)
+  const day3Customers = await db.list($.Customer, {
+    where: {
+      createdAt: { gte: startOfDay(threeDaysAgo), lt: endOfDay(threeDaysAgo) },
+    },
+  })
+
+  // Send getting started guide (Day 3)
+  for (const customer of day3Customers) {
+    await send('Email.scheduled', {
+      to: customer.email,
+      template: 'getting-started',
+      customerId: customer.$id,
+    })
+  }
+
+  // Get customers who signed up 7 days ago
+  const sevenDaysAgo = subDays(new Date(), 7)
+  const day7Customers = await db.list($.Customer, {
+    where: {
+      createdAt: { gte: startOfDay(sevenDaysAgo), lt: endOfDay(sevenDaysAgo) },
+    },
+  })
+
+  // Send feature highlight (Day 7)
+  for (const customer of day7Customers) {
+    await send('Email.scheduled', {
+      to: customer.email,
+      template: 'feature-highlight',
+      customerId: customer.$id,
+    })
+  }
+
+  console.log(`Onboarding: ${newCustomers.length} new, ${day3Customers.length} day 3, ${day7Customers.length} day 7`)
+})
+```
+
+## Data Quality Maintenance
+
+Automated data quality checks and cleanup:
+
+```typescript
+import { $, every, db, send } from 'sdk.do'
+
+every('0 3 * * *', async () => {
+  console.log('Running data quality maintenance...')
+
+  let issuesFixed = 0
+
+  // Find and fix duplicate records
+  const duplicates = await db.query(`
+    SELECT email, COUNT(*) as count
+    FROM customers
+    GROUP BY email
+    HAVING count > 1
+  `)
+
+  for (const dup of duplicates) {
+    const records = await db.list($.Customer, {
+      where: { email: dup.email },
+      orderBy: { createdAt: 'asc' },
+    })
+
+    // Keep oldest, mark others as duplicates
+    for (let i = 1; i < records.length; i++) {
+      await db.update(records[i].$id, {
+        duplicate: true,
+        duplicateOf: records[0].$id,
+      })
+      issuesFixed++
+    }
+  }
+
+  // Find incomplete records
+  const incomplete = await db.list($.Product, {
+    where: {
+      or: [{ name: null }, { description: null }, { price: null }],
+    },
+  })
+
+  for (const product of incomplete) {
+    await send('DataQuality.incompleteRecord', {
+      entityType: 'Product',
+      entityId: product.$id,
+      missingFields: [!product.name && 'name', !product.description && 'description', !product.price && 'price'].filter(Boolean),
+    })
+  }
+
+  // Clean up orphaned records
+  const orders = await db.list($.Order, {
+    where: { customerId: { ne: null } },
+  })
+
+  for (const order of orders) {
+    const customer = await db.get($.Customer, order.customerId)
+    if (!customer) {
+      await db.update(order.$id, {
+        orphaned: true,
+        orphanedAt: new Date(),
+      })
+      issuesFixed++
+    }
+  }
+
+  // Log maintenance results
+  await db.create($.MaintenanceLog, {
+    type: 'data-quality',
+    timestamp: new Date(),
+    issuesFixed,
+    incompleteRecords: incomplete.length,
+  })
+
+  console.log(`Data quality maintenance completed: ${issuesFixed} issues fixed`)
+})
+```
+
+## Content Enrichment
+
+Automated content generation and enrichment:
+
+```typescript
+import { $, every, db, ai } from 'sdk.do'
+
+every($.Hourly, async () => {
+  console.log('Enriching product content...')
+
+  // Get products without descriptions
+  const products = await db.list($.Product, {
+    where: { description: null },
+    limit: 50, // Process 50 per hour
+  })
+
+  let enriched = 0
+
+  for (const product of products) {
+    try {
+      // Generate description with AI
+      const description = await ai.generate(`Generate a compelling product description for: ${product.name}`, {
+        schema: $.Product,
+        context: {
+          name: product.name,
+          category: product.category,
+          features: product.features,
+          targetAudience: product.targetAudience,
+        },
+      })
+
+      // Update product
+      await db.update(product.$id, {
+        description: description.description,
+        enrichedAt: new Date(),
+      })
+
+      enriched++
+    } catch (error) {
+      console.error(`Failed to enrich product ${product.$id}:`, error)
+    }
+  }
+
+  console.log(`Content enrichment: ${enriched}/${products.length} products enriched`)
+})
+```
+
+## System Health Monitoring
+
+Monitor system health and send alerts:
+
+```typescript
+import { $, every, db, send } from 'sdk.do'
+
+every($.Every5Minutes, async () => {
+  const checks = []
+
+  // Check database connection
+  try {
+    await db.list($.HealthCheck, { limit: 1 })
+    checks.push({ name: 'database', status: 'healthy' })
+  } catch (error) {
+    checks.push({ name: 'database', status: 'unhealthy', error: error.message })
+  }
+
+  // Check API response time
+  const apiStart = Date.now()
+  try {
+    await fetch('https://api.example.com/health')
+    const responseTime = Date.now() - apiStart
+    checks.push({
+      name: 'api',
+      status: responseTime < 1000 ? 'healthy' : 'degraded',
+      responseTime,
+    })
+  } catch (error) {
+    checks.push({ name: 'api', status: 'unhealthy', error: error.message })
+  }
+
+  // Check queue depth
+  const queueDepth = await db.count($.QueueItem, {
+    where: { status: 'pending' },
+  })
+  checks.push({
+    name: 'queue',
+    status: queueDepth < 1000 ? 'healthy' : 'warning',
+    depth: queueDepth,
+  })
+
+  // Log health check
+  await db.create($.HealthCheckLog, {
+    timestamp: new Date(),
+    checks,
+    overallStatus: checks.every((c) => c.status === 'healthy') ? 'healthy' : 'degraded',
+  })
+
+  // Send alerts for unhealthy services
+  const unhealthy = checks.filter((c) => c.status === 'unhealthy')
+  if (unhealthy.length > 0) {
+    await send('Alert.systemHealth', {
+      severity: 'high',
+      checks: unhealthy,
+      timestamp: new Date(),
+    })
+  }
+})
+```
+
+## End of Quarter Processing
+
+Quarterly business operations:
+
+```typescript
+import { $, every, db, ai, send } from 'sdk.do'
+
+every($.EndOfQuarter, async () => {
+  console.log('Processing end of quarter...')
+
+  const quarter = getCurrentQuarter()
+  const quarterStart = startOfQuarter(new Date())
+  const quarterEnd = endOfQuarter(new Date())
+
+  // Aggregate quarterly metrics
+  const orders = await db.list($.Order, {
+    where: {
+      createdAt: { gte: quarterStart, lte: quarterEnd },
+    },
+  })
+
+  const revenue = orders.reduce((sum, o) => sum + o.total, 0)
+  const customers = new Set(orders.map((o) => o.customerId)).size
+
+  // Generate quarterly report with AI
+  const report = await ai.generate(`Generate quarterly business report for Q${quarter}: ${orders.length} orders, $${revenue} revenue, ${customers} customers`, {
+    schema: $.QuarterlyReport,
+    structured: true,
+  })
+
+  // Store report
+  const savedReport = await db.create($.QuarterlyReport, {
+    quarter,
+    year: new Date().getFullYear(),
+    startDate: quarterStart,
+    endDate: quarterEnd,
+    metrics: {
+      orders: orders.length,
+      revenue,
+      customers,
+    },
+    report,
+  })
+
+  // Notify stakeholders
+  await send('Report.quarterly', {
+    reportId: savedReport.$id,
+    quarter,
+    year: new Date().getFullYear(),
+  })
+
+  console.log(`Quarterly report generated: Q${quarter}`)
+})
+
+function getCurrentQuarter() {
+  return Math.floor(new Date().getMonth() / 3) + 1
+}
+```
+
+## Best Practices
+
+### 1. Batch Processing
+
+Process items in batches to avoid overwhelming systems:
+
+```typescript
+every($.Hourly, async () => {
+  const batchSize = 100
+  const items = await db.list($.Item, { limit: batchSize })
+
+  for (const item of items) {
+    await processItem(item)
+  }
+})
+```
+
+### 2. Idempotent Operations
+
+Use unique keys to prevent duplicate processing:
+
+```typescript
+every($.Daily, async () => {
+  const reportKey = format(new Date(), 'yyyy-MM-dd')
+
+  await db.upsert($.Report, {
+    $id: `daily-report-${reportKey}`,
+    date: reportKey,
+    data: reportData,
+  })
+})
+```
+
+### 3. Error Handling and Retries
+
+Handle failures gracefully:
+
+```typescript
+every($.Hourly, async () => {
+  try {
+    await externalAPICall()
+  } catch (error) {
+    console.error('API call failed:', error)
+    await send('Task.failed', { error: error.message })
+  }
+})
+```
+
+### 4. Monitoring and Alerts
+
+Track execution and send alerts:
+
+```typescript
+every($.Daily, async () => {
+  const startTime = Date.now()
+
+  await task()
+
+  const duration = Date.now() - startTime
+
+  await db.create($.TaskLog, {
+    task: 'daily-report',
+    duration,
+    timestamp: new Date(),
+  })
+})
+```
+
+## See Also
+
+- [Basic Schedules](./basic-schedules) - Simple scheduling examples
+- [Schedules Guide](../docs/schedules) - All schedule types
+- [Patterns](../docs/patterns) - Advanced patterns
+- [API Reference](../api/) - Complete API documentation
+
+## License
+
+MIT (Open Source)

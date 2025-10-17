@@ -1,0 +1,890 @@
+---
+$id: https://api.do/api
+$type: APIReference
+title: API Reference
+description: Complete API reference for api.do external API integration
+keywords: [api, reference, documentation, functions, methods]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# API Reference
+
+Complete API reference for api.do external API integration.
+
+## Overview
+
+The api.do module provides functions for integrating external APIs:
+
+- `api.get()` - HTTP GET requests
+- `api.post()` - HTTP POST requests
+- `api.put()` - HTTP PUT requests
+- `api.patch()` - HTTP PATCH requests
+- `api.delete()` - HTTP DELETE requests
+- `api.head()` - HTTP HEAD requests
+- `api.options()` - HTTP OPTIONS requests
+- `api.graphql()` - GraphQL queries and mutations
+- `api.webhook()` - Send webhook events
+- `api.config()` - Configure default settings
+
+## api.get()
+
+Perform HTTP GET request to retrieve data.
+
+### Signature
+
+```typescript
+function get<T = any>(url: string, options?: RequestOptions): Promise<T>
+```
+
+### Parameters
+
+#### `url: string` (required)
+
+The full URL to request.
+
+```typescript
+await api.get('https://api.example.com/users')
+```
+
+#### `options?: RequestOptions` (optional)
+
+Request configuration options.
+
+```typescript
+interface RequestOptions {
+  // Authentication
+  auth?: AuthOptions
+
+  // Query parameters
+  params?: Record<string, any>
+
+  // Custom headers
+  headers?: Record<string, string>
+
+  // Response configuration
+  responseType?: 'json' | 'text' | 'blob' | 'arraybuffer'
+  fullResponse?: boolean
+
+  // Timeout and retry
+  timeout?: number
+  retry?: RetryOptions
+
+  // Rate limiting
+  rateLimit?: RateLimitOptions
+
+  // Schema mapping
+  schema?: SchemaType
+  mapping?: Record<string, string>
+
+  // Transformation
+  transform?: {
+    request?: (data: any) => any
+    response?: (data: any) => any
+  }
+}
+```
+
+### Returns
+
+- **Default**: `Promise<T>` - Response body (parsed JSON by default)
+- **With fullResponse**: `Promise<Response<T>>` - Full response object
+
+### Examples
+
+**Basic GET:**
+
+```typescript
+const users = await api.get('https://api.example.com/users')
+```
+
+**GET with query parameters:**
+
+```typescript
+const users = await api.get('https://api.example.com/users', {
+  params: {
+    page: 1,
+    limit: 10,
+  },
+})
+```
+
+**GET with authentication:**
+
+```typescript
+const data = await api.get('https://api.example.com/data', {
+  auth: {
+    type: 'bearer',
+    token: process.env.API_TOKEN,
+  },
+})
+```
+
+**GET with schema mapping:**
+
+```typescript
+import { $ } from 'sdk.do'
+
+const person = await api.get('https://api.example.com/users/123', {
+  schema: $.Person,
+  mapping: {
+    full_name: 'name',
+    email_address: 'email',
+  },
+})
+```
+
+### Error Codes
+
+- `TIMEOUT` - Request timeout
+- `RATE_LIMIT_EXCEEDED` - Rate limit exceeded
+- `AUTH_FAILED` - Authentication failed
+- `NOT_FOUND` - Resource not found (404)
+- `SERVER_ERROR` - Server error (5xx)
+
+## api.post()
+
+Perform HTTP POST request to create resources.
+
+### Signature
+
+```typescript
+function post<T = any>(url: string, data?: any, options?: RequestOptions): Promise<T>
+```
+
+### Parameters
+
+#### `url: string` (required)
+
+The full URL to request.
+
+#### `data?: any` (optional)
+
+Data to send in request body.
+
+#### `options?: RequestOptions` (optional)
+
+Request configuration options (same as `api.get()`).
+
+### Returns
+
+`Promise<T>` - Response body or full response if `fullResponse: true`.
+
+### Examples
+
+**Basic POST:**
+
+```typescript
+const user = await api.post('https://api.example.com/users', {
+  name: 'John Smith',
+  email: 'john@example.com',
+})
+```
+
+**POST with authentication:**
+
+```typescript
+const created = await api.post(
+  'https://api.example.com/orders',
+  {
+    customerId: '123',
+    items: [{ productId: '456', quantity: 2 }],
+  },
+  {
+    auth: {
+      type: 'bearer',
+      token: process.env.API_TOKEN,
+    },
+  }
+)
+```
+
+**POST with Schema.org type:**
+
+```typescript
+import { $ } from 'sdk.do'
+
+const person = await api.post('https://api.example.com/persons', {
+  $type: 'Person',
+  name: 'John Smith',
+  email: 'john@example.com',
+})
+```
+
+## api.put()
+
+Perform HTTP PUT request to replace resources.
+
+### Signature
+
+```typescript
+function put<T = any>(url: string, data?: any, options?: RequestOptions): Promise<T>
+```
+
+### Parameters
+
+Same as `api.post()`.
+
+### Returns
+
+`Promise<T>` - Response body or full response.
+
+### Example
+
+```typescript
+const updated = await api.put(
+  'https://api.example.com/users/123',
+  {
+    name: 'John Smith Updated',
+    email: 'john.updated@example.com',
+  },
+  {
+    auth: {
+      type: 'bearer',
+      token: process.env.API_TOKEN,
+    },
+  }
+)
+```
+
+## api.patch()
+
+Perform HTTP PATCH request to update specific fields.
+
+### Signature
+
+```typescript
+function patch<T = any>(url: string, data?: any, options?: RequestOptions): Promise<T>
+```
+
+### Parameters
+
+Same as `api.post()`.
+
+### Returns
+
+`Promise<T>` - Response body or full response.
+
+### Example
+
+```typescript
+const updated = await api.patch(
+  'https://api.example.com/users/123',
+  {
+    email: 'newemail@example.com',
+  },
+  {
+    auth: {
+      type: 'bearer',
+      token: process.env.API_TOKEN,
+    },
+  }
+)
+```
+
+## api.delete()
+
+Perform HTTP DELETE request to remove resources.
+
+### Signature
+
+```typescript
+function delete<T = any>(
+  url: string,
+  options?: RequestOptions
+): Promise<T>
+```
+
+### Parameters
+
+#### `url: string` (required)
+
+The full URL to request.
+
+#### `options?: RequestOptions` (optional)
+
+Request configuration options.
+
+### Returns
+
+`Promise<T>` - Response body or full response.
+
+### Example
+
+```typescript
+await api.delete('https://api.example.com/users/123', {
+  auth: {
+    type: 'bearer',
+    token: process.env.API_TOKEN,
+  },
+})
+```
+
+## api.head()
+
+Perform HTTP HEAD request to get headers without body.
+
+### Signature
+
+```typescript
+function head(url: string, options?: RequestOptions): Promise<Response>
+```
+
+### Parameters
+
+Same as `api.get()` (automatically sets `fullResponse: true`).
+
+### Returns
+
+`Promise<Response>` - Response with headers and status.
+
+### Example
+
+```typescript
+const response = await api.head('https://api.example.com/users/123')
+console.log(response.headers['content-type'])
+console.log(response.headers['content-length'])
+```
+
+## api.options()
+
+Perform HTTP OPTIONS request to check allowed methods.
+
+### Signature
+
+```typescript
+function options(url: string, options?: RequestOptions): Promise<Response>
+```
+
+### Parameters
+
+Same as `api.get()`.
+
+### Returns
+
+`Promise<Response>` - Response with allowed methods.
+
+### Example
+
+```typescript
+const response = await api.options('https://api.example.com/users')
+console.log(response.headers['allow']) // "GET, POST, PUT, DELETE"
+```
+
+## api.graphql()
+
+Perform GraphQL queries and mutations.
+
+### Signature
+
+```typescript
+function graphql<T = any>(url: string, options: GraphQLOptions): Promise<T>
+```
+
+### Parameters
+
+#### `url: string` (required)
+
+The GraphQL endpoint URL.
+
+#### `options: GraphQLOptions` (required)
+
+GraphQL request options.
+
+```typescript
+interface GraphQLOptions {
+  // GraphQL query or mutation
+  query: string
+
+  // Variables for query
+  variables?: Record<string, any>
+
+  // Operation name (if multiple operations in query)
+  operationName?: string
+
+  // Authentication
+  auth?: AuthOptions
+
+  // Schema mapping
+  schema?: SchemaType
+  mapping?: Record<string, string>
+
+  // Other request options
+  timeout?: number
+  headers?: Record<string, string>
+}
+```
+
+### Returns
+
+`Promise<T>` - GraphQL response data.
+
+### Examples
+
+**Basic query:**
+
+```typescript
+const users = await api.graphql('https://api.example.com/graphql', {
+  query: `
+    query {
+      users {
+        id
+        name
+        email
+      }
+    }
+  `,
+})
+```
+
+**Query with variables:**
+
+```typescript
+const user = await api.graphql('https://api.example.com/graphql', {
+  query: `
+    query GetUser($id: ID!) {
+      user(id: $id) {
+        id
+        name
+        email
+      }
+    }
+  `,
+  variables: {
+    id: '123',
+  },
+})
+```
+
+**Mutation:**
+
+```typescript
+const created = await api.graphql('https://api.example.com/graphql', {
+  query: `
+    mutation CreateUser($input: CreateUserInput!) {
+      createUser(input: $input) {
+        id
+        name
+        email
+      }
+    }
+  `,
+  variables: {
+    input: {
+      name: 'John Smith',
+      email: 'john@example.com',
+    },
+  },
+})
+```
+
+**With authentication:**
+
+```typescript
+const data = await api.graphql('https://api.github.com/graphql', {
+  query: `
+    query {
+      viewer {
+        login
+        name
+      }
+    }
+  `,
+  auth: {
+    type: 'bearer',
+    token: process.env.GITHUB_TOKEN,
+  },
+})
+```
+
+### Error Handling
+
+GraphQL errors are available in the `errors` field:
+
+```typescript
+try {
+  const data = await api.graphql(url, { query })
+} catch (error) {
+  if (error.graphQLErrors) {
+    for (const err of error.graphQLErrors) {
+      console.error(err.message)
+    }
+  }
+}
+```
+
+## api.webhook()
+
+Send webhook events to external services.
+
+### Signature
+
+```typescript
+function webhook(url: string, payload: any, options?: RequestOptions): Promise<void>
+```
+
+### Parameters
+
+#### `url: string` (required)
+
+The webhook endpoint URL.
+
+#### `payload: any` (required)
+
+Data to send in webhook payload.
+
+#### `options?: RequestOptions` (optional)
+
+Request configuration options.
+
+### Returns
+
+`Promise<void>` - Resolves when webhook is delivered.
+
+### Examples
+
+**Simple webhook:**
+
+```typescript
+await api.webhook('https://webhook.site/unique-url', {
+  event: 'order.created',
+  data: {
+    orderId: '12345',
+    total: 99.99,
+  },
+})
+```
+
+**Webhook with custom headers:**
+
+```typescript
+await api.webhook(
+  'https://webhook.example.com/events',
+  {
+    event: 'user.registered',
+    userId: '123',
+  },
+  {
+    headers: {
+      'X-Event-Type': 'user.registered',
+      'X-Event-Id': 'evt_123456',
+    },
+  }
+)
+```
+
+**Webhook with retry:**
+
+```typescript
+await api.webhook('https://webhook.example.com/events', payload, {
+  retry: {
+    attempts: 3,
+    delay: 1000,
+    backoff: 'exponential',
+  },
+})
+```
+
+## api.config()
+
+Configure global default settings for all requests.
+
+### Signature
+
+```typescript
+function config(options: ConfigOptions): void
+```
+
+### Parameters
+
+```typescript
+interface ConfigOptions {
+  // Base URL for all requests
+  baseURL?: string
+
+  // Default timeout (ms)
+  timeout?: number
+
+  // Default headers
+  headers?: Record<string, string>
+
+  // Default authentication
+  auth?: AuthOptions
+
+  // Default retry settings
+  retry?: RetryOptions
+
+  // Default rate limiting
+  rateLimit?: RateLimitOptions
+}
+```
+
+### Example
+
+```typescript
+import { api } from 'sdk.do'
+
+api.config({
+  baseURL: 'https://api.example.com',
+  timeout: 30000,
+  headers: {
+    'User-Agent': 'MyApp/1.0',
+  },
+  auth: {
+    type: 'bearer',
+    token: process.env.API_TOKEN,
+  },
+  retry: {
+    attempts: 3,
+    delay: 1000,
+  },
+})
+
+// Now all requests use these defaults
+const users = await api.get('/users')
+```
+
+## Type Definitions
+
+### AuthOptions
+
+Authentication configuration.
+
+```typescript
+type AuthOptions = BearerAuth | ApiKeyAuth | OAuth2Auth | BasicAuth | CustomAuth
+
+interface BearerAuth {
+  type: 'bearer'
+  token: string
+}
+
+interface ApiKeyAuth {
+  type: 'apiKey'
+  key: string
+  header?: string // Default: 'X-API-Key'
+  param?: string // Alternative: send as query param
+}
+
+interface OAuth2Auth {
+  type: 'oauth2'
+  accessToken: string
+  refreshToken?: string
+  clientId?: string
+  clientSecret?: string
+  tokenEndpoint?: string
+}
+
+interface BasicAuth {
+  type: 'basic'
+  username: string
+  password: string
+}
+
+interface CustomAuth {
+  type: 'custom'
+  header: string
+  value: string
+}
+```
+
+### RetryOptions
+
+Retry configuration for failed requests.
+
+```typescript
+interface RetryOptions {
+  // Number of retry attempts
+  attempts?: number // Default: 3
+
+  // Delay between retries (ms)
+  delay?: number // Default: 1000
+
+  // Backoff strategy
+  backoff?: 'linear' | 'exponential' // Default: 'exponential'
+
+  // Retry on these status codes
+  retryOn?: number[] // Default: [408, 429, 500, 502, 503, 504]
+}
+```
+
+### RateLimitOptions
+
+Rate limiting configuration.
+
+```typescript
+interface RateLimitOptions {
+  // Maximum requests
+  maxRequests: number
+
+  // Per time window (ms)
+  perMilliseconds: number
+}
+```
+
+### Response
+
+Full response object when `fullResponse: true`.
+
+```typescript
+interface Response<T = any> {
+  // Response status
+  status: number
+  statusText: string
+
+  // Response headers
+  headers: Record<string, string>
+
+  // Response body
+  data: T
+
+  // Request configuration
+  config: RequestOptions
+}
+```
+
+## Environment Variables
+
+Configure api.do via environment variables:
+
+```bash
+# Default timeout
+API_TIMEOUT=30000
+
+# Default retry settings
+API_RETRY_ATTEMPTS=3
+API_RETRY_DELAY=1000
+
+# Default rate limiting
+API_RATE_LIMIT=100
+API_RATE_LIMIT_WINDOW=60000
+
+# External service API keys
+GITHUB_TOKEN=ghp_...
+STRIPE_API_KEY=sk_live_...
+SENDGRID_API_KEY=SG....
+SHOPIFY_ACCESS_TOKEN=shpat_...
+```
+
+## Error Handling
+
+All API functions throw errors with this structure:
+
+```typescript
+interface APIError extends Error {
+  code: string
+  message: string
+  status?: number
+  statusText?: string
+  data?: any
+  retryAfter?: number
+}
+```
+
+### Error Codes
+
+- `TIMEOUT` - Request timeout
+- `RATE_LIMIT_EXCEEDED` - Rate limit exceeded
+- `AUTH_FAILED` - Authentication failed
+- `NOT_FOUND` - Resource not found (404)
+- `BAD_REQUEST` - Invalid request (400)
+- `FORBIDDEN` - Access forbidden (403)
+- `SERVER_ERROR` - Server error (5xx)
+- `NETWORK_ERROR` - Network connection error
+
+### Example
+
+```typescript
+try {
+  const data = await api.get('https://api.example.com/data')
+} catch (error) {
+  if (error.code === 'RATE_LIMIT_EXCEEDED') {
+    console.log(`Rate limited. Retry after ${error.retryAfter}ms`)
+  } else if (error.code === 'AUTH_FAILED') {
+    console.error('Authentication failed')
+  } else {
+    console.error('Request failed:', error.message)
+  }
+}
+```
+
+## Best Practices
+
+### 1. Use Environment Variables
+
+Store credentials securely:
+
+```typescript
+const data = await api.get('https://api.example.com/data', {
+  auth: {
+    type: 'bearer',
+    token: process.env.API_TOKEN,
+  },
+})
+```
+
+### 2. Implement Error Handling
+
+Always handle errors:
+
+```typescript
+try {
+  const data = await api.get(url)
+} catch (error) {
+  console.error('Failed:', error)
+}
+```
+
+### 3. Use Timeouts
+
+Set appropriate timeouts:
+
+```typescript
+await api.get(url, {
+  timeout: 10000,
+})
+```
+
+### 4. Implement Retry Logic
+
+Handle transient failures:
+
+```typescript
+await api.get(url, {
+  retry: {
+    attempts: 3,
+    delay: 1000,
+    backoff: 'exponential',
+  },
+})
+```
+
+### 5. Map to Semantic Types
+
+Use Schema.org mapping:
+
+```typescript
+const person = await api.get(url, {
+  schema: $.Person,
+  mapping: { full_name: 'name' },
+})
+```
+
+## See Also
+
+- [Getting Started](../docs/getting-started) - Quick start guide
+- [Making Requests](../docs/making-requests) - HTTP methods guide
+- [Authentication](../docs/authentication) - Auth patterns
+- [REST API Example](../examples/rest-api) - REST integration
+- [GraphQL Example](../examples/graphql-api) - GraphQL integration
+- [Webhook Example](../examples/webhook-integration) - Webhook handling
+
+## Support
+
+- [GitHub Issues](https://github.com/dot-do/ai/issues) - Report bugs
+- [Discord Community](https://discord.gg/dotdo) - Get help
+- [Documentation](https://api.do) - Full documentation
+
+## License
+
+MIT (Open Source)

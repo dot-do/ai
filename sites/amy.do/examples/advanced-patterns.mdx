@@ -1,0 +1,367 @@
+---
+$id: https://amy.do/examples/advanced-patterns
+$type: TechArticle
+title: Marketing AI Agent Advanced Patterns
+description: Advanced patterns and techniques for Marketing AI Agent
+keywords: [advanced patterns, amy.do, complex workflows, optimization]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Advanced Patterns
+
+Master advanced Marketing AI Agent patterns for complex use cases.
+
+## Multi-Step Workflows
+
+Execute complex multi-step workflows:
+
+```typescript
+import $, { agent, db } from 'sdk.do'
+
+const marketingAgent = await agent.create({
+  $role: $.MarketingAgent,
+  model: 'claude-sonnet-4.5',
+})
+
+// Define workflow
+const workflow = {
+  steps: [
+    { name: 'step1', action: 'analyze' },
+    { name: 'step2', action: 'plan' },
+    { name: 'step3', action: 'execute' },
+    { name: 'step4', action: 'review' },
+  ],
+  parallel: false,
+}
+
+// Execute workflow
+const result = await marketingAgent.executeWorkflow(workflow)
+```
+
+## Parallel Processing
+
+Process multiple tasks in parallel:
+
+```typescript
+// Parallel execution
+const tasks = Array.from({ length: 10 }, (_, i) => ({
+  task: `Task ${i}`,
+  context: { id: i },
+}))
+
+const results = await Promise.all(tasks.map((task) => marketingAgent.execute(task)))
+
+console.log(`Completed ${results.length} tasks`)
+```
+
+## Conditional Execution
+
+Execute tasks conditionally:
+
+```typescript
+// Conditional logic
+const result = await marketingAgent.execute({
+  task: 'Initial analysis',
+  conditions: {
+    if_success: 'continue_to_execution',
+    if_failure: 'escalate_to_human',
+    if_uncertain: 'request_more_data',
+  },
+})
+
+// Handle result based on condition
+switch (result.next_action) {
+  case 'continue_to_execution':
+    await marketingAgent.execute({ task: 'Execute plan' })
+    break
+  case 'escalate_to_human':
+    await notifyHuman(result)
+    break
+  case 'request_more_data':
+    const additionalData = await gatherData()
+    await marketingAgent.execute({ task: 'Re-analyze', data: additionalData })
+    break
+}
+```
+
+## State Management
+
+Maintain state across executions:
+
+```typescript
+import $, { agent, db } from 'sdk.do'
+
+const marketingAgent = await agent.create({
+  $role: $.MarketingAgent,
+  state: {
+    enabled: true,
+    persistence: 'database',
+    ttl: 86400, // 24 hours
+  },
+})
+
+// Execute with state
+const result1 = await marketingAgent.execute({
+  task: 'Task 1',
+  state_key: 'workflow_123',
+})
+
+// State is preserved
+const result2 = await marketingAgent.execute({
+  task: 'Task 2',
+  state_key: 'workflow_123', // Uses same state
+})
+
+// Access state
+const state = await marketingAgent.getState('workflow_123')
+console.log('Current state:', state)
+```
+
+## Event-Driven Architecture
+
+Build event-driven systems:
+
+```typescript
+import $, { agent, on, send } from 'sdk.do'
+
+const marketingAgent = await agent.create({
+  $role: $.MarketingAgent,
+  event_driven: true,
+})
+
+// Subscribe to events
+await on($.Event.triggered, async (event) => {
+  const result = await marketingAgent.execute({
+    task: 'Handle event',
+    event: event,
+  })
+
+  // Publish result
+  await send($.Result.completed, result)
+})
+
+// Chain events
+await on($.Result.completed, async (result) => {
+  if (result.requires_followup) {
+    await send($.Event.triggered, {
+      type: 'followup',
+      data: result,
+    })
+  }
+})
+```
+
+## Caching Strategies
+
+Implement intelligent caching:
+
+```typescript
+const marketingAgent = await agent.create({
+  $role: $.MarketingAgent,
+  cache: {
+    enabled: true,
+    strategy: 'semantic_similarity',
+    threshold: 0.9,
+    ttl: 3600,
+    max_size: 1000,
+  },
+})
+
+// Cached automatically
+const result1 = await marketingAgent.execute(task1)
+const result2 = await marketingAgent.execute(task1) // Cache hit
+```
+
+## Feedback Loops
+
+Implement continuous improvement:
+
+```typescript
+const marketingAgent = await agent.create({
+  $role: $.MarketingAgent,
+  learning: {
+    enabled: true,
+    feedback_loop: true,
+  },
+})
+
+// Execute with feedback
+const result = await marketingAgent.execute(task)
+
+// Provide feedback
+await marketingAgent.feedback({
+  task_id: result.id,
+  rating: 5,
+  comments: 'Excellent results',
+  metrics: { accuracy: 0.95, relevance: 0.98 },
+})
+
+// Agent improves over time
+```
+
+## Multi-Agent Collaboration
+
+Coordinate multiple agents:
+
+```typescript
+import $, { agent } from 'sdk.do'
+
+// Create specialized agents
+const agent1 = await agent.create({
+  $role: $.MarketingAgent,
+  specialization: 'analysis',
+})
+
+const agent2 = await agent.create({
+  $role: $.MarketingAgent,
+  specialization: 'execution',
+})
+
+const agent3 = await agent.create({
+  $role: $.MarketingAgent,
+  specialization: 'monitoring',
+})
+
+// Collaborative workflow
+const analysis = await agent1.analyze(task)
+const execution = await agent2.execute({
+  plan: analysis.recommendations,
+})
+const monitoring = await agent3.monitor({
+  execution: execution,
+})
+```
+
+## Advanced Error Handling
+
+Comprehensive error handling:
+
+```typescript
+const marketingAgent = await agent.create({
+  $role: $.MarketingAgent,
+  error_handling: {
+    retry_strategy: 'exponential_backoff',
+    max_retries: 5,
+    fallback_enabled: true,
+    circuit_breaker: {
+      enabled: true,
+      threshold: 0.5,
+      timeout: 60000,
+    },
+  },
+})
+
+// Automatic error recovery
+try {
+  const result = await marketingAgent.execute(task)
+} catch (error) {
+  if (error.recoverable) {
+    // Automatic retry with backoff
+    console.log('Retrying...')
+  } else {
+    // Escalate to human
+    await escalate(error)
+  }
+}
+```
+
+## Performance Optimization
+
+Optimize performance:
+
+```typescript
+// Streaming for large responses
+const stream = await marketingAgent.executeStream(task)
+for await (const chunk of stream) {
+  processChunk(chunk)
+}
+
+// Batch processing for efficiency
+const batchResults = await marketingAgent.batch({
+  items: largelist,
+  batch_size: 100,
+  parallel: 10,
+  error_handling: 'continue',
+})
+
+// Prefetching for predictable workflows
+await marketingAgent.prefetch([{ task: 'likely_next_task_1' }, { task: 'likely_next_task_2' }])
+```
+
+## Monitoring and Observability
+
+Monitor agent performance:
+
+```typescript
+import $, { agent, monitor } from 'sdk.do'
+
+const marketingAgent = await agent.create({
+  $role: $.MarketingAgent,
+  monitoring: {
+    enabled: true,
+    metrics: ['latency', 'success_rate', 'token_usage'],
+    sampling: 1.0, // 100% sampling
+    export_to: ['prometheus', 'datadog'],
+  },
+})
+
+// Query metrics
+const metrics = await monitor.getMetrics({
+  agent: marketingAgent,
+  period: 'last_24_hours',
+  aggregation: 'p95',
+})
+
+// Set up alerts
+await monitor.createAlert({
+  metric: 'latency',
+  threshold: 5000,
+  comparison: 'greater_than',
+  action: 'notify',
+})
+```
+
+## Advanced Integration Patterns
+
+Integrate with external systems:
+
+```typescript
+import $, { agent, api } from 'sdk.do'
+
+const marketingAgent = await agent.create({
+  $role: $.MarketingAgent,
+  integrations: {
+    external_api_1: {
+      url: 'https://api.example.com',
+      auth: { type: 'bearer', token: process.env.API_TOKEN },
+      retry: 3,
+      timeout: 30000,
+    },
+    external_api_2: {
+      url: 'https://api2.example.com',
+      auth: { type: 'oauth2', client_id: process.env.CLIENT_ID },
+      rate_limit: 100,
+    },
+  },
+})
+
+// Use integrations
+const result = await marketingAgent.execute({
+  task: 'Fetch and analyze data',
+  use_integrations: ['external_api_1', 'external_api_2'],
+})
+```
+
+## Next Steps
+
+- [Integration](./integration) - External integrations
+- [Real-world Use Case](./real-world-use-case) - Production example
+- [API Reference](../api/reference) - Complete API
+
+## Related Documentation
+
+- [Basic Usage](./basic-usage) - Basic examples
+- [Best Practices](../docs/best-practices) - Best practices
+- [Architecture](../docs/architecture) - System architecture

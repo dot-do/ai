@@ -1,0 +1,967 @@
+---
+$id: https://services.do/api
+$type: APIReference
+title: services.do API Reference
+description: Complete API reference for service deployment and management
+keywords: [api, reference, documentation, services, cloudflare-workers]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# API Reference
+
+Complete API reference for services.do service deployment and management.
+
+## Core Functions
+
+### service()
+
+Define a new service.
+
+**Signature**:
+
+```typescript
+function service(config: ServiceConfig): Service
+```
+
+**Parameters**:
+
+- `config` - Service configuration object
+
+**Returns**: Service instance
+
+**Example**:
+
+```typescript
+import $, { service } from 'sdk.do'
+
+const myService = service({
+  $type: 'Service',
+  name: 'MyService',
+  version: '1.0.0',
+  routes: {
+    'GET /': async () => Response.json({ message: 'Hello' }),
+  },
+})
+```
+
+### deploy()
+
+Deploy a service to Cloudflare Workers.
+
+**Signature**:
+
+```typescript
+async function deploy(options?: DeployOptions): Promise<DeploymentResult>
+```
+
+**Parameters**:
+
+- `options` - Deployment configuration
+
+**Returns**: Promise with deployment result
+
+**Example**:
+
+```typescript
+const result = await myService.deploy({
+  environment: 'production',
+  strategy: 'canary',
+})
+```
+
+### discover()
+
+Discover a service by type or name.
+
+**Signature**:
+
+```typescript
+async function discover(service: string | ServiceType): Promise<Service>
+```
+
+**Parameters**:
+
+- `service` - Service name or semantic type
+
+**Returns**: Promise with service instance
+
+**Example**:
+
+```typescript
+const userService = await discover($.UserService)
+const orderService = await discover('OrderService')
+```
+
+### call()
+
+Make a call to another service.
+
+**Signature**:
+
+```typescript
+async function call(service: Service | string, route: string, params?: any): Promise<Response>
+```
+
+**Parameters**:
+
+- `service` - Service instance or name
+- `route` - Route pattern (e.g., 'GET /users/:id')
+- `params` - Route parameters and body
+
+**Returns**: Promise with Response object
+
+**Example**:
+
+```typescript
+const response = await call($.UserService, 'GET /users/:id', { id: '123' })
+const user = await response.json()
+```
+
+## Types
+
+### ServiceConfig
+
+Configuration for defining a service.
+
+```typescript
+interface ServiceConfig {
+  $id?: string
+  $type: 'Service'
+  name: string
+  description?: string
+  version: string
+  routes: Record<string, RouteHandler>
+  middleware?: Middleware[]
+  dependencies?: string[]
+  environments?: Record<string, EnvironmentConfig>
+  health?: HealthCheckConfig
+  worker?: WorkerConfig
+}
+```
+
+**Properties**:
+
+- `$id` - Unique identifier (optional)
+- `$type` - Type identifier (required: 'Service')
+- `name` - Service name (required)
+- `description` - Service description (optional)
+- `version` - Semantic version (required)
+- `routes` - Route definitions (required)
+- `middleware` - Middleware stack (optional)
+- `dependencies` - Service dependencies (optional)
+- `environments` - Environment configs (optional)
+- `health` - Health check config (optional)
+- `worker` - Cloudflare Worker config (optional)
+
+### RouteHandler
+
+Handler function for a route.
+
+```typescript
+type RouteHandler = (request: ServiceRequest) => Promise<Response> | Response
+```
+
+**Properties**:
+
+- `request` - Enhanced request object with params
+
+**Returns**: Response or Promise<Response>
+
+### ServiceRequest
+
+Enhanced request object with route parameters.
+
+```typescript
+interface ServiceRequest extends Request {
+  params: Record<string, string>
+  query: URLSearchParams
+  body?: any
+}
+```
+
+**Properties**:
+
+- `params` - Route parameters
+- `query` - Query string parameters
+- `body` - Parsed request body (if applicable)
+
+### DeployOptions
+
+Options for deploying a service.
+
+```typescript
+interface DeployOptions {
+  environment?: string
+  accountId?: string
+  apiToken?: string
+  strategy?: DeploymentStrategy
+  rollout?: RolloutConfig
+  canary?: CanaryConfig
+  blueGreen?: BlueGreenConfig
+  resources?: ResourceConfig
+  scaling?: ScalingConfig
+  vars?: Record<string, string>
+  customDomains?: CustomDomain[]
+  hooks?: DeploymentHooks
+}
+```
+
+### DeploymentStrategy
+
+Deployment strategy type.
+
+```typescript
+type DeploymentStrategy = 'rolling' | 'canary' | 'blue-green' | 'recreate'
+```
+
+### RolloutConfig
+
+Configuration for rolling deployments.
+
+```typescript
+interface RolloutConfig {
+  batchSize: number | string
+  interval: number
+  healthCheck: boolean
+  autoRollback: boolean
+  healthCheckConfig?: HealthCheckConfig
+  pausePoints?: PausePoint[]
+  timeout?: number
+}
+```
+
+### CanaryConfig
+
+Configuration for canary deployments.
+
+```typescript
+interface CanaryConfig {
+  percentage: number
+  duration: number
+  steps: number[]
+  autoPromote: boolean
+  metrics?: string[]
+  analysis?: AnalysisConfig
+  rollback?: RollbackConfig
+  thresholds?: Record<string, number>
+}
+```
+
+### BlueGreenConfig
+
+Configuration for blue-green deployments.
+
+```typescript
+interface BlueGreenConfig {
+  testing: boolean
+  autoSwitch: boolean
+  testConfig?: TestConfig
+  switchDelay: number
+  rollbackWindow: number
+}
+```
+
+### ResourceConfig
+
+Resource allocation configuration.
+
+```typescript
+interface ResourceConfig {
+  cpu: number
+  memory: number
+  timeout?: number
+  maxConcurrency?: number
+}
+```
+
+### ScalingConfig
+
+Auto-scaling configuration.
+
+```typescript
+interface ScalingConfig {
+  enabled: boolean
+  min: number
+  max: number
+  metrics?: ScalingMetric[]
+  policy?: ScalingPolicy
+  schedule?: ScheduledScaling[]
+}
+```
+
+### ScalingMetric
+
+Metric configuration for scaling.
+
+```typescript
+interface ScalingMetric {
+  type: 'cpu' | 'memory' | 'requests' | 'latency'
+  threshold: number
+  scaleUp?: ScaleAction
+  scaleDown?: ScaleAction
+}
+```
+
+### HealthCheckConfig
+
+Health check configuration.
+
+```typescript
+interface HealthCheckConfig {
+  endpoint: string
+  interval: number
+  timeout: number
+  healthyThreshold?: number
+  unhealthyThreshold?: number
+  checks?: HealthCheck[]
+}
+```
+
+### Middleware
+
+Middleware function type.
+
+```typescript
+type Middleware = (request: ServiceRequest, next: () => Promise<Response>) => Promise<Response>
+```
+
+### WorkerConfig
+
+Cloudflare Workers configuration.
+
+```typescript
+interface WorkerConfig {
+  compatibility_date?: string
+  usage_model?: 'bundled' | 'unbound'
+  durable_objects?: DurableObjectConfig
+  kv_namespaces?: KVNamespace[]
+  r2_buckets?: R2Bucket[]
+  vars?: Record<string, string>
+  secrets?: string[]
+}
+```
+
+## Service Management Functions
+
+### status()
+
+Get service status.
+
+**Signature**:
+
+```typescript
+async function status(service: string): Promise<ServiceStatus>
+```
+
+**Parameters**:
+
+- `service` - Service name
+
+**Returns**: Promise with service status
+
+**Example**:
+
+```typescript
+const status = await service.status('UserService')
+console.log('State:', status.state)
+console.log('Health:', status.health)
+```
+
+### info()
+
+Get detailed service information.
+
+**Signature**:
+
+```typescript
+async function info(service: string): Promise<ServiceInfo>
+```
+
+**Parameters**:
+
+- `service` - Service name
+
+**Returns**: Promise with service information
+
+**Example**:
+
+```typescript
+const info = await service.info('UserService')
+console.log('Version:', info.version)
+console.log('Instances:', info.instances)
+```
+
+### scale()
+
+Scale service instances.
+
+**Signature**:
+
+```typescript
+async function scale(service: string, config: ScaleConfig): Promise<ScaleResult>
+```
+
+**Parameters**:
+
+- `service` - Service name
+- `config` - Scaling configuration
+
+**Returns**: Promise with scaling result
+
+**Example**:
+
+```typescript
+await service.scale('UserService', {
+  instances: 10,
+  resources: { cpu: 200, memory: 256 },
+})
+```
+
+### configure()
+
+Update service configuration.
+
+**Signature**:
+
+```typescript
+async function configure(service: string, config: ServiceConfiguration): Promise<void>
+```
+
+**Parameters**:
+
+- `service` - Service name
+- `config` - Configuration updates
+
+**Returns**: Promise that resolves when complete
+
+**Example**:
+
+```typescript
+await service.configure('UserService', {
+  scaling: {
+    enabled: true,
+    min: 2,
+    max: 50,
+  },
+})
+```
+
+### restart()
+
+Restart a service.
+
+**Signature**:
+
+```typescript
+async function restart(service: string, options?: RestartOptions): Promise<void>
+```
+
+**Parameters**:
+
+- `service` - Service name
+- `options` - Restart options
+
+**Returns**: Promise that resolves when complete
+
+**Example**:
+
+```typescript
+await service.restart('UserService', {
+  graceful: true,
+  drainTimeout: 30,
+})
+```
+
+### rollback()
+
+Rollback to previous version.
+
+**Signature**:
+
+```typescript
+async function rollback(service: string, options?: RollbackOptions): Promise<void>
+```
+
+**Parameters**:
+
+- `service` - Service name
+- `options` - Rollback options
+
+**Returns**: Promise that resolves when complete
+
+**Example**:
+
+```typescript
+await service.rollback('UserService', {
+  version: '1.0.0',
+})
+```
+
+## Monitoring Functions
+
+### metrics.current()
+
+Get current metrics for a service.
+
+**Signature**:
+
+```typescript
+async function current(service: string): Promise<ServiceMetrics>
+```
+
+**Parameters**:
+
+- `service` - Service name
+
+**Returns**: Promise with current metrics
+
+**Example**:
+
+```typescript
+const metrics = await metrics.current('UserService')
+console.log('Request rate:', metrics.request_rate)
+console.log('Error rate:', metrics.error_rate)
+```
+
+### metrics.query()
+
+Query historical metrics.
+
+**Signature**:
+
+```typescript
+async function query(options: MetricsQuery): Promise<MetricsResult>
+```
+
+**Parameters**:
+
+- `options` - Query options
+
+**Returns**: Promise with metrics data
+
+**Example**:
+
+```typescript
+const data = await metrics.query({
+  service: 'UserService',
+  metrics: ['request_rate', 'latency_p99'],
+  from: Date.now() - 3600000,
+  to: Date.now(),
+  interval: 60,
+})
+```
+
+### health()
+
+Check service health.
+
+**Signature**:
+
+```typescript
+async function health(service: string): Promise<HealthStatus>
+```
+
+**Parameters**:
+
+- `service` - Service name
+
+**Returns**: Promise with health status
+
+**Example**:
+
+```typescript
+const health = await service.health('UserService')
+console.log('Status:', health.status)
+console.log('Checks:', health.checks)
+```
+
+## Middleware
+
+### middleware.cors()
+
+CORS middleware.
+
+**Signature**:
+
+```typescript
+function cors(options: CORSOptions): Middleware
+```
+
+**Parameters**:
+
+- `options` - CORS configuration
+
+**Returns**: Middleware function
+
+**Example**:
+
+```typescript
+middleware.cors({
+  origin: '*',
+  methods: ['GET', 'POST'],
+  headers: ['Content-Type'],
+})
+```
+
+### middleware.auth()
+
+Authentication middleware.
+
+**Signature**:
+
+```typescript
+function auth(options: AuthOptions): Middleware
+```
+
+**Parameters**:
+
+- `options` - Authentication configuration
+
+**Returns**: Middleware function
+
+**Example**:
+
+```typescript
+middleware.auth({
+  type: 'bearer',
+  verify: async (token) => await verifyToken(token),
+})
+```
+
+### middleware.rateLimit()
+
+Rate limiting middleware.
+
+**Signature**:
+
+```typescript
+function rateLimit(options: RateLimitOptions): Middleware
+```
+
+**Parameters**:
+
+- `options` - Rate limit configuration
+
+**Returns**: Middleware function
+
+**Example**:
+
+```typescript
+middleware.rateLimit({
+  requests: 100,
+  window: 60000,
+})
+```
+
+### middleware.logging()
+
+Logging middleware.
+
+**Signature**:
+
+```typescript
+function logging(options: LoggingOptions): Middleware
+```
+
+**Parameters**:
+
+- `options` - Logging configuration
+
+**Returns**: Middleware function
+
+**Example**:
+
+```typescript
+middleware.logging({
+  level: 'info',
+  format: 'json',
+})
+```
+
+## Event Functions
+
+### on()
+
+Subscribe to service events.
+
+**Signature**:
+
+```typescript
+function on(event: string | EventType, handler: EventHandler): void
+```
+
+**Parameters**:
+
+- `event` - Event name or semantic type
+- `handler` - Event handler function
+
+**Example**:
+
+```typescript
+on($.Service.scaled, async (event) => {
+  console.log('Service scaled:', event.service)
+})
+```
+
+### send()
+
+Publish service event.
+
+**Signature**:
+
+```typescript
+async function send(event: string | EventType, data: any): Promise<void>
+```
+
+**Parameters**:
+
+- `event` - Event name or semantic type
+- `data` - Event data
+
+**Example**:
+
+```typescript
+await send($.Service.deployed, {
+  service: 'UserService',
+  version: '2.0.0',
+})
+```
+
+## Registry Functions
+
+### registry.register()
+
+Register a service.
+
+**Signature**:
+
+```typescript
+async function register(service: ServiceRegistration): Promise<void>
+```
+
+**Parameters**:
+
+- `service` - Service registration data
+
+**Example**:
+
+```typescript
+await registry.register({
+  name: 'UserService',
+  version: '1.0.0',
+  endpoint: 'https://users.example.workers.dev',
+})
+```
+
+### registry.list()
+
+List registered services.
+
+**Signature**:
+
+```typescript
+async function list(filter?: ServiceFilter): Promise<Service[]>
+```
+
+**Parameters**:
+
+- `filter` - Optional filter criteria
+
+**Returns**: Promise with array of services
+
+**Example**:
+
+```typescript
+const services = await registry.list()
+const activeServices = await registry.list({ status: 'active' })
+```
+
+### registry.get()
+
+Get service from registry.
+
+**Signature**:
+
+```typescript
+async function get(name: string): Promise<Service | null>
+```
+
+**Parameters**:
+
+- `name` - Service name
+
+**Returns**: Promise with service or null
+
+**Example**:
+
+```typescript
+const service = await registry.get('UserService')
+```
+
+### registry.watch()
+
+Watch for service changes.
+
+**Signature**:
+
+```typescript
+function watch(service: string, handler: (event: ServiceEvent) => void): void
+```
+
+**Parameters**:
+
+- `service` - Service name to watch
+- `handler` - Change handler function
+
+**Example**:
+
+```typescript
+registry.watch($.UserService, (event) => {
+  console.log('Service changed:', event)
+})
+```
+
+## Utility Functions
+
+### withRetry()
+
+Wrap function with retry logic.
+
+**Signature**:
+
+```typescript
+function withRetry<T>(fn: () => Promise<T>, options: RetryOptions): Promise<T>
+```
+
+**Parameters**:
+
+- `fn` - Function to retry
+- `options` - Retry configuration
+
+**Returns**: Promise with function result
+
+**Example**:
+
+```typescript
+const result = await withRetry(() => call($.UnreliableService, 'GET /data'), { maxAttempts: 3, backoff: 'exponential' })
+```
+
+### withCircuitBreaker()
+
+Wrap function with circuit breaker.
+
+**Signature**:
+
+```typescript
+function withCircuitBreaker<T>(fn: () => Promise<T>, options: CircuitBreakerOptions): () => Promise<T>
+```
+
+**Parameters**:
+
+- `fn` - Function to wrap
+- `options` - Circuit breaker configuration
+
+**Returns**: Wrapped function
+
+**Example**:
+
+```typescript
+const safeFn = withCircuitBreaker(() => call($.ExternalService, 'GET /data'), { threshold: 5, timeout: 60000 })
+```
+
+### withTimeout()
+
+Wrap promise with timeout.
+
+**Signature**:
+
+```typescript
+function withTimeout<T>(promise: Promise<T>, timeout: number): Promise<T>
+```
+
+**Parameters**:
+
+- `promise` - Promise to wrap
+- `timeout` - Timeout in milliseconds
+
+**Returns**: Promise that rejects on timeout
+
+**Example**:
+
+```typescript
+const result = await withTimeout(call($.SlowService, 'GET /data'), 5000)
+```
+
+## Event Types
+
+### Service Events
+
+- `$.Service.deployed` - Service deployed
+- `$.Service.updated` - Service updated
+- `$.Service.scaled` - Service scaled
+- `$.Service.restarted` - Service restarted
+- `$.Service.terminated` - Service terminated
+
+### Deployment Events
+
+- `$.Deployment.started` - Deployment started
+- `$.Deployment.progress` - Deployment progress
+- `$.Deployment.completed` - Deployment completed
+- `$.Deployment.failed` - Deployment failed
+- `$.Deployment.rolledBack` - Deployment rolled back
+
+### Health Events
+
+- `$.Health.healthy` - Service became healthy
+- `$.Health.unhealthy` - Service became unhealthy
+- `$.Health.degraded` - Service degraded
+
+## Error Types
+
+### DeploymentError
+
+Thrown when deployment fails.
+
+```typescript
+class DeploymentError extends Error {
+  code: string
+  service: string
+  version: string
+}
+```
+
+### ServiceNotFoundError
+
+Thrown when service is not found.
+
+```typescript
+class ServiceNotFoundError extends Error {
+  service: string
+}
+```
+
+### CircuitBreakerOpenError
+
+Thrown when circuit breaker is open.
+
+```typescript
+class CircuitBreakerOpenError extends Error {
+  service: string
+  threshold: number
+}
+```
+
+## Next Steps
+
+- [Getting Started](../docs/getting-started.mdx) - Deploy your first service
+- [Examples](../examples/) - Real-world examples
+- [Deployment Guide](../docs/deployment.mdx) - Deployment strategies
+
+## Resources
+
+- [sdk.do](https://sdk.do) - Core SDK documentation
+- [workflows.do](https://workflows.do) - Workflow orchestration
+- [events.do](https://events.do) - Event system
+- [Cloudflare Workers API](https://developers.cloudflare.com/workers/)

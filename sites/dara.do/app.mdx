@@ -1,0 +1,334 @@
+---
+$id: https://dara.do/app
+$type: WebPage
+title: Talk to Dara - Your Operations AI Agent
+description: Chat, call, or text with Dara - your personal AI operations and finance expert
+---
+
+import { $, db, agent, send, on, every } from 'sdk.do'
+
+# Talk to Dara
+
+<VoiceCall agent="dara" />
+<TextChat agent="dara" />
+<SMSWidget phoneNumber="+1-555-DARA-OPS" />
+
+## Quick Actions
+
+<AgentActions>
+  <Action
+    label="Financial Review Call"
+    icon="dollar"
+    onClick={async () => {
+      const session = await agent.create({
+        $type: $.AgentSession,
+        agent: 'dara',
+        mode: 'voice_call',
+        agenda: ['Financial health check', 'Budget review', 'Forecast update'],
+        duration: 30,
+        prepare: async () => {
+          // Prepare latest financial data
+          const data = {
+            metrics: await db.get($.FinancialMetrics, { period: 'current_month' }),
+            budget: await db.get($.Budget, { period: 'current_quarter' }),
+            forecast: await db.get($.FinancialForecast),
+          }
+          return data
+        },
+      })
+
+      return session
+    }}
+
+/>
+
+  <Action
+    label="Business Health Check"
+    icon="heart"
+    onClick={async () => {
+      const health = await agent.execute({
+        agent: 'dara',
+        task: 'business_health_analysis',
+        period: 'last_30_days',
+        metrics: [
+          'revenue',
+          'burn_rate',
+          'runway',
+          'growth_rate',
+          'unit_economics',
+          'customer_health',
+        ],
+      })
+
+      return health
+    }}
+
+/>
+
+  <Action
+    label="Generate Report"
+    icon="document"
+    onClick={async () => {
+      const reportType = await selectReportType([
+        'Executive Summary',
+        'Financial Report',
+        'Metrics Dashboard',
+        'OKR Progress',
+        'Process Analysis',
+      ])
+
+      const report = await agent.execute({
+        agent: 'dara',
+        task: 'generate_report',
+        report_type: reportType,
+        period: 'last_month',
+        recipients: [$.user],
+      })
+
+      return report
+    }}
+
+/>
+
+  <Action
+    label="Process Optimization"
+    icon="cog"
+    onClick={async () => {
+      const process = await selectProcess()
+
+      const analysis = await agent.execute({
+        agent: 'dara',
+        task: 'process_analysis',
+        process: process,
+        focus: ['efficiency', 'quality', 'cost', 'capacity'],
+      })
+
+      return analysis
+    }}
+
+/>
+
+</AgentActions>
+
+## Recent Conversations
+
+<ConversationHistory agent="dara" limit={10} />
+
+## Live Business Metrics
+
+export const LiveMetrics = async () => {
+  const metrics = await db.get($.BusinessMetrics, { period: 'current' })
+
+const metricCards = [
+{
+name: 'MRR',
+value: metrics.mrr,
+change: metrics.mrr_change,
+trend: metrics.mrr_trend,
+icon: 'trending-up',
+},
+{
+name: 'Burn Rate',
+value: metrics.burn_rate,
+change: metrics.burn_rate_change,
+trend: metrics.burn_rate_trend,
+icon: 'fire',
+},
+{
+name: 'Cash Runway',
+value: `${metrics.runway_months} months`,
+alert: metrics.runway_months < 12,
+icon: 'clock',
+},
+{
+name: 'CAC Payback',
+value: `${metrics.cac_payback_months} months`,
+change: metrics.cac_payback_change,
+icon: 'dollar-sign',
+},
+]
+
+return (
+
+<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+  {metricCards.map((metric) => (
+    <MetricCard
+      key={metric.name}
+      {...metric}
+      onDrillDown={async () => {
+        // Start voice call with Dara to discuss this metric
+        await send($.AgentCall.requested, {
+          agent: 'dara',
+          topic: `Discuss ${metric.name}`,
+          context: metric,
+        })
+      }}
+    />
+  ))}
+</div>
+) }
+
+<LiveMetrics />
+
+## Dara's Expertise
+
+export const DaraCapabilities = () => {
+  const capabilities = [
+    {
+      category: 'Financial Management',
+      skills: ['Budget planning', 'Cash flow analysis', 'Financial forecasting', 'Unit economics'],
+      available: 'Now',
+    },
+    {
+      category: 'Business Analytics',
+      skills: ['KPI tracking', 'Trend analysis', 'Predictive modeling', 'Performance dashboards'],
+      available: 'Now',
+    },
+    {
+      category: 'Process Optimization',
+      skills: ['Workflow analysis', 'Efficiency improvements', 'Automation', 'SOPs'],
+      available: 'Now',
+    },
+    {
+      category: 'Strategic Planning',
+      skills: ['OKR tracking', 'Goal alignment', 'Resource allocation', 'Scenario planning'],
+      available: 'Now',
+    },
+  ]
+
+return (
+
+<div className="grid grid-cols-2 gap-4">
+  {capabilities.map((cat) => (
+    <CapabilityCard key={cat.category} {...cat} />
+  ))}
+</div>
+) }
+
+<DaraCapabilities />
+
+## Active Initiatives
+
+export const ActiveInitiatives = async () => {
+  const initiatives = await db.list($.Initiative, {
+    status: 'active',
+    owner: 'dara',
+  })
+
+return (
+
+<div className="space-y-4">
+  {initiatives.map((initiative) => (
+    <InitiativeCard
+      key={initiative.$id}
+      initiative={initiative}
+      onDiscuss={async () => {
+        // Start call with Dara about this initiative
+        await send($.AgentCall.requested, {
+          agent: 'dara',
+          topic: `Initiative: ${initiative.name}`,
+          context: initiative,
+          priority: 'high',
+        })
+      }}
+    />
+  ))}
+</div>
+) }
+
+<ActiveInitiatives />
+
+## Alerts & Recommendations
+
+export const AlertsSection = async () => {
+  const alerts = await db.list($.Alert, {
+    status: 'active',
+    owner: 'dara',
+  })
+
+const recommendations = await agent.execute({
+agent: 'dara',
+task: 'generate_recommendations',
+context: {
+alerts: alerts,
+metrics: await db.get($.BusinessMetrics),
+      goals: await db.list($.OKR, { status: 'active' }),
+},
+})
+
+return (
+
+<div className="space-y-4">
+  {alerts.map((alert) => (
+    <AlertCard key={alert.$id} alert={alert} recommendations={recommendations} />
+  ))}
+</div>
+) }
+
+<AlertsSection />
+
+## Start a Strategy Session
+
+<GroupChatInvite
+  agents={['dara', 'tom', 'amy']}
+  topic="Strategic Business Review"
+  agenda={[
+    'Financial performance review (Dara)',
+    'Technical infrastructure planning (Tom)',
+    'Marketing effectiveness analysis (Amy)',
+    'Q1 strategic priorities',
+  ]}
+  scheduleSuggestions={[
+    { day: 'Monday', time: '9:00 AM' },
+    { day: 'Thursday', time: '2:00 PM' },
+  ]}
+/>
+
+## Schedule Recurring Check-ins
+
+export const RecurringMeetings = () => {
+  const meetings = [
+    {
+      name: 'Weekly Business Review',
+      frequency: '0 9 * * 1', // Monday 9am
+      duration: 30,
+      topics: ['Metrics review', 'Alerts', 'Recommendations'],
+    },
+    {
+      name: 'Monthly Financial Close',
+      frequency: '0 10 1 * *', // 1st of month, 10am
+      duration: 60,
+      topics: ['Month-end close', 'Forecast update', 'Budget variance'],
+    },
+    {
+      name: 'Quarterly Strategic Planning',
+      frequency: '0 14 1 1,4,7,10 *', // First day of quarter, 2pm
+      duration: 120,
+      topics: ['OKR review', 'Strategic initiatives', 'Resource planning'],
+    },
+  ]
+
+return (
+
+<div className="space-y-3">
+  {meetings.map((meeting) => (
+    <RecurringMeetingCard
+      key={meeting.name}
+      meeting={meeting}
+      onSchedule={async () => {
+        await every(meeting.frequency, async () => {
+          await send($.Meeting.scheduled, {
+            agent: 'dara',
+            name: meeting.name,
+            duration: meeting.duration,
+            topics: meeting.topics,
+            attendees: [$.user],
+          })
+        })
+      }}
+    />
+  ))}
+</div>
+) }
+
+<RecurringMeetings />

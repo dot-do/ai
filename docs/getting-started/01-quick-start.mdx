@@ -1,0 +1,192 @@
+---
+$id: /docs/getting-started/quick-start
+$type: Documentation
+title: Quick Start - Get Running in 5 Minutes
+description: The fastest path from zero to your first .do API call
+keywords: [quick start, getting started, first steps, hello world]
+author: .do Team
+lastUpdated: 2025-10-11
+readingTime: 5 min
+---
+
+# Quick Start
+
+Get your first `.do` application running in **less than 5 minutes**.
+
+## What You'll Build
+
+A simple application that:
+
+1. Creates a semantic business entity
+2. Listens for events
+3. Uses AI to generate content
+4. Stores data in the database
+
+## Prerequisites
+
+- Node.js 18+ or Bun 1.0+
+- A `.do` API key ([get one here](https://platform.do/signup))
+
+## Step 1: Install the SDK
+
+```bash
+# Using npm
+npm install @dotdo/sdk.do
+
+# Using pnpm (recommended)
+pnpm add @dotdo/sdk.do
+
+# Using bun
+bun add @dotdo/sdk.do
+```
+
+## Step 2: Set Your API Key
+
+Create a `.env` file in your project root:
+
+```bash
+DO_API_KEY=your_api_key_here
+```
+
+Or export it in your shell:
+
+```bash
+export DO_API_KEY=your_api_key_here
+```
+
+## Step 3: Write Your First Code
+
+Create `index.ts`:
+
+```typescript
+import { $, ai, db, on, send } from '@dotdo/sdk.do'
+
+// Create a business entity
+const business = await db.create($.Business, {
+  name: 'Acme Corp',
+  description: 'We make great products',
+  industry: 'Technology',
+})
+
+console.log('Created business:', business.$id)
+
+// Listen for when orders are created
+on($.Order.created, async (order) => {
+  console.log('New order received:', order.$id)
+
+  // Use AI to generate a thank you email
+  const email = await ai.generate('Write a warm thank you email for this order', { context: order })
+
+  console.log('Generated email:', email)
+})
+
+// Create an order (triggers the event above)
+const order = await db.create($.Order, {
+  business: business.$id,
+  customer: $.Customer['customer-123'],
+  items: [
+    { product: 'Widget', quantity: 2, price: 19.99 },
+    { product: 'Gadget', quantity: 1, price: 49.99 },
+  ],
+  total: 89.97,
+})
+
+// Publish the order created event
+await send($.Order.created, order)
+```
+
+## Step 4: Run It
+
+```bash
+# Using tsx (TypeScript execution)
+npx tsx index.ts
+
+# Using Bun (fastest)
+bun run index.ts
+
+# Using Node.js (requires transpilation)
+npx tsc && node index.js
+```
+
+**Expected output:**
+
+```
+Created business: Business:01HJ6X2Y8Z9Q7W5V4T3R2P1N0M
+New order received: Order:01HJ6X2Y8Z9Q7W5V4T3R2P1N0N
+Generated email: Dear valued customer,
+
+Thank you so much for your recent order! We're thrilled that you chose our Widget (x2) and Gadget. Your order total of $89.97 is being processed and will ship soon.
+
+We truly appreciate your business!
+
+Warm regards,
+The Acme Corp Team
+```
+
+## What Just Happened?
+
+1. **Semantic Types**: You used `$.Business` and `$.Order` - these are type-safe references to Schema.org types
+2. **Database**: The `db.create()` function automatically inferred the schema and stored your data
+3. **Events**: The `on()` listener subscribed to order creation events
+4. **AI**: The `ai.generate()` function used GPT-5 to create personalized content
+5. **Type Safety**: TypeScript provided autocomplete and validation throughout
+
+## Next Steps
+
+### Learn Core Concepts
+
+- [Understanding $ (Semantic Proxy)](../core-concepts/semantic-graph.mdx)
+- [Database Operations](../core-concepts/data-model.mdx)
+- [Event System](../core-concepts/event-system.mdx)
+- [AI Services](../core-concepts/ai-services.mdx)
+
+### Try More Examples
+
+- [Build a Todo App](../tutorials/beginner/todo-app.mdx)
+- [Schedule Daily Reports](../tutorials/beginner/scheduled-reports.mdx)
+- [Create a Contact Form](../tutorials/beginner/contact-form.mdx)
+
+### Explore the API
+
+- [SDK Reference](../api-reference/sdk/README.md)
+- [Database API](../api-reference/sdk/db.mdx)
+- [AI API](../api-reference/sdk/ai.mdx)
+- [Events API](../api-reference/sdk/events.mdx)
+
+## Common Issues
+
+### "API key not found"
+
+Make sure your `DO_API_KEY` environment variable is set. Check with:
+
+```bash
+echo $DO_API_KEY
+```
+
+### "Module not found"
+
+Install dependencies:
+
+```bash
+pnpm install
+```
+
+### TypeScript errors
+
+Make sure you're using TypeScript 5.0+ and have proper type definitions:
+
+```bash
+pnpm add -D typescript@latest
+```
+
+## Get Help
+
+- **[Discord Community](https://discord.gg/dotdo)** - Ask questions in #help
+- **[GitHub Issues](https://github.com/dot-do/platform/issues)** - Report bugs
+- **[Email Support](mailto:support@platform.do)** - Enterprise support
+
+---
+
+**Was this page helpful?** [Yes](.) | [No](.) | [Report Issue](https://github.com/dot-do/platform/issues/new?title=Quick+Start+Issue)
+
+[Next: Installation →](./02-installation.mdx)

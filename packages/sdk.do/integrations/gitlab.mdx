@@ -1,0 +1,764 @@
+---
+$id: https://integrations.do/gitlab
+$type: Integration
+name: GitLab
+service: gitlab
+description: DevSecOps platform for repository management and CI/CD
+category: developer-tools
+sdkBased: true
+sdkPackage: '@gitbeaker/rest'
+sdkVersion: ^41.0.0
+sdkImport: Gitlab
+
+auth:
+  type: oauth2
+  authorizationUrl: https://gitlab.com/oauth/authorize
+  tokenUrl: https://gitlab.com/oauth/token
+  scopes:
+    - api
+    - read_user
+    - read_repository
+    - write_repository
+
+resources:
+  - name: Project
+    plural: Projects
+    description: Repository and project management
+    operations:
+      - name: create
+        method: POST
+        path: /api/v4/projects
+        params:
+          - name: name
+            type: string
+            required: true
+            description: Project name
+          - name: description
+            type: string
+            required: false
+            description: Project description
+          - name: visibility
+            type: string
+            required: false
+            description: Project visibility (private, internal, public)
+        returns: Project
+
+      - name: get
+        method: GET
+        path: /api/v4/projects/{project_id}
+        params:
+          - name: project_id
+            type: string
+            required: true
+            description: Project ID or path
+        returns: Project
+
+      - name: update
+        method: PUT
+        path: /api/v4/projects/{project_id}
+        params:
+          - name: project_id
+            type: string
+            required: true
+            description: Project ID
+          - name: name
+            type: string
+            required: false
+            description: Updated name
+          - name: description
+            type: string
+            required: false
+            description: Updated description
+        returns: Project
+
+      - name: delete
+        method: DELETE
+        path: /api/v4/projects/{project_id}
+        params:
+          - name: project_id
+            type: string
+            required: true
+            description: Project ID
+        returns: boolean
+
+      - name: list
+        method: GET
+        path: /api/v4/projects
+        params:
+          - name: owned
+            type: boolean
+            required: false
+            description: Limit by owned projects
+          - name: membership
+            type: boolean
+            required: false
+            description: Limit by membership
+        returns: Project[]
+        pagination:
+          type: offset
+          offsetField: page
+          limitField: per_page
+          defaultLimit: 20
+          maxLimit: 100
+
+  - name: Issue
+    plural: Issues
+    description: Project issue tracking
+    operations:
+      - name: create
+        method: POST
+        path: /api/v4/projects/{project_id}/issues
+        params:
+          - name: project_id
+            type: string
+            required: true
+            description: Project ID
+          - name: title
+            type: string
+            required: true
+            description: Issue title
+          - name: description
+            type: string
+            required: false
+            description: Issue description
+          - name: labels
+            type: string
+            required: false
+            description: Comma-separated label names
+        returns: Issue
+
+      - name: get
+        method: GET
+        path: /api/v4/projects/{project_id}/issues/{issue_iid}
+        params:
+          - name: project_id
+            type: string
+            required: true
+            description: Project ID
+          - name: issue_iid
+            type: number
+            required: true
+            description: Issue IID (internal ID)
+        returns: Issue
+
+      - name: update
+        method: PUT
+        path: /api/v4/projects/{project_id}/issues/{issue_iid}
+        params:
+          - name: project_id
+            type: string
+            required: true
+            description: Project ID
+          - name: issue_iid
+            type: number
+            required: true
+            description: Issue IID
+          - name: title
+            type: string
+            required: false
+            description: Updated title
+          - name: state_event
+            type: string
+            required: false
+            description: State change (close, reopen)
+        returns: Issue
+
+      - name: list
+        method: GET
+        path: /api/v4/projects/{project_id}/issues
+        params:
+          - name: project_id
+            type: string
+            required: true
+            description: Project ID
+          - name: state
+            type: string
+            required: false
+            description: Filter by state (opened, closed, all)
+        returns: Issue[]
+        pagination:
+          type: offset
+          offsetField: page
+          limitField: per_page
+          defaultLimit: 20
+          maxLimit: 100
+
+  - name: MergeRequest
+    plural: MergeRequests
+    description: Code review and merge requests
+    operations:
+      - name: create
+        method: POST
+        path: /api/v4/projects/{project_id}/merge_requests
+        params:
+          - name: project_id
+            type: string
+            required: true
+            description: Project ID
+          - name: source_branch
+            type: string
+            required: true
+            description: Source branch name
+          - name: target_branch
+            type: string
+            required: true
+            description: Target branch name
+          - name: title
+            type: string
+            required: true
+            description: Merge request title
+        returns: MergeRequest
+
+      - name: get
+        method: GET
+        path: /api/v4/projects/{project_id}/merge_requests/{merge_request_iid}
+        params:
+          - name: project_id
+            type: string
+            required: true
+            description: Project ID
+          - name: merge_request_iid
+            type: number
+            required: true
+            description: Merge request IID
+        returns: MergeRequest
+
+      - name: update
+        method: PUT
+        path: /api/v4/projects/{project_id}/merge_requests/{merge_request_iid}
+        params:
+          - name: project_id
+            type: string
+            required: true
+            description: Project ID
+          - name: merge_request_iid
+            type: number
+            required: true
+            description: Merge request IID
+          - name: title
+            type: string
+            required: false
+            description: Updated title
+          - name: state_event
+            type: string
+            required: false
+            description: State change (close, reopen)
+        returns: MergeRequest
+
+      - name: merge
+        method: PUT
+        path: /api/v4/projects/{project_id}/merge_requests/{merge_request_iid}/merge
+        params:
+          - name: project_id
+            type: string
+            required: true
+            description: Project ID
+          - name: merge_request_iid
+            type: number
+            required: true
+            description: Merge request IID
+          - name: merge_commit_message
+            type: string
+            required: false
+            description: Custom merge commit message
+        returns: MergeRequest
+
+      - name: list
+        method: GET
+        path: /api/v4/projects/{project_id}/merge_requests
+        params:
+          - name: project_id
+            type: string
+            required: true
+            description: Project ID
+          - name: state
+            type: string
+            required: false
+            description: Filter by state (opened, closed, merged, all)
+        returns: MergeRequest[]
+        pagination:
+          type: offset
+          offsetField: page
+          limitField: per_page
+          defaultLimit: 20
+          maxLimit: 100
+
+  - name: Pipeline
+    plural: Pipelines
+    description: CI/CD pipeline management
+    operations:
+      - name: create
+        method: POST
+        path: /api/v4/projects/{project_id}/pipeline
+        params:
+          - name: project_id
+            type: string
+            required: true
+            description: Project ID
+          - name: ref
+            type: string
+            required: true
+            description: Branch or tag name
+          - name: variables
+            type: array
+            required: false
+            description: Pipeline variables
+        returns: Pipeline
+
+      - name: get
+        method: GET
+        path: /api/v4/projects/{project_id}/pipelines/{pipeline_id}
+        params:
+          - name: project_id
+            type: string
+            required: true
+            description: Project ID
+          - name: pipeline_id
+            type: number
+            required: true
+            description: Pipeline ID
+        returns: Pipeline
+
+      - name: cancel
+        method: POST
+        path: /api/v4/projects/{project_id}/pipelines/{pipeline_id}/cancel
+        params:
+          - name: project_id
+            type: string
+            required: true
+            description: Project ID
+          - name: pipeline_id
+            type: number
+            required: true
+            description: Pipeline ID
+        returns: Pipeline
+
+      - name: retry
+        method: POST
+        path: /api/v4/projects/{project_id}/pipelines/{pipeline_id}/retry
+        params:
+          - name: project_id
+            type: string
+            required: true
+            description: Project ID
+          - name: pipeline_id
+            type: number
+            required: true
+            description: Pipeline ID
+        returns: Pipeline
+
+      - name: list
+        method: GET
+        path: /api/v4/projects/{project_id}/pipelines
+        params:
+          - name: project_id
+            type: string
+            required: true
+            description: Project ID
+          - name: status
+            type: string
+            required: false
+            description: Filter by status (running, pending, success, failed)
+        returns: Pipeline[]
+        pagination:
+          type: offset
+          offsetField: page
+          limitField: per_page
+          defaultLimit: 20
+          maxLimit: 100
+
+webhooks:
+  enabled: true
+  signatureHeader: X-Gitlab-Token
+  signatureAlgorithm: sha256
+  verificationMethod: secret
+  events:
+    - name: push
+      type: Push Hook
+      description: Push to repository
+    - name: tag_push
+      type: Tag Push Hook
+      description: Tag push to repository
+    - name: issue
+      type: Issue Hook
+      description: Issue created, updated, or closed
+    - name: merge_request
+      type: Merge Request Hook
+      description: Merge request created, updated, or merged
+    - name: pipeline
+      type: Pipeline Hook
+      description: Pipeline status changed
+    - name: build
+      type: Job Hook
+      description: Build/job status changed
+    - name: wiki_page
+      type: Wiki Page Hook
+      description: Wiki page created or updated
+    - name: deployment
+      type: Deployment Hook
+      description: Deployment created
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 403
+      type: authorization
+      statusCode: 403
+      message: Forbidden
+      retryable: false
+    - code: 404
+      type: not_found
+      statusCode: 404
+      message: Resource not found
+      retryable: false
+    - code: 400
+      type: validation
+      statusCode: 400
+      message: Bad request
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+    - code: 500
+      type: server
+      statusCode: 500
+      message: Internal server error
+      retryable: true
+  retryable: [429, 500, 502, 503, 504]
+  nonRetryable: [400, 401, 403, 404, 422]
+
+tests:
+  enabled: true
+  cleanup: true
+  scenarios:
+    - name: Project Management
+      description: Test project CRUD operations
+      steps:
+        - action: create
+          resource: Project
+        - action: retrieve
+          resource: Project
+        - action: update
+          resource: Project
+        - action: list
+          resource: Project
+        - action: delete
+          resource: Project
+
+    - name: Issue Tracking
+      description: Test issue operations
+      steps:
+        - action: create
+          resource: Issue
+        - action: retrieve
+          resource: Issue
+        - action: update
+          resource: Issue
+        - action: list
+          resource: Issue
+
+    - name: Merge Request Workflow
+      description: Test merge request operations
+      steps:
+        - action: create
+          resource: MergeRequest
+        - action: retrieve
+          resource: MergeRequest
+        - action: update
+          resource: MergeRequest
+        - action: list
+          resource: MergeRequest
+        - action: custom
+          resource: MergeRequest
+
+    - name: Pipeline Management
+      description: Test CI/CD pipeline operations
+      steps:
+        - action: create
+          resource: Pipeline
+        - action: retrieve
+          resource: Pipeline
+        - action: list
+          resource: Pipeline
+        - action: custom
+          resource: Pipeline
+
+    - name: Webhook Verification
+      description: Test webhook token verification
+      steps:
+        - action: assert
+          expects:
+            status: 200
+
+docs:
+  homepage: https://about.gitlab.com
+  apiDocs: https://docs.gitlab.com/api/rest/
+  sdkDocs: https://github.com/jdalrymple/gitbeaker
+  guides:
+    quickstart: https://docs.gitlab.com/api/rest/
+    webhooks: https://docs.gitlab.com/user/project/integrations/webhooks/
+    authentication: https://docs.gitlab.com/api/rest/authentication/
+---
+
+# GitLab Integration
+
+GitLab is a complete DevSecOps platform for repository management, CI/CD, and collaboration.
+
+## Features
+
+- **Projects**: Repository and project management
+- **Issues**: Issue tracking and project management
+- **Merge Requests**: Code review and collaboration
+- **Pipelines**: CI/CD pipeline orchestration
+- **OAuth 2.0**: Secure authentication
+- **Webhooks**: Real-time event notifications
+
+## Quick Start
+
+```typescript
+import { GitlabClient } from '@dotdo/sdk.do/integrations/gitlab'
+
+const gitlab = new GitlabClient({
+  host: 'https://gitlab.com',
+  token: process.env.GITLAB_TOKEN,
+})
+
+// Create a project
+const project = await gitlab.project.create({
+  name: 'My Project',
+  description: 'Project description',
+  visibility: 'private',
+})
+
+// Create an issue
+const issue = await gitlab.issue.create({
+  project_id: project.id,
+  title: 'Bug report',
+  description: 'Description of the bug',
+})
+```
+
+## Authentication
+
+GitLab uses OAuth 2.0 or Personal Access Tokens:
+
+```bash
+export GITLAB_TOKEN=your_access_token
+export GITLAB_HOST=https://gitlab.com  # or self-hosted URL
+```
+
+## Resources
+
+### Projects
+
+Manage repositories and projects:
+
+```typescript
+// Create project
+const project = await gitlab.project.create({
+  name: 'New Project',
+  description: 'A new GitLab project',
+  visibility: 'private',
+})
+
+// Get project
+const project = await gitlab.project.get({
+  project_id: '12345',
+})
+
+// Update project
+await gitlab.project.update({
+  project_id: '12345',
+  description: 'Updated description',
+})
+
+// List projects
+const projects = await gitlab.project.list({
+  owned: true,
+  membership: true,
+})
+
+// Delete project
+await gitlab.project.delete({
+  project_id: '12345',
+})
+```
+
+### Issues
+
+Track and manage issues:
+
+```typescript
+// Create issue
+const issue = await gitlab.issue.create({
+  project_id: '12345',
+  title: 'Bug: Login not working',
+  description: 'Users cannot log in',
+  labels: 'bug,high-priority',
+})
+
+// Get issue
+const issue = await gitlab.issue.get({
+  project_id: '12345',
+  issue_iid: 42,
+})
+
+// Update issue
+await gitlab.issue.update({
+  project_id: '12345',
+  issue_iid: 42,
+  state_event: 'close',
+})
+
+// List issues
+const issues = await gitlab.issue.list({
+  project_id: '12345',
+  state: 'opened',
+})
+```
+
+### Merge Requests
+
+Code review workflow:
+
+```typescript
+// Create merge request
+const mr = await gitlab.mergeRequest.create({
+  project_id: '12345',
+  source_branch: 'feature-branch',
+  target_branch: 'main',
+  title: 'Add new feature',
+})
+
+// Get merge request
+const mr = await gitlab.mergeRequest.get({
+  project_id: '12345',
+  merge_request_iid: 10,
+})
+
+// Update merge request
+await gitlab.mergeRequest.update({
+  project_id: '12345',
+  merge_request_iid: 10,
+  title: 'Updated: Add new feature',
+})
+
+// Merge merge request
+await gitlab.mergeRequest.merge({
+  project_id: '12345',
+  merge_request_iid: 10,
+  merge_commit_message: 'Merge feature branch',
+})
+
+// List merge requests
+const mergeRequests = await gitlab.mergeRequest.list({
+  project_id: '12345',
+  state: 'opened',
+})
+```
+
+### Pipelines
+
+CI/CD pipeline management:
+
+```typescript
+// Create pipeline
+const pipeline = await gitlab.pipeline.create({
+  project_id: '12345',
+  ref: 'main',
+  variables: [{ key: 'DEPLOY_ENV', value: 'production' }],
+})
+
+// Get pipeline
+const pipeline = await gitlab.pipeline.get({
+  project_id: '12345',
+  pipeline_id: 789,
+})
+
+// Cancel pipeline
+await gitlab.pipeline.cancel({
+  project_id: '12345',
+  pipeline_id: 789,
+})
+
+// Retry pipeline
+await gitlab.pipeline.retry({
+  project_id: '12345',
+  pipeline_id: 789,
+})
+
+// List pipelines
+const pipelines = await gitlab.pipeline.list({
+  project_id: '12345',
+  status: 'running',
+})
+```
+
+## Webhooks
+
+GitLab supports webhooks with token verification:
+
+```typescript
+import { GitlabWebhookHandler, WebhookEventRouter } from '@dotdo/sdk.do/integrations/gitlab'
+
+const handler = new GitlabWebhookHandler(process.env.GITLAB_WEBHOOK_TOKEN)
+const event = await handler.handleRequest(request)
+
+const router = new WebhookEventRouter()
+router.onPush(async (event) => {
+  console.log('Push event:', event.data)
+})
+
+router.onMergeRequest(async (event) => {
+  console.log('Merge request event:', event.data)
+})
+
+router.onPipeline(async (event) => {
+  console.log('Pipeline event:', event.data)
+})
+
+await router.route(event)
+```
+
+## Error Handling
+
+```typescript
+import { GitlabError } from '@dotdo/sdk.do/integrations/gitlab'
+
+try {
+  await gitlab.project.create({
+    /* ... */
+  })
+} catch (error) {
+  if (error instanceof GitlabError) {
+    console.error('GitLab Error:', error.code, error.message)
+    if (error.isRetriable()) {
+      // Retry logic
+    }
+  }
+}
+```
+
+## Best Practices
+
+1. **API Version**: Always use /api/v4 endpoint
+2. **Project IDs**: Use project ID or namespace/project-name path
+3. **IID vs ID**: Issues and MRs use IID (internal ID) within projects
+4. **OAuth Scopes**: Request minimum required scopes (api, read_repository, etc.)
+5. **Rate Limits**: GitLab.com has 600 requests/minute per user
+6. **Self-Hosted**: Support both gitlab.com and self-hosted instances
+7. **Webhooks**: Use secret tokens for webhook verification
+
+## API Reference
+
+Full API documentation: https://docs.gitlab.com/api/rest/
+
+## License
+
+MIT

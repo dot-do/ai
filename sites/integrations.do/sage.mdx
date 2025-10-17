@@ -1,0 +1,99 @@
+---
+$id: https://integrations.do/sage
+$type: Integration
+name: Sage
+service: sage
+description: Sage delivers accounting, payroll, and payment software solutions aimed at small to medium enterprises, automating financial tasks and compliance
+category: accounting
+sdkBased: false
+baseUrl: https://api.sage.com
+
+auth:
+  type: oauth2
+  authorizationUrl: https://www.sageone.com/oauth2/auth/central?filter=apiv3.1
+  tokenUrl: https://oauth.accounting.sage.com/token
+  scopes:
+    - readonly
+    - offline_access
+    - email
+    - openid
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Sage actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: false
+  events: []
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://www.sage.com/en-gb/
+  apiDocs: https://www.sage.com/en-gb/
+---
+
+# Sage Integration
+
+Sage delivers accounting, payroll, and payment software solutions aimed at small to medium enterprises, automating financial tasks and compliance
+
+## Quick Start
+
+```typescript
+import { SageClient } from '@dotdo/sdk.do/integrations/sage'
+
+const sage = new SageClient({
+  apiKey: process.env.SAGE_API_KEY,
+})
+
+const result = await sage.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Sage provides 0 actions through the Composio API.
+
+## License
+
+MIT

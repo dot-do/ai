@@ -1,0 +1,293 @@
+# onet.org.ai
+
+**O*NET Complete Database Meta-Package** - Unified access to all O*NET 30.0 vocabularies including occupations, technologies, tools, tasks, and job titles.
+
+## Overview
+
+This meta-package provides a single entry point for all O*NET data packages. Instead of importing each package separately, you can access all O*NET data through one unified API.
+
+**Included Packages:**
+- **soc.org.ai** - 923 occupations with SOC codes
+- **tech.org.ai** - 135 technologies and software
+- **tools.org.ai** - Physical tools and equipment
+- **tasks.org.ai** - 19,000+ occupational task statements
+- **jobs.org.ai** - Job titles and alternate names
+
+## Installation
+
+```bash
+pnpm add onet.org.ai
+```
+
+This automatically installs all O*NET sub-packages.
+
+## Usage
+
+### Option 1: Direct Imports (Tree-shakeable)
+
+Import only what you need for optimal bundle size:
+
+```typescript
+import { occupations, getOccupation } from 'onet.org.ai'
+import { technologies, getTechnology } from 'onet.org.ai'
+
+// Get specific occupation
+const softwareDev = getOccupation('15-1252.00')
+console.log(softwareDev.title) // Software Developers
+
+// Get specific technology
+const python = getTechnology('Python')
+console.log(python.category) // Programming Language
+```
+
+### Option 2: Namespace Imports
+
+Use namespaces for organized access:
+
+```typescript
+import { soc, tech, tools, tasks, jobs } from 'onet.org.ai'
+
+// Access through namespaces
+const occupation = soc.getOccupation('15-1252.00')
+const technology = tech.getTechnology('Python')
+const task = tasks.getTask('task-id')
+```
+
+### Option 3: Individual Package Imports
+
+Import sub-packages directly if preferred:
+
+```typescript
+import { occupations } from 'soc.org.ai'
+import { technologies } from 'tech.org.ai'
+import { tools } from 'tools.org.ai'
+```
+
+## Common Queries
+
+### Find Occupation and Related Data
+
+```typescript
+import { getOccupation, soc, tech, tasks } from 'onet.org.ai'
+
+// Get occupation
+const softwareDev = getOccupation('15-1252.00')
+
+// Find technologies used by this occupation
+const usedTech = tech.technologies.filter((t) =>
+  t.usedBy?.some((ref) => ref.$id.includes('15-1252.00'))
+)
+
+// Find tasks for this occupation
+const occupationTasks = tasks.tasks.filter((t) =>
+  t.performedBy?.some((ref) => ref.$id.includes('15-1252.00'))
+)
+
+console.log(`${softwareDev.title} uses:`)
+usedTech.forEach((t) => console.log(`- ${t.name}`))
+
+console.log(`\nKey tasks:`)
+occupationTasks.slice(0, 5).forEach((t) => console.log(`- ${t.description}`))
+```
+
+### Search by Technology
+
+```typescript
+import { getTechnology, soc } from 'onet.org.ai'
+
+// Get technology
+const python = getTechnology('Python')
+
+// Find occupations that use Python
+const pythonOccupations = python.usedBy?.map((ref) => {
+  const socCode = ref.$id.split(':')[1]
+  return soc.getOccupation(socCode)
+})
+
+console.log('Occupations using Python:')
+pythonOccupations?.forEach((occ) => console.log(`- ${occ.title}`))
+```
+
+### Career Exploration
+
+```typescript
+import { soc, tech, tasks } from 'onet.org.ai'
+
+// Find occupations in a career cluster
+const itOccupations = soc.occupations.filter((o) => o.careerCluster === 'Information Technology')
+
+// For each occupation, show technologies and sample tasks
+itOccupations.forEach((occ) => {
+  console.log(`\n${occ.title} (${occ.code})`)
+
+  // Technologies
+  const techs = tech.technologies.filter((t) => t.usedBy?.some((ref) => ref.$id.includes(occ.code)))
+  console.log(`Technologies: ${techs.map((t) => t.name).join(', ')}`)
+
+  // Sample tasks
+  const occTasks = tasks.tasks.filter((t) => t.performedBy?.some((ref) => ref.$id.includes(occ.code)))
+  console.log(`Sample task: ${occTasks[0]?.description}`)
+})
+```
+
+## Data Structure
+
+### Occupation (from soc.org.ai)
+
+```typescript
+interface Occupation {
+  $type: 'Occupation'
+  $id: string // https://soc.org.ai/15-1252.00
+  code: string // SOC code
+  title: string
+  description: string
+  careerCluster?: string
+
+  // Semantic relationships
+  requires?: Ref[] // Technologies
+  performs?: Ref[] // Tasks
+  uses?: Ref[] // Tools
+}
+```
+
+### Technology (from tech.org.ai)
+
+```typescript
+interface Technology {
+  $type: 'Technology'
+  $id: string // https://tech.org.ai/Python
+  name: string
+  category: TechnologyCategory
+  hotTechnology?: boolean
+
+  // Semantic relationships
+  usedBy?: Ref[] // Occupations
+  requiredFor?: Ref[] // Tasks
+}
+```
+
+### Tool (from tools.org.ai)
+
+```typescript
+interface Tool {
+  $type: 'Tool'
+  $id: string // https://tools.org.ai/[name]
+  name: string
+  category: ToolCategory
+
+  // Semantic relationships
+  usedBy?: Ref[] // Occupations
+  requiredFor?: Ref[] // Tasks
+}
+```
+
+### Task (from tasks.org.ai)
+
+```typescript
+interface Task {
+  $type: 'Task'
+  $id: string // https://tasks.org.ai/[id]
+  description: string
+  taskType?: TaskType
+
+  // Semantic relationships
+  performedBy?: Ref[] // Occupations
+  requires?: Ref[] // Technologies/Tools
+}
+```
+
+### JobTitle (from jobs.org.ai)
+
+```typescript
+interface JobTitle {
+  $type: 'JobTitle'
+  $id: string // https://jobs.org.ai/[id]
+  title: string
+  alternateTitle?: string
+
+  // Semantic relationships
+  variantOf?: Ref // Primary occupation
+}
+```
+
+## Semantic Queries with sdk.do
+
+Use O*NET data with semantic triple patterns:
+
+```typescript
+import { $ } from 'sdk.do'
+import { getOccupation, getTechnology } from 'onet.org.ai'
+
+const softwareDev = getOccupation('15-1252.00')
+const python = getTechnology('Python')
+
+// Query who uses what
+const usersOfPython = await db.related(python, $.usedBy, $.Occupation)
+
+// Query what someone uses
+const techForDevs = await db.related(softwareDev, $.requires, $.Technology)
+
+// Complex queries
+const pythonDevTasks = await db.query({
+  subject: { $type: $.Occupation, code: '15-1252.00' },
+  predicate: $.performs,
+  object: { $type: $.Task, requires: { $id: python.$id } },
+})
+```
+
+## Package Exports
+
+The package provides multiple export paths:
+
+```typescript
+// Main entry (tree-shakeable)
+import { occupations, technologies } from 'onet.org.ai'
+
+// Namespace access
+import { soc, tech } from 'onet.org.ai'
+
+// Direct sub-package access
+import 'onet.org.ai/soc' // → soc.org.ai
+import 'onet.org.ai/tech' // → tech.org.ai
+import 'onet.org.ai/tools' // → tools.org.ai
+import 'onet.org.ai/tasks' // → tasks.org.ai
+import 'onet.org.ai/jobs' // → jobs.org.ai
+```
+
+## Data Counts
+
+| Package | Count | Description |
+|---------|-------|-------------|
+| soc.org.ai | 923 | Standard Occupational Classification codes |
+| tech.org.ai | 135 | Technologies and software (deduplicated) |
+| tools.org.ai | TBD | Physical tools and equipment |
+| tasks.org.ai | 19,000+ | Detailed task statements |
+| jobs.org.ai | TBD | Alternate job titles |
+
+## Attribution
+
+This package uses data from the O*NET 30.0 Database by the U.S. Department of Labor, Employment and Training Administration (USDOL/ETA). Used under the CC BY 4.0 license. O*NET® is a trademark of USDOL/ETA.
+
+**Required Attribution**:
+> This page includes information from the O*NET 30.0 Database by the U.S. Department of Labor, Employment and Training Administration (USDOL/ETA). Used under the CC BY 4.0 license. O*NET® is a trademark of USDOL/ETA.
+
+## License
+
+MIT (package code)
+
+## Resources
+
+- **O*NET Online**: https://www.onetonline.org/
+- **O*NET Database**: https://www.onetcenter.org/database.html
+- **O*NET Data Dictionary**: https://www.onetcenter.org/dictionary/30.0/excel/
+- **CC BY 4.0 License**: https://creativecommons.org/licenses/by/4.0/
+
+## Sub-Packages
+
+- **soc.org.ai** - Occupations and SOC codes
+- **tech.org.ai** - Technologies and software
+- **tools.org.ai** - Physical tools and equipment
+- **tasks.org.ai** - Occupational tasks
+- **jobs.org.ai** - Job titles and variants
+
+See individual package README files for detailed documentation.

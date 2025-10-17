@@ -1,0 +1,138 @@
+---
+$id: https://resources.do/examples/integration
+$type: HowTo
+title: Integration Examples
+description: Integrating resources.do with other platform components
+keywords: [integration, platform, nouns, verbs, events]
+---
+
+# Integration Examples
+
+## With nouns.do
+
+```typescript
+// Nouns define types
+$.Person // Type definition
+$.Organization // Type definition
+
+// Resources are instances of types
+const person = await db.create($.Person, { name: 'Jane' }) // Resource
+const org = await db.create($.Organization, { name: 'Acme' }) // Resource
+
+// Type checking
+console.log(person.$type) // 'Person'
+console.log(org.$type) // 'Organization'
+```
+
+## With verbs.do
+
+```typescript
+import $ from 'sdk.do'
+
+// Verbs operate on resources
+const person = await db.get($.Person, 'person-123') // Resource
+
+// Apply verbs
+await $.update(person, { jobTitle: 'CTO' })
+await $.notify(person, { message: 'Promoted!' })
+await $.delete(person)
+```
+
+## With events.do
+
+```typescript
+import { on, send } from 'sdk.do'
+
+// Listen for resource events
+on($.Person.created, async (person) => {
+  console.log('New person resource:', person.$id)
+})
+
+on($.Person.updated, async (person) => {
+  console.log('Person updated:', person.$id)
+})
+
+// Create triggers events
+const person = await db.create($.Person, { name: 'Jane' })
+// ^ Triggers $.Person.created event
+
+// Update triggers events
+await db.update(person, { jobTitle: 'CTO' })
+// ^ Triggers $.Person.updated event
+```
+
+## With database.do
+
+```typescript
+// resources.do uses database.do under the hood
+import { db } from 'sdk.do'
+
+// High-level resource operations
+const person = await db.create($.Person, data) // Uses database.do
+
+// Low-level database operations
+await db.query(`SELECT * FROM resources WHERE type = 'Person'`)
+
+// Transactions
+await db.transaction(async (tx) => {
+  const person = await tx.create($.Person, data)
+  await tx.relate(person, $.worksFor, org)
+})
+```
+
+## With AI
+
+```typescript
+import { ai } from 'sdk.do'
+
+// Generate resources with AI
+const person = await ai.generate('Create a software engineer profile', { schema: $.Person })
+
+// Save AI-generated resource
+const saved = await db.create($.Person, person)
+
+// Enrich existing resources
+const existing = await db.get($.Person, 'person-123')
+const enriched = await ai.generate(`Enrich this person profile: ${JSON.stringify(existing)}`, { schema: $.Person })
+
+await db.update(existing, enriched)
+```
+
+## Complete Integration Example
+
+```typescript
+import $, { db, ai, on, send } from 'sdk.do'
+
+// Listen for new person resources
+on($.Person.created, async (person) => {
+  // Enrich with AI
+  const enriched = await ai.generate(`Generate missing profile data for: ${person.name}`, { schema: $.Person })
+
+  // Update resource
+  await db.update(person, enriched)
+
+  // Create related resources
+  if (!person.worksFor) {
+    const org = await db.create($.Organization, {
+      $type: 'Organization',
+      name: 'Freelance',
+    })
+
+    await db.relate(person, $.worksFor, org)
+  }
+
+  // Notify
+  await $.notify(person, {
+    message: 'Profile setup complete',
+  })
+})
+
+// Create person (triggers workflow)
+const person = await db.create($.Person, {
+  $type: 'Person',
+  name: 'Jane Smith',
+  email: 'jane@example.com',
+})
+```
+
+See [Real-World Use Case](./real-world-use-case) for a complete application.

@@ -1,0 +1,526 @@
+---
+$id: https://agents.do/docs/getting-started
+$type: TechArticle
+title: Getting Started with agents.do
+description: Learn how to build your first autonomous agent with the .do platform agent framework
+keywords: [getting started, agent tutorial, first agent, agent setup, Business-as-Code agents]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Getting Started with agents.do
+
+Build your first autonomous agent in 5 minutes.
+
+## Installation
+
+```bash
+pnpm add sdk.do
+```
+
+## Your First Agent
+
+Let's create a simple autonomous agent that can research companies and generate insights.
+
+### Step 1: Import SDK
+
+```typescript
+import $, { agent } from 'sdk.do'
+```
+
+### Step 2: Define Agent
+
+```typescript
+const researchAgent = await agent.create({
+  $type: 'Agent',
+  name: 'Research Assistant',
+  role: 'Business Research Analyst',
+  goal: 'Research companies and provide actionable insights',
+  capabilities: ['web_search', 'data_analysis', 'report_generation'],
+  tools: ['search', 'scraper', 'summarizer'],
+  model: 'claude-sonnet-4.5',
+})
+```
+
+### Step 3: Execute Agent
+
+```typescript
+const result = await researchAgent.execute({
+  task: 'Research company and generate insights',
+  input: {
+    company: 'Acme Corp',
+    focus: ['market position', 'competitors', 'growth signals'],
+  },
+})
+
+console.log(result)
+// {
+//   company: 'Acme Corp',
+//   insights: {
+//     market_position: 'Leading provider in enterprise SaaS...',
+//     competitors: ['CompetitorA', 'CompetitorB'],
+//     growth_signals: ['Recent Series B funding', 'Hiring spike']
+//   },
+//   recommendations: ['High priority target', 'Decision maker: CTO'],
+//   confidence: 0.85
+// }
+```
+
+## Understanding Agent Execution
+
+When you execute an agent, it goes through several phases:
+
+### 1. Perception
+
+The agent observes its environment and gathers context:
+
+```typescript
+// Agent perceives the task and context
+const context = await agent.perceive({
+  task: 'Research company',
+  input: { company: 'Acme Corp' },
+})
+```
+
+### 2. Reasoning
+
+The agent analyzes the context and plans actions:
+
+```typescript
+// Agent reasons about approach
+const plan = await agent.reason(context)
+// → Plan: [search_web, analyze_results, generate_insights]
+```
+
+### 3. Action
+
+The agent executes the planned actions:
+
+```typescript
+// Agent acts on plan
+const actions = [
+  agent.tool.search.execute({ query: 'Acme Corp news' }),
+  agent.tool.scraper.execute({ url: 'acme.com' }),
+  agent.tool.summarizer.execute({ text: results }),
+]
+```
+
+### 4. Learning
+
+The agent learns from results to improve future performance:
+
+```typescript
+// Agent learns from execution
+await agent.learn({
+  task: 'research_company',
+  result: result,
+  feedback: { success: true, quality: 0.9 },
+})
+```
+
+## Agent Configuration
+
+Customize agent behavior with configuration options:
+
+```typescript
+await researchAgent.configure({
+  // Model settings
+  temperature: 0.7,
+  maxTokens: 4096,
+
+  // Execution settings
+  maxIterations: 10,
+  timeout: 300000, // 5 minutes
+
+  // Autonomy level
+  autonomy: 'supervised', // 'autonomous' | 'supervised' | 'manual'
+
+  // Notifications
+  notifications: ['task_start', 'task_complete', 'decision_required', 'error'],
+
+  // Error handling
+  error_handling: {
+    retry: { attempts: 3, backoff: 'exponential' },
+    fallback: 'escalate_to_human',
+    notification: true,
+  },
+
+  // Logging
+  logging: 'detailed', // 'none' | 'basic' | 'detailed'
+
+  // Rate limiting
+  rate_limit: {
+    requests_per_minute: 10,
+    tokens_per_minute: 100000,
+  },
+})
+```
+
+## Autonomy Levels
+
+agents.do supports three autonomy levels:
+
+### Autonomous
+
+Agent makes all decisions independently:
+
+```typescript
+await agent.configure({ autonomy: 'autonomous' })
+
+// Agent executes without human approval
+const result = await agent.execute({ task: 'research_company' })
+```
+
+### Supervised
+
+Agent asks for approval on key decisions:
+
+```typescript
+await agent.configure({
+  autonomy: 'supervised',
+  approval_required: ['send_email', 'book_meeting', 'create_record'],
+})
+
+// Agent will request approval
+await agent.on('approval_required', async (decision) => {
+  console.log(`Agent wants to: ${decision.action}`)
+  const approved = await getUserApproval(decision)
+  return approved
+})
+```
+
+### Manual
+
+Agent suggests actions but requires explicit confirmation:
+
+```typescript
+await agent.configure({ autonomy: 'manual' })
+
+// Agent suggests next action
+const suggestion = await agent.suggestNextAction()
+console.log(`Suggestion: ${suggestion.action}`)
+
+// You explicitly execute
+if (await getUserConfirmation(suggestion)) {
+  await agent.executeAction(suggestion)
+}
+```
+
+## Agent Memory
+
+Agents have memory systems for context and learning:
+
+### Short-Term Memory
+
+Context for current task:
+
+```typescript
+// Agent remembers context within task
+await agent.execute({ task: 'research_company', input: { company: 'Acme' } })
+// Agent recalls: "I'm researching Acme Corp"
+
+await agent.execute({ task: 'generate_email' })
+// Agent recalls: "Generate email to Acme Corp based on research"
+```
+
+### Long-Term Memory
+
+Persistent knowledge across tasks:
+
+```typescript
+// Agent stores learnings
+await agent.remember({
+  type: 'company_profile',
+  company: 'Acme Corp',
+  data: { industry: 'SaaS', size: '100-500', location: 'San Francisco' },
+})
+
+// Agent recalls later
+const profile = await agent.recall({
+  type: 'company_profile',
+  company: 'Acme Corp',
+})
+```
+
+### Episodic Memory
+
+History of past actions:
+
+```typescript
+// Agent remembers past interactions
+const history = await agent.getHistory({
+  company: 'Acme Corp',
+  limit: 10,
+})
+
+console.log(history)
+// [
+//   { date: '2025-10-01', action: 'researched', result: 'qualified' },
+//   { date: '2025-10-03', action: 'sent_email', result: 'opened' },
+//   { date: '2025-10-05', action: 'booked_meeting', result: 'confirmed' }
+// ]
+```
+
+## Tools
+
+Agents use tools to interact with systems:
+
+### Built-in Tools
+
+Common tools available by default:
+
+```typescript
+const agent = await agent.create({
+  name: 'Agent',
+  tools: [
+    'search', // Web search
+    'scraper', // Web scraping
+    'summarizer', // Text summarization
+    'calculator', // Calculations
+    'datetime', // Date/time operations
+    'json', // JSON parsing
+    'validator', // Data validation
+  ],
+})
+```
+
+### Custom Tools
+
+Define your own tools:
+
+```typescript
+const agent = await agent.create({
+  name: 'Sales Agent',
+  tools: {
+    crm: {
+      $type: 'Tool',
+      name: 'crm',
+      description: 'Manage customer relationships',
+      functions: {
+        create_lead: async (data) => {
+          return await db.create($.Lead, data)
+        },
+        update_lead: async (id, data) => {
+          return await db.update($.Lead, id, data)
+        },
+        get_lead: async (id) => {
+          return await db.get($.Lead, id)
+        },
+      },
+    },
+  },
+})
+
+// Agent autonomously uses custom tool
+await agent.execute({
+  task: 'Create lead for Acme Corp',
+  input: { company: 'Acme Corp', contact: 'john@acme.com' },
+})
+// Agent will call: crm.create_lead({ company: 'Acme', contact: 'john@acme' })
+```
+
+### Tool Selection
+
+Agents autonomously select appropriate tools:
+
+```typescript
+// Agent chooses right tool for task
+await agent.execute({ task: 'Calculate ROI for customer' })
+// → Agent selects: calculator
+
+await agent.execute({ task: 'Find company contact info' })
+// → Agent selects: search, scraper
+
+await agent.execute({ task: 'Schedule follow-up meeting' })
+// → Agent selects: calendar, email
+```
+
+## Monitoring and Observability
+
+Monitor agent behavior and performance:
+
+### Real-time Monitoring
+
+```typescript
+// Listen to agent events
+agent.on('task_start', (event) => {
+  console.log(`Agent starting: ${event.task}`)
+})
+
+agent.on('action_executed', (event) => {
+  console.log(`Action: ${event.action}, Result: ${event.result}`)
+})
+
+agent.on('task_complete', (event) => {
+  console.log(`Task complete: ${event.task}, Duration: ${event.duration}ms`)
+})
+
+agent.on('error', (event) => {
+  console.error(`Error: ${event.error}, Context: ${event.context}`)
+})
+```
+
+### Metrics
+
+```typescript
+// Get agent performance metrics
+const metrics = await agent.getMetrics({
+  timeframe: 'last_7_days',
+})
+
+console.log(metrics)
+// {
+//   tasks_completed: 150,
+//   success_rate: 0.85,
+//   avg_execution_time: 45000,
+//   tools_used: {
+//     search: 120,
+//     scraper: 80,
+//     summarizer: 150
+//   },
+//   errors: 10,
+//   escalations: 5
+// }
+```
+
+### Logging
+
+```typescript
+// Configure detailed logging
+await agent.configure({
+  logging: 'detailed',
+  log_destination: 'console', // 'console' | 'file' | 'service'
+})
+
+// View agent logs
+const logs = await agent.getLogs({
+  level: 'info', // 'debug' | 'info' | 'warn' | 'error'
+  limit: 100,
+})
+```
+
+## Next Steps
+
+- [Creating Agents](./creating-agents) - Build agents with personas and capabilities
+- [Agent Communication](./agent-communication) - Agent-to-agent patterns
+- [Examples](../examples/) - Real-world agent implementations
+- [API Reference](../api/) - Complete API documentation
+
+## Best Practices
+
+### Start Simple
+
+Begin with simple, focused agents:
+
+```typescript
+// Good: Focused agent
+const agent = await agent.create({
+  name: 'Lead Researcher',
+  role: 'Research leads and provide insights',
+  capabilities: ['research', 'analysis'],
+})
+
+// Avoid: Overly complex agent
+const agent = await agent.create({
+  name: 'Everything Agent',
+  capabilities: ['research', 'sales', 'support', 'analytics', 'devops'],
+  // Too many responsibilities
+})
+```
+
+### Clear Goals
+
+Define specific, measurable goals:
+
+```typescript
+// Good: Specific goals
+goals: ['Research 20 companies per day', 'Generate insights with >80% accuracy', 'Complete research in <5 minutes per company']
+
+// Avoid: Vague goals
+goals: ['Do research', 'Be helpful']
+```
+
+### Appropriate Autonomy
+
+Start supervised, move to autonomous:
+
+```typescript
+// Development: Supervised
+await agent.configure({ autonomy: 'supervised' })
+
+// Production: Autonomous (after validation)
+await agent.configure({ autonomy: 'autonomous' })
+```
+
+### Monitor Performance
+
+Always monitor agent behavior:
+
+```typescript
+// Set up monitoring
+agent.on('error', notifyTeam)
+agent.on('task_complete', logMetrics)
+
+// Review metrics regularly
+const metrics = await agent.getMetrics()
+if (metrics.success_rate < 0.8) {
+  await agent.retrain()
+}
+```
+
+## Troubleshooting
+
+### Agent Not Executing
+
+Check configuration and permissions:
+
+```typescript
+// Verify agent configuration
+const config = await agent.getConfig()
+console.log(config)
+
+// Check tool permissions
+const tools = await agent.getTools()
+console.log(tools)
+```
+
+### Poor Results
+
+Improve with more context:
+
+```typescript
+// Add context to improve results
+await agent.execute({
+  task: 'research_company',
+  input: { company: 'Acme' },
+  context: {
+    industry: 'SaaS',
+    size: 'enterprise',
+    previous_interactions: history,
+  },
+})
+```
+
+### Rate Limiting
+
+Configure rate limits:
+
+```typescript
+await agent.configure({
+  rate_limit: {
+    requests_per_minute: 10,
+    tokens_per_minute: 100000,
+  },
+})
+```
+
+## Support
+
+- [Documentation](https://agents.do/docs)
+- [GitHub Issues](https://github.com/dot-do/platform/issues)
+- [Community Discord](https://discord.gg/dotdo)
+
+---
+
+Ready to build autonomous digital workers? Let's [create your first agent](./creating-agents).

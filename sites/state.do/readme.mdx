@@ -1,0 +1,595 @@
+---
+$id: https://state.do
+$type: WebSite
+name: state.do
+description: Distributed state management with Cloudflare Durable Objects
+keywords: [state, durable objects, distributed, storage, consistency, real-time, cloudflare]
+author:
+  $type: Organization
+  name: .do Platform
+license: CC-BY-4.0
+---
+
+# state.do
+
+**Distributed state management with Cloudflare Durable Objects**
+
+state.do provides powerful distributed state management using Cloudflare Durable Objects. Build stateful applications with strong consistency, real-time updates, and global scale.
+
+## Quick Start
+
+```typescript
+// Define a Durable Object
+export class Counter {
+  state: DurableObjectState
+
+  constructor(state: DurableObjectState) {
+    this.state = state
+  }
+
+  async fetch(request: Request) {
+    const url = new URL(request.url)
+
+    if (url.pathname === '/increment') {
+      const count = (await this.state.storage.get<number>('count')) || 0
+      await this.state.storage.put('count', count + 1)
+      return new Response(JSON.stringify({ count: count + 1 }))
+    }
+
+    if (url.pathname === '/get') {
+      const count = (await this.state.storage.get<number>('count')) || 0
+      return new Response(JSON.stringify({ count }))
+    }
+
+    return new Response('Not found', { status: 404 })
+  }
+}
+```
+
+## Key Features
+
+### 🔒 Strong Consistency
+
+Durable Objects provide single-writer consistency:
+
+```typescript
+export class Account {
+  async transfer(amount: number, toAccountId: string) {
+    // All operations are serialized - no race conditions!
+    const balance = (await this.state.storage.get<number>('balance')) || 0
+
+    if (balance < amount) {
+      throw new Error('Insufficient funds')
+    }
+
+    await this.state.storage.put('balance', balance - amount)
+
+    // Make RPC call to target account
+    const toAccount = this.env.ACCOUNTS.get(this.env.ACCOUNTS.idFromName(toAccountId))
+    await toAccount.deposit(amount)
+  }
+}
+```
+
+### 🌍 Global Distribution
+
+Objects are automatically created near users:
+
+```typescript
+// Get or create object near the user
+const id = env.COUNTER.idFromName('global-counter')
+const stub = env.COUNTER.get(id)
+const response = await stub.fetch(request)
+```
+
+### 💾 Persistent Storage
+
+Data persists across requests:
+
+```typescript
+export class Session {
+  async fetch(request: Request) {
+    // Data persists between requests
+    const visits = (await this.state.storage.get<number>('visits')) || 0
+    await this.state.storage.put('visits', visits + 1)
+
+    const user = await this.state.storage.get('user')
+    return new Response(JSON.stringify({ visits, user }))
+  }
+}
+```
+
+### ⚡ Real-Time Updates
+
+WebSocket support for real-time features:
+
+```typescript
+export class ChatRoom {
+  private sessions: WebSocket[] = []
+
+  async fetch(request: Request) {
+    const pair = new WebSocketPair()
+    const [client, server] = Object.values(pair)
+
+    this.sessions.push(server)
+
+    server.addEventListener('message', async (event) => {
+      // Broadcast to all connected clients
+      const message = event.data
+      for (const session of this.sessions) {
+        session.send(message)
+      }
+    })
+
+    return new Response(null, { status: 101, webSocket: client })
+  }
+}
+```
+
+### 🔄 Atomic Transactions
+
+Execute multiple operations atomically:
+
+```typescript
+export class Inventory {
+  async purchase(items: string[]) {
+    const transaction = this.state.storage.transaction(async (txn) => {
+      // All operations in transaction are atomic
+      for (const item of items) {
+        const stock = (await txn.get<number>(`stock:${item}`)) || 0
+        if (stock < 1) {
+          throw new Error(`Out of stock: ${item}`)
+        }
+        await txn.put(`stock:${item}`, stock - 1)
+      }
+    })
+
+    await transaction
+  }
+}
+```
+
+### 🎯 Alarm Scheduling
+
+Schedule future work:
+
+```typescript
+export class Reminder {
+  async fetch(request: Request) {
+    const { message, delayMs } = await request.json()
+
+    // Store reminder
+    await this.state.storage.put('message', message)
+
+    // Schedule alarm
+    await this.state.storage.setAlarm(Date.now() + delayMs)
+
+    return new Response('Reminder set')
+  }
+
+  async alarm() {
+    const message = await this.state.storage.get('message')
+    // Send notification
+    await sendNotification(message)
+  }
+}
+```
+
+## Core Concepts
+
+### Durable Objects
+
+Each object is a single instance with:
+
+- Unique ID
+- Persistent storage
+- Guaranteed single-writer
+- Global distribution
+
+```typescript
+// Get object by ID
+const id = env.COUNTER.idFromName('user-123')
+const stub = env.COUNTER.get(id)
+
+// Make request to object
+const response = await stub.fetch(new Request('https://fake-host/increment'))
+```
+
+### State Storage
+
+Transactional key-value storage:
+
+```typescript
+// Get
+const value = await this.state.storage.get('key')
+
+// Put
+await this.state.storage.put('key', 'value')
+
+// Delete
+await this.state.storage.delete('key')
+
+// List
+const entries = await this.state.storage.list()
+
+// Transaction
+await this.state.storage.transaction(async (txn) => {
+  const value = await txn.get('key')
+  await txn.put('key', value + 1)
+})
+```
+
+### Object IDs
+
+Three ways to create object IDs:
+
+```typescript
+// 1. From name (deterministic)
+const id = env.COUNTER.idFromName('global-counter')
+
+// 2. From string (existing ID)
+const id = env.COUNTER.idFromString(existingId)
+
+// 3. New unique ID
+const id = env.COUNTER.newUniqueId()
+```
+
+## Documentation
+
+- [Getting Started](./docs/getting-started) - Setup and basic usage
+- [Architecture](./docs/architecture) - How Durable Objects work
+- [Best Practices](./docs/best-practices) - Patterns and optimization
+- [Troubleshooting](./docs/troubleshooting) - Common issues
+
+## Examples
+
+- [Basic Usage](./examples/basic-usage) - Simple counters and state
+- [Advanced Patterns](./examples/advanced-patterns) - Transactions, alarms
+- [Integration](./examples/integration) - Database, events, APIs
+- [Real-World Use Case](./examples/real-world-use-case) - Multiplayer game
+
+## Use Cases
+
+### Real-Time Collaboration
+
+```typescript
+export class Document {
+  private clients = new Set<WebSocket>()
+
+  async fetch(request: Request) {
+    if (request.headers.get('Upgrade') === 'websocket') {
+      const pair = new WebSocketPair()
+      const [client, server] = Object.values(pair)
+
+      this.clients.add(server)
+
+      server.addEventListener('message', (event) => {
+        // Broadcast changes to all clients
+        const update = JSON.parse(event.data)
+        for (const client of this.clients) {
+          client.send(JSON.stringify(update))
+        }
+
+        // Persist changes
+        this.state.storage.put('content', update.content)
+      })
+
+      return new Response(null, { status: 101, webSocket: client })
+    }
+
+    // HTTP: Get current content
+    const content = await this.state.storage.get('content')
+    return new Response(JSON.stringify({ content }))
+  }
+}
+```
+
+### Rate Limiting
+
+```typescript
+export class RateLimiter {
+  async checkLimit(userId: string, maxPerMinute = 60): Promise<boolean> {
+    const key = `requests:${userId}`
+    const now = Date.now()
+    const minute = 60000
+
+    // Get requests in last minute
+    const requests = (await this.state.storage.get<number[]>(key)) || []
+    const recent = requests.filter((t) => now - t < minute)
+
+    if (recent.length >= maxPerMinute) {
+      return false // Rate limit exceeded
+    }
+
+    // Add current request
+    recent.push(now)
+    await this.state.storage.put(key, recent)
+
+    return true
+  }
+}
+```
+
+### Leaderboard
+
+```typescript
+export class Leaderboard {
+  async updateScore(userId: string, score: number) {
+    const current = (await this.state.storage.get<number>(`score:${userId}`)) || 0
+
+    if (score > current) {
+      await this.state.storage.put(`score:${userId}`, score)
+    }
+  }
+
+  async getTop(limit = 10) {
+    const entries = await this.state.storage.list({ prefix: 'score:' })
+    const scores = Array.from(entries.entries())
+      .map(([key, score]) => ({
+        userId: key.replace('score:', ''),
+        score: score as number,
+      }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit)
+
+    return scores
+  }
+}
+```
+
+### Session Management
+
+```typescript
+export class UserSession {
+  async fetch(request: Request) {
+    const url = new URL(request.url)
+
+    if (url.pathname === '/login') {
+      const { userId, data } = await request.json()
+
+      await this.state.storage.put('userId', userId)
+      await this.state.storage.put('loginTime', Date.now())
+      await this.state.storage.put('data', data)
+
+      // Set expiry alarm (1 hour)
+      await this.state.storage.setAlarm(Date.now() + 3600000)
+
+      return new Response('Logged in')
+    }
+
+    if (url.pathname === '/session') {
+      const userId = await this.state.storage.get('userId')
+      const data = await this.state.storage.get('data')
+      return new Response(JSON.stringify({ userId, data }))
+    }
+
+    return new Response('Not found', { status: 404 })
+  }
+
+  async alarm() {
+    // Session expired
+    await this.state.storage.deleteAll()
+  }
+}
+```
+
+## Integration with .do Platform
+
+state.do integrates with the entire `.do` ecosystem:
+
+### With Database (db.do)
+
+```typescript
+import { $, db } from 'sdk.do'
+
+export class UserCache {
+  async getUser(userId: string) {
+    // Check cache
+    let user = await this.state.storage.get(`user:${userId}`)
+
+    if (!user) {
+      // Load from database
+      user = await db.get($.Person, userId)
+      await this.state.storage.put(`user:${userId}`, user)
+    }
+
+    return user
+  }
+}
+```
+
+### With Events (on.do, send.do)
+
+```typescript
+import { send } from 'sdk.do'
+
+export class Order {
+  async create(orderData: any) {
+    await this.state.storage.put('order', orderData)
+    await this.state.storage.put('status', 'pending')
+
+    // Publish event
+    await send($.Order.created, orderData)
+  }
+}
+```
+
+### With AI (ai.do)
+
+```typescript
+import { ai } from 'sdk.do'
+
+export class Conversation {
+  async addMessage(message: string) {
+    const history = (await this.state.storage.get<string[]>('messages')) || []
+    history.push(message)
+
+    // Generate AI response
+    const response = await ai.generate(message, {
+      context: { history },
+    })
+
+    history.push(response)
+    await this.state.storage.put('messages', history)
+
+    return response
+  }
+}
+```
+
+## Semantic Patterns
+
+state.do uses `$.Subject.predicate.Object` patterns:
+
+```typescript
+import { $ } from 'sdk.do'
+
+// State types
+$.State
+$.Session
+$.Cache
+$.Counter
+
+// State operations
+await $.state.get(key)
+await $.state.set(key, value)
+await $.state.delete(key)
+
+// State events
+on($.State.updated, handler)
+on($.Session.expired, handler)
+```
+
+## Configuration
+
+### wrangler.toml
+
+```toml
+[durable_objects]
+bindings = [
+  { name = "COUNTER", class_name = "Counter" },
+  { name = "SESSIONS", class_name = "UserSession" },
+  { name = "CHAT_ROOMS", class_name = "ChatRoom" }
+]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["Counter", "UserSession", "ChatRoom"]
+```
+
+### Environment Variables
+
+```bash
+# No API keys needed - runs on Cloudflare Edge
+# Configuration is in wrangler.toml
+```
+
+## Performance
+
+### Latency
+
+- **First request**: 0-50ms (cold start)
+- **Subsequent requests**: 0-10ms (in-memory)
+- **Storage operations**: 1-5ms
+- **Cross-object RPC**: 10-20ms
+
+### Throughput
+
+- **Requests per second**: 1000+ per object
+- **Storage operations**: 10,000+ per second
+- **WebSocket messages**: 100+ messages/second
+
+### Limits
+
+- **Storage per object**: 1GB
+- **Request size**: 100MB
+- **CPU time per request**: 30 seconds
+- **WebSocket connections**: 10,000 per object
+
+## Best Practices
+
+### 1. Design for Single Instance
+
+Each object is a single instance:
+
+```typescript
+// Good: State per user
+const id = env.SESSIONS.idFromName(`user:${userId}`)
+
+// Avoid: Global shared state
+const id = env.SESSIONS.idFromName('global') // Bottleneck!
+```
+
+### 2. Use Transactions
+
+Ensure consistency:
+
+```typescript
+// Good: Atomic transaction
+await this.state.storage.transaction(async (txn) => {
+  const balance = await txn.get('balance')
+  await txn.put('balance', balance - amount)
+})
+
+// Avoid: Race conditions
+const balance = await this.state.storage.get('balance')
+await this.state.storage.put('balance', balance - amount) // Not atomic!
+```
+
+### 3. Cache Aggressively
+
+Store frequently accessed data:
+
+```typescript
+export class UserData {
+  private cache = new Map()
+
+  async get(key: string) {
+    // Check memory cache
+    if (this.cache.has(key)) {
+      return this.cache.get(key)
+    }
+
+    // Check storage
+    const value = await this.state.storage.get(key)
+    this.cache.set(key, value)
+    return value
+  }
+}
+```
+
+## License
+
+state.do is released under the [Creative Commons Attribution 4.0 International License (CC-BY-4.0)](https://creativecommons.org/licenses/by/4.0/).
+
+## Resources
+
+- [sdk.do](https://sdk.do) - Core SDK documentation
+- [Cloudflare Durable Objects](https://developers.cloudflare.com/durable-objects/) - Official docs
+- [db.do](https://db.do) - Database operations
+- [events.do](https://events.do) - Event system
+
+## Related Domains
+
+- **[database.do](https://database.do)** - Database operations
+- **[context.do](https://context.do)** - Context management
+- **[data.do](https://data.do)** - Data operations
+- **[embeddings.do](https://embeddings.do)** - Vector embeddings
+
+## Contributing
+
+state.do is part of the [`.do` platform](https://do) ecosystem. Contributions are welcome!
+
+See the [ai repository](https://github.com/dot-do/ai) for contribution guidelines.
+
+## Acknowledgments
+
+state.do builds upon:
+
+- [Cloudflare Durable Objects](https://developers.cloudflare.com/durable-objects/) - Distributed state
+- [Cloudflare Workers](https://workers.cloudflare.com/) - Edge compute
+- [WebSockets](https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API) - Real-time communication
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

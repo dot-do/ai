@@ -1,0 +1,188 @@
+---
+$id: https://resources.do/examples/advanced-patterns
+$type: HowTo
+title: Advanced Patterns
+description: Complex patterns for working with data records and resources
+keywords: [advanced, patterns, queries, data management]
+---
+
+# Advanced Patterns
+
+## Complex Queries
+
+```typescript
+// Multiple conditions (AND)
+const results = await db.list($.Person, {
+  where: {
+    jobTitle: { $contains: 'Engineer' },
+    yearsExperience: { $gte: 5 },
+    status: 'Active',
+  },
+})
+
+// OR conditions
+const results = await db.list($.Person, {
+  where: {
+    $or: [{ jobTitle: { $contains: 'Engineer' } }, { jobTitle: { $contains: 'Developer' } }],
+  },
+})
+
+// Date ranges
+const recent = await db.list($.Person, {
+  where: {
+    createdAt: {
+      $gte: new Date('2025-01-01'),
+      $lte: new Date('2025-12-31'),
+    },
+  },
+})
+
+// Nested property queries
+const sfPeople = await db.list($.Person, {
+  where: {
+    'address.addressLocality': 'San Francisco',
+  },
+})
+```
+
+## Pagination
+
+```typescript
+async function* paginateResources(type: TypeReference, pageSize = 100) {
+  let offset = 0
+
+  while (true) {
+    const page = await db.list(type, { limit: pageSize, offset })
+    if (page.length === 0) break
+    yield* page
+    offset += pageSize
+  }
+}
+
+// Usage
+for await (const person of paginateResources($.Person)) {
+  await processPerson(person)
+}
+```
+
+## Caching
+
+```typescript
+class ResourceCache {
+  private cache = new Map<string, any>()
+  private ttl = 60000
+
+  async get(type: TypeReference, id: string) {
+    const key = `${type.$type}:${id}`
+    const cached = this.cache.get(key)
+
+    if (cached && Date.now() - cached.timestamp < this.ttl) {
+      return cached.value
+    }
+
+    const resource = await db.get(type, id)
+    this.cache.set(key, {
+      value: resource,
+      timestamp: Date.now(),
+    })
+
+    return resource
+  }
+}
+```
+
+## Data Migration
+
+```typescript
+async function migratePersonData() {
+  const people = await db.list($.Person)
+
+  for (const person of people) {
+    // Old format: 'name'
+    // New format: 'givenName' and 'familyName'
+    if (person.name && !person.givenName) {
+      const [givenName, familyName] = person.name.split(' ', 2)
+
+      await db.update(person, {
+        givenName,
+        familyName: familyName || '',
+      })
+    }
+  }
+}
+```
+
+## Backup and Restore
+
+```typescript
+// Backup
+async function backupResources(type: TypeReference) {
+  const resources = await db.list(type)
+  const json = JSON.stringify(resources, null, 2)
+  await fs.writeFile(`backup-${type.$type}.json`, json)
+}
+
+// Restore
+async function restoreResources(type: TypeReference, filename: string) {
+  const json = await fs.readFile(filename, 'utf-8')
+  const resources = JSON.parse(json)
+
+  for (const resource of resources) {
+    await db.create(type, resource)
+  }
+}
+```
+
+## Transactions
+
+```typescript
+async function transferOwnership(itemId: string, fromId: string, toId: string) {
+  await db.transaction(async (tx) => {
+    // Remove old relationship
+    const item = await tx.get($.Product, itemId)
+    await tx.unrelate(item, $.ownedBy, fromId)
+
+    // Add new relationship
+    await tx.relate(item, $.ownedBy, toId)
+
+    // Update item
+    await tx.update(item, {
+      ownerId: toId,
+      transferredAt: new Date(),
+    })
+  })
+}
+```
+
+## Validation Pipelines
+
+```typescript
+async function createValidatedResource(type: TypeReference, data: any) {
+  // Step 1: Type validation
+  const typeValidation = validate(data, type)
+  if (!typeValidation.valid) {
+    throw new Error(`Type validation failed: ${typeValidation.errors}`)
+  }
+
+  // Step 2: Business rules
+  if (type.$type === 'Person' && !data.email) {
+    throw new Error('Email is required for Person')
+  }
+
+  // Step 3: Uniqueness check
+  if (data.email) {
+    const existing = await db.list(type, {
+      where: { email: data.email },
+      limit: 1,
+    })
+    if (existing.length > 0) {
+      throw new Error('Email already exists')
+    }
+  }
+
+  // Step 4: Create
+  return await db.create(type, data)
+}
+```
+
+See [Integration](./integration) and [Real-World Use Case](./real-world-use-case).

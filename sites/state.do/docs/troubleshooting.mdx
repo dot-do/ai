@@ -1,0 +1,888 @@
+---
+$id: https://state.do/docs/troubleshooting
+$type: TroubleshootingGuide
+title: state.do Troubleshooting
+description: Common issues and solutions when working with state.do
+keywords: [troubleshooting, debugging, errors, issues, solutions]
+author:
+  $type: Organization
+  name: .do Platform
+license: CC-BY-4.0
+---
+
+# state.do Troubleshooting
+
+Common issues and solutions when working with state.do.
+
+## Common Errors and Solutions
+
+### Error: "Durable Object binding not found"
+
+**Symptom:**
+
+```
+Error: Durable Object binding 'COUNTER' not found
+```
+
+**Cause:** Missing or incorrect `wrangler.toml` configuration.
+
+**Solution:**
+
+Add the Durable Object binding to `wrangler.toml`:
+
+```toml
+[[durable_objects.bindings]]
+name = "COUNTER"
+class_name = "Counter"
+script_name = "my-worker"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["Counter"]
+```
+
+Then deploy:
+
+```bash
+wrangler deploy
+```
+
+### Error: "Class not exported"
+
+**Symptom:**
+
+```
+Error: Durable Object class 'Counter' is not exported
+```
+
+**Cause:** Durable Object class not exported from worker.
+
+**Solution:**
+
+Ensure class is exported:
+
+```typescript
+// worker.ts
+export class Counter extends DurableObject {
+  // Implementation
+}
+
+// Also export as default if needed
+export { Counter as default }
+```
+
+### Error: "Storage operation failed"
+
+**Symptom:**
+
+```
+Error: Storage operation failed: value too large
+```
+
+**Cause:** Attempting to store value larger than 128 KB.
+
+**Solution:**
+
+Split large values into chunks:
+
+```typescript
+export class LargeDataStore extends DurableObject {
+  async storeLargeValue(key: string, value: string) {
+    const chunkSize = 100_000 // 100 KB chunks
+    const chunks = []
+
+    for (let i = 0; i < value.length; i += chunkSize) {
+      chunks.push(value.slice(i, i + chunkSize))
+    }
+
+    // Store chunks
+    await this.ctx.storage.put(`${key}:count`, chunks.length)
+    for (let i = 0; i < chunks.length; i++) {
+      await this.ctx.storage.put(`${key}:${i}`, chunks[i])
+    }
+  }
+
+  async retrieveLargeValue(key: string): Promise<string> {
+    const count = await this.ctx.storage.get<number>(`${key}:count`)
+    if (!count) return null
+
+    const chunks: string[] = []
+    for (let i = 0; i < count; i++) {
+      const chunk = await this.ctx.storage.get<string>(`${key}:${i}`)
+      chunks.push(chunk)
+    }
+
+    return chunks.join('')
+  }
+}
+```
+
+### Error: "Alarm not firing"
+
+**Symptom:** Scheduled alarms don't execute.
+
+**Cause:** Multiple possible causes.
+
+**Solutions:**
+
+1. **Ensure `alarm()` method exists:**
+
+```typescript
+export class Scheduler extends DurableObject {
+  async fetch(request: Request) {
+    await this.ctx.storage.setAlarm(Date.now() + 60000)
+    return new Response('Alarm set')
+  }
+
+  // Must implement alarm() method
+  async alarm() {
+    console.log('Alarm fired!')
+  }
+}
+```
+
+2. **Check alarm scheduling:**
+
+```typescript
+// Bad: Alarm in the past
+await this.ctx.storage.setAlarm(Date.now() - 1000) // Won't fire!
+
+// Good: Alarm in the future
+await this.ctx.storage.setAlarm(Date.now() + 60000)
+```
+
+3. **Verify object stays active:**
+
+```typescript
+// Objects may be evicted if unused
+// Make regular requests to keep object alive
+setInterval(async () => {
+  await stub.fetch(new Request('https://fake/ping'))
+}, 30000)
+```
+
+### Error: "WebSocket connection failed"
+
+**Symptom:** WebSocket connections fail or disconnect.
+
+**Cause:** Incorrect WebSocket handling.
+
+**Solution:**
+
+Ensure proper WebSocket upgrade:
+
+```typescript
+export class WebSocketHandler extends DurableObject {
+  async fetch(request: Request) {
+    // Check upgrade header
+    if (request.headers.get('Upgrade') !== 'websocket') {
+      return new Response('Expected WebSocket', { status: 426 })
+    }
+
+    // Create WebSocket pair
+    const pair = new WebSocketPair()
+    const [client, server] = Object.values(pair)
+
+    // Accept connection
+    server.accept()
+
+    // Handle events
+    server.addEventListener('message', (event) => {
+      console.log('Received:', event.data)
+    })
+
+    server.addEventListener('error', (event) => {
+      console.error('WebSocket error:', event)
+    })
+
+    server.addEventListener('close', (event) => {
+      console.log('WebSocket closed:', event.code, event.reason)
+    })
+
+    // Return client
+    return new Response(null, {
+      status: 101,
+      webSocket: client,
+    })
+  }
+}
+```
+
+## Debugging State Issues
+
+### Inspect Storage Contents
+
+```typescript
+export class DebugObject extends DurableObject {
+  async fetch(request: Request) {
+    const url = new URL(request.url)
+
+    if (url.pathname === '/debug') {
+      // List all storage entries
+      const entries = await this.ctx.storage.list()
+      const data = Object.fromEntries(entries)
+
+      return new Response(
+        JSON.stringify(
+          {
+            objectId: this.ctx.id.toString(),
+            storage: data,
+            timestamp: Date.now(),
+          },
+          null,
+          2
+        )
+      )
+    }
+
+    return new Response('Not found', { status: 404 })
+  }
+}
+```
+
+### Track State Changes
+
+```typescript
+export class TrackedState extends DurableObject {
+  async fetch(request: Request) {
+    const url = new URL(request.url)
+
+    if (url.pathname === '/update') {
+      const { key, value } = await request.json()
+
+      // Log before
+      const before = await this.ctx.storage.get(key)
+      console.log('Before:', { key, value: before })
+
+      // Update
+      await this.ctx.storage.put(key, value)
+
+      // Log after
+      const after = await this.ctx.storage.get(key)
+      console.log('After:', { key, value: after })
+
+      // Store history
+      const history = (await this.ctx.storage.get<any[]>('history')) || []
+      history.push({
+        key,
+        before,
+        after,
+        timestamp: Date.now(),
+      })
+      await this.ctx.storage.put('history', history)
+
+      return new Response('OK')
+    }
+
+    if (url.pathname === '/history') {
+      const history = await this.ctx.storage.get('history')
+      return new Response(JSON.stringify(history, null, 2))
+    }
+
+    return new Response('Not found', { status: 404 })
+  }
+}
+```
+
+### Verify Object Location
+
+```typescript
+export class LocationAware extends DurableObject {
+  async fetch(request: Request) {
+    // Get location from request
+    const cf = request.cf as any
+
+    return new Response(
+      JSON.stringify(
+        {
+          objectId: this.ctx.id.toString(),
+          requestColo: cf?.colo, // Cloudflare datacenter
+          requestCountry: cf?.country,
+          requestCity: cf?.city,
+          timestamp: Date.now(),
+        },
+        null,
+        2
+      )
+    )
+  }
+}
+```
+
+## Performance Problems
+
+### High Latency
+
+**Symptom:** Requests take longer than expected.
+
+**Diagnosis:**
+
+```typescript
+export class LatencyDebug extends DurableObject {
+  async fetch(request: Request) {
+    const timings: Record<string, number> = {}
+    const start = Date.now()
+
+    // Measure storage read
+    const readStart = Date.now()
+    const data = await this.ctx.storage.get('data')
+    timings.storageRead = Date.now() - readStart
+
+    // Measure computation
+    const computeStart = Date.now()
+    const result = this.processData(data)
+    timings.compute = Date.now() - computeStart
+
+    // Measure storage write
+    const writeStart = Date.now()
+    await this.ctx.storage.put('result', result)
+    timings.storageWrite = Date.now() - writeStart
+
+    timings.total = Date.now() - start
+
+    return new Response(JSON.stringify(timings, null, 2))
+  }
+
+  processData(data: any) {
+    // Processing logic
+    return data
+  }
+}
+```
+
+**Solutions:**
+
+1. **Batch storage operations:**
+
+```typescript
+// Bad: Multiple roundtrips
+const a = await this.ctx.storage.get('a')
+const b = await this.ctx.storage.get('b')
+const c = await this.ctx.storage.get('c')
+
+// Good: Single roundtrip
+const values = await this.ctx.storage.get(['a', 'b', 'c'])
+```
+
+2. **Cache frequently accessed data:**
+
+```typescript
+export class CachedObject extends DurableObject {
+  private cache: Map<string, any> = new Map()
+
+  async get(key: string) {
+    if (this.cache.has(key)) {
+      return this.cache.get(key)
+    }
+
+    const value = await this.ctx.storage.get(key)
+    this.cache.set(key, value)
+    return value
+  }
+}
+```
+
+3. **Reduce payload size:**
+
+```typescript
+// Bad: Send entire object
+return new Response(JSON.stringify(largeObject))
+
+// Good: Send only needed fields
+return new Response(
+  JSON.stringify({
+    id: largeObject.id,
+    name: largeObject.name,
+  })
+)
+```
+
+### Memory Issues
+
+**Symptom:** Object runs slowly or crashes.
+
+**Diagnosis:**
+
+```typescript
+export class MemoryDebug extends DurableObject {
+  async fetch(request: Request) {
+    // Check storage size
+    const entries = await this.ctx.storage.list()
+    const totalKeys = entries.size
+
+    let totalSize = 0
+    for (const [key, value] of entries) {
+      const size = JSON.stringify(value).length
+      totalSize += size
+    }
+
+    return new Response(
+      JSON.stringify({
+        totalKeys,
+        totalSize,
+        averageSize: totalSize / totalKeys,
+      })
+    )
+  }
+}
+```
+
+**Solutions:**
+
+1. **Remove unused data:**
+
+```typescript
+export class Cleanup extends DurableObject {
+  async cleanup() {
+    const entries = await this.ctx.storage.list()
+
+    for (const [key, value] of entries) {
+      // Remove old entries
+      if (value.timestamp < Date.now() - 86400000) {
+        // 24 hours
+        await this.ctx.storage.delete(key)
+      }
+    }
+  }
+}
+```
+
+2. **Partition data across objects:**
+
+```typescript
+// Bad: One object for all users
+const users = env.USERS.idFromName('all-users')
+
+// Good: One object per user
+const user = env.USERS.idFromName(`user:${userId}`)
+```
+
+### Cold Start Delays
+
+**Symptom:** First request to object is slow.
+
+**Solutions:**
+
+1. **Minimize constructor work:**
+
+```typescript
+// Bad: Heavy initialization
+export class Heavy extends DurableObject {
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env)
+    this.loadLargeDataset() // Slow!
+  }
+}
+
+// Good: Lazy initialization
+export class Lazy extends DurableObject {
+  private data: any = null
+
+  async getData() {
+    if (!this.data) {
+      this.data = await this.loadLargeDataset()
+    }
+    return this.data
+  }
+}
+```
+
+2. **Keep objects warm:**
+
+```typescript
+// Periodic ping to prevent hibernation
+setInterval(async () => {
+  const stub = env.COUNTER.get(id)
+  await stub.fetch(new Request('https://fake/ping'))
+}, 25000) // Every 25 seconds
+```
+
+## Connection Issues
+
+### WebSocket Disconnections
+
+**Symptom:** WebSockets disconnect unexpectedly.
+
+**Solutions:**
+
+1. **Implement heartbeat:**
+
+```typescript
+export class HeartbeatSocket extends DurableObject {
+  private sessions: Map<WebSocket, NodeJS.Timeout> = new Map()
+
+  async fetch(request: Request) {
+    if (request.headers.get('Upgrade') === 'websocket') {
+      const pair = new WebSocketPair()
+      const [client, server] = Object.values(pair)
+
+      server.accept()
+
+      // Start heartbeat
+      const heartbeat = setInterval(() => {
+        try {
+          server.send(JSON.stringify({ type: 'ping' }))
+        } catch {
+          clearInterval(heartbeat)
+          this.sessions.delete(server)
+        }
+      }, 30000)
+
+      this.sessions.set(server, heartbeat)
+
+      server.addEventListener('close', () => {
+        clearInterval(heartbeat)
+        this.sessions.delete(server)
+      })
+
+      return new Response(null, {
+        status: 101,
+        webSocket: client,
+      })
+    }
+
+    return new Response('OK')
+  }
+}
+```
+
+2. **Handle reconnection:**
+
+```typescript
+// Client-side reconnection logic
+class ReconnectingWebSocket {
+  private ws: WebSocket
+  private url: string
+  private reconnectDelay = 1000
+
+  constructor(url: string) {
+    this.url = url
+    this.connect()
+  }
+
+  connect() {
+    this.ws = new WebSocket(this.url)
+
+    this.ws.onclose = () => {
+      console.log('Disconnected, reconnecting in', this.reconnectDelay, 'ms')
+      setTimeout(() => this.connect(), this.reconnectDelay)
+      this.reconnectDelay = Math.min(this.reconnectDelay * 2, 30000)
+    }
+
+    this.ws.onopen = () => {
+      console.log('Connected')
+      this.reconnectDelay = 1000
+    }
+  }
+
+  send(data: string) {
+    if (this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(data)
+    }
+  }
+}
+```
+
+### Request Timeouts
+
+**Symptom:** Requests timeout before completing.
+
+**Solutions:**
+
+1. **Optimize long operations:**
+
+```typescript
+export class OptimizedProcessor extends DurableObject {
+  async fetch(request: Request) {
+    // Bad: Process everything in one request
+    // const result = await this.processAllData()
+
+    // Good: Process in batches with status updates
+    const batchSize = 100
+    const batches = Math.ceil(totalItems / batchSize)
+
+    for (let i = 0; i < batches; i++) {
+      await this.processBatch(i * batchSize, batchSize)
+
+      // Store progress
+      await this.ctx.storage.put('progress', {
+        current: i + 1,
+        total: batches,
+      })
+    }
+
+    return new Response('Complete')
+  }
+
+  async processBatch(offset: number, limit: number) {
+    // Process batch
+  }
+}
+```
+
+2. **Use alarms for background work:**
+
+```typescript
+export class BackgroundProcessor extends DurableObject {
+  async fetch(request: Request) {
+    // Queue work
+    await this.ctx.storage.put('pendingWork', {
+      task: 'process-data',
+      timestamp: Date.now(),
+    })
+
+    // Schedule immediate alarm
+    await this.ctx.storage.setAlarm(Date.now() + 100)
+
+    // Return immediately
+    return new Response('Queued')
+  }
+
+  async alarm() {
+    const work = await this.ctx.storage.get('pendingWork')
+    if (!work) return
+
+    // Process in background
+    await this.processWork(work)
+
+    await this.ctx.storage.delete('pendingWork')
+  }
+
+  async processWork(work: any) {
+    // Long-running processing
+  }
+}
+```
+
+## Migration Strategies
+
+### Schema Changes
+
+**Scenario:** Need to change stored data format.
+
+**Strategy: Gradual Migration**
+
+```typescript
+export class VersionedData extends DurableObject {
+  async fetch(request: Request) {
+    const url = new URL(request.url)
+
+    if (url.pathname === '/get') {
+      let data = await this.ctx.storage.get('data')
+
+      // Migrate old format to new
+      if (data && !data.version) {
+        data = this.migrateV0toV1(data)
+        await this.ctx.storage.put('data', data)
+      }
+
+      return new Response(JSON.stringify(data))
+    }
+
+    return new Response('Not found', { status: 404 })
+  }
+
+  migrateV0toV1(oldData: any) {
+    return {
+      version: 1,
+      user: {
+        id: oldData.userId,
+        name: oldData.userName,
+      },
+      metadata: {
+        created: oldData.timestamp || Date.now(),
+      },
+    }
+  }
+}
+```
+
+### Class Renames
+
+**Scenario:** Need to rename Durable Object class.
+
+**Strategy: Migration Tag**
+
+```toml
+# wrangler.toml
+
+[[migrations]]
+tag = "v1"
+new_classes = ["Counter"]
+
+[[migrations]]
+tag = "v2"
+renamed_classes = [
+  { from = "Counter", to = "AdvancedCounter" }
+]
+```
+
+### Data Relocation
+
+**Scenario:** Need to move data between objects.
+
+**Strategy: Coordinated Migration**
+
+```typescript
+export class DataMigrator extends DurableObject {
+  async fetch(request: Request) {
+    const url = new URL(request.url)
+
+    if (url.pathname === '/migrate') {
+      const { sourceId, targetId } = await request.json()
+
+      // Get source object
+      const source = this.ctx.env.OLD_NAMESPACE.get(this.ctx.env.OLD_NAMESPACE.idFromString(sourceId))
+
+      // Fetch all data
+      const response = await source.fetch(new Request('https://fake/export'))
+      const data = await response.json()
+
+      // Get target object
+      const target = this.ctx.env.NEW_NAMESPACE.get(this.ctx.env.NEW_NAMESPACE.idFromString(targetId))
+
+      // Import data
+      await target.fetch(
+        new Request('https://fake/import', {
+          method: 'POST',
+          body: JSON.stringify(data),
+        })
+      )
+
+      return new Response('Migrated')
+    }
+
+    return new Response('Not found', { status: 404 })
+  }
+}
+```
+
+## Testing and Development
+
+### Local Development Issues
+
+**Issue:** Durable Objects not working locally.
+
+**Solution:** Use Miniflare:
+
+```bash
+npm install -D miniflare
+```
+
+```typescript
+// test.ts
+import { Miniflare } from 'miniflare'
+
+const mf = new Miniflare({
+  script: `
+    export class Counter extends DurableObject {
+      async fetch(request) {
+        const count = (await this.state.storage.get('count')) || 0
+        await this.state.storage.put('count', count + 1)
+        return new Response(JSON.stringify({ count: count + 1 }))
+      }
+    }
+
+    export default {
+      async fetch(request, env) {
+        const id = env.COUNTER.idFromName('test')
+        const stub = env.COUNTER.get(id)
+        return stub.fetch(request)
+      }
+    }
+  `,
+  durableObjects: {
+    COUNTER: 'Counter',
+  },
+})
+
+// Test
+const response = await mf.dispatchFetch('https://fake/increment')
+const data = await response.json()
+console.log(data) // { count: 1 }
+```
+
+### Testing with Multiple Objects
+
+```typescript
+import { describe, it, expect, beforeEach } from 'vitest'
+
+describe('Durable Objects', () => {
+  let env: any
+
+  beforeEach(() => {
+    env = getMiniflareBindings()
+  })
+
+  it('handles multiple objects independently', async () => {
+    // Create two objects
+    const id1 = env.COUNTER.idFromName('counter-1')
+    const id2 = env.COUNTER.idFromName('counter-2')
+
+    const stub1 = env.COUNTER.get(id1)
+    const stub2 = env.COUNTER.get(id2)
+
+    // Increment first counter
+    await stub1.fetch(new Request('https://fake/increment'))
+    await stub1.fetch(new Request('https://fake/increment'))
+
+    // Increment second counter once
+    await stub2.fetch(new Request('https://fake/increment'))
+
+    // Check counts
+    const response1 = await stub1.fetch(new Request('https://fake/get'))
+    const data1 = await response1.json()
+    expect(data1.count).toBe(2)
+
+    const response2 = await stub2.fetch(new Request('https://fake/get'))
+    const data2 = await response2.json()
+    expect(data2.count).toBe(1)
+  })
+})
+```
+
+## Getting Help
+
+### Debug Checklist
+
+- [ ] Check `wrangler.toml` configuration
+- [ ] Verify class is exported
+- [ ] Review error logs in dashboard
+- [ ] Test locally with Miniflare
+- [ ] Check storage size limits
+- [ ] Verify alarm implementation
+- [ ] Inspect WebSocket upgrade headers
+- [ ] Review request/response formats
+- [ ] Check for rate limiting
+- [ ] Verify object ID generation
+
+### Useful Commands
+
+```bash
+# View logs
+wrangler tail
+
+# List Durable Objects
+wrangler d1 execute DB --command "SELECT * FROM objects"
+
+# Deploy with verbose output
+wrangler deploy --verbose
+
+# Test locally
+wrangler dev --local
+
+# Check configuration
+wrangler whoami
+```
+
+### Resources
+
+- [Cloudflare Durable Objects Docs](https://developers.cloudflare.com/durable-objects/)
+- [Cloudflare Community Forum](https://community.cloudflare.com/)
+- [Cloudflare Discord](https://discord.gg/cloudflaredev)
+- [sdk.do Documentation](https://sdk.do)
+- [GitHub Issues](https://github.com/dot-do/platform/issues)
+
+---
+
+Documentation licensed under [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/).

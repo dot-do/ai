@@ -1,0 +1,102 @@
+---
+$id: https://integrations.do/quickbooks
+$type: Integration
+name: Quickbooks
+service: quickbooks
+description: Quickbooks is a cloud-based accounting software that helps you manage your finances, track your income and expenses, and get insights into your business
+category: accounting
+sdkBased: false
+baseUrl: https://api.quickbooks.com
+
+auth:
+  type: oauth2
+  authorizationUrl: https://appcenter.intuit.com/connect/oauth2
+  tokenUrl: https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer
+  scopes:
+    - com.intuit.quickbooks.accounting
+    - com.intuit.quickbooks.payment
+    - openid
+    - profile
+    - email
+    - phone
+    - address
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Quickbooks actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: false
+  events: []
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://quickbooks.intuit.com
+  apiDocs: https://quickbooks.intuit.com
+---
+
+# Quickbooks Integration
+
+Quickbooks is a cloud-based accounting software that helps you manage your finances, track your income and expenses, and get insights into your business
+
+## Quick Start
+
+```typescript
+import { QuickbooksClient } from '@dotdo/sdk.do/integrations/quickbooks'
+
+const quickbooks = new QuickbooksClient({
+  apiKey: process.env.QUICKBOOKS_API_KEY,
+})
+
+const result = await quickbooks.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Quickbooks provides 13 actions through the Composio API.
+
+## License
+
+MIT

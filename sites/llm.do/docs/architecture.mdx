@@ -1,0 +1,815 @@
+---
+$id: https://llm.do/docs/architecture
+$type: TechArticle
+title: LLM Gateway Architecture
+description: Architecture and design patterns for the llm.do gateway
+keywords: [llm, gateway, architecture, design patterns, routing, caching, multi-provider]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Architecture
+
+Understanding the architecture of llm.do helps you build scalable, cost-effective AI applications.
+
+## Overview
+
+llm.do is a multi-provider LLM gateway that provides:
+
+1. **Unified Interface**: Single API for multiple providers (OpenAI, Anthropic, etc.)
+2. **Intelligent Routing**: Automatic model selection based on task requirements
+3. **Cost Optimization**: Batching, caching, and smart routing to minimize costs
+4. **High Availability**: Automatic failover and retry logic
+5. **Usage Analytics**: Track costs, performance, and usage patterns
+
+## System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        Application                           │
+│                   (Your Business Logic)                      │
+└─────────────────┬───────────────────────────────────────────┘
+                  │
+                  │ SDK/API Calls
+                  │
+┌─────────────────▼───────────────────────────────────────────┐
+│                      llm.do Gateway                          │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │              Request Handler                         │  │
+│  │  • Validate input                                    │  │
+│  │  • Apply rate limiting                               │  │
+│  │  • Check cache                                       │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                            │                                 │
+│  ┌──────────────────────────▼──────────────────────────┐  │
+│  │           Intelligent Router                         │  │
+│  │  • Analyze task requirements                         │  │
+│  │  • Select optimal provider/model                     │  │
+│  │  • Load balancing                                    │  │
+│  │  • Failover handling                                 │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                            │                                 │
+│         ┌──────────────────┼──────────────────┐             │
+│         │                  │                  │             │
+│  ┌──────▼──────┐  ┌───────▼────────┐  ┌──────▼──────┐     │
+│  │   OpenAI    │  │   Anthropic    │  │   Future    │     │
+│  │   Adapter   │  │    Adapter     │  │   Adapters  │     │
+│  └──────┬──────┘  └───────┬────────┘  └──────┬──────┘     │
+│         │                  │                  │             │
+│  ┌──────▼──────────────────▼──────────────────▼──────┐     │
+│  │            Response Aggregator                     │     │
+│  │  • Normalize responses                             │     │
+│  │  • Track metrics                                   │     │
+│  │  • Update analytics                                │     │
+│  └────────────────────────────────────────────────────┘     │
+└──────────────────────────────────────────────────────────────┘
+```
+
+## Core Components
+
+### 1. Request Handler
+
+The request handler is the entry point for all LLM operations:
+
+```typescript
+// Request handling flow
+async function handleRequest(request: LLMRequest): Promise<LLMResponse> {
+  // 1. Validate input
+  validateRequest(request)
+
+  // 2. Apply rate limiting
+  await rateLimiter.check(request.user)
+
+  // 3. Check cache
+  const cached = await cache.get(request.cacheKey)
+  if (cached) return cached
+
+  // 4. Route to provider
+  const response = await router.route(request)
+
+  // 5. Cache response
+  await cache.set(request.cacheKey, response, ttl)
+
+  // 6. Track analytics
+  await analytics.track(request, response)
+
+  return response
+}
+```
+
+**Features:**
+
+- Input validation and sanitization
+- Rate limiting per user/API key
+- Cache lookup and storage
+- Error handling and logging
+- Analytics tracking
+
+### 2. Intelligent Router
+
+The router selects the optimal provider and model based on various factors:
+
+```typescript
+interface RoutingStrategy {
+  // Optimization targets
+  optimize?: 'cost' | 'quality' | 'speed'
+
+  // Provider preferences
+  providers?: string[]
+
+  // Model capabilities
+  capability?: 'code' | 'creative' | 'analytical'
+
+  // Failover configuration
+  fallback?: string
+  retries?: number
+
+  // Load balancing
+  loadBalance?: boolean
+}
+
+class IntelligentRouter {
+  async route(request: LLMRequest): Promise<LLMResponse> {
+    // Analyze task requirements
+    const requirements = await this.analyzeTask(request)
+
+    // Select optimal provider/model
+    const provider = await this.selectProvider(requirements)
+
+    // Execute with failover
+    try {
+      return await provider.execute(request)
+    } catch (error) {
+      // Try fallback providers
+      return await this.executeFallback(request, error)
+    }
+  }
+
+  private async analyzeTask(request: LLMRequest) {
+    return {
+      complexity: this.estimateComplexity(request),
+      domain: this.identifyDomain(request),
+      requirements: this.extractRequirements(request),
+    }
+  }
+
+  private async selectProvider(requirements: TaskRequirements) {
+    // Cost optimization
+    if (requirements.optimize === 'cost') {
+      return this.selectCheapestProvider(requirements)
+    }
+
+    // Quality optimization
+    if (requirements.optimize === 'quality') {
+      return this.selectBestProvider(requirements)
+    }
+
+    // Speed optimization
+    if (requirements.optimize === 'speed') {
+      return this.selectFastestProvider(requirements)
+    }
+
+    // Default: balanced approach
+    return this.selectBalancedProvider(requirements)
+  }
+}
+```
+
+**Routing Strategies:**
+
+- **Cost Optimization**: Selects the cheapest model that meets requirements
+- **Quality Optimization**: Selects the most capable model
+- **Speed Optimization**: Selects the fastest responding model
+- **Load Balancing**: Distributes requests across multiple providers
+- **Capability-Based**: Routes based on task type (code, creative, analytical)
+
+### 3. Provider Adapters
+
+Each provider has an adapter that normalizes the interface:
+
+```typescript
+interface ProviderAdapter {
+  name: string
+  capabilities: string[]
+
+  // Core operations
+  generate(request: GenerateRequest): Promise<GenerateResponse>
+  embed(request: EmbedRequest): Promise<EmbedResponse>
+  stream(request: StreamRequest): AsyncIterator<string>
+
+  // Batch operations
+  createBatch(requests: BatchRequest[]): Promise<Batch>
+  getBatchStatus(batchId: string): Promise<BatchStatus>
+  getBatchResults(batchId: string): Promise<BatchResult[]>
+
+  // Health and availability
+  healthCheck(): Promise<boolean>
+  getRateLimit(): Promise<RateLimit>
+}
+
+// OpenAI Adapter
+class OpenAIAdapter implements ProviderAdapter {
+  name = 'openai'
+  capabilities = ['generate', 'embed', 'stream', 'batch', 'code']
+
+  async generate(request: GenerateRequest): Promise<GenerateResponse> {
+    const response = await openai.chat.completions.create({
+      model: request.model,
+      messages: request.messages,
+      temperature: request.temperature,
+      max_tokens: request.maxTokens,
+    })
+
+    return this.normalizeResponse(response)
+  }
+
+  private normalizeResponse(response: any): GenerateResponse {
+    return {
+      content: response.choices[0].message.content,
+      model: response.model,
+      usage: {
+        promptTokens: response.usage.prompt_tokens,
+        completionTokens: response.usage.completion_tokens,
+        totalTokens: response.usage.total_tokens,
+      },
+      metadata: {
+        provider: 'openai',
+        finishReason: response.choices[0].finish_reason,
+      },
+    }
+  }
+}
+
+// Anthropic Adapter
+class AnthropicAdapter implements ProviderAdapter {
+  name = 'anthropic'
+  capabilities = ['generate', 'embed', 'stream', 'creative', 'long-context']
+
+  async generate(request: GenerateRequest): Promise<GenerateResponse> {
+    const response = await anthropic.messages.create({
+      model: request.model,
+      messages: request.messages,
+      temperature: request.temperature,
+      max_tokens: request.maxTokens,
+    })
+
+    return this.normalizeResponse(response)
+  }
+
+  private normalizeResponse(response: any): GenerateResponse {
+    return {
+      content: response.content[0].text,
+      model: response.model,
+      usage: {
+        promptTokens: response.usage.input_tokens,
+        completionTokens: response.usage.output_tokens,
+        totalTokens: response.usage.input_tokens + response.usage.output_tokens,
+      },
+      metadata: {
+        provider: 'anthropic',
+        finishReason: response.stop_reason,
+      },
+    }
+  }
+}
+```
+
+### 4. Caching Layer
+
+The caching layer reduces costs and improves response times:
+
+```typescript
+interface CacheConfig {
+  enabled: boolean
+  ttl: number // Time to live in seconds
+  strategy: 'lru' | 'lfu' | 'ttl'
+  maxSize: number // Maximum cache size in MB
+}
+
+class CacheLayer {
+  async get(key: string): Promise<CachedResponse | null> {
+    const cached = await this.store.get(key)
+
+    if (!cached) return null
+
+    // Check if expired
+    if (Date.now() > cached.expiresAt) {
+      await this.store.delete(key)
+      return null
+    }
+
+    // Track hit
+    await this.analytics.trackCacheHit(key)
+
+    return cached.data
+  }
+
+  async set(key: string, data: any, ttl: number): Promise<void> {
+    const expiresAt = Date.now() + ttl * 1000
+
+    await this.store.set(key, {
+      data,
+      expiresAt,
+      createdAt: Date.now(),
+    })
+  }
+
+  private generateKey(request: LLMRequest): string {
+    // Create deterministic cache key
+    return hashObject({
+      provider: request.provider,
+      model: request.model,
+      messages: request.messages,
+      temperature: request.temperature,
+      schema: request.schema,
+    })
+  }
+}
+```
+
+**Cache Strategies:**
+
+- **LRU (Least Recently Used)**: Evicts least recently accessed items
+- **LFU (Least Frequently Used)**: Evicts least frequently accessed items
+- **TTL (Time To Live)**: Evicts items after expiration time
+
+### 5. Analytics Engine
+
+The analytics engine tracks usage, costs, and performance:
+
+```typescript
+interface AnalyticsEvent {
+  timestamp: number
+  provider: string
+  model: string
+  operation: 'generate' | 'embed' | 'stream' | 'batch'
+  usage: {
+    promptTokens: number
+    completionTokens: number
+    totalTokens: number
+  }
+  cost: number
+  latency: number
+  success: boolean
+  error?: string
+}
+
+class AnalyticsEngine {
+  async track(request: LLMRequest, response: LLMResponse): Promise<void> {
+    const event: AnalyticsEvent = {
+      timestamp: Date.now(),
+      provider: response.metadata.provider,
+      model: response.model,
+      operation: request.operation,
+      usage: response.usage,
+      cost: this.calculateCost(response),
+      latency: response.metadata.latency,
+      success: true,
+    }
+
+    await this.store.insert(event)
+    await this.updateMetrics(event)
+  }
+
+  private calculateCost(response: LLMResponse): number {
+    const pricing = this.getPricing(response.metadata.provider, response.model)
+
+    const inputCost = (response.usage.promptTokens / 1000000) * pricing.input
+    const outputCost = (response.usage.completionTokens / 1000000) * pricing.output
+
+    return inputCost + outputCost
+  }
+
+  async getUsageStats(options: UsageOptions): Promise<UsageStats> {
+    const events = await this.store.query({
+      startDate: options.startDate,
+      endDate: options.endDate,
+    })
+
+    return {
+      totalRequests: events.length,
+      totalCost: events.reduce((sum, e) => sum + e.cost, 0),
+      totalTokens: events.reduce((sum, e) => sum + e.usage.totalTokens, 0),
+      averageLatency: events.reduce((sum, e) => sum + e.latency, 0) / events.length,
+      byProvider: this.groupBy(events, 'provider'),
+      byModel: this.groupBy(events, 'model'),
+    }
+  }
+}
+```
+
+## Design Patterns
+
+### 1. Adapter Pattern
+
+Normalizes different provider APIs into a common interface:
+
+```typescript
+// Unified interface
+interface LLMProvider {
+  generate(request: GenerateRequest): Promise<GenerateResponse>
+}
+
+// Provider-specific implementations
+class OpenAIProvider implements LLMProvider {
+  async generate(request: GenerateRequest): Promise<GenerateResponse> {
+    // OpenAI-specific implementation
+  }
+}
+
+class AnthropicProvider implements LLMProvider {
+  async generate(request: GenerateRequest): Promise<GenerateResponse> {
+    // Anthropic-specific implementation
+  }
+}
+
+// Gateway uses unified interface
+const provider = selectProvider(request)
+const response = await provider.generate(request)
+```
+
+### 2. Strategy Pattern
+
+Allows different routing strategies to be swapped at runtime:
+
+```typescript
+interface RoutingStrategy {
+  selectProvider(request: LLMRequest): Promise<ProviderAdapter>
+}
+
+class CostOptimizedStrategy implements RoutingStrategy {
+  async selectProvider(request: LLMRequest): Promise<ProviderAdapter> {
+    // Select cheapest suitable provider
+  }
+}
+
+class QualityOptimizedStrategy implements RoutingStrategy {
+  async selectProvider(request: LLMRequest): Promise<ProviderAdapter> {
+    // Select most capable provider
+  }
+}
+
+// Use strategy at runtime
+const strategy = getStrategy(request.routing.optimize)
+const provider = await strategy.selectProvider(request)
+```
+
+### 3. Circuit Breaker Pattern
+
+Prevents cascading failures when providers are unavailable:
+
+```typescript
+class CircuitBreaker {
+  private state: 'closed' | 'open' | 'half-open' = 'closed'
+  private failures = 0
+  private threshold = 5
+  private timeout = 60000 // 1 minute
+
+  async execute<T>(fn: () => Promise<T>): Promise<T> {
+    if (this.state === 'open') {
+      if (Date.now() - this.openedAt > this.timeout) {
+        this.state = 'half-open'
+      } else {
+        throw new Error('Circuit breaker is open')
+      }
+    }
+
+    try {
+      const result = await fn()
+      this.onSuccess()
+      return result
+    } catch (error) {
+      this.onFailure()
+      throw error
+    }
+  }
+
+  private onSuccess(): void {
+    this.failures = 0
+    this.state = 'closed'
+  }
+
+  private onFailure(): void {
+    this.failures++
+    if (this.failures >= this.threshold) {
+      this.state = 'open'
+      this.openedAt = Date.now()
+    }
+  }
+}
+```
+
+### 4. Retry Pattern
+
+Automatically retries failed requests with exponential backoff:
+
+```typescript
+class RetryHandler {
+  async execute<T>(fn: () => Promise<T>, options: RetryOptions): Promise<T> {
+    let lastError: Error
+
+    for (let attempt = 0; attempt < options.maxRetries; attempt++) {
+      try {
+        return await fn()
+      } catch (error) {
+        lastError = error
+
+        // Don't retry non-retryable errors
+        if (!this.isRetryable(error)) {
+          throw error
+        }
+
+        // Wait before retrying
+        if (attempt < options.maxRetries - 1) {
+          await this.sleep(this.getBackoff(attempt, options))
+        }
+      }
+    }
+
+    throw lastError
+  }
+
+  private isRetryable(error: any): boolean {
+    // Retry on rate limits, timeouts, and server errors
+    return error.code === 'RATE_LIMIT_EXCEEDED' || error.code === 'TIMEOUT' || error.statusCode >= 500
+  }
+
+  private getBackoff(attempt: number, options: RetryOptions): number {
+    // Exponential backoff: 1s, 2s, 4s, 8s, ...
+    return Math.min(options.baseDelay * Math.pow(2, attempt), options.maxDelay)
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms))
+  }
+}
+```
+
+## Scalability
+
+### Horizontal Scaling
+
+The gateway is designed to scale horizontally:
+
+```typescript
+// Load balancer distributes requests across gateway instances
+┌──────────────┐
+│ Load Balancer│
+└──────┬───────┘
+       │
+   ┌───┴───┬────────┬────────┐
+   │       │        │        │
+┌──▼───┐ ┌─▼────┐ ┌─▼────┐ ┌─▼────┐
+│ GW 1 │ │ GW 2 │ │ GW 3 │ │ GW N │
+└──────┘ └──────┘ └──────┘ └──────┘
+```
+
+**Stateless Design**: Each gateway instance is stateless, storing data in shared services:
+
+- **Cache**: Redis or Cloudflare KV
+- **Analytics**: ClickHouse or BigQuery
+- **Queue**: Bull or AWS SQS
+
+### Vertical Scaling
+
+Optimize resource usage within each instance:
+
+- **Connection Pooling**: Reuse HTTP connections to providers
+- **Request Batching**: Combine multiple requests into batches
+- **Streaming**: Stream responses to reduce memory usage
+- **Worker Threads**: Parallelize CPU-intensive operations
+
+## Security
+
+### API Key Management
+
+```typescript
+class APIKeyManager {
+  async validate(apiKey: string): Promise<User> {
+    // Validate API key format
+    if (!this.isValidFormat(apiKey)) {
+      throw new Error('Invalid API key format')
+    }
+
+    // Look up user
+    const user = await this.store.getUserByAPIKey(apiKey)
+    if (!user) {
+      throw new Error('Invalid API key')
+    }
+
+    // Check if key is active
+    if (!user.active) {
+      throw new Error('API key is inactive')
+    }
+
+    return user
+  }
+
+  async rotate(userId: string): Promise<string> {
+    // Generate new API key
+    const newKey = this.generateAPIKey()
+
+    // Store new key
+    await this.store.updateAPIKey(userId, newKey)
+
+    return newKey
+  }
+}
+```
+
+### Rate Limiting
+
+```typescript
+class RateLimiter {
+  async check(user: User): Promise<void> {
+    const key = `rate_limit:${user.id}`
+
+    // Get current count
+    const count = await this.store.get(key)
+
+    // Check limit
+    if (count >= user.rateLimit.requestsPerMinute) {
+      throw new Error('Rate limit exceeded')
+    }
+
+    // Increment count
+    await this.store.increment(key)
+
+    // Set expiry if first request
+    if (count === 0) {
+      await this.store.expire(key, 60)
+    }
+  }
+}
+```
+
+### Input Sanitization
+
+```typescript
+function sanitizeRequest(request: LLMRequest): LLMRequest {
+  return {
+    ...request,
+    messages: request.messages.map((msg) => ({
+      role: msg.role,
+      content: sanitizeContent(msg.content),
+    })),
+    maxTokens: Math.min(request.maxTokens, MAX_TOKENS),
+    temperature: Math.max(0, Math.min(2, request.temperature)),
+  }
+}
+
+function sanitizeContent(content: string): string {
+  // Remove potential injection attacks
+  return content
+    .replace(/<script>/gi, '')
+    .replace(/javascript:/gi, '')
+    .trim()
+}
+```
+
+## Performance Optimization
+
+### Response Caching
+
+Cache frequently used prompts to reduce costs and latency:
+
+```typescript
+// Cache hit rate: ~30-40% for typical workloads
+const cached = await cache.get(cacheKey)
+if (cached) {
+  return cached // ~10ms vs ~1000ms for API call
+}
+```
+
+### Connection Pooling
+
+Reuse HTTP connections to providers:
+
+```typescript
+const agent = new https.Agent({
+  keepAlive: true,
+  maxSockets: 50,
+  maxFreeSockets: 10,
+  timeout: 60000,
+})
+```
+
+### Request Batching
+
+Combine multiple requests into single API call:
+
+```typescript
+// Individual requests: 10 requests × $0.002 = $0.020
+for (const item of items) {
+  await llm.generate(prompt(item))
+}
+
+// Batched requests: 1 batch × $0.001 = $0.010 (50% savings)
+await llm.batch.create(items.map((item) => ({ prompt: prompt(item) })))
+```
+
+## Monitoring
+
+### Key Metrics
+
+Track these metrics for operational health:
+
+```typescript
+interface Metrics {
+  // Request metrics
+  requestsPerSecond: number
+  averageLatency: number
+  errorRate: number
+
+  // Provider metrics
+  providerAvailability: Record<string, number>
+  providerLatency: Record<string, number>
+
+  // Cost metrics
+  costPerRequest: number
+  costPerDay: number
+
+  // Cache metrics
+  cacheHitRate: number
+  cacheSize: number
+}
+```
+
+### Alerting
+
+Set up alerts for critical issues:
+
+```typescript
+// High error rate
+if (metrics.errorRate > 0.05) {
+  alert('High error rate: ' + metrics.errorRate)
+}
+
+// High cost
+if (metrics.costPerDay > budget.daily) {
+  alert('Daily cost exceeds budget')
+}
+
+// Provider unavailability
+if (metrics.providerAvailability.openai < 0.95) {
+  alert('OpenAI availability below 95%')
+}
+```
+
+## Best Practices
+
+### 1. Design for Failure
+
+Assume providers will fail and design accordingly:
+
+```typescript
+await llm.generate('prompt', {
+  routing: {
+    fallback: 'claude-sonnet-4.5',
+    retries: 3,
+  },
+})
+```
+
+### 2. Optimize for Cost
+
+Use intelligent routing and caching:
+
+```typescript
+await llm.generate('prompt', {
+  routing: { optimize: 'cost' },
+  cache: { enabled: true },
+})
+```
+
+### 3. Monitor Everything
+
+Track all metrics and set up alerts:
+
+```typescript
+const stats = await llm.analytics.usage()
+console.log(`Cost today: $${stats.costToday}`)
+```
+
+### 4. Use Semantic Context
+
+Leverage Schema.org types for structure:
+
+```typescript
+await llm.generate('prompt', {
+  schema: $.Product,
+  structured: true,
+})
+```
+
+## Next Steps
+
+- [Best Practices](./best-practices) - Optimization and usage patterns
+- [Troubleshooting](./troubleshooting) - Common issues and solutions
+- [API Reference](../api/reference) - Complete API documentation
+- [Examples](../examples/) - Practical implementation examples
+
+## License
+
+MIT (Open Source)

@@ -1,0 +1,224 @@
+---
+$id: https://embeddings.do/examples/advanced-patterns
+$type: HowTo
+title: Advanced Patterns - embeddings.do
+description: Advanced embedding patterns including clustering and recommendations
+keywords: [embeddings, advanced, clustering, recommendations, deduplication]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Advanced Patterns
+
+Advanced embedding patterns for clustering, recommendations, and more.
+
+## Content Clustering
+
+```typescript
+import { $, ai, db } from 'sdk.do'
+
+async function clusterArticles(threshold = 0.8) {
+  const articles = await db.list($.Article)
+
+  const clusters: any[][] = []
+  const used = new Set<string>()
+
+  for (const article of articles) {
+    if (used.has(article.$id)) continue
+
+    const cluster = [article]
+    used.add(article.$id)
+
+    for (const other of articles) {
+      if (used.has(other.$id)) continue
+
+      const similarity = cosineSimilarity(article.embedding, other.embedding)
+
+      if (similarity > threshold) {
+        cluster.push(other)
+        used.add(other.$id)
+      }
+    }
+
+    clusters.push(cluster)
+  }
+
+  return clusters
+}
+
+const clusters = await clusterArticles(0.8)
+console.log(`Found ${clusters.length} clusters`)
+clusters.forEach((cluster, i) => {
+  console.log(`Cluster ${i + 1}: ${cluster.length} articles`)
+})
+```
+
+## Recommendation System
+
+```typescript
+import { $, ai, db } from 'sdk.do'
+
+async function recommendProducts(userId: string, limit = 5) {
+  // Get user's purchase history
+  const orders = await db.list($.Order, {
+    where: { customer: userId },
+  })
+
+  const purchasedProducts = orders.flatMap((order) => order.orderedItem)
+
+  // Calculate average preference embedding
+  const preferenceEmbedding = averageEmbeddings(purchasedProducts.map((p) => p.embedding))
+
+  // Find similar products
+  const allProducts = await db.list($.Product)
+
+  return allProducts
+    .filter((p) => !purchasedProducts.some((pp) => pp.$id === p.$id))
+    .map((p) => ({
+      product: p,
+      score: cosineSimilarity(preferenceEmbedding, p.embedding),
+    }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit)
+}
+
+function averageEmbeddings(embeddings: number[][]): number[] {
+  const dims = embeddings[0].length
+  const avg = new Array(dims).fill(0)
+
+  for (const embedding of embeddings) {
+    for (let i = 0; i < dims; i++) {
+      avg[i] += embedding[i]
+    }
+  }
+
+  return avg.map((v) => v / embeddings.length)
+}
+```
+
+## Semantic Deduplication
+
+```typescript
+import { $, ai, db } from 'sdk.do'
+
+async function deduplicateContent(threshold = 0.95) {
+  const articles = await db.list($.Article)
+  const unique: any[] = [articles[0]]
+
+  for (let i = 1; i < articles.length; i++) {
+    let isDuplicate = false
+
+    for (const uniqueArticle of unique) {
+      const similarity = cosineSimilarity(articles[i].embedding, uniqueArticle.embedding)
+
+      if (similarity > threshold) {
+        isDuplicate = true
+        break
+      }
+    }
+
+    if (!isDuplicate) {
+      unique.push(articles[i])
+    }
+  }
+
+  return {
+    unique,
+    duplicates: articles.length - unique.length,
+  }
+}
+
+const result = await deduplicateContent(0.95)
+console.log(`Found ${result.duplicates} duplicates`)
+console.log(`Kept ${result.unique.length} unique articles`)
+```
+
+## Multi-Field Search
+
+```typescript
+import { $, ai, db } from 'sdk.do'
+
+async function multiFieldSearch(query: string) {
+  const queryEmbedding = await ai.embed(query)
+
+  const products = await db.list($.Product)
+
+  // Search across multiple fields with weights
+  return products
+    .map((product) => {
+      const nameScore = cosineSimilarity(queryEmbedding, product.nameEmbedding)
+      const descScore = cosineSimilarity(queryEmbedding, product.descEmbedding)
+      const categoryScore = cosineSimilarity(queryEmbedding, product.categoryEmbedding)
+
+      // Weighted score
+      const score = nameScore * 0.5 + descScore * 0.3 + categoryScore * 0.2
+
+      return { product, score }
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 10)
+}
+```
+
+## Batch Processing with Cache
+
+```typescript
+import { $, ai, db } from 'sdk.do'
+
+class EmbeddingCache {
+  private cache = new Map<string, number[]>()
+
+  async getOrCreate(text: string): Promise<number[]> {
+    const hash = this.hash(text)
+
+    // Check memory cache
+    if (this.cache.has(hash)) {
+      return this.cache.get(hash)!
+    }
+
+    // Check database
+    const cached = await db.get($.Embedding, `embed:${hash}`)
+    if (cached) {
+      this.cache.set(hash, cached.vector)
+      return cached.vector
+    }
+
+    // Generate new
+    const embedding = await ai.embed(text)
+    await db.create($.Embedding, {
+      $id: `embed:${hash}`,
+      text,
+      vector: embedding,
+    })
+
+    this.cache.set(hash, embedding)
+    return embedding
+  }
+
+  private hash(text: string): string {
+    return text
+      .split('')
+      .reduce((a, b) => ((a << 5) - a + b.charCodeAt(0)) | 0, 0)
+      .toString(36)
+  }
+}
+
+const cache = new EmbeddingCache()
+
+// Use cached embeddings
+async function processProducts() {
+  const products = await db.list($.Product)
+
+  for (const product of products) {
+    const text = `${product.name} ${product.description}`
+    const embedding = await cache.getOrCreate(text)
+
+    await db.update(product.$id, { embedding })
+  }
+}
+```
+
+## License
+
+CC-BY-4.0 (Open Source)

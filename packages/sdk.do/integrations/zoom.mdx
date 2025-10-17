@@ -1,0 +1,589 @@
+---
+$id: https://integrations.do/zoom
+$type: Integration
+name: Zoom
+service: zoom
+description: Video conferencing and virtual meeting platform
+category: communication
+sdkBased: false
+baseUrl: https://api.zoom.us/v2
+
+auth:
+  type: oauth2
+  authorizationUrl: https://zoom.us/oauth/authorize
+  tokenUrl: https://zoom.us/oauth/token
+  scopes:
+    - meeting:write
+    - meeting:read
+    - user:read
+    - webinar:write
+    - recording:read
+
+resources:
+  - name: Meeting
+    plural: Meetings
+    description: Schedule and manage Zoom meetings
+    operations:
+      - name: create
+        method: POST
+        path: /users/{userId}/meetings
+        params:
+          - name: userId
+            type: string
+            required: true
+            description: User ID or 'me'
+          - name: topic
+            type: string
+            required: true
+            description: Meeting topic
+          - name: type
+            type: number
+            required: false
+            description: Meeting type (1=instant, 2=scheduled, 3=recurring, 8=recurring with fixed time)
+          - name: start_time
+            type: string
+            required: false
+            description: Meeting start time (ISO 8601)
+          - name: duration
+            type: number
+            required: false
+            description: Meeting duration in minutes
+          - name: timezone
+            type: string
+            required: false
+            description: Timezone (e.g., America/New_York)
+          - name: password
+            type: string
+            required: false
+            description: Meeting password
+          - name: agenda
+            type: string
+            required: false
+            description: Meeting agenda
+          - name: settings
+            type: object
+            required: false
+            description: Meeting settings
+        returns: Meeting
+
+      - name: get
+        method: GET
+        path: /meetings/{meetingId}
+        params:
+          - name: meetingId
+            type: string
+            required: true
+            description: Meeting ID
+        returns: Meeting
+
+      - name: update
+        method: PATCH
+        path: /meetings/{meetingId}
+        params:
+          - name: meetingId
+            type: string
+            required: true
+            description: Meeting ID
+          - name: topic
+            type: string
+            required: false
+            description: New meeting topic
+          - name: start_time
+            type: string
+            required: false
+            description: New start time
+          - name: duration
+            type: number
+            required: false
+            description: New duration
+        returns: Meeting
+
+      - name: delete
+        method: DELETE
+        path: /meetings/{meetingId}
+        params:
+          - name: meetingId
+            type: string
+            required: true
+            description: Meeting ID
+        returns: boolean
+
+      - name: list
+        method: GET
+        path: /users/{userId}/meetings
+        params:
+          - name: userId
+            type: string
+            required: true
+            description: User ID or 'me'
+          - name: type
+            type: string
+            required: false
+            description: Meeting type (scheduled, live, upcoming)
+          - name: page_size
+            type: number
+            required: false
+            description: Number of records per page
+        returns: Meeting[]
+        pagination:
+          type: page
+          pageField: page_number
+          limitField: page_size
+          defaultLimit: 30
+          maxLimit: 300
+
+  - name: Webinar
+    plural: Webinars
+    description: Create and manage webinars
+    operations:
+      - name: create
+        method: POST
+        path: /users/{userId}/webinars
+        params:
+          - name: userId
+            type: string
+            required: true
+            description: User ID or 'me'
+          - name: topic
+            type: string
+            required: true
+            description: Webinar topic
+          - name: type
+            type: number
+            required: true
+            description: Webinar type (5=webinar, 6=recurring, 9=recurring with fixed time)
+          - name: start_time
+            type: string
+            required: false
+            description: Webinar start time
+          - name: duration
+            type: number
+            required: false
+            description: Duration in minutes
+          - name: agenda
+            type: string
+            required: false
+            description: Webinar agenda
+        returns: Webinar
+
+      - name: get
+        method: GET
+        path: /webinars/{webinarId}
+        params:
+          - name: webinarId
+            type: string
+            required: true
+            description: Webinar ID
+        returns: Webinar
+
+      - name: update
+        method: PATCH
+        path: /webinars/{webinarId}
+        params:
+          - name: webinarId
+            type: string
+            required: true
+            description: Webinar ID
+          - name: topic
+            type: string
+            required: false
+            description: New webinar topic
+        returns: Webinar
+
+      - name: delete
+        method: DELETE
+        path: /webinars/{webinarId}
+        params:
+          - name: webinarId
+            type: string
+            required: true
+            description: Webinar ID
+        returns: boolean
+
+  - name: User
+    plural: Users
+    description: Manage Zoom users
+    operations:
+      - name: get
+        method: GET
+        path: /users/{userId}
+        params:
+          - name: userId
+            type: string
+            required: true
+            description: User ID or email
+        returns: User
+
+      - name: list
+        method: GET
+        path: /users
+        params:
+          - name: status
+            type: string
+            required: false
+            description: User status (active, inactive, pending)
+          - name: page_size
+            type: number
+            required: false
+            description: Number of users per page
+        returns: User[]
+        pagination:
+          type: page
+          pageField: page_number
+          limitField: page_size
+          defaultLimit: 30
+          maxLimit: 300
+
+  - name: Recording
+    plural: Recordings
+    description: Manage cloud recordings
+    operations:
+      - name: list
+        method: GET
+        path: /users/{userId}/recordings
+        params:
+          - name: userId
+            type: string
+            required: true
+            description: User ID or 'me'
+          - name: from
+            type: string
+            required: false
+            description: Start date (YYYY-MM-DD)
+          - name: to
+            type: string
+            required: false
+            description: End date (YYYY-MM-DD)
+        returns: Recording[]
+        pagination:
+          type: page
+          pageField: page_number
+          limitField: page_size
+          defaultLimit: 30
+
+      - name: get
+        method: GET
+        path: /meetings/{meetingId}/recordings
+        params:
+          - name: meetingId
+            type: string
+            required: true
+            description: Meeting ID
+        returns: Recording
+
+      - name: delete
+        method: DELETE
+        path: /meetings/{meetingId}/recordings
+        params:
+          - name: meetingId
+            type: string
+            required: true
+            description: Meeting ID
+        returns: boolean
+
+webhooks:
+  enabled: true
+  signatureHeader: x-zm-signature
+  signatureAlgorithm: sha256
+  verificationMethod: signature
+  events:
+    - name: meeting.started
+      type: meeting.started
+      description: Meeting has started
+    - name: meeting.ended
+      type: meeting.ended
+      description: Meeting has ended
+    - name: meeting.participant_joined
+      type: meeting.participant_joined
+      description: Participant joined meeting
+    - name: meeting.participant_left
+      type: meeting.participant_left
+      description: Participant left meeting
+    - name: webinar.started
+      type: webinar.started
+      description: Webinar has started
+    - name: webinar.ended
+      type: webinar.ended
+      description: Webinar has ended
+    - name: recording.completed
+      type: recording.completed
+      description: Recording has been completed
+    - name: recording.transcript_completed
+      type: recording.transcript_completed
+      description: Recording transcript completed
+
+errors:
+  mapping:
+    - code: 124
+      type: authentication
+      statusCode: 401
+      message: Invalid access token
+      retryable: false
+    - code: 200
+      type: validation
+      statusCode: 400
+      message: Invalid parameter
+      retryable: false
+    - code: 300
+      type: validation
+      statusCode: 400
+      message: Missing required parameter
+      retryable: false
+    - code: 3001
+      type: not_found
+      statusCode: 404
+      message: Meeting does not exist
+      retryable: false
+    - code: 3003
+      type: authorization
+      statusCode: 403
+      message: Not permitted to access this meeting
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, RATE_LIMIT]
+  nonRetryable: [124, 200, 300, 3001, 3003]
+
+tests:
+  enabled: true
+  cleanup: true
+  scenarios:
+    - name: Meeting Management
+      description: Test meeting CRUD operations
+      steps:
+        - action: create
+          resource: Meeting
+        - action: retrieve
+          resource: Meeting
+        - action: update
+          resource: Meeting
+        - action: list
+          resource: Meeting
+        - action: delete
+          resource: Meeting
+
+    - name: Webinar Management
+      description: Test webinar operations
+      steps:
+        - action: create
+          resource: Webinar
+        - action: retrieve
+          resource: Webinar
+        - action: update
+          resource: Webinar
+        - action: delete
+          resource: Webinar
+
+    - name: User Operations
+      description: Test user retrieval
+      steps:
+        - action: retrieve
+          resource: User
+        - action: list
+          resource: User
+
+    - name: Recording Operations
+      description: Test recording management
+      steps:
+        - action: list
+          resource: Recording
+        - action: retrieve
+          resource: Recording
+
+    - name: Webhook Verification
+      description: Test webhook signature verification
+      steps:
+        - action: assert
+          expects:
+            status: 200
+
+docs:
+  homepage: https://zoom.us
+  apiDocs: https://developers.zoom.us/docs/api/
+  guides:
+    quickstart: https://developers.zoom.us/docs/api/rest/quick-start/
+    webhooks: https://developers.zoom.us/docs/api/rest/webhook-reference/
+    authentication: https://developers.zoom.us/docs/integrations/oauth/
+    meetings: https://developers.zoom.us/docs/api/rest/reference/zoom-api/methods/#tag/Meetings
+---
+
+# Zoom Integration
+
+Zoom is a leading video conferencing and virtual meeting platform with comprehensive API support for meetings, webinars, users, and recordings.
+
+## Features
+
+- **Meetings**: Schedule and manage Zoom meetings
+- **Webinars**: Create and manage webinars
+- **Users**: Manage Zoom users and accounts
+- **Recordings**: Access and manage cloud recordings
+- **OAuth 2.0**: Secure authentication
+- **Webhooks**: Real-time event notifications
+
+## Quick Start
+
+```typescript
+import { ZoomClient } from '@dotdo/sdk.do/integrations/zoom'
+
+const zoom = new ZoomClient({
+  clientId: process.env.ZOOM_CLIENT_ID,
+  clientSecret: process.env.ZOOM_CLIENT_SECRET,
+})
+
+// Create a meeting
+const meeting = await zoom.meeting.create({
+  userId: 'me',
+  topic: 'Team Sync',
+  type: 2,
+  start_time: '2025-10-15T10:00:00Z',
+  duration: 60,
+})
+
+console.log('Join URL:', meeting.join_url)
+```
+
+## Authentication
+
+Zoom uses OAuth 2.0 authentication. Register your app in the Zoom App Marketplace:
+
+```bash
+export ZOOM_CLIENT_ID=your_client_id
+export ZOOM_CLIENT_SECRET=your_client_secret
+```
+
+## Resources
+
+### Meetings
+
+Schedule and manage meetings:
+
+```typescript
+// Create meeting
+const meeting = await zoom.meeting.create({
+  userId: 'me',
+  topic: 'Weekly Standup',
+  type: 2, // Scheduled meeting
+  start_time: '2025-10-15T10:00:00Z',
+  duration: 30,
+  settings: {
+    join_before_host: true,
+    mute_upon_entry: true,
+  },
+})
+
+// Update meeting
+await zoom.meeting.update({
+  meetingId: meeting.id,
+  topic: 'Updated Topic',
+  duration: 45,
+})
+
+// Delete meeting
+await zoom.meeting.delete({ meetingId: meeting.id })
+```
+
+### Webinars
+
+Create and manage webinars:
+
+```typescript
+// Create webinar
+const webinar = await zoom.webinar.create({
+  userId: 'me',
+  topic: 'Product Launch',
+  type: 5,
+  start_time: '2025-10-20T14:00:00Z',
+  duration: 120,
+})
+
+// Get webinar
+const webinarInfo = await zoom.webinar.get({ webinarId: webinar.id })
+```
+
+### Users
+
+Manage Zoom users:
+
+```typescript
+// Get user
+const user = await zoom.user.get({ userId: 'me' })
+
+// List users
+const users = await zoom.user.list({ status: 'active' })
+```
+
+### Recordings
+
+Access cloud recordings:
+
+```typescript
+// List recordings
+const recordings = await zoom.recording.list({
+  userId: 'me',
+  from: '2025-10-01',
+  to: '2025-10-31',
+})
+
+// Get recording
+const recording = await zoom.recording.get({ meetingId: 'meeting-id' })
+
+// Delete recording
+await zoom.recording.delete({ meetingId: 'meeting-id' })
+```
+
+## Webhooks
+
+Zoom supports webhooks for real-time event notifications:
+
+```typescript
+import { ZoomWebhookHandler, WebhookEventRouter } from '@dotdo/sdk.do/integrations/zoom'
+
+const handler = new ZoomWebhookHandler(process.env.ZOOM_WEBHOOK_SECRET)
+const event = await handler.handleRequest(request)
+
+const router = new WebhookEventRouter()
+router.onMeetingStarted(async (event) => {
+  console.log('Meeting started:', event.data)
+})
+
+await router.route(event)
+```
+
+## Error Handling
+
+```typescript
+import { ZoomError } from '@dotdo/sdk.do/integrations/zoom'
+
+try {
+  await zoom.meeting.create({
+    /* ... */
+  })
+} catch (error) {
+  if (error instanceof ZoomError) {
+    console.error('Zoom Error:', error.code, error.message)
+    if (error.isRetriable()) {
+      // Retry logic
+    }
+  }
+}
+```
+
+## Best Practices
+
+1. **OAuth Tokens**: Refresh tokens before expiration
+2. **Rate Limits**: Zoom enforces rate limits (varies by plan)
+3. **Webhooks**: Verify webhook signatures
+4. **Meeting Types**: Use correct type codes (1=instant, 2=scheduled, etc.)
+5. **Timezones**: Always specify timezone for scheduled meetings
+6. **Pagination**: Use pagination for large result sets
+
+## API Reference
+
+Full API documentation: https://developers.zoom.us/docs/api/
+
+## License
+
+MIT

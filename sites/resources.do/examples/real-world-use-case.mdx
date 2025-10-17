@@ -1,0 +1,339 @@
+---
+$id: https://resources.do/examples/real-world-use-case
+$type: HowTo
+title: Real-World Use Case - Inventory Management System
+description: Complete inventory management system using data records and resources
+keywords: [inventory, management, real-world, complete example]
+---
+
+# Real-World Use Case: Inventory Management System
+
+Complete inventory management system demonstrating comprehensive resource management.
+
+## Data Model
+
+```typescript
+import $, { db } from 'sdk.do'
+
+// Products (resources)
+const product = await db.create($.Product, {
+  $type: 'Product',
+  name: 'Widget Pro',
+  sku: 'WDG-PRO-001',
+  price: 299.99,
+  priceCurrency: 'USD',
+})
+
+// Inventory locations (resources)
+const warehouse = await db.create($.Place, {
+  $type: 'Place',
+  name: 'Main Warehouse',
+  address: {
+    $type: 'PostalAddress',
+    streetAddress: '123 Storage St',
+    addressLocality: 'San Francisco',
+  },
+})
+
+// Stock records (resources)
+const stock = await db.create($.Offer, {
+  $type: 'Offer',
+  itemOffered: { $id: product.$id, $type: 'Product' },
+  availability: 'InStock',
+  inventoryLevel: { value: 100 },
+  availableAtOrFrom: { $id: warehouse.$id, $type: 'Place' },
+})
+```
+
+## Stock Management
+
+```typescript
+async function getStockLevel(productId: string, warehouseId: string) {
+  const stocks = await db.list($.Offer, {
+    where: {
+      'itemOffered.$id': productId,
+      'availableAtOrFrom.$id': warehouseId,
+    },
+  })
+
+  if (stocks.length === 0) {
+    return 0
+  }
+
+  return stocks[0].inventoryLevel.value
+}
+
+async function adjustStock(productId: string, warehouseId: string, quantity: number, reason: string) {
+  const stocks = await db.list($.Offer, {
+    where: {
+      'itemOffered.$id': productId,
+      'availableAtOrFrom.$id': warehouseId,
+    },
+  })
+
+  if (stocks.length === 0) {
+    throw new Error('Stock record not found')
+  }
+
+  const stock = stocks[0]
+  const newLevel = stock.inventoryLevel.value + quantity
+
+  await db.update(stock, {
+    inventoryLevel: { value: Math.max(0, newLevel) },
+  })
+
+  // Log adjustment
+  await db.create($.Action, {
+    $type: 'UpdateAction',
+    object: { $id: stock.$id, $type: 'Offer' },
+    result: {
+      oldLevel: stock.inventoryLevel.value,
+      newLevel,
+      quantity,
+      reason,
+    },
+    startTime: new Date(),
+  })
+
+  return newLevel
+}
+
+async function transferStock(productId: string, fromWarehouseId: string, toWarehouseId: string, quantity: number) {
+  await db.transaction(async (tx) => {
+    // Reduce from source
+    await adjustStock(productId, fromWarehouseId, -quantity, 'Transfer out')
+
+    // Increase at destination
+    await adjustStock(productId, toWarehouseId, quantity, 'Transfer in')
+  })
+}
+```
+
+## Order Fulfillment
+
+```typescript
+async function fulfillOrder(orderId: string) {
+  const order = await db.get($.Order, orderId)
+
+  for (const item of order.orderedItem) {
+    // Check stock
+    const stock = await getStockLevel(item.product.$id, order.fulfillmentWarehouse)
+
+    if (stock < item.quantity) {
+      throw new Error(`Insufficient stock for ${item.product.name}`)
+    }
+
+    // Allocate stock
+    await adjustStock(item.product.$id, order.fulfillmentWarehouse, -item.quantity, `Order ${order.orderNumber}`)
+  }
+
+  // Update order status
+  await db.update(order, {
+    orderStatus: 'Fulfilled',
+    fulfilledDate: new Date(),
+  })
+}
+```
+
+## Stock Alerts
+
+```typescript
+import { on } from 'sdk.do'
+
+// Monitor stock levels
+on($.Offer.updated, async (stock) => {
+  const minLevel = 10
+  const level = stock.inventoryLevel.value
+
+  if (level <= minLevel) {
+    // Create alert
+    await db.create($.Action, {
+      $type: 'InformAction',
+      about: { $id: stock.$id, $type: 'Offer' },
+      description: `Low stock alert: ${stock.itemOffered.name}`,
+      result: {
+        currentLevel: level,
+        minimumLevel: minLevel,
+        needsRestock: true,
+      },
+    })
+
+    // Notify purchasing
+    await $.notify(purchasingTeam, {
+      title: 'Low Stock Alert',
+      message: `${stock.itemOffered.name} is low (${level} units)`,
+      priority: 'high',
+    })
+  }
+})
+```
+
+## Reporting
+
+```typescript
+async function getInventoryReport() {
+  const stocks = await db.list($.Offer)
+
+  const report = {
+    totalProducts: stocks.length,
+    totalValue: 0,
+    lowStock: [],
+    outOfStock: [],
+    byWarehouse: {},
+  }
+
+  for (const stock of stocks) {
+    const product = await db.get($.Product, stock.itemOffered.$id)
+    const warehouse = await db.get($.Place, stock.availableAtOrFrom.$id)
+    const level = stock.inventoryLevel.value
+
+    // Total value
+    report.totalValue += level * product.price
+
+    // Low stock
+    if (level <= 10 && level > 0) {
+      report.lowStock.push({
+        product: product.name,
+        level,
+        warehouse: warehouse.name,
+      })
+    }
+
+    // Out of stock
+    if (level === 0) {
+      report.outOfStock.push({
+        product: product.name,
+        warehouse: warehouse.name,
+      })
+    }
+
+    // By warehouse
+    if (!report.byWarehouse[warehouse.name]) {
+      report.byWarehouse[warehouse.name] = {
+        products: 0,
+        totalValue: 0,
+      }
+    }
+
+    report.byWarehouse[warehouse.name].products++
+    report.byWarehouse[warehouse.name].totalValue += level * product.price
+  }
+
+  return report
+}
+```
+
+## Stock Audit
+
+```typescript
+async function auditInventory(warehouseId: string) {
+  const stocks = await db.list($.Offer, {
+    where: { 'availableAtOrFrom.$id': warehouseId },
+  })
+
+  const audit = []
+
+  for (const stock of stocks) {
+    const product = await db.get($.Product, stock.itemOffered.$id)
+
+    // Get actual count (from physical count or external system)
+    const actualCount = await performPhysicalCount(product.$id, warehouseId)
+    const systemCount = stock.inventoryLevel.value
+    const discrepancy = actualCount - systemCount
+
+    audit.push({
+      product: product.name,
+      sku: product.sku,
+      systemCount,
+      actualCount,
+      discrepancy,
+    })
+
+    // Adjust if discrepancy
+    if (discrepancy !== 0) {
+      await adjustStock(product.$id, warehouseId, discrepancy, 'Audit adjustment')
+    }
+  }
+
+  // Save audit report
+  await db.create($.Report, {
+    $type: 'Report',
+    reportNumber: `AUD-${Date.now()}`,
+    about: { $id: warehouseId, $type: 'Place' },
+    dateCreated: new Date(),
+    text: JSON.stringify(audit),
+  })
+
+  return audit
+}
+```
+
+## Complete Example
+
+```typescript
+async function main() {
+  // Create warehouse
+  const warehouse = await db.create($.Place, {
+    $type: 'Place',
+    name: 'Main Warehouse',
+  })
+
+  // Create product
+  const product = await db.create($.Product, {
+    $type: 'Product',
+    name: 'Widget',
+    sku: 'WDG-001',
+    price: 99.99,
+  })
+
+  // Create initial stock
+  const stock = await db.create($.Offer, {
+    $type: 'Offer',
+    itemOffered: { $id: product.$id, $type: 'Product' },
+    availableAtOrFrom: { $id: warehouse.$id, $type: 'Place' },
+    inventoryLevel: { value: 100 },
+  })
+
+  // Adjust stock
+  await adjustStock(product.$id, warehouse.$id, -10, 'Sale')
+
+  // Check level
+  const level = await getStockLevel(product.$id, warehouse.$id)
+  console.log(`Current stock: ${level}`)
+
+  // Generate report
+  const report = await getInventoryReport()
+  console.log('Inventory report:', report)
+}
+
+main()
+```
+
+## Summary
+
+This inventory system demonstrates:
+
+- Resource creation and management
+- Complex queries and filtering
+- Relationship tracking
+- Transaction handling
+- Event-driven alerts
+- Reporting and analytics
+- Data integrity with auditing
+
+The resource-based approach provides:
+
+- Clear data model
+- Type safety
+- Relationship tracking
+- Event integration
+- Scalable architecture
+
+---
+
+**Next Steps**:
+
+- Add barcode scanning
+- Integrate with shipping carriers
+- Build mobile app for warehouse staff
+- Add forecasting and auto-reordering

@@ -1,0 +1,102 @@
+---
+$id: https://integrations.do/trello
+$type: Integration
+name: Trello
+service: trello
+description: A web-based, kanban-style, list-making application.
+category: productivity
+sdkBased: false
+baseUrl: https://api.trello.com
+
+auth:
+  type: api-key
+  location: header
+  headerName: Authorization
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Trello actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: true
+  verificationMethod: none
+  events:
+    - name: generic_trigger
+      type: trigger
+      description: Generic webhook trigger
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://trello.com
+  apiDocs: https://trello.com
+---
+
+# Trello Integration
+
+A web-based, kanban-style, list-making application.
+
+## Quick Start
+
+```typescript
+import { TrelloClient } from '@dotdo/sdk.do/integrations/trello'
+
+const trello = new TrelloClient({
+  apiKey: process.env.TRELLO_API_KEY,
+})
+
+const result = await trello.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Trello provides 346 actions through the Composio API.
+
+## Webhooks
+
+Trello supports 5 webhook triggers for real-time event notifications.
+
+## License
+
+MIT

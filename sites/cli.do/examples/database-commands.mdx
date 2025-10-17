@@ -1,0 +1,694 @@
+---
+$id: https://cli.do/examples/database-commands
+$type: HowTo
+title: Database Commands Examples - cli.do
+description: Advanced database operations with cli.do semantic patterns
+keywords: [database, examples, queries, relationships, semantic]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Database Commands Examples
+
+Advanced database operations using cli.do with semantic patterns.
+
+## Overview
+
+cli.do provides powerful database commands that work with semantic types and relationships. This guide covers advanced patterns for working with your Business-as-Code database.
+
+## Semantic Type Queries
+
+### List by Schema.org Types
+
+Query using semantic types from Schema.org:
+
+```bash
+# Organizations
+do db list Organization
+
+# People
+do db list Person
+
+# Products
+do db list Product
+
+# Places
+do db list Place
+
+# Events
+do db list Event
+
+# Creative works
+do db list Article
+do db list BlogPosting
+do db list VideoObject
+```
+
+### Custom Business Types
+
+Query custom business types:
+
+```bash
+# Business entities
+do db list Business
+do db list Brand
+do db list Service
+
+# Financial entities
+do db list Order
+do db list Invoice
+do db list Payment
+
+# Content entities
+do db list Blog
+do db list Newsletter
+do db list Campaign
+```
+
+## Advanced Filtering
+
+### Exact Match
+
+Filter by exact field values:
+
+```bash
+# Find specific job title
+do db list Person --where '{
+  "jobTitle": "Software Engineer"
+}'
+
+# Find specific industry
+do db list Business --where '{
+  "industry": "Technology"
+}'
+
+# Find specific status
+do db list Order --where '{
+  "status": "completed"
+}'
+```
+
+### Comparison Operators
+
+Use comparison operators in filters:
+
+```bash
+# Products under $50
+do db list Product --where '{
+  "price": {"$lt": 50}
+}'
+
+# Products $50 or more
+do db list Product --where '{
+  "price": {"$gte": 50}
+}'
+
+# Businesses with 100+ employees
+do db list Business --where '{
+  "numberOfEmployees": {"$gte": 100}
+}'
+
+# Orders over $1000
+do db list Order --where '{
+  "total": {"$gt": 1000}
+}'
+
+# Recent orders (last 30 days)
+do db list Order --where '{
+  "orderDate": {"$gte": "2025-09-10"}
+}'
+```
+
+### Multiple Conditions
+
+Combine multiple filter conditions:
+
+```bash
+# Engineers in SF
+do db list Person --where '{
+  "jobTitle": "Software Engineer",
+  "addressLocality": "San Francisco"
+}'
+
+# Tech companies with 50+ employees
+do db list Business --where '{
+  "industry": "Technology",
+  "numberOfEmployees": {"$gte": 50}
+}'
+
+# Expensive tech products
+do db list Product --where '{
+  "category": "Technology",
+  "price": {"$gte": 500}
+}'
+```
+
+### Pattern Matching
+
+Use pattern matching in queries:
+
+```bash
+# Names starting with "A"
+do db list Person --where '{
+  "name": {"$regex": "^A"}
+}'
+
+# Email addresses with specific domain
+do db list Person --where '{
+  "email": {"$regex": "@example\\.com$"}
+}'
+
+# Products containing "Pro"
+do db list Product --where '{
+  "name": {"$regex": "Pro"}
+}'
+```
+
+### Array Contains
+
+Filter by array field contents:
+
+```bash
+# People with specific skill
+do db list Person --where '{
+  "skills": {"$contains": "JavaScript"}
+}'
+
+# Products with specific feature
+do db list Product --where '{
+  "features": {"$contains": "wireless"}
+}'
+
+# Businesses in specific locations
+do db list Business --where '{
+  "locations": {"$contains": "California"}
+}'
+```
+
+## Pagination & Sorting
+
+### Efficient Pagination
+
+Handle large datasets with pagination:
+
+```bash
+# First page (10 items)
+do db list Business --limit 10 --offset 0
+
+# Second page
+do db list Business --limit 10 --offset 10
+
+# Third page
+do db list Business --limit 10 --offset 20
+
+# Get total count first
+TOTAL=$(do db count Business)
+echo "Total businesses: $TOTAL"
+
+# Calculate pages
+PAGES=$((TOTAL / 10))
+echo "Total pages: $PAGES"
+```
+
+### Sort by Multiple Fields
+
+Sort results by multiple criteria:
+
+```bash
+# Sort by industry, then name
+do db list Business --sort "industry:asc,name:asc"
+
+# Sort by price descending, then name ascending
+do db list Product --sort "price:desc,name:asc"
+
+# Sort by date descending, then status
+do db list Order --sort "orderDate:desc,status:asc"
+```
+
+### Combined Pagination and Sorting
+
+Use together for efficient queries:
+
+```bash
+# Top 10 most expensive products
+do db list Product --sort "price:desc" --limit 10
+
+# 10 most recent orders
+do db list Order --sort "orderDate:desc" --limit 10
+
+# Alphabetical businesses, page 2
+do db list Business --sort "name:asc" --limit 10 --offset 10
+```
+
+## Field Selection
+
+### Select Specific Fields
+
+Optimize queries by selecting only needed fields:
+
+```bash
+# Get only names
+do db list Person --fields "name"
+
+# Get name and email
+do db list Person --fields "name,email"
+
+# Get business essentials
+do db list Business --fields "name,industry,numberOfEmployees"
+
+# Get product pricing
+do db list Product --fields "name,price,currency"
+```
+
+### Exclude Sensitive Data
+
+Omit sensitive fields from results:
+
+```bash
+# Get user info without passwords
+do db list Person --fields "name,email,jobTitle"
+
+# Get orders without payment details
+do db list Order --fields "id,customer,total,status"
+```
+
+## Relationship Queries
+
+### One-to-Many Relationships
+
+Query related entities:
+
+```bash
+# Brands owned by business
+do db related Business:acme owns Brand
+
+# Employees of organization
+do db related Organization:acme employs Person
+
+# Products by manufacturer
+do db related Organization:acme manufacturer Product
+
+# Blog posts by author
+do db related Person:john author BlogPosting
+
+# Orders by customer
+do db related Person:jane customer Order
+```
+
+### Many-to-Many Relationships
+
+Query bidirectional relationships:
+
+```bash
+# Organizations person works for
+do db related Person:john worksFor Organization
+
+# People person knows
+do db related Person:john knows Person
+
+# Products in order
+do db related Order:123 contains Product
+
+# Skills person has
+do db related Person:john hasSkill Skill
+```
+
+### Nested Relationships
+
+Query relationships through multiple levels:
+
+```bash
+# Get business, then brands, then products
+BUSINESS=$(do db get Business acme-corp)
+BRANDS=$(do db related Business:acme-corp owns Brand)
+for brand in $(echo $BRANDS | jq -r '.[].["$id"]'); do
+  do db related "Brand:$brand" manufacturer Product
+done
+```
+
+### Create Relationships
+
+Link entities with semantic predicates:
+
+```bash
+# Business owns brand
+do db relate Business:acme owns Brand:acme-brand
+
+# Person works for organization
+do db relate Person:john worksFor Organization:acme
+
+# Author writes blog post
+do db relate Person:jane author BlogPosting:post-123
+
+# Product manufactured by organization
+do db relate Product:widget-pro manufacturer Organization:acme
+
+# Order contains products
+do db relate Order:order-123 contains Product:widget-pro
+do db relate Order:order-123 contains Product:gadget-basic
+```
+
+### Relationships with Metadata
+
+Add context to relationships:
+
+```bash
+# Employment with start date
+do db relate Person:john worksFor Organization:acme --metadata '{
+  "startDate": "2020-01-01",
+  "department": "Engineering"
+}'
+
+# Ownership with percentage
+do db relate Business:acme owns Brand:widget --metadata '{
+  "percentage": 100,
+  "since": "2015-01-01"
+}'
+
+# Knows relationship with context
+do db relate Person:john knows Person:jane --metadata '{
+  "context": "worked together",
+  "since": "2020"
+}'
+```
+
+## Bulk Operations
+
+### Batch Create from CSV
+
+Convert CSV to entities:
+
+```bash
+# Create people.csv
+cat > people.csv << 'EOF'
+name,email,jobTitle
+Alice Johnson,alice@example.com,Designer
+Bob Wilson,bob@example.com,Developer
+Carol Martinez,carol@example.com,Manager
+EOF
+
+# Convert CSV to JSON and create
+cat people.csv | tail -n +2 | while IFS=, read name email job; do
+  do db create Person "{
+    \"name\": \"$name\",
+    \"email\": \"$email\",
+    \"jobTitle\": \"$job\"
+  }"
+done
+```
+
+### Batch Update
+
+Update multiple entities:
+
+```bash
+# Get all engineers
+ENGINEERS=$(do db list Person --where '{"jobTitle": "Software Engineer"}' --format json)
+
+# Update each engineer
+echo $ENGINEERS | jq -c '.[]' | while read person; do
+  ID=$(echo $person | jq -r '.["$id"]')
+  do db update Person $ID '{"department": "Engineering"}' --merge
+done
+```
+
+### Batch Delete
+
+Delete multiple entities:
+
+```bash
+# Delete inactive users
+INACTIVE=$(do db list Person --where '{"active": false}' --format json)
+
+echo $INACTIVE | jq -r '.[].["$id"]' | while read id; do
+  do db delete Person $id --force
+done
+```
+
+### Export and Import
+
+Backup and restore data:
+
+```bash
+# Export all businesses to file
+do db list Business > businesses-backup.json
+
+# Export with timestamp
+TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+do db list Business > "businesses-$TIMESTAMP.json"
+
+# Import from backup
+cat businesses-backup.json | jq -c '.[]' | while read entity; do
+  ID=$(echo $entity | jq -r '.["$id"]')
+  do db create Business "$entity"
+done
+```
+
+## Data Migration
+
+### Migrate Between Types
+
+Transform and migrate data:
+
+```bash
+# Get old type
+OLD=$(do db list OldType --format json)
+
+# Transform and create new type
+echo $OLD | jq -c '.[] | {
+  "$id": .id,
+  "$type": "NewType",
+  "name": .oldName,
+  "value": .oldValue
+}' | while read entity; do
+  do db create NewType "$entity"
+done
+```
+
+### Add Missing Fields
+
+Populate missing data:
+
+```bash
+# Find entities without email
+NO_EMAIL=$(do db list Person --where '{"email": null}' --format json)
+
+# Add default emails
+echo $NO_EMAIL | jq -r '.[].["$id"]' | while read id; do
+  do db update Person $id "{
+    \"email\": \"$id@example.com\"
+  }" --merge
+done
+```
+
+### Normalize Data
+
+Clean and standardize data:
+
+```bash
+# Get all businesses
+BUSINESSES=$(do db list Business --format json)
+
+# Normalize industry names
+echo $BUSINESSES | jq -c '.[]' | while read biz; do
+  ID=$(echo $biz | jq -r '.["$id"]')
+  INDUSTRY=$(echo $biz | jq -r '.industry' | tr '[:lower:]' '[:upper:]')
+
+  do db update Business $ID "{
+    \"industry\": \"$INDUSTRY\"
+  }" --merge
+done
+```
+
+## Real-World Scenarios
+
+### Customer Management
+
+```bash
+# Create customer
+do db create Person '{
+  "$id": "customer-001",
+  "$type": "Person",
+  "name": "John Customer",
+  "email": "john@example.com",
+  "telephone": "+1-555-0100"
+}'
+
+# Add address
+do db update Person customer-001 '{
+  "address": {
+    "$type": "PostalAddress",
+    "streetAddress": "123 Main St",
+    "addressLocality": "San Francisco",
+    "postalCode": "94102"
+  }
+}' --merge
+
+# Find customers in SF
+do db list Person --where '{
+  "address.addressLocality": "San Francisco"
+}'
+
+# Get customer orders
+do db related Person:customer-001 customer Order
+```
+
+### Product Catalog
+
+```bash
+# Create product
+do db create Product '{
+  "$id": "laptop-pro",
+  "$type": "Product",
+  "name": "Laptop Pro",
+  "description": "Professional laptop",
+  "price": 1299.99,
+  "currency": "USD",
+  "brand": "TechBrand"
+}'
+
+# Add features
+do db update Product laptop-pro '{
+  "features": [
+    "16GB RAM",
+    "512GB SSD",
+    "15-inch display"
+  ]
+}' --merge
+
+# Find laptops
+do db list Product --where '{
+  "name": {"$regex": "Laptop"}
+}'
+
+# Find affordable products
+do db list Product --where '{
+  "price": {"$lt": 1000}
+}' --sort "price:asc"
+```
+
+### Order Processing
+
+```bash
+# Create order
+do db create Order '{
+  "$id": "order-1001",
+  "$type": "Order",
+  "orderNumber": "1001",
+  "customer": "customer-001",
+  "orderDate": "2025-10-10",
+  "orderStatus": "pending",
+  "total": 1299.99
+}'
+
+# Add order items
+do db relate Order:order-1001 contains Product:laptop-pro
+
+# Update order status
+do db update Order order-1001 '{
+  "orderStatus": "confirmed"
+}'
+
+# Get pending orders
+do db list Order --where '{
+  "orderStatus": "pending"
+}' --sort "orderDate:desc"
+
+# Get customer's orders
+do db related Person:customer-001 customer Order
+```
+
+### Blog Management
+
+```bash
+# Create author
+do db create Person '{
+  "$id": "jane-blogger",
+  "$type": "Person",
+  "name": "Jane Blogger",
+  "email": "jane@blog.com",
+  "jobTitle": "Content Writer"
+}'
+
+# Create blog post
+do db create BlogPosting '{
+  "$id": "post-ai-2025",
+  "$type": "BlogPosting",
+  "headline": "AI in 2025",
+  "articleBody": "Content here...",
+  "datePublished": "2025-10-10",
+  "keywords": ["AI", "technology", "future"]
+}'
+
+# Link author to post
+do db relate Person:jane-blogger author BlogPosting:post-ai-2025
+
+# Get author's posts
+do db related Person:jane-blogger author BlogPosting
+
+# Get recent posts
+do db list BlogPosting --sort "datePublished:desc" --limit 10
+```
+
+## Performance Tips
+
+### Use Field Selection
+
+Only fetch needed fields:
+
+```bash
+# Slow - fetches all fields
+do db list Business
+
+# Fast - fetches only needed fields
+do db list Business --fields "name,industry"
+```
+
+### Limit Results
+
+Always use limits for large datasets:
+
+```bash
+# Dangerous - might fetch millions
+do db list Business
+
+# Safe - fetches manageable amount
+do db list Business --limit 100
+```
+
+### Index Your Filters
+
+Ensure filtered fields are indexed in database:
+
+```bash
+# Fast (if email is indexed)
+do db list Person --where '{"email": "user@example.com"}'
+
+# Slow (if email is not indexed)
+do db list Person --where '{"email": {"$regex": "user"}}'
+```
+
+### Batch Operations
+
+Group operations for efficiency:
+
+```bash
+# Slow - individual creates
+for i in {1..100}; do
+  do db create Person "{\"name\": \"User $i\"}"
+done
+
+# Fast - batch create
+cat users.json | do db create Person --batch
+```
+
+## Next Steps
+
+- [AI Commands Examples](./ai-commands) - AI generation patterns
+- [Basic Examples](./basic) - Essential CLI operations
+- [Commands Reference](../docs/commands) - Complete command documentation
+
+---
+
+Part of the [cli.do](https://cli.do) documentation.

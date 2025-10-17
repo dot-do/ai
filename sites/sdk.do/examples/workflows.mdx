@@ -1,0 +1,633 @@
+---
+$id: https://sdk.do/examples/workflows
+$type: HowTo
+title: Workflow Example
+description: Scheduled workflows and automation with semantic patterns
+keywords: [workflows, scheduling, cron, automation, every]
+---
+
+# Workflow Example
+
+Build automated workflows with scheduled execution and semantic patterns.
+
+## Overview
+
+This example demonstrates:
+
+- Scheduled workflow execution
+- Daily, hourly, and custom schedules
+- Workflow orchestration
+- Background jobs
+- Workflow monitoring
+
+## Complete Example
+
+```typescript
+import $, { db, ai, on, send, every } from 'sdk.do'
+
+// ==========================================
+// Scheduled Workflows
+// ==========================================
+
+// Daily report generation
+every($.Daily, async () => {
+  console.log('\n=== Running Daily Report ===')
+
+  const today = new Date()
+  const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000)
+
+  // Get daily metrics
+  const newCustomers = await db.list($.Customer, {
+    where: {
+      dateCreated: { $gte: yesterday.toISOString() },
+    },
+  })
+
+  const newOrders = await db.list($.Order, {
+    where: {
+      orderDate: { $gte: yesterday.toISOString() },
+    },
+  })
+
+  const revenue = newOrders.reduce((sum, order) => sum + order.total, 0)
+
+  console.log('Daily Metrics:')
+  console.log(`  New Customers: ${newCustomers.length}`)
+  console.log(`  New Orders: ${newOrders.length}`)
+  console.log(`  Revenue: $${revenue.toFixed(2)}`)
+
+  // Generate AI insights
+  const insights = await ai.generate(
+    `Analyze these daily metrics and provide insights:
+     - ${newCustomers.length} new customers
+     - ${newOrders.length} new orders
+     - $${revenue.toFixed(2)} revenue`,
+    {
+      schema: {
+        summary: 'string',
+        trends: 'array',
+        recommendations: 'array',
+      },
+    }
+  )
+
+  console.log('AI Insights:')
+  console.log(`  ${insights.summary}`)
+
+  // Send report email
+  send($.Email.send, {
+    to: 'admin@example.com',
+    subject: 'Daily Business Report',
+    body: `
+      Daily Metrics:
+      - New Customers: ${newCustomers.length}
+      - New Orders: ${newOrders.length}
+      - Revenue: $${revenue.toFixed(2)}
+
+      Insights:
+      ${insights.summary}
+
+      Recommendations:
+      ${insights.recommendations.map((r, i) => `${i + 1}. ${r}`).join('\n')}
+    `,
+  })
+
+  console.log('✓ Daily report sent')
+})
+
+// Hourly data sync
+every($.Hourly, async () => {
+  console.log('\n=== Running Hourly Sync ===')
+
+  // Sync with external systems
+  const externalData = await fetch('https://api.example.com/sync')
+    .then((r) => r.json())
+    .catch((err) => {
+      console.error('Sync failed:', err)
+      return null
+    })
+
+  if (externalData) {
+    console.log(`✓ Synced ${externalData.records} records`)
+
+    // Update local database
+    for (const record of externalData.items || []) {
+      const existing = await db.get($.Product, record.id)
+
+      if (existing) {
+        await db.update(existing, record)
+      } else {
+        await db.create($.Product, record)
+      }
+    }
+
+    console.log('✓ Database updated')
+  }
+})
+
+// Every 6 hours: Maintenance tasks
+every('0 */6 * * *', async () => {
+  console.log('\n=== Running Maintenance ===')
+
+  // Clean up old records
+  const cutoffDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
+
+  const oldOrders = await db.list($.Order, {
+    where: {
+      orderDate: { $lt: cutoffDate.toISOString() },
+      orderStatus: 'Completed',
+    },
+  })
+
+  console.log(`Archiving ${oldOrders.length} old orders`)
+
+  for (const order of oldOrders) {
+    await db.update(order, { archived: true })
+  }
+
+  console.log('✓ Maintenance complete')
+})
+
+// Weekly analytics
+every($.Weekly, async () => {
+  console.log('\n=== Running Weekly Analytics ===')
+
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+
+  // Get weekly data
+  const customers = await db.list($.Customer, {
+    where: {
+      dateCreated: { $gte: weekAgo.toISOString() },
+    },
+  })
+
+  const orders = await db.list($.Order, {
+    where: {
+      orderDate: { $gte: weekAgo.toISOString() },
+    },
+  })
+
+  // Calculate metrics
+  const totalRevenue = orders.reduce((sum, o) => sum + o.total, 0)
+  const avgOrderValue = orders.length > 0 ? totalRevenue / orders.length : 0
+
+  console.log('Weekly Metrics:')
+  console.log(`  Customers: ${customers.length}`)
+  console.log(`  Orders: ${orders.length}`)
+  console.log(`  Revenue: $${totalRevenue.toFixed(2)}`)
+  console.log(`  Avg Order Value: $${avgOrderValue.toFixed(2)}`)
+
+  // Generate comprehensive report
+  const report = await ai.generate(
+    `Generate a comprehensive weekly business report with these metrics:
+     - ${customers.length} new customers
+     - ${orders.length} orders
+     - $${totalRevenue.toFixed(2)} revenue
+     - $${avgOrderValue.toFixed(2)} average order value`,
+    {
+      schema: {
+        executiveSummary: 'string',
+        keyMetrics: 'object',
+        trends: 'array',
+        actionItems: 'array',
+      },
+    }
+  )
+
+  console.log('Weekly Report Generated')
+
+  // Send to stakeholders
+  send($.Email.send, {
+    to: 'executives@example.com',
+    subject: 'Weekly Business Report',
+    body: JSON.stringify(report, null, 2),
+  })
+
+  console.log('✓ Weekly report sent')
+})
+
+// Monthly customer segmentation
+every($.Monthly, async () => {
+  console.log('\n=== Running Monthly Segmentation ===')
+
+  const customers = await db.list($.Customer, { limit: 1000 })
+
+  console.log(`Segmenting ${customers.length} customers`)
+
+  // Batch segment with AI
+  const segments = await ai.batch(
+    customers.map((c) => ({
+      prompt: `Classify customer segment for: ${c.name}`,
+      schema: {
+        segment: 'string',
+        tier: 'string',
+        recommendations: 'array',
+      },
+    }))
+  )
+
+  // Update customer records
+  await Promise.all(
+    customers.map((c, i) =>
+      db.update(c, {
+        segment: segments[i].segment,
+        tier: segments[i].tier,
+      })
+    )
+  )
+
+  console.log('✓ Customer segmentation complete')
+
+  // Generate segment report
+  const segmentCounts = segments.reduce((acc, s) => {
+    acc[s.segment] = (acc[s.segment] || 0) + 1
+    return acc
+  }, {})
+
+  console.log('Segment Distribution:')
+  Object.entries(segmentCounts).forEach(([segment, count]) => {
+    console.log(`  ${segment}: ${count}`)
+  })
+})
+
+// ==========================================
+// Event-Driven Workflows
+// ==========================================
+
+// Customer onboarding workflow
+on($.Customer.created, async (customer) => {
+  console.log(`\n→ Starting onboarding for ${customer.name}`)
+
+  // Day 0: Welcome email
+  send($.Email.send, {
+    to: customer.email,
+    subject: 'Welcome!',
+    template: 'welcome',
+    data: customer,
+  })
+
+  // Day 1: Follow-up (scheduled)
+  send($.Workflow.schedule, {
+    workflowId: 'day-1-followup',
+    customerId: customer.$id,
+    executeAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+  })
+
+  // Day 7: Check-in (scheduled)
+  send($.Workflow.schedule, {
+    workflowId: 'day-7-checkin',
+    customerId: customer.$id,
+    executeAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+  })
+
+  console.log('✓ Onboarding workflow scheduled')
+})
+
+// Order fulfillment workflow
+on($.Order.paid, async (order) => {
+  console.log(`\n→ Starting fulfillment for order ${order.$id}`)
+
+  // Step 1: Validate inventory
+  const hasInventory = await validateInventory(order)
+
+  if (!hasInventory) {
+    send($.Order.backordered, order)
+    return
+  }
+
+  // Step 2: Reserve inventory
+  await reserveInventory(order)
+
+  // Step 3: Create shipping label
+  const shippingLabel = await createShippingLabel(order)
+
+  // Step 4: Schedule pickup
+  send($.Shipping.schedulePickup, {
+    orderId: order.$id,
+    label: shippingLabel,
+  })
+
+  // Step 5: Update order status
+  await db.update(order, {
+    orderStatus: 'Shipped',
+    trackingNumber: shippingLabel.trackingNumber,
+  })
+
+  // Step 6: Notify customer
+  send($.Email.send, {
+    to: order.customerEmail,
+    subject: 'Order Shipped!',
+    template: 'order-shipped',
+    data: {
+      orderId: order.$id,
+      trackingNumber: shippingLabel.trackingNumber,
+    },
+  })
+
+  console.log('✓ Fulfillment workflow complete')
+})
+
+// ==========================================
+// Helper Functions
+// ==========================================
+
+async function validateInventory(order) {
+  for (const item of order.items || []) {
+    const product = await db.get($.Product, item.productId)
+
+    if (!product || product.inventory < item.quantity) {
+      return false
+    }
+  }
+
+  return true
+}
+
+async function reserveInventory(order) {
+  for (const item of order.items || []) {
+    const product = await db.get($.Product, item.productId)
+
+    await db.update(product, {
+      inventory: product.inventory - item.quantity,
+      reserved: product.reserved + item.quantity,
+    })
+  }
+}
+
+async function createShippingLabel(order) {
+  // Simulate shipping label creation
+  return {
+    trackingNumber: `TRK-${Date.now()}`,
+    carrier: 'USPS',
+    service: 'Priority Mail',
+  }
+}
+
+// ==========================================
+// Demo Function
+// ==========================================
+
+async function workflowsExample() {
+  console.log('=== Workflows Example ===\n')
+  console.log('Workflows are now running in the background')
+  console.log('They will execute on their schedules:')
+  console.log('  - Daily: Every day at midnight')
+  console.log('  - Hourly: Every hour')
+  console.log('  - Every 6 hours: 4 times per day')
+  console.log('  - Weekly: Every Sunday')
+  console.log('  - Monthly: First day of each month')
+  console.log()
+
+  // Simulate some events
+  console.log('Simulating customer creation...')
+
+  const customer = await db.create($.Customer, {
+    name: 'Demo Customer',
+    email: 'demo@example.com',
+    customerStatus: 'Active',
+  })
+
+  send($.Customer.created, customer)
+
+  console.log('✓ Customer created, onboarding workflow triggered')
+  console.log()
+
+  // Wait for workflows to process
+  await new Promise((resolve) => setTimeout(resolve, 1000))
+
+  // Cleanup
+  await db.delete(customer)
+
+  console.log('=== Example Complete ===')
+}
+
+// Run the example
+workflowsExample().catch(console.error)
+```
+
+## Schedule Patterns
+
+### Semantic Schedules
+
+```typescript
+every($.Daily, handler) // Daily at midnight
+every($.Hourly, handler) // Every hour
+every($.Weekly, handler) // Weekly on Sunday
+every($.Monthly, handler) // Monthly on 1st
+every($.Yearly, handler) // Yearly on Jan 1
+```
+
+### Cron Expressions
+
+```typescript
+// Every 15 minutes
+every('*/15 * * * *', handler)
+
+// Every day at 9 AM
+every('0 9 * * *', handler)
+
+// Every weekday at 6 PM
+every('0 18 * * 1-5', handler)
+
+// First day of month at noon
+every('0 12 1 * *', handler)
+
+// Every 6 hours
+every('0 */6 * * *', handler)
+```
+
+## Common Workflows
+
+### Daily Reports
+
+```typescript
+every($.Daily, async () => {
+  const metrics = await calculateDailyMetrics()
+  const report = await generateReport(metrics)
+  await sendReport(report)
+})
+```
+
+### Data Synchronization
+
+```typescript
+every($.Hourly, async () => {
+  const externalData = await fetchExternalData()
+  await syncToDatabase(externalData)
+})
+```
+
+### Cleanup Tasks
+
+```typescript
+every($.Daily, async () => {
+  await cleanupOldRecords()
+  await archiveCompletedOrders()
+  await pruneExpiredSessions()
+})
+```
+
+### Scheduled Notifications
+
+```typescript
+every('0 9 * * *', async () => {
+  const dueReminders = await getDueReminders()
+
+  for (const reminder of dueReminders) {
+    send($.Email.send, {
+      to: reminder.email,
+      subject: 'Reminder',
+      body: reminder.message,
+    })
+  }
+})
+```
+
+## Workflow Orchestration
+
+### Multi-Step Workflows
+
+```typescript
+// Step 1: Initial event
+on($.Order.created, async (order) => {
+  send($.Order.validate, order)
+})
+
+// Step 2: Validation
+on($.Order.validate, async (order) => {
+  const isValid = await validateOrder(order)
+
+  if (isValid) {
+    send($.Order.validated, order)
+  } else {
+    send($.Order.rejected, order)
+  }
+})
+
+// Step 3: Processing
+on($.Order.validated, async (order) => {
+  await processOrder(order)
+  send($.Order.processed, order)
+})
+
+// Step 4: Completion
+on($.Order.processed, async (order) => {
+  await completeOrder(order)
+  send($.Order.completed, order)
+})
+```
+
+### Conditional Workflows
+
+```typescript
+on($.Customer.created, async (customer) => {
+  if (customer.tier === 'Enterprise') {
+    send($.Workflow.enterprise, customer)
+  } else if (customer.tier === 'Premium') {
+    send($.Workflow.premium, customer)
+  } else {
+    send($.Workflow.standard, customer)
+  }
+})
+```
+
+### Parallel Workflows
+
+```typescript
+on($.Order.created, async (order) => {
+  // Execute multiple workflows in parallel
+  await Promise.all([validateInventory(order), validatePayment(order), calculateShipping(order), checkFraud(order)])
+
+  send($.Order.validated, order)
+})
+```
+
+## Best Practices
+
+### 1. Keep Workflows Idempotent
+
+```typescript
+// Good - idempotent
+every($.Daily, async () => {
+  const today = new Date().toISOString().split('T')[0]
+
+  const existing = await db.list($.DailyReport, {
+    where: { date: today },
+  })
+
+  if (existing.length === 0) {
+    await generateReport(today)
+  }
+})
+```
+
+### 2. Handle Errors Gracefully
+
+```typescript
+every($.Hourly, async () => {
+  try {
+    await syncData()
+  } catch (error) {
+    console.error('Sync failed:', error)
+    send($.Alert.error, {
+      workflow: 'hourly-sync',
+      error: error.message,
+    })
+  }
+})
+```
+
+### 3. Monitor Execution
+
+```typescript
+every($.Daily, async () => {
+  const startTime = Date.now()
+
+  try {
+    await performTask()
+
+    const duration = Date.now() - startTime
+
+    await db.create($.WorkflowExecution, {
+      workflow: 'daily-task',
+      status: 'success',
+      duration,
+      timestamp: new Date().toISOString(),
+    })
+  } catch (error) {
+    await db.create($.WorkflowExecution, {
+      workflow: 'daily-task',
+      status: 'failed',
+      error: error.message,
+      timestamp: new Date().toISOString(),
+    })
+  }
+})
+```
+
+### 4. Use Batching
+
+```typescript
+every($.Hourly, async () => {
+  const customers = await db.list($.Customer, { limit: 1000 })
+
+  // Good - batch processing
+  const results = await ai.batch(
+    customers.map((c) => ({
+      prompt: `Analyze: ${c.name}`,
+    }))
+  )
+
+  // Avoid - sequential processing
+  // for (const customer of customers) {
+  //   await ai.generate(`Analyze: ${customer.name}`)
+  // }
+})
+```
+
+## See Also
+
+- [Basic Example](./basic) - Basic operations
+- [Events Example](./events) - Event handling
+- [API Reference](../docs/api-reference) - Workflow API docs
+- [workflows.do](https://workflows.do) - Workflow guide

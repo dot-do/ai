@@ -1,0 +1,66 @@
+---
+$id: https://verbs.do/examples/advanced-patterns
+$type: HowTo
+title: Advanced Patterns
+description: Complex patterns and workflows with semantic verbs
+keywords: [advanced, workflows, patterns]
+---
+
+# Advanced Patterns
+
+## Composed Workflows
+
+```typescript
+async function processOrder(order: Order) {
+  await $.validate(order)
+  const payment = await $.processPayment(order)
+  await $.fulfill(order)
+  await $.ship(order)
+  await $.notify(order.customer, { message: 'Shipped!' })
+}
+```
+
+## Batch Operations
+
+```typescript
+const people = await $.createMany($.Person, [
+  { name: 'Alice', email: 'alice@example.com' },
+  { name: 'Bob', email: 'bob@example.com' },
+  { name: 'Carol', email: 'carol@example.com' },
+])
+
+await Promise.all(people.map((p) => $.update(p, { status: 'Active' })))
+```
+
+## Conditional Verbs
+
+```typescript
+async function processOrderWithApproval(order: Order) {
+  if (order.total > 1000) {
+    await $.requireApproval(order, manager)
+  }
+  await $.process(order)
+}
+```
+
+## Custom Verbs
+
+```typescript
+import { registry } from 'verbs.do/core'
+
+registry.registerVerb({
+  name: 'qualify',
+  implementation: async (lead: Lead) => {
+    const score = await $.score(lead)
+    if (score > 70) {
+      await $.update(lead, { status: 'Qualified' })
+    }
+    return lead
+  },
+})
+
+// Use custom verb
+await $.qualify(lead)
+```
+
+See [Integration](./integration) and [Real-World Use Case](./real-world-use-case).

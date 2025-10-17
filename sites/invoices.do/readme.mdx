@@ -1,0 +1,328 @@
+---
+$id: https://invoices.do
+$type: WebSite
+title: invoices.do - Invoice Management for Business-as-Code
+description: Build autonomous invoice management systems with semantic patterns. Generate invoices, track payments, send reminders, and calculate taxes using Schema.org Invoice types.
+keywords: [invoices, invoice management, billing, accounts receivable, Business-as-Code, Schema.org]
+author:
+  $type: Organization
+  name: .do Platform
+license: MIT
+---
+
+# invoices.do
+
+**Semantic Invoice Management for Business-as-Code**
+
+invoices.do provides a comprehensive invoice management framework for the `.do` platform, enabling you to build autonomous billing and accounts receivable systems using semantic patterns with Schema.org Invoice types.
+
+## What is Invoice Management?
+
+Invoice management encompasses the complete billing lifecycle:
+
+- **Invoice Generation**: Create invoices from orders, subscriptions, or services
+- **Payment Tracking**: Monitor payment status and due dates
+- **Payment Reminders**: Automated reminders for overdue invoices
+- **Tax Calculation**: Accurate sales tax, VAT, and other tax computations
+- **Payment Processing**: Accept and record payments
+- **Reporting**: Financial reports and accounts receivable aging
+
+## Quick Start
+
+```bash
+pnpm add sdk.do
+```
+
+```typescript
+import $, { db } from 'sdk.do'
+
+// Create an invoice
+const invoice = await db.create($.Invoice, {
+  $type: 'Invoice',
+  invoiceNumber: 'INV-2025-001',
+  dateIssued: new Date().toISOString(),
+  customer: {
+    $type: 'Person',
+    name: 'Jane Smith',
+    email: 'jane@example.com',
+  },
+  referencesOrder: 'order-123',
+  accountId: 'customer-456',
+  totalPaymentDue: {
+    $type: 'PriceSpecification',
+    price: 649.99,
+    priceCurrency: 'USD',
+  },
+  paymentDueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+  paymentStatus: 'PaymentDue',
+})
+```
+
+## Key Features
+
+### Automatic Invoice Generation
+
+Generate invoices automatically from orders:
+
+```typescript
+import { on } from 'sdk.do'
+
+await on($.Order.created, async (order) => {
+  const totals = calculateOrderTotal(order)
+
+  const invoice = await db.create($.Invoice, {
+    $type: 'Invoice',
+    invoiceNumber: `INV-${order.orderNumber}`,
+    dateIssued: new Date().toISOString(),
+    referencesOrder: order.$id,
+    customer: order.customer,
+    accountId: order.customer.$id,
+    totalPaymentDue: {
+      $type: 'PriceSpecification',
+      price: totals.total,
+      priceCurrency: 'USD',
+    },
+    paymentDueDate: calculatePaymentDueDate(30), // Net 30
+    paymentStatus: 'PaymentDue',
+    lineItems: order.orderedItem.map((item) => ({
+      $type: 'InvoiceItem',
+      name: item.orderedItem.name,
+      quantity: item.orderQuantity,
+      unitPrice: item.price.price,
+      totalPrice: item.price.price * item.orderQuantity,
+    })),
+  })
+
+  // Send invoice to customer
+  await sendInvoice(invoice)
+})
+```
+
+### Payment Tracking
+
+Track payment status and record payments:
+
+```typescript
+// Record payment
+async function recordPayment(invoiceId: string, amount: number, method: string) {
+  const invoice = await db.get($.Invoice, invoiceId)
+
+  const payment = {
+    $type: 'PaymentRecord',
+    amount,
+    paymentMethod: method,
+    paymentDate: new Date().toISOString(),
+    transactionId: generateTransactionId(),
+  }
+
+  const newBalance = invoice.totalPaymentDue.price - amount
+
+  await db.update(invoice, {
+    payments: [...(invoice.payments || []), payment],
+    paymentStatus: newBalance <= 0 ? 'PaymentComplete' : 'PaymentPartial',
+    paymentDate: newBalance <= 0 ? new Date().toISOString() : undefined,
+    remainingBalance: newBalance,
+  })
+
+  if (newBalance <= 0) {
+    await send({
+      $type: 'EmailMessage',
+      recipient: invoice.customer.email,
+      subject: `Invoice ${invoice.invoiceNumber} Paid`,
+      text: 'Thank you for your payment!',
+    })
+  }
+
+  return invoice
+}
+```
+
+### Payment Reminders
+
+Automated payment reminder system:
+
+```typescript
+import { every } from 'sdk.do'
+
+// Check for overdue invoices daily
+await every('0 9 * * *', async () => {
+  const now = new Date()
+
+  // Find overdue invoices
+  const overdueInvoices = await db.list($.Invoice, {
+    where: {
+      paymentStatus: 'PaymentDue',
+      paymentDueDate: { $lt: now.toISOString() },
+    },
+  })
+
+  for (const invoice of overdueInvoices) {
+    const daysOverdue = Math.floor((now.getTime() - new Date(invoice.paymentDueDate).getTime()) / (24 * 60 * 60 * 1000))
+
+    // Send reminder based on days overdue
+    if ([1, 7, 14, 30].includes(daysOverdue)) {
+      await sendPaymentReminder(invoice, daysOverdue)
+    }
+  }
+})
+
+async function sendPaymentReminder(invoice: Invoice, daysOverdue: number) {
+  await send({
+    $type: 'EmailMessage',
+    recipient: invoice.customer.email,
+    subject: `Payment Reminder: Invoice ${invoice.invoiceNumber}`,
+    html: `
+      <h1>Payment Reminder</h1>
+      <p>This invoice is ${daysOverdue} days overdue.</p>
+      <p>Invoice Number: ${invoice.invoiceNumber}</p>
+      <p>Amount Due: $${invoice.totalPaymentDue.price}</p>
+      <p>Original Due Date: ${new Date(invoice.paymentDueDate).toLocaleDateString()}</p>
+      <p>Please remit payment at your earliest convenience.</p>
+    `,
+  })
+}
+```
+
+### Tax Calculation
+
+Calculate sales tax, VAT, and other taxes:
+
+```typescript
+interface TaxCalculation {
+  subtotal: number
+  taxRate: number
+  taxAmount: number
+  total: number
+}
+
+function calculateTax(subtotal: number, taxRate: number, address: PostalAddress): TaxCalculation {
+  // Determine tax rate based on location
+  const locationTaxRate = getTaxRateForLocation(address)
+  const effectiveRate = taxRate || locationTaxRate
+
+  const taxAmount = subtotal * effectiveRate
+  const total = subtotal + taxAmount
+
+  return {
+    subtotal,
+    taxRate: effectiveRate,
+    taxAmount,
+    total,
+  }
+}
+
+function getTaxRateForLocation(address: PostalAddress): number {
+  // US state tax rates (example)
+  const stateTaxRates = {
+    CA: 0.0725, // California
+    NY: 0.04, // New York
+    TX: 0.0625, // Texas
+    FL: 0.06, // Florida
+    // ... more states
+  }
+
+  return stateTaxRates[address.addressRegion] || 0
+}
+
+// Apply to invoice
+const tax = calculateTax(subtotal, 0, invoice.billingAddress)
+await db.update(invoice, {
+  subtotal: tax.subtotal,
+  taxRate: tax.taxRate,
+  taxAmount: tax.taxAmount,
+  totalPaymentDue: {
+    $type: 'PriceSpecification',
+    price: tax.total,
+    priceCurrency: 'USD',
+  },
+})
+```
+
+## Semantic Patterns
+
+```typescript
+import $ from 'sdk.do'
+
+// Invoice types
+$.Invoice
+$.InvoiceItem
+$.PaymentRecord
+$.TaxCalculation
+
+// Invoice events
+$.Invoice.created
+$.Invoice.updated
+$.Invoice.sent
+$.Invoice.paid
+$.Invoice.overdue
+$.Invoice.cancelled
+
+// Invoice relationships
+$.Invoice.references.Order
+$.Invoice.belongs.to.Customer
+$.Invoice.has.LineItem
+$.Invoice.has.Payment
+$.Customer.owes.Invoice
+```
+
+## Invoice Lifecycle
+
+1. **Generation** - Created from order or service
+2. **Delivery** - Sent to customer via email/portal
+3. **Payment** - Customer makes payment
+4. **Recording** - Payment recorded and applied
+5. **Reconciliation** - Books updated, order completed
+
+## Integration
+
+```typescript
+// Orders → Invoices
+await on($.Order.created, async (order) => {
+  await createInvoiceFromOrder(order)
+})
+
+// Payments → Invoices
+await on($.Payment.received, async (payment) => {
+  await recordPayment(payment.invoice, payment.amount, payment.method)
+})
+
+// Invoices → Customers
+await on($.Invoice.paid, async (invoice) => {
+  const customer = await db.get($.Person, invoice.customer.$id)
+  await db.update(customer, {
+    totalPaid: (customer.totalPaid || 0) + invoice.totalPaymentDue.price,
+  })
+})
+```
+
+## Documentation
+
+- [Getting Started](./docs/getting-started) - Setup and first invoice
+- [Architecture](./docs/architecture) - Invoice system design
+- [Best Practices](./docs/best-practices) - Invoice management patterns
+- [Troubleshooting](./docs/troubleshooting) - Common issues
+- [API Reference](./api/) - Complete API documentation
+- [Examples](./examples/) - Real-world invoice examples
+
+## Examples
+
+- [Basic Usage](./examples/basic-usage) - Simple invoice creation
+- [Advanced Patterns](./examples/advanced-patterns) - Complex invoice workflows
+- [Integration](./examples/integration) - Integration with other services
+- [Real-World Use Case](./examples/real-world-use-case) - Complete billing system
+
+## Related Projects
+
+- [orders.do](https://orders.do) - Order management
+- [payments.do](https://payments.do) - Payment processing
+- [customers.do](https://customers.do) - Customer management
+- [schema.org.ai](https://schema.org.ai) - Schema.org types
+- [sdk.do](https://sdk.do) - Core SDK
+
+## License
+
+MIT (Open Source)
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

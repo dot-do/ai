@@ -1,0 +1,113 @@
+---
+$id: https://integrations.do/xero
+$type: Integration
+name: Xero
+service: xero
+description: Xero is a cloud-based accounting software for small businesses, providing invoicing, bank reconciliation, bookkeeping, and financial reporting in real time
+category: accounting
+sdkBased: false
+baseUrl: https://api.xero.com
+
+auth:
+  type: oauth2
+  authorizationUrl: https://login.xero.com/identity/connect/authorize
+  tokenUrl: https://identity.xero.com/connect/token
+  scopes:
+    - openid
+    - profile
+    - email
+    - offline_access
+    - accounting.reports.read
+    - accounting.transactions.read
+    - accounting.transactions
+    - accounting.contacts.read
+    - accounting.contacts
+    - accounting.settings.read
+    - accounting.settings
+    - accounting.attachments
+    - accounting.journals.read
+    - projects.read
+    - projects
+    - files.read
+    - files
+    - accounting.budgets.read
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Xero actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: false
+  events: []
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://www.xero.com/
+  apiDocs: https://www.xero.com/
+---
+
+# Xero Integration
+
+Xero is a cloud-based accounting software for small businesses, providing invoicing, bank reconciliation, bookkeeping, and financial reporting in real time
+
+## Quick Start
+
+```typescript
+import { XeroClient } from '@dotdo/sdk.do/integrations/xero'
+
+const xero = new XeroClient({
+  apiKey: process.env.XERO_API_KEY,
+})
+
+const result = await xero.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Xero provides 40 actions through the Composio API.
+
+## License
+
+MIT

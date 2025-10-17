@@ -1,0 +1,96 @@
+---
+$id: https://integrations.do/netsuite
+$type: Integration
+name: Netsuite
+service: netsuite
+description: NetSuite by Oracle is a cloud-based ERP suite that combines accounting, CRM, e-commerce, and inventory management for comprehensive business oversight
+category: accounting
+sdkBased: false
+baseUrl: https://api.netsuite.com
+
+auth:
+  type: oauth2
+  authorizationUrl: https://system.netsuite.com/app/login/oauth2/authorize.nl
+  tokenUrl: https://{{subdomain}}.suitetalk.api.netsuite.com/services/rest/auth/oauth2/v1/token
+  scopes:
+    - profile
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Netsuite actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: false
+  events: []
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://www.netsuite.com
+  apiDocs: https://www.netsuite.com
+---
+
+# Netsuite Integration
+
+NetSuite by Oracle is a cloud-based ERP suite that combines accounting, CRM, e-commerce, and inventory management for comprehensive business oversight
+
+## Quick Start
+
+```typescript
+import { NetsuiteClient } from '@dotdo/sdk.do/integrations/netsuite'
+
+const netsuite = new NetsuiteClient({
+  apiKey: process.env.NETSUITE_API_KEY,
+})
+
+const result = await netsuite.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Netsuite provides 0 actions through the Composio API.
+
+## License
+
+MIT

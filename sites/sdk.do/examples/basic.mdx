@@ -1,0 +1,421 @@
+---
+$id: https://sdk.do/examples/basic
+$type: HowTo
+title: Basic Usage Example
+description: Basic sdk.do operations including database, AI, and semantic patterns
+keywords: [example, basic, tutorial, getting-started]
+---
+
+# Basic Usage Example
+
+Learn the fundamentals of sdk.do through a simple example.
+
+## Overview
+
+This example demonstrates:
+
+- Creating and querying entities with semantic types
+- Using the `$` proxy for type-safe operations
+- Basic database CRUD operations
+- Simple AI content generation
+
+## Complete Example
+
+```typescript
+import $, { db, ai } from 'sdk.do'
+
+async function basicExample() {
+  console.log('=== Basic sdk.do Example ===\n')
+
+  // ==========================================
+  // 1. Create Entity
+  // ==========================================
+
+  console.log('1. Creating a business...')
+
+  const business = await db.create($.Business, {
+    name: 'Tech Innovations Inc',
+    industry: 'Technology',
+    foundingDate: '2025-01-01',
+    description: 'Leading technology solutions provider',
+  })
+
+  console.log('✓ Created:', business.$id)
+  console.log('  Name:', business.name)
+  console.log('  Industry:', business.industry)
+  console.log()
+
+  // ==========================================
+  // 2. Read Entity
+  // ==========================================
+
+  console.log('2. Reading business...')
+
+  const retrieved = await db.get($.Business, business.$id)
+
+  if (retrieved) {
+    console.log('✓ Found:', retrieved.name)
+  } else {
+    console.log('✗ Not found')
+  }
+  console.log()
+
+  // ==========================================
+  // 3. Update Entity
+  // ==========================================
+
+  console.log('3. Updating business...')
+
+  const updated = await db.update(business, {
+    numberOfEmployees: 50,
+    revenue: 5000000,
+  })
+
+  console.log('✓ Updated')
+  console.log('  Employees:', updated.numberOfEmployees)
+  console.log('  Revenue:', updated.revenue)
+  console.log()
+
+  // ==========================================
+  // 4. List Entities
+  // ==========================================
+
+  console.log('4. Listing businesses...')
+
+  const allBusinesses = await db.list($.Business, {
+    limit: 10,
+  })
+
+  console.log(`✓ Found ${allBusinesses.length} businesses`)
+  allBusinesses.forEach((b) => {
+    console.log(`  - ${b.name} (${b.industry})`)
+  })
+  console.log()
+
+  // ==========================================
+  // 5. Filter Entities
+  // ==========================================
+
+  console.log('5. Filtering tech businesses...')
+
+  const techBusinesses = await db.list($.Business, {
+    where: { industry: 'Technology' },
+    limit: 5,
+  })
+
+  console.log(`✓ Found ${techBusinesses.length} tech businesses`)
+  console.log()
+
+  // ==========================================
+  // 6. AI Generation
+  // ==========================================
+
+  console.log('6. Generating business description with AI...')
+
+  const aiDescription = await ai.generate(`Write a compelling 2-sentence description for: ${business.name}`)
+
+  console.log('✓ Generated:', aiDescription)
+  console.log()
+
+  // Update with AI description
+  await db.update(business, {
+    description: aiDescription,
+  })
+
+  console.log('✓ Updated business with AI description')
+  console.log()
+
+  // ==========================================
+  // 7. Semantic Types
+  // ==========================================
+
+  console.log('7. Working with semantic types...')
+
+  // Create person
+  const person = await db.create($.Person, {
+    name: 'Jane Smith',
+    email: 'jane@example.com',
+    jobTitle: 'CEO',
+  })
+
+  console.log('✓ Created person:', person.name)
+
+  // Create product
+  const product = await db.create($.Product, {
+    name: 'Cloud Platform',
+    description: 'Enterprise cloud platform',
+    price: 99.99,
+  })
+
+  console.log('✓ Created product:', product.name)
+  console.log()
+
+  // ==========================================
+  // 8. Cleanup (Optional)
+  // ==========================================
+
+  console.log('8. Cleanup...')
+
+  await db.delete(business)
+  await db.delete(person)
+  await db.delete(product)
+
+  console.log('✓ Deleted all test entities')
+  console.log()
+
+  console.log('=== Example Complete ===')
+}
+
+// Run the example
+basicExample().catch(console.error)
+```
+
+## Step-by-Step Explanation
+
+### 1. Import SDK
+
+```typescript
+import $, { db, ai } from 'sdk.do'
+```
+
+- `$` - Semantic proxy for Schema.org types
+- `db` - Database operations
+- `ai` - AI services
+
+### 2. Create Entity
+
+```typescript
+const business = await db.create($.Business, {
+  name: 'Tech Innovations Inc',
+  industry: 'Technology',
+  foundingDate: '2025-01-01',
+  description: 'Leading technology solutions provider',
+})
+```
+
+Creates a new Business entity with semantic type `$.Business`.
+
+### 3. Read Entity
+
+```typescript
+const retrieved = await db.get($.Business, business.$id)
+```
+
+Retrieves entity by ID. Returns `null` if not found.
+
+### 4. Update Entity
+
+```typescript
+const updated = await db.update(business, {
+  numberOfEmployees: 50,
+  revenue: 5000000,
+})
+```
+
+Updates entity with new data. Returns updated entity.
+
+### 5. List Entities
+
+```typescript
+const allBusinesses = await db.list($.Business, {
+  limit: 10,
+})
+```
+
+Lists all entities of type Business, limited to 10 results.
+
+### 6. Filter Entities
+
+```typescript
+const techBusinesses = await db.list($.Business, {
+  where: { industry: 'Technology' },
+  limit: 5,
+})
+```
+
+Filters entities by field values.
+
+### 7. AI Generation
+
+```typescript
+const aiDescription = await ai.generate(`Write a compelling 2-sentence description for: ${business.name}`)
+```
+
+Generates content using AI.
+
+### 8. Delete Entity
+
+```typescript
+await db.delete(business)
+```
+
+Deletes entity from database.
+
+## Running the Example
+
+Save as `basic.ts` and run:
+
+```bash
+tsx basic.ts
+```
+
+## Expected Output
+
+```
+=== Basic sdk.do Example ===
+
+1. Creating a business...
+✓ Created: business-abc123
+  Name: Tech Innovations Inc
+  Industry: Technology
+
+2. Reading business...
+✓ Found: Tech Innovations Inc
+
+3. Updating business...
+✓ Updated
+  Employees: 50
+  Revenue: 5000000
+
+4. Listing businesses...
+✓ Found 1 businesses
+  - Tech Innovations Inc (Technology)
+
+5. Filtering tech businesses...
+✓ Found 1 tech businesses
+
+6. Generating business description with AI...
+✓ Generated: Tech Innovations Inc is a cutting-edge technology solutions provider revolutionizing enterprise software. With innovative cloud platforms and AI-powered tools, they empower businesses to achieve digital transformation.
+
+✓ Updated business with AI description
+
+7. Working with semantic types...
+✓ Created person: Jane Smith
+✓ Created product: Cloud Platform
+
+8. Cleanup...
+✓ Deleted all test entities
+
+=== Example Complete ===
+```
+
+## Key Concepts
+
+### Semantic Types
+
+Use `$` proxy to access Schema.org types:
+
+```typescript
+$.Business // Business entity
+$.Person // Person entity
+$.Product // Product entity
+$.Order // Order entity
+```
+
+### Type Safety
+
+TypeScript provides type checking:
+
+```typescript
+import type { Business } from 'schema.org.ai'
+
+const business: Business = await db.create($.Business, {
+  name: 'Acme',
+  industry: 'Technology',
+})
+```
+
+### Async/Await
+
+All operations are asynchronous:
+
+```typescript
+// Good
+const business = await db.get($.Business, 'id')
+
+// Wrong - don't forget await
+const business = db.get($.Business, 'id') // Returns Promise
+```
+
+### Error Handling
+
+Always handle errors:
+
+```typescript
+try {
+  const business = await db.create($.Business, data)
+} catch (error) {
+  console.error('Failed to create business:', error)
+}
+```
+
+## Next Steps
+
+Continue learning with more examples:
+
+- [Database Operations](./database) - Advanced queries and relationships
+- [Event Handling](./events) - Event-driven architecture
+- [AI Generation](./ai-generation) - AI content generation
+- [Workflows](./workflows) - Scheduled workflows
+
+## Variations
+
+### With Environment Configuration
+
+```typescript
+import $, { db } from 'sdk.do'
+
+// Check configuration
+console.log('Database:', process.env.SDK_DATABASE_URL)
+console.log('AI Model:', process.env.SDK_AI_MODEL)
+
+// Use in operations
+const businesses = await db.list($.Business)
+```
+
+### With TypeScript Types
+
+```typescript
+import $, { db } from 'sdk.do'
+import type { Business, Person } from 'schema.org.ai'
+
+const business: Business = await db.create($.Business, {
+  name: 'Acme',
+  industry: 'Technology',
+})
+
+const person: Person = await db.create($.Person, {
+  name: 'John Doe',
+  email: 'john@example.com',
+})
+```
+
+### With Error Handling
+
+```typescript
+import $, { db } from 'sdk.do'
+
+async function safeCreate(data: any) {
+  try {
+    const business = await db.create($.Business, data)
+    return { success: true, data: business }
+  } catch (error) {
+    return { success: false, error: error.message }
+  }
+}
+
+const result = await safeCreate({ name: 'Acme' })
+
+if (result.success) {
+  console.log('Created:', result.data.$id)
+} else {
+  console.error('Failed:', result.error)
+}
+```
+
+## See Also
+
+- [Getting Started Guide](../docs/getting-started)
+- [API Reference](../docs/api-reference)
+- [Database Examples](./database)
+- [Quick Start](../docs/quickstart)

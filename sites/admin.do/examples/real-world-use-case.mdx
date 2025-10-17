@@ -1,0 +1,96 @@
+---
+$id: https://admin.do/examples/real-world-use-case
+$type: TechArticle
+title: admin.do Real-World Use Case
+description: Real-world use case for admin.do
+keywords: [admin, real-world, use case]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Real-World Use Case
+
+Production implementation of admin.do for a SaaS company.
+
+## Scenario
+
+A SaaS company needs enterprise-grade admin capabilities including user management, RBAC, audit logging, and monitoring for 500+ team members.
+
+## Implementation
+
+### 1. Configure RBAC
+
+```typescript
+import { admin } from 'admin.do'
+
+// Define organizational roles
+await Promise.all([
+  admin.roles.create({
+    name: 'engineering',
+    permissions: ['platform.*', 'database.*', 'deploy.read'],
+  }),
+  admin.roles.create({
+    name: 'product',
+    permissions: ['analytics.*', 'feature_flags.*'],
+  }),
+  admin.roles.create({
+    name: 'support',
+    permissions: ['users.read', 'tickets.*', 'logs.read'],
+  }),
+])
+```
+
+### 2. Automated User Provisioning
+
+```typescript
+import { admin, on } from 'admin.do'
+
+on($.Employee.hired, async (event) => {
+  const user = await admin.users.create({
+    email: event.employee.email,
+    name: event.employee.name,
+    department: event.employee.department,
+  })
+
+  await admin.users.assignRole(user.$id, event.employee.department.toLowerCase())
+
+  await admin.audit.log({
+    action: 'user.provisioned',
+    actor: 'system',
+    target: user.$id,
+  })
+})
+```
+
+### 3. Security Monitoring
+
+```typescript
+import { admin, every, send } from 'admin.do'
+
+every($.Hourly, async () => {
+  const failedLogins = await admin.audit.query({
+    action: 'auth.failed',
+    since: '1h',
+  })
+
+  if (failedLogins.length > 50) {
+    await send($.Alert.created, {
+      severity: 'critical',
+      message: 'High number of failed login attempts',
+      count: failedLogins.length,
+    })
+  }
+})
+```
+
+## Results
+
+- **500+ users** managed with automated provisioning
+- **99.99% uptime** for auth system
+- **Complete audit trail** for compliance
+- **<100ms** permission checks
+
+## License
+
+MIT (Open Source)

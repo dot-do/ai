@@ -1,0 +1,253 @@
+---
+$id: https://resources.do/docs/best-practices
+$type: TechArticle
+title: resources.do Best Practices
+description: Recommended patterns for working with data records and resources
+keywords: [best practices, patterns, data management, querying]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# resources.do Best Practices
+
+Recommended patterns for working with data records and entity instances.
+
+## Data Validation
+
+### Validate Before Creating
+
+```typescript
+import { validate } from 'sdk.do'
+
+// ✓ Good - validate first
+async function createPerson(data: any) {
+  const result = validate(data, $.Person)
+  if (!result.valid) {
+    throw new ValidationError(result.errors)
+  }
+  return await db.create($.Person, data)
+}
+
+// ✗ Avoid - no validation
+async function createPerson(data: any) {
+  return await db.create($.Person, data)
+}
+```
+
+### Validate on Update
+
+```typescript
+// ✓ Good - validate updates
+async function updatePerson(id: string, data: any) {
+  const person = await db.get($.Person, id)
+  const updated = { ...person, ...data }
+  const result = validate(updated, $.Person)
+
+  if (!result.valid) {
+    throw new ValidationError(result.errors)
+  }
+
+  return await db.update(person, data)
+}
+```
+
+## Querying Patterns
+
+### Use Specific Filters
+
+```typescript
+// ✓ Good - specific query
+const engineers = await db.list($.Person, {
+  where: {
+    jobTitle: { $contains: 'Engineer' },
+    status: 'Active',
+  },
+  limit: 10,
+})
+
+// ✗ Avoid - load all then filter
+const all = await db.list($.Person)
+const engineers = all.filter((p) => p.jobTitle?.includes('Engineer'))
+```
+
+### Always Limit Results
+
+```typescript
+// ✓ Good - with limit
+const people = await db.list($.Person, { limit: 100 })
+
+// ✗ Avoid - unbounded
+const people = await db.list($.Person)
+```
+
+### Use Pagination
+
+```typescript
+// ✓ Good - paginate large datasets
+async function* getAllPeople() {
+  let offset = 0
+  const limit = 100
+
+  while (true) {
+    const page = await db.list($.Person, { limit, offset })
+    if (page.length === 0) break
+    yield* page
+    offset += limit
+  }
+}
+
+for await (const person of getAllPeople()) {
+  await processPerson(person)
+}
+```
+
+## Error Handling
+
+### Handle Not Found
+
+```typescript
+// ✓ Good - handle errors
+async function getPerson(id: string) {
+  try {
+    return await db.get($.Person, id)
+  } catch (error) {
+    if (error.code === 'NOT_FOUND') {
+      return null
+    }
+    throw error
+  }
+}
+
+// Or use optional
+const person = await db.get($.Person, id).catch(() => null)
+if (!person) {
+  console.error('Person not found')
+}
+```
+
+### Check Existence
+
+```typescript
+// ✓ Good - check first
+const exists = await db.exists($.Person, id)
+if (exists) {
+  const person = await db.get($.Person, id)
+}
+```
+
+## Performance
+
+### Cache Frequently Accessed Resources
+
+```typescript
+const cache = new Map<string, any>()
+
+async function getCachedPerson(id: string) {
+  if (cache.has(id)) {
+    return cache.get(id)
+  }
+
+  const person = await db.get($.Person, id)
+  cache.set(id, person)
+  return person
+}
+```
+
+### Batch Operations
+
+```typescript
+// ✓ Good - batch
+const people = await Promise.all(ids.map((id) => db.get($.Person, id)))
+
+// ✗ Avoid - sequential
+const people = []
+for (const id of ids) {
+  people.push(await db.get($.Person, id))
+}
+```
+
+### Use Indexes
+
+```typescript
+// Query indexed fields
+const people = await db.list($.Person, {
+  where: { email: 'jane@example.com' }, // email is indexed
+})
+
+// Avoid querying unindexed nested fields
+const people = await db.list($.Person, {
+  where: { 'metadata.customField': 'value' }, // May be slow
+})
+```
+
+## Data Integrity
+
+### Use Transactions
+
+```typescript
+// ✓ Good - atomic operations
+await db.transaction(async (tx) => {
+  const person = await tx.create($.Person, personData)
+  await tx.relate(person, $.worksFor, organization)
+  await tx.create($.Task, { assignee: person.$id })
+})
+```
+
+### Soft Deletes
+
+```typescript
+// ✓ Good - soft delete for important data
+await db.update(person, {
+  status: 'Archived',
+  archivedAt: new Date(),
+})
+
+// Query only active
+const active = await db.list($.Person, {
+  where: { status: { $ne: 'Archived' } },
+})
+```
+
+## Testing
+
+### Use Test Fixtures
+
+```typescript
+const testPerson = {
+  $type: 'Person',
+  name: 'Test User',
+  email: 'test@example.com',
+  jobTitle: 'Tester',
+}
+
+describe('Person operations', () => {
+  it('creates person', async () => {
+    const person = await db.create($.Person, testPerson)
+    expect(person.$type).toBe('Person')
+  })
+})
+```
+
+### Clean Up After Tests
+
+```typescript
+describe('Person tests', () => {
+  let testPerson: any
+
+  beforeEach(async () => {
+    testPerson = await db.create($.Person, testData)
+  })
+
+  afterEach(async () => {
+    await db.delete(testPerson)
+  })
+})
+```
+
+## Related Documentation
+
+- [Getting Started](./getting-started)
+- [Architecture](./architecture)
+- [Troubleshooting](./troubleshooting)
+- [API Reference](../api/reference)

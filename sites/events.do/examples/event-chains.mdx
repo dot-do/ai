@@ -1,0 +1,744 @@
+---
+$id: https://events.do/examples/event-chains
+$type: HowTo
+title: Event Chains and Workflows
+description: Pattern for chaining multiple events to create complex workflows
+keywords: [event-chains, workflows, patterns, saga, orchestration]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Event Chains and Workflows
+
+Learn how to chain multiple events together to create sophisticated, event-driven workflows. This guide covers common patterns for building reliable, maintainable event chains.
+
+## Basic Event Chain
+
+The simplest event chain: one event triggers another.
+
+```typescript
+import { on, send } from 'sdk.do'
+
+// Step 1
+on('User.registered', async (event) => {
+  console.log('User registered, creating profile...')
+
+  await send('Profile.created', {
+    userId: event.data.id,
+    email: event.data.email,
+    createdAt: new Date(),
+  })
+})
+
+// Step 2
+on('Profile.created', async (event) => {
+  console.log('Profile created, sending welcome email...')
+
+  await send('Email.sent', {
+    to: event.data.email,
+    template: 'welcome',
+    sentAt: new Date(),
+  })
+})
+
+// Step 3
+on('Email.sent', async (event) => {
+  console.log('Welcome email sent!')
+})
+
+// Start the chain
+await send('User.registered', {
+  id: 'user-123',
+  email: 'user@example.com',
+})
+```
+
+## Linear Workflow
+
+A sequential workflow where each step depends on the previous one.
+
+```typescript
+import { on, send } from 'sdk.do'
+
+// Document approval workflow
+on('Document.submitted', async (event) => {
+  console.log(`Document ${event.data.id} submitted`)
+
+  // Automatic checks
+  const checks = await runAutomatedChecks(event.data)
+
+  if (checks.passed) {
+    await send('Document.checksPass ed', event.data)
+  } else {
+    await send('Document.checksFailed', {
+      ...event.data,
+      issues: checks.issues,
+    })
+  }
+})
+
+on('Document.checksPassed', async (event) => {
+  console.log(`Document ${event.data.id} passed checks, assigning reviewer...`)
+
+  const reviewer = await assignReviewer(event.data)
+
+  await send('Document.reviewAssigned', {
+    ...event.data,
+    reviewer: reviewer.id,
+  })
+})
+
+on('Document.reviewAssigned', async (event) => {
+  console.log(`Document ${event.data.id} assigned to ${event.data.reviewer}`)
+
+  // Notify reviewer
+  await notifyReviewer(event.data.reviewer, event.data.id)
+
+  // Wait for review (in real app, this would be triggered by user action)
+  // This is just for demonstration
+  setTimeout(async () => {
+    await send('Document.reviewed', {
+      ...event.data,
+      approved: true,
+      reviewedAt: new Date(),
+    })
+  }, 5000)
+})
+
+on('Document.reviewed', async (event) => {
+  if (event.data.approved) {
+    await send('Document.approved', event.data)
+  } else {
+    await send('Document.rejected', event.data)
+  }
+})
+
+on('Document.approved', async (event) => {
+  console.log(`Document ${event.data.id} approved!`)
+
+  await notifySubmitter(event.data, 'approved')
+  await publishDocument(event.data)
+})
+
+on('Document.rejected', async (event) => {
+  console.log(`Document ${event.data.id} rejected`)
+
+  await notifySubmitter(event.data, 'rejected')
+})
+
+// Start the workflow
+await send('Document.submitted', {
+  id: 'doc-123',
+  title: 'Q4 Report',
+  submitter: 'user-456',
+})
+```
+
+## Branching Workflow
+
+Events that trigger different paths based on conditions.
+
+```typescript
+import { on, send } from 'sdk.do'
+
+// Order processing with different paths based on order value
+on('Order.created', async (event) => {
+  const order = event.data
+
+  if (order.total > 10000) {
+    // High-value orders get special treatment
+    await send('Order.flaggedForReview', order)
+  } else {
+    // Standard orders proceed directly
+    await send('Order.validated', order)
+  }
+})
+
+// High-value path
+on('Order.flaggedForReview', async (event) => {
+  console.log('High-value order - manual review required')
+
+  // Notify sales team
+  await notifySalesTeam(event.data)
+
+  // Wait for manual approval (simulated)
+  setTimeout(async () => {
+    await send('Order.approved', event.data)
+  }, 3000)
+})
+
+on('Order.approved', async (event) => {
+  console.log('Order approved, proceeding...')
+
+  await send('Order.validated', event.data)
+})
+
+// Standard path
+on('Order.validated', async (event) => {
+  console.log('Order validated, processing payment...')
+
+  await send('Payment.requested', {
+    orderId: event.data.id,
+    amount: event.data.total,
+  })
+})
+
+on('Payment.requested', async (event) => {
+  console.log('Processing payment...')
+
+  const result = await processPayment(event.data)
+
+  if (result.success) {
+    await send('Payment.completed', event.data)
+  } else {
+    await send('Payment.failed', event.data)
+  }
+})
+
+on('Payment.completed', async (event) => {
+  await send('Order.confirmed', event.data)
+})
+```
+
+## Parallel Processing
+
+One event triggers multiple independent operations.
+
+```typescript
+import { on, send } from 'sdk.do'
+
+// Order created triggers parallel operations
+on('Order.created', async (event) => {
+  const order = event.data
+
+  // All these operations happen in parallel
+  await Promise.all([
+    send('Inventory.checkRequested', {
+      orderId: order.id,
+      items: order.items,
+    }),
+    send('Fraud.checkRequested', {
+      orderId: order.id,
+      customer: order.customer,
+    }),
+    send('Shipping.quoteRequested', {
+      orderId: order.id,
+      destination: order.shippingAddress,
+    }),
+  ])
+})
+
+// Track completion of parallel operations
+const orderChecks = new Map()
+
+function initOrderChecks(orderId: string) {
+  orderChecks.set(orderId, {
+    inventory: false,
+    fraud: false,
+    shipping: false,
+  })
+}
+
+function checkAllComplete(orderId: string) {
+  const checks = orderChecks.get(orderId)
+  return checks.inventory && checks.fraud && checks.shipping
+}
+
+// Inventory check completed
+on('Inventory.checkCompleted', async (event) => {
+  const { orderId, available } = event.data
+
+  if (!orderChecks.has(orderId)) {
+    initOrderChecks(orderId)
+  }
+
+  orderChecks.get(orderId).inventory = true
+  orderChecks.get(orderId).inventoryAvailable = available
+
+  if (checkAllComplete(orderId)) {
+    await send('Order.checksCompleted', {
+      orderId,
+      checks: orderChecks.get(orderId),
+    })
+    orderChecks.delete(orderId)
+  }
+})
+
+// Fraud check completed
+on('Fraud.checkCompleted', async (event) => {
+  const { orderId, passed } = event.data
+
+  if (!orderChecks.has(orderId)) {
+    initOrderChecks(orderId)
+  }
+
+  orderChecks.get(orderId).fraud = true
+  orderChecks.get(orderId).fraudPassed = passed
+
+  if (checkAllComplete(orderId)) {
+    await send('Order.checksCompleted', {
+      orderId,
+      checks: orderChecks.get(orderId),
+    })
+    orderChecks.delete(orderId)
+  }
+})
+
+// Shipping quote completed
+on('Shipping.quoteCompleted', async (event) => {
+  const { orderId, quote } = event.data
+
+  if (!orderChecks.has(orderId)) {
+    initOrderChecks(orderId)
+  }
+
+  orderChecks.get(orderId).shipping = true
+  orderChecks.get(orderId).shippingQuote = quote
+
+  if (checkAllComplete(orderId)) {
+    await send('Order.checksCompleted', {
+      orderId,
+      checks: orderChecks.get(orderId),
+    })
+    orderChecks.delete(orderId)
+  }
+})
+
+// All checks completed
+on('Order.checksCompleted', async (event) => {
+  const { orderId, checks } = event.data
+
+  if (checks.inventoryAvailable && checks.fraudPassed) {
+    await send('Order.validated', {
+      orderId,
+      shippingCost: checks.shippingQuote,
+    })
+  } else {
+    await send('Order.rejected', {
+      orderId,
+      reasons: {
+        inventory: !checks.inventoryAvailable,
+        fraud: !checks.fraudPassed,
+      },
+    })
+  }
+})
+```
+
+## Saga Pattern
+
+Distributed transactions with compensation logic.
+
+```typescript
+import { on, send } from 'sdk.do'
+
+// Track saga state
+const sagas = new Map()
+
+// Start booking saga
+on('Booking.requested', async (event) => {
+  const { bookingId, flightId, hotelId, carId } = event.data
+
+  // Initialize saga
+  sagas.set(bookingId, {
+    steps: [],
+    status: 'in-progress',
+  })
+
+  // Step 1: Book flight
+  await send('Flight.bookingRequested', {
+    bookingId,
+    flightId,
+  })
+})
+
+// Flight booked successfully
+on('Flight.booked', async (event) => {
+  const { bookingId, flightId, confirmationCode } = event.data
+  const saga = sagas.get(bookingId)
+
+  saga.steps.push({
+    type: 'flight',
+    status: 'completed',
+    confirmationCode,
+  })
+
+  // Step 2: Book hotel
+  await send('Hotel.bookingRequested', {
+    bookingId,
+    hotelId: event.data.hotelId,
+  })
+})
+
+// Hotel booked successfully
+on('Hotel.booked', async (event) => {
+  const { bookingId, confirmationCode } = event.data
+  const saga = sagas.get(bookingId)
+
+  saga.steps.push({
+    type: 'hotel',
+    status: 'completed',
+    confirmationCode,
+  })
+
+  // Step 3: Book car
+  await send('Car.bookingRequested', {
+    bookingId,
+    carId: event.data.carId,
+  })
+})
+
+// Car booked successfully
+on('Car.booked', async (event) => {
+  const { bookingId, confirmationCode } = event.data
+  const saga = sagas.get(bookingId)
+
+  saga.steps.push({
+    type: 'car',
+    status: 'completed',
+    confirmationCode,
+  })
+
+  saga.status = 'completed'
+
+  // All bookings successful
+  await send('Booking.completed', {
+    bookingId,
+    confirmations: saga.steps,
+  })
+
+  sagas.delete(bookingId)
+})
+
+// Handle failures with compensation
+on('Flight.bookingFailed', async (event) => {
+  const { bookingId, reason } = event.data
+
+  await send('Booking.failed', {
+    bookingId,
+    failedAt: 'flight',
+    reason,
+  })
+})
+
+on('Hotel.bookingFailed', async (event) => {
+  const { bookingId, reason } = event.data
+  const saga = sagas.get(bookingId)
+
+  // Compensate: Cancel flight
+  const flightStep = saga.steps.find((s) => s.type === 'flight')
+  if (flightStep) {
+    await send('Flight.cancellationRequested', {
+      bookingId,
+      confirmationCode: flightStep.confirmationCode,
+    })
+  }
+
+  await send('Booking.failed', {
+    bookingId,
+    failedAt: 'hotel',
+    reason,
+  })
+})
+
+on('Car.bookingFailed', async (event) => {
+  const { bookingId, reason } = event.data
+  const saga = sagas.get(bookingId)
+
+  // Compensate: Cancel flight and hotel
+  for (const step of saga.steps) {
+    if (step.type === 'flight') {
+      await send('Flight.cancellationRequested', {
+        bookingId,
+        confirmationCode: step.confirmationCode,
+      })
+    } else if (step.type === 'hotel') {
+      await send('Hotel.cancellationRequested', {
+        bookingId,
+        confirmationCode: step.confirmationCode,
+      })
+    }
+  }
+
+  await send('Booking.failed', {
+    bookingId,
+    failedAt: 'car',
+    reason,
+  })
+})
+
+on('Booking.failed', async (event) => {
+  const { bookingId } = event.data
+
+  sagas.delete(bookingId)
+
+  console.log('Booking failed, all reservations cancelled')
+})
+```
+
+## State Machine Pattern
+
+Use events to model state transitions.
+
+```typescript
+import { on, send } from 'sdk.do'
+
+// Ticket states: new → in_progress → resolved → closed
+const ticketStates = new Map()
+
+on('Ticket.created', async (event) => {
+  const ticket = event.data
+  ticketStates.set(ticket.id, 'new')
+
+  console.log(`Ticket ${ticket.id} created (state: new)`)
+
+  // Auto-assign if high priority
+  if (ticket.priority === 'high') {
+    await send('Ticket.assignmentRequested', ticket)
+  }
+})
+
+on('Ticket.assignmentRequested', async (event) => {
+  const ticket = event.data
+  const currentState = ticketStates.get(ticket.id)
+
+  // Can only assign from 'new' state
+  if (currentState !== 'new') {
+    console.log(`Cannot assign ticket ${ticket.id} from state ${currentState}`)
+    return
+  }
+
+  const agent = await findAvailableAgent()
+
+  await send('Ticket.assigned', {
+    ...ticket,
+    agent: agent.id,
+  })
+})
+
+on('Ticket.assigned', async (event) => {
+  const ticket = event.data
+  ticketStates.set(ticket.id, 'assigned')
+
+  console.log(`Ticket ${ticket.id} assigned to ${ticket.agent} (state: assigned)`)
+
+  await notifyAgent(ticket.agent, ticket)
+})
+
+on('Ticket.workStarted', async (event) => {
+  const ticket = event.data
+  const currentState = ticketStates.get(ticket.id)
+
+  // Can only start work from 'assigned' state
+  if (currentState !== 'assigned') {
+    console.log(`Cannot start work on ticket ${ticket.id} from state ${currentState}`)
+    return
+  }
+
+  ticketStates.set(ticket.id, 'in_progress')
+
+  console.log(`Work started on ticket ${ticket.id} (state: in_progress)`)
+})
+
+on('Ticket.resolved', async (event) => {
+  const ticket = event.data
+  const currentState = ticketStates.get(ticket.id)
+
+  // Can only resolve from 'in_progress' state
+  if (currentState !== 'in_progress') {
+    console.log(`Cannot resolve ticket ${ticket.id} from state ${currentState}`)
+    return
+  }
+
+  ticketStates.set(ticket.id, 'resolved')
+
+  console.log(`Ticket ${ticket.id} resolved (state: resolved)`)
+
+  // Notify customer
+  await notifyCustomer(ticket.customer, 'resolved', ticket)
+})
+
+on('Ticket.closed', async (event) => {
+  const ticket = event.data
+  const currentState = ticketStates.get(ticket.id)
+
+  // Can only close from 'resolved' state
+  if (currentState !== 'resolved') {
+    console.log(`Cannot close ticket ${ticket.id} from state ${currentState}`)
+    return
+  }
+
+  ticketStates.set(ticket.id, 'closed')
+
+  console.log(`Ticket ${ticket.id} closed (state: closed)`)
+
+  // Request feedback
+  await send('Feedback.requested', {
+    ticketId: ticket.id,
+    customer: ticket.customer,
+  })
+
+  // Cleanup
+  setTimeout(
+    () => {
+      ticketStates.delete(ticket.id)
+    },
+    30 * 24 * 60 * 60 * 1000
+  ) // Delete after 30 days
+})
+```
+
+## Event Aggregation
+
+Combine multiple events into a summary.
+
+```typescript
+import { on, send } from 'sdk.do'
+
+// Track daily metrics
+const dailyMetrics = {
+  orders: 0,
+  revenue: 0,
+  customers: new Set(),
+  products: new Map(),
+}
+
+on('Order.completed', async (event) => {
+  const order = event.data
+
+  // Update metrics
+  dailyMetrics.orders++
+  dailyMetrics.revenue += order.total
+  dailyMetrics.customers.add(order.customer.id)
+
+  for (const item of order.items) {
+    const current = dailyMetrics.products.get(item.product) || 0
+    dailyMetrics.products.set(item.product, current + item.quantity)
+  }
+})
+
+// Publish daily summary
+every($.Daily, async () => {
+  // Create summary
+  const summary = {
+    date: new Date().toISOString().split('T')[0],
+    totalOrders: dailyMetrics.orders,
+    totalRevenue: dailyMetrics.revenue,
+    uniqueCustomers: dailyMetrics.customers.size,
+    topProducts: Array.from(dailyMetrics.products.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([product, quantity]) => ({ product, quantity })),
+  }
+
+  // Publish summary event
+  await send('Metrics.dailySummary', summary)
+
+  // Reset metrics
+  dailyMetrics.orders = 0
+  dailyMetrics.revenue = 0
+  dailyMetrics.customers.clear()
+  dailyMetrics.products.clear()
+})
+
+on('Metrics.dailySummary', async (event) => {
+  console.log('Daily Summary:', event.data)
+
+  // Store in database
+  await db.create($.DailyMetrics, event.data)
+
+  // Send to analytics
+  await sendToAnalytics(event.data)
+
+  // Notify stakeholders
+  await sendDailyReport(event.data)
+})
+```
+
+## Best Practices
+
+### 1. Use Correlation IDs
+
+Track related events:
+
+```typescript
+const correlationId = generateId()
+
+await send('Order.created', orderData, { correlationId })
+await send('Payment.requested', paymentData, { correlationId })
+await send('Order.shipped', shippingData, { correlationId })
+```
+
+### 2. Handle Errors Gracefully
+
+Don't let one failure break the chain:
+
+```typescript
+on('Order.created', async (event) => {
+  try {
+    await validateOrder(event.data)
+    await send('Order.validated', event.data)
+  } catch (error) {
+    await send('Order.validationFailed', {
+      ...event.data,
+      error: error.message,
+    })
+  }
+})
+```
+
+### 3. Keep State Outside Events
+
+Use a database or cache for state:
+
+```typescript
+// ❌ Bad - state in memory
+const orderStates = new Map()
+
+// ✅ Good - state in database
+on('Order.created', async (event) => {
+  await db.create($.Order, {
+    ...event.data,
+    status: 'created',
+  })
+})
+```
+
+### 4. Make Handlers Idempotent
+
+Handle duplicate events:
+
+```typescript
+on('Payment.completed', async (event) => {
+  const existing = await db.get($.Payment, event.data.id)
+
+  if (existing?.status === 'completed') {
+    console.log('Payment already completed, skipping')
+    return
+  }
+
+  await processPayment(event.data)
+})
+```
+
+### 5. Use Timeouts
+
+Don't wait forever:
+
+```typescript
+const timeout = setTimeout(() => {
+  send('Order.timeout', { orderId })
+}, 30000) // 30 second timeout
+
+on('Order.completed', async (event) => {
+  clearTimeout(timeout)
+})
+```
+
+## See Also
+
+- [Order Workflow Example](./order-workflow)
+- [Basic Events Example](./basic-events)
+- [Event Listeners](../docs/listeners)
+- [Event Publishers](../docs/publishers)

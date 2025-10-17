@@ -1,0 +1,703 @@
+---
+$id: https://cli.do/examples/ai-commands
+$type: HowTo
+title: AI Commands Examples - cli.do
+description: AI generation and processing examples with cli.do
+keywords: [ai, examples, generation, embeddings, prompts, llm]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# AI Commands Examples
+
+AI generation and processing examples using cli.do.
+
+## Overview
+
+cli.do provides powerful AI commands for content generation, embeddings, and batch processing. This guide covers patterns for working with AI models using semantic types and schemas.
+
+## Basic Text Generation
+
+### Simple Prompts
+
+Generate text with basic prompts:
+
+```bash
+# Generate a haiku
+do ai generate "Write a haiku about programming"
+
+# Explain a concept
+do ai generate "Explain what GraphQL is in simple terms"
+
+# Tell a story
+do ai generate "Write a short story about a time-traveling developer"
+
+# Create a joke
+do ai generate "Tell me a programming joke"
+
+# Write instructions
+do ai generate "How to center a div in CSS"
+```
+
+Output example:
+
+```
+Code flows like water
+Logic branches, functions bloom
+Beauty in syntax
+```
+
+### Multi-Line Prompts
+
+Use here-docs for complex prompts:
+
+```bash
+do ai generate "
+Create a product description for:
+- Name: Widget Pro 3000
+- Features: Wireless, Fast, Durable
+- Price: 99.99 USD
+- Target audience: Professionals
+
+Make it compelling and concise.
+"
+```
+
+### Prompts from Files
+
+Store prompts in files for reuse:
+
+```bash
+# Create prompt file
+cat > prompt.txt << 'EOF'
+Write a professional email announcing:
+- Product launch: Widget Pro 3000
+- Release date: October 15, 2025
+- Key features: Enhanced performance, new design
+- Call to action: Pre-order now
+EOF
+
+# Generate from file
+do ai generate @prompt.txt
+```
+
+## Model Selection
+
+### Choose Specific Models
+
+Select AI models for different tasks:
+
+```bash
+# Use Claude Sonnet 4.5 (best for reasoning)
+do ai generate "Solve this logic puzzle..." --model claude-sonnet-4.5
+
+# Use GPT-5 (best for general tasks)
+do ai generate "Write a blog post" --model gpt-5
+
+# Use GPT-5 Mini (faster, cost-effective)
+do ai generate "Summarize this text" --model gpt-5-mini
+
+# Use GPT-5 Codex (best for code generation)
+do ai generate "Write a React component" --model gpt-5-codex
+```
+
+### Model Comparison
+
+Compare outputs from different models:
+
+```bash
+PROMPT="Explain quantum computing"
+
+echo "Claude Sonnet 4.5:"
+do ai generate "$PROMPT" --model claude-sonnet-4.5
+
+echo -e "\nGPT-5:"
+do ai generate "$PROMPT" --model gpt-5
+```
+
+## Structured Generation
+
+### Generate with Schemas
+
+Generate structured data using Schema.org types:
+
+```bash
+# Generate a blog post
+do ai generate "Write about AI ethics" --schema BlogPosting --format json
+
+# Generate a product
+do ai generate "Create a laptop product" --schema Product --format json
+
+# Generate a person profile
+do ai generate "Create employee profile for software engineer" --schema Person --format json
+
+# Generate an event
+do ai generate "Create tech conference event" --schema Event --format json
+
+# Generate an organization
+do ai generate "Create startup company" --schema Organization --format json
+```
+
+Example output:
+
+```json
+{
+  "$type": "BlogPosting",
+  "$id": "ai-ethics-2025",
+  "headline": "The Ethics of AI in 2025",
+  "articleBody": "As artificial intelligence...",
+  "author": {
+    "$type": "Person",
+    "name": "AI Generated"
+  },
+  "datePublished": "2025-10-10",
+  "keywords": ["AI", "ethics", "technology"]
+}
+```
+
+### Save Structured Output
+
+Generate and save to database:
+
+```bash
+# Generate product and save
+PRODUCT=$(do ai generate "Create wireless headphones product" --schema Product --format json)
+
+# Create in database
+echo $PRODUCT | do db create Product
+
+# One-liner version
+do ai generate "Create laptop product" --schema Product --format json | do db create Product
+```
+
+### Generate Multiple Entities
+
+Create related entities:
+
+```bash
+# Generate organization
+ORG=$(do ai generate "Create tech startup" --schema Organization --format json)
+echo $ORG | do db create Organization
+
+# Generate employees for that org
+do ai generate "Create 3 employee profiles for a tech startup" --schema Person --format json | do db create Person --batch
+```
+
+## Temperature Control
+
+### Creative vs Deterministic
+
+Control randomness in generation:
+
+```bash
+# Very deterministic (temperature 0.0)
+do ai generate "What is 2+2?" --temperature 0.0
+
+# Balanced (temperature 1.0, default)
+do ai generate "Write a story" --temperature 1.0
+
+# Very creative (temperature 1.5)
+do ai generate "Create a unique character" --temperature 1.5
+
+# Maximum creativity (temperature 2.0)
+do ai generate "Invent a new concept" --temperature 2.0
+```
+
+### Use Cases by Temperature
+
+```bash
+# Factual content (low temperature)
+do ai generate "Explain photosynthesis" --temperature 0.3
+
+# Marketing content (medium temperature)
+do ai generate "Write product description" --temperature 1.0
+
+# Creative content (high temperature)
+do ai generate "Write a sci-fi story" --temperature 1.5
+
+# Code generation (low temperature)
+do ai generate "Write a sorting algorithm" --temperature 0.2 --model gpt-5-codex
+```
+
+## System Prompts
+
+### Set Context and Behavior
+
+Use system prompts to set context:
+
+```bash
+# Act as expert
+do ai generate "Explain machine learning" \
+  --system "You are a machine learning professor"
+
+# Set tone
+do ai generate "Explain APIs" \
+  --system "You are a friendly teacher explaining to beginners"
+
+# Set format
+do ai generate "List benefits of TypeScript" \
+  --system "Respond with bullet points only"
+
+# Set expertise
+do ai generate "Design a database schema" \
+  --system "You are a senior database architect"
+```
+
+### Complex System Prompts
+
+```bash
+# Multi-line system prompt
+do ai generate "Create a marketing email" --system "
+You are a professional marketing copywriter.
+- Be concise and compelling
+- Use active voice
+- Include clear call-to-action
+- Keep under 200 words
+"
+```
+
+## Batch Processing
+
+### Process Multiple Prompts
+
+Batch generate content:
+
+```bash
+# Create prompts file
+cat > prompts.json << 'EOF'
+[
+  {
+    "prompt": "Write a haiku about code",
+    "temperature": 1.0
+  },
+  {
+    "prompt": "Explain REST APIs",
+    "temperature": 0.5
+  },
+  {
+    "prompt": "Create a joke about developers",
+    "temperature": 1.5
+  }
+]
+EOF
+
+# Batch generate
+do ai batch --file prompts.json --operation generate --output results.json
+```
+
+### Parallel Processing
+
+Process many prompts efficiently:
+
+```bash
+# Create large batch
+cat > batch.json << 'EOF'
+[
+  {"prompt": "Generate product 1", "schema": "Product"},
+  {"prompt": "Generate product 2", "schema": "Product"},
+  {"prompt": "Generate product 3", "schema": "Product"}
+]
+EOF
+
+# Process with parallelism
+do ai batch --file batch.json --operation generate --parallel 10
+```
+
+### Content Pipeline
+
+Chain generation steps:
+
+```bash
+# Step 1: Generate topics
+do ai generate "List 5 blog post topics about AI" > topics.txt
+
+# Step 2: Generate posts for each topic
+cat topics.txt | while read topic; do
+  do ai generate "Write blog post about: $topic" --schema BlogPosting --format json
+done > posts.json
+
+# Step 3: Save to database
+cat posts.json | jq -c '.' | while read post; do
+  echo $post | do db create BlogPosting
+done
+```
+
+## Embeddings
+
+### Create Embeddings
+
+Generate vector embeddings:
+
+```bash
+# Embed single text
+do ai embed "Hello world"
+
+# Embed from file
+do ai embed @document.txt
+
+# Embed with custom dimensions
+do ai embed "Text to embed" --dimensions 768
+
+# Embed and save
+EMBEDDING=$(do ai embed "Product description")
+echo $EMBEDDING > embedding.json
+```
+
+### Batch Embeddings
+
+Process multiple texts:
+
+```bash
+# Create texts file
+cat > texts.json << 'EOF'
+[
+  {"text": "First document"},
+  {"text": "Second document"},
+  {"text": "Third document"}
+]
+EOF
+
+# Batch embed
+do ai batch --file texts.json --operation embed --output embeddings.json
+```
+
+### Semantic Search
+
+Use embeddings for search:
+
+```bash
+# Embed query
+QUERY_EMBEDDING=$(do ai embed "wireless headphones")
+
+# Find similar products (pseudo-code, actual search depends on vector DB)
+# do db search Product --vector "$QUERY_EMBEDDING" --limit 10
+```
+
+## Content Generation Workflows
+
+### Blog Post Creation
+
+Complete blog post workflow:
+
+```bash
+# 1. Generate outline
+OUTLINE=$(do ai generate "Create blog post outline about AI ethics")
+
+# 2. Generate full post
+POST=$(do ai generate "Write full blog post based on outline: $OUTLINE" --schema BlogPosting --format json)
+
+# 3. Save to database
+echo $POST | do db create BlogPosting
+
+# 4. Generate social media snippets
+POST_ID=$(echo $POST | jq -r '.["$id"]')
+do ai generate "Create Twitter thread from blog post: $POST" > "social-$POST_ID.txt"
+```
+
+### Product Description Generation
+
+Generate product content:
+
+```bash
+# 1. Get product data
+PRODUCT=$(do db get Product laptop-pro)
+
+# 2. Generate marketing description
+MARKETING=$(do ai generate "Create compelling marketing copy for: $PRODUCT")
+
+# 3. Generate technical specs
+SPECS=$(do ai generate "Create technical specification list for: $PRODUCT")
+
+# 4. Generate SEO description
+SEO=$(do ai generate "Create SEO-optimized meta description for: $PRODUCT" --max-tokens 160)
+
+# 5. Update product
+do db update Product laptop-pro "{
+  \"description\": $MARKETING,
+  \"specifications\": $SPECS,
+  \"metaDescription\": $SEO
+}" --merge
+```
+
+### Customer Communication
+
+Generate personalized emails:
+
+```bash
+# Get customer
+CUSTOMER=$(do db get Person customer-001)
+
+# Get customer orders
+ORDERS=$(do db related Person:customer-001 customer Order)
+
+# Generate personalized email
+EMAIL=$(do ai generate "
+Create personalized thank you email for:
+Customer: $CUSTOMER
+Recent orders: $ORDERS
+
+Make it warm and professional.
+")
+
+echo "$EMAIL"
+```
+
+### Content Enrichment
+
+Enhance existing content:
+
+```bash
+# Get blog posts without keywords
+POSTS=$(do db list BlogPosting --where '{"keywords": null}')
+
+# Add keywords to each post
+echo $POSTS | jq -c '.[]' | while read post; do
+  POST_ID=$(echo $post | jq -r '.["$id"]')
+  BODY=$(echo $post | jq -r '.articleBody')
+
+  # Generate keywords
+  KEYWORDS=$(do ai generate "Extract 5 keywords from: $BODY" --format json)
+
+  # Update post
+  do db update BlogPosting $POST_ID "{\"keywords\": $KEYWORDS}" --merge
+done
+```
+
+## Advanced Patterns
+
+### Multi-Step Generation
+
+Chain multiple generation steps:
+
+```bash
+# Step 1: Generate concept
+CONCEPT=$(do ai generate "Invent a new tech product concept")
+
+# Step 2: Generate name
+NAME=$(do ai generate "Create catchy product name for: $CONCEPT")
+
+# Step 3: Generate full product
+PRODUCT=$(do ai generate "
+Create detailed product based on:
+Concept: $CONCEPT
+Name: $NAME
+
+Include features, pricing, and target market.
+" --schema Product --format json)
+
+# Step 4: Save product
+echo $PRODUCT | do db create Product
+```
+
+### Iterative Refinement
+
+Refine generated content:
+
+```bash
+# Initial generation
+V1=$(do ai generate "Write product tagline")
+
+# Refine
+V2=$(do ai generate "Make this tagline more compelling: $V1")
+
+# Refine again
+V3=$(do ai generate "Make this tagline shorter and punchier: $V2")
+
+echo "V1: $V1"
+echo "V2: $V2"
+echo "V3: $V3"
+```
+
+### Validation and Retry
+
+Validate and regenerate if needed:
+
+```bash
+# Generate with validation
+generate_valid_email() {
+  local attempt=0
+  local max_attempts=3
+
+  while [ $attempt -lt $max_attempts ]; do
+    EMAIL=$(do ai generate "Write professional product launch email")
+
+    # Check if valid (contains required elements)
+    if echo "$EMAIL" | grep -q "Subject:" && echo "$EMAIL" | grep -q "Dear"; then
+      echo "$EMAIL"
+      return 0
+    fi
+
+    attempt=$((attempt + 1))
+  done
+
+  echo "Failed to generate valid email after $max_attempts attempts"
+  return 1
+}
+
+generate_valid_email
+```
+
+### Context-Aware Generation
+
+Use context from database:
+
+```bash
+# Get business context
+BUSINESS=$(do db get Business acme-corp)
+BRAND=$(do db related Business:acme-corp owns Brand)
+PRODUCTS=$(do db related Business:acme-corp manufacturer Product)
+
+# Generate contextual content
+do ai generate "
+Write company overview using this context:
+Business: $BUSINESS
+Brands: $BRAND
+Products: $PRODUCTS
+
+Make it suitable for About Us page.
+" --schema AboutPage --format json
+```
+
+## Real-World Use Cases
+
+### Documentation Generation
+
+Generate technical documentation:
+
+```bash
+# Get API endpoints from code
+ENDPOINTS=$(cat api-spec.json)
+
+# Generate documentation
+do ai generate "
+Create API documentation for:
+$ENDPOINTS
+
+Include:
+- Endpoint descriptions
+- Parameters
+- Example requests
+- Example responses
+" --schema TechArticle --format json
+```
+
+### Translation
+
+Translate content:
+
+```bash
+# Get content
+CONTENT=$(do db get BlogPosting post-123 --fields "headline,articleBody")
+
+# Translate
+do ai generate "Translate this to Spanish: $CONTENT" --schema BlogPosting --format json > post-123-es.json
+
+# Save translation
+do db create BlogPosting @post-123-es.json
+```
+
+### Summarization
+
+Summarize long content:
+
+```bash
+# Get long article
+ARTICLE=$(do db get Article article-456)
+
+# Generate summary
+SUMMARY=$(do ai generate "Summarize in 2-3 sentences: $ARTICLE")
+
+# Update with summary
+do db update Article article-456 "{\"abstract\": \"$SUMMARY\"}" --merge
+```
+
+### Classification
+
+Classify and tag content:
+
+```bash
+# Get unclassified products
+PRODUCTS=$(do db list Product --where '{"category": null}')
+
+# Classify each
+echo $PRODUCTS | jq -c '.[]' | while read product; do
+  ID=$(echo $product | jq -r '.["$id"]')
+  NAME=$(echo $product | jq -r '.name')
+  DESC=$(echo $product | jq -r '.description')
+
+  # Generate category
+  CATEGORY=$(do ai generate "What category does this product belong to: $NAME - $DESC? Answer with one word.")
+
+  # Update product
+  do db update Product $ID "{\"category\": \"$CATEGORY\"}" --merge
+done
+```
+
+## Performance Tips
+
+### Optimize Token Usage
+
+Reduce costs by being concise:
+
+```bash
+# Verbose (uses more tokens)
+do ai generate "I would like you to please write a haiku about programming computers"
+
+# Concise (uses fewer tokens)
+do ai generate "Write a haiku about programming"
+```
+
+### Use Appropriate Models
+
+Choose the right model for the task:
+
+```bash
+# Simple task - use mini
+do ai generate "Summarize: $TEXT" --model gpt-5-mini
+
+# Complex reasoning - use full model
+do ai generate "Analyze market trends: $DATA" --model claude-sonnet-4.5
+
+# Code generation - use codex
+do ai generate "Write React component" --model gpt-5-codex
+```
+
+### Batch When Possible
+
+Use batch operations for multiple requests:
+
+```bash
+# Inefficient - individual requests
+for prompt in "${prompts[@]}"; do
+  do ai generate "$prompt"
+done
+
+# Efficient - batch request
+do ai batch --file prompts.json --operation generate
+```
+
+### Cache Common Prompts
+
+Cache frequently used generations:
+
+```bash
+# Check cache first
+if [ -f "cached-response.txt" ]; then
+  cat cached-response.txt
+else
+  # Generate and cache
+  do ai generate "Common prompt" > cached-response.txt
+  cat cached-response.txt
+fi
+```
+
+## Next Steps
+
+- [Database Commands Examples](./database-commands) - Advanced database operations
+- [Basic Examples](./basic) - Essential CLI operations
+- [Commands Reference](../docs/commands) - Complete command documentation
+
+---
+
+Part of the [cli.do](https://cli.do) documentation.

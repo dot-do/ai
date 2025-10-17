@@ -1,0 +1,95 @@
+---
+title: Middlewares
+description: Explore how Sunar enhances your discord bot's functionality with middleware support.
+---
+
+## Protectors
+
+Protectors in Sunar act as middleware, allowing you to intercept and control the flow of commands and interactions within your Discord bot. They provide a flexible way to enforce permissions, validate inputs, or perform pre-processing before executing commands.
+
+<Steps>
+<Step>
+### Create the protector logic
+
+Create a file `only-admins.js` in the directory `src/protectors/`. This file defines a protector `onlyAdmins` that checks if the user has administrator permissions.
+
+```js title="src/protectors/only-admins.js"
+import { PermissionFlagsBits } from 'discord.js'
+import { Protector, execute } from 'sunar'
+
+const onlyAdmins = new Protector({
+  commands: ['slash'],
+  signals: ['interactionCreate'],
+})
+
+const content = 'This command can only be used by administrators'
+
+function checkIsAdmin(permissions) {
+  if (!permissions) return false
+  return permissions.has(PermissionFlagsBits.Administrator)
+}
+
+execute(onlyAdmins, (arg, next) => {
+  const entry = Array.isArray(arg) ? arg[0] : arg
+  const isAdmin = checkIsAdmin(entry.memberPermissions)
+
+  if (entry.isRepliable() && !isAdmin) {
+    return entry.reply({ content, ephemeral: true })
+  }
+
+  return isAdmin && next()
+})
+
+export { onlyAdmins }
+```
+
+<Callout>
+  When creating a `Protector` instance, specify the commands, signals, or components that will use this protector. This allows precise control over the
+  arguments received through function parameters.
+</Callout>
+
+</Step>
+
+<Step>
+### Create a protected command
+
+Create a file `protected.js` in the directory `src/commands/`. This file defines a Slash command named `protected` that is protected by the `onlyAdmins` protector. Only administrators can execute this command, and it replies with a message indicating the user is an administrator.
+
+```js title="src/commands/protected.js"
+import { Slash, execute, protect } from 'sunar'
+
+import { onlyAdmins } from '../protectors/only-admins.js'
+
+const slash = new Slash({
+  name: 'protected',
+  description: 'This is a protected slash command',
+})
+
+protect(slash, [onlyAdmins]) // [!code highlight]
+
+execute(slash, (interaction) => {
+  interaction.reply({ content: 'You are an admin!' })
+})
+
+export { slash }
+```
+
+</Step>
+
+</Steps>
+
+### File structure
+
+Here's an overview of the project's file structure to help you visualize how files are organized in this example.
+
+<Files>
+  <Folder name="src" defaultOpen>
+    <Folder name="commands" defaultOpen>
+      <File name="protected.js" />
+    </Folder>
+    <Folder name="protectors" defaultOpen>
+      <File name="only-admins.js" />
+    </Folder>
+    <File name="index.js" />
+  </Folder>
+</Files>

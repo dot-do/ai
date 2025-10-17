@@ -1,0 +1,1032 @@
+---
+$id: https://data.do/docs/getting-started
+$type: https://schema.org/TechArticle
+name: Getting Started with data.do
+description: Installation, setup, and basic operations guide for data.do
+author:
+  $type: https://schema.org/Organization
+  name: .do
+  url: https://do.inc
+license:
+  documentation: CC-BY-4.0
+  code: MIT
+---
+
+# Getting Started with data.do
+
+This guide will walk you through installing data.do, setting up your first data operations, and understanding the core concepts.
+
+## Installation
+
+### Prerequisites
+
+- Node.js 18 or higher
+- TypeScript 5.0 or higher (recommended)
+- An understanding of basic JavaScript/TypeScript
+
+### Install SDK
+
+```bash
+npm install sdk.do
+```
+
+Or with other package managers:
+
+```bash
+yarn add sdk.do
+pnpm add sdk.do
+```
+
+### TypeScript Configuration
+
+For the best experience, configure your `tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true
+  }
+}
+```
+
+## Core Concepts
+
+### 1. Semantic Data Types
+
+data.do uses semantic types from Schema.org, GS1, and other vocabularies:
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Schema.org types
+$.Customer // https://schema.org/Customer
+$.Order // https://schema.org/Order
+$.Product // https://schema.org/Product
+
+// Custom types
+$.Invoice
+$.Shipment
+$.Inventory
+```
+
+### 2. Data Operations
+
+All data operations follow the `$.Subject.predicate.Object` pattern:
+
+```typescript
+import { data } from 'sdk.do'
+
+// Create
+await data.create($.Subject, data)
+
+// Read
+await data.get($.Subject, id)
+await data.list($.Subject, options)
+
+// Update
+await data.update(id, changes)
+
+// Delete
+await data.delete(id)
+```
+
+### 3. Type Safety
+
+data.do provides full TypeScript type inference:
+
+```typescript
+// Type-safe creation
+const customer = await data.create($.Customer, {
+  name: 'Alice Johnson', // ✓ type-checked
+  email: 'alice@example.com', // ✓ type-checked
+  age: 30, // ✓ type-checked
+  // invalid: 'field' // ✗ TypeScript error
+})
+
+// Type-safe access
+console.log(customer.name) // ✓ string
+console.log(customer.email) // ✓ string
+// console.log(customer.invalid) // ✗ TypeScript error
+```
+
+## Basic CRUD Operations
+
+### Creating Data
+
+```typescript
+import { $, data } from 'sdk.do'
+
+// Simple create
+const user = await data.create($.User, {
+  name: 'Bob Smith',
+  email: 'bob@example.com',
+  role: 'user',
+})
+
+console.log(user)
+// {
+//   $id: 'user-abc123',
+//   $type: 'https://schema.org/User',
+//   name: 'Bob Smith',
+//   email: 'bob@example.com',
+//   role: 'user',
+//   createdAt: '2025-10-10T14:30:00Z',
+//   updatedAt: '2025-10-10T14:30:00Z'
+// }
+
+// Create with validation
+const product = await data.create(
+  $.Product,
+  {
+    name: 'Laptop',
+    price: 999.99,
+    category: 'Electronics',
+  },
+  {
+    validate: true,
+    schema: $.Product,
+  }
+)
+
+// Create multiple records
+const users = await data.createMany($.User, [
+  { name: 'Alice', email: 'alice@example.com' },
+  { name: 'Bob', email: 'bob@example.com' },
+  { name: 'Carol', email: 'carol@example.com' },
+])
+
+console.log(`Created ${users.length} users`)
+```
+
+### Reading Data
+
+```typescript
+// Get single record by ID
+const user = await data.get($.User, 'user-abc123')
+
+// Get with include relationships
+const order = await data.get($.Order, 'order-xyz789', {
+  include: {
+    customer: true,
+    items: true,
+    shipping: true,
+  },
+})
+
+// List all records
+const allUsers = await data.list($.User)
+
+// List with filtering
+const activeUsers = await data.list($.User, {
+  where: {
+    status: 'active',
+    role: 'admin',
+  },
+})
+
+// List with pagination
+const page1 = await data.list($.User, {
+  limit: 10,
+  offset: 0,
+})
+
+const page2 = await data.list($.User, {
+  limit: 10,
+  offset: 10,
+})
+
+// List with sorting
+const recentOrders = await data.list($.Order, {
+  orderBy: {
+    createdAt: 'desc',
+  },
+  limit: 20,
+})
+
+// List with complex filtering
+const orders = await data.list($.Order, {
+  where: {
+    status: 'pending',
+    total: { $gte: 100 },
+    createdAt: { $gte: '2025-01-01' },
+  },
+  orderBy: { total: 'desc' },
+})
+```
+
+### Updating Data
+
+```typescript
+// Simple update
+await data.update('user-abc123', {
+  lastLogin: new Date(),
+  loginCount: 10,
+})
+
+// Update with conditions
+await data.update(
+  'user-abc123',
+  {
+    status: 'inactive',
+  },
+  {
+    where: {
+      lastLogin: { $lt: '2024-01-01' },
+    },
+  }
+)
+
+// Update multiple records
+await data.updateMany($.User, {
+  where: {
+    role: 'user',
+    createdAt: { $lt: '2024-01-01' },
+  },
+  set: {
+    status: 'legacy',
+  },
+})
+
+// Increment/decrement
+await data.update('product-123', {
+  inventory: { $increment: -1 }, // Decrement by 1
+  soldCount: { $increment: 1 }, // Increment by 1
+})
+
+// Upsert (create or update)
+await data.upsert(
+  $.Customer,
+  {
+    email: 'alice@example.com',
+    name: 'Alice Johnson',
+    preferences: { newsletter: true },
+  },
+  {
+    key: 'email', // Match on email field
+  }
+)
+```
+
+### Deleting Data
+
+```typescript
+// Delete single record
+await data.delete('user-abc123')
+
+// Delete with confirmation
+await data.delete('user-abc123', {
+  confirm: true,
+  reason: 'User requested account deletion',
+})
+
+// Soft delete (mark as deleted)
+await data.softDelete('user-abc123', {
+  deletedBy: 'admin-456',
+  deletedAt: new Date(),
+})
+
+// Delete multiple records
+await data.deleteMany($.User, {
+  where: {
+    status: 'inactive',
+    lastLogin: { $lt: '2023-01-01' },
+  },
+})
+
+// Cascade delete (delete related records)
+await data.delete('customer-123', {
+  cascade: {
+    orders: true,
+    payments: true,
+    addresses: true,
+  },
+})
+```
+
+## Schema Validation
+
+### Basic Validation
+
+```typescript
+import { data, validate } from 'sdk.do/data'
+
+// Validate data structure
+const isValid = await validate(userData, $.User)
+
+if (isValid) {
+  await data.create($.User, userData)
+} else {
+  console.log('Invalid user data')
+}
+
+// Validate with detailed errors
+const result = await validate(userData, $.User, {
+  detailed: true,
+})
+
+if (!result.valid) {
+  console.log('Validation errors:', result.errors)
+  // [
+  //   { path: 'email', message: 'Invalid email format' },
+  //   { path: 'age', message: 'Must be at least 18' }
+  // ]
+}
+```
+
+### Custom Validation Rules
+
+```typescript
+// Define validation rules
+const productRules = {
+  $type: $.Product,
+  rules: {
+    name: {
+      minLength: 3,
+      maxLength: 100,
+      required: true,
+    },
+    price: {
+      min: 0,
+      max: 1000000,
+      required: true,
+    },
+    sku: {
+      pattern: /^[A-Z]{3}-\d{6}$/,
+      required: true,
+    },
+    category: {
+      enum: ['Electronics', 'Clothing', 'Books', 'Home'],
+      required: true,
+    },
+    description: {
+      maxLength: 5000,
+    },
+  },
+}
+
+// Validate with custom rules
+const result = await validate(product, productRules)
+
+if (!result.valid) {
+  console.log('Validation failed:', result.errors)
+}
+```
+
+### Validation with Schema.org Types
+
+```typescript
+// Automatic validation using Schema.org types
+const customer = {
+  $type: 'https://schema.org/Customer',
+  name: 'Alice Johnson',
+  email: 'alice@example.com',
+  telephone: '+1-555-0123',
+  address: {
+    $type: 'https://schema.org/PostalAddress',
+    streetAddress: '123 Main St',
+    addressLocality: 'Springfield',
+    addressRegion: 'IL',
+    postalCode: '62701',
+    addressCountry: 'US',
+  },
+}
+
+// Validates against Schema.org Customer type
+const isValid = await validate(customer, $.Customer)
+```
+
+### Async Validation
+
+```typescript
+// Validate with async checks
+const rules = {
+  $type: $.User,
+  rules: {
+    email: {
+      required: true,
+      format: 'email',
+      async unique() {
+        const existing = await data.list($.User, {
+          where: { email: this.value },
+        })
+        return existing.length === 0
+      },
+    },
+    username: {
+      required: true,
+      minLength: 3,
+      async unique() {
+        const existing = await data.list($.User, {
+          where: { username: this.value },
+        })
+        return existing.length === 0
+      },
+    },
+  },
+}
+
+const result = await validate(userData, rules)
+```
+
+## Query Builder
+
+### Simple Queries
+
+```typescript
+import { query } from 'sdk.do/data'
+
+// Basic query
+const users = await query($.User).execute()
+
+// Query with filter
+const activeUsers = await query($.User).where({ status: 'active' }).execute()
+
+// Query with sorting
+const recentUsers = await query($.User).orderBy('createdAt', 'desc').limit(10).execute()
+
+// Query with select
+const userNames = await query($.User).select(['name', 'email']).execute()
+```
+
+### Complex Queries
+
+```typescript
+// Multiple conditions
+const results = await query($.Order)
+  .where({
+    status: 'pending',
+    total: { $gte: 100, $lte: 1000 },
+    createdAt: { $gte: '2025-01-01' },
+  })
+  .orderBy('total', 'desc')
+  .limit(50)
+  .execute()
+
+// OR conditions
+const orders = await query($.Order)
+  .where({
+    $or: [{ status: 'pending' }, { status: 'processing' }],
+  })
+  .execute()
+
+// Complex nested conditions
+const filteredOrders = await query($.Order)
+  .where({
+    $and: [
+      { status: { $in: ['pending', 'processing'] } },
+      {
+        $or: [{ priority: 'high' }, { total: { $gte: 1000 } }],
+      },
+    ],
+  })
+  .execute()
+```
+
+### Joins and Relationships
+
+```typescript
+// Include related data
+const ordersWithCustomers = await query($.Order)
+  .include({
+    customer: true,
+    items: true,
+  })
+  .execute()
+
+// Nested includes
+const orders = await query($.Order)
+  .include({
+    customer: {
+      include: {
+        addresses: true,
+        preferences: true,
+      },
+    },
+    items: {
+      include: {
+        product: true,
+      },
+    },
+  })
+  .execute()
+
+// Select specific fields from includes
+const orders = await query($.Order)
+  .include({
+    customer: query($.Customer).select(['name', 'email']),
+    items: query($.OrderItem).include('product'),
+  })
+  .execute()
+```
+
+### Aggregations
+
+```typescript
+// Count records
+const count = await query($.Order).count()
+
+// Sum values
+const totalRevenue = await query($.Order).where({ status: 'completed' }).sum('total')
+
+// Average
+const avgOrderValue = await query($.Order).avg('total')
+
+// Min/Max
+const minPrice = await query($.Product).min('price')
+const maxPrice = await query($.Product).max('price')
+
+// Group by
+const ordersByStatus = await query($.Order)
+  .aggregate({
+    count: { $count: '*' },
+    total: { $sum: 'total' },
+  })
+  .groupBy('status')
+  .execute()
+
+// Complex aggregation
+const salesReport = await query($.Order)
+  .where({
+    createdAt: { $gte: '2025-01-01' },
+  })
+  .aggregate({
+    revenue: { $sum: 'total' },
+    orders: { $count: '*' },
+    avgOrderValue: { $avg: 'total' },
+    minOrder: { $min: 'total' },
+    maxOrder: { $max: 'total' },
+  })
+  .groupBy(['status', 'customerId'])
+  .having({
+    revenue: { $gte: 1000 },
+  })
+  .execute()
+```
+
+### Full-text Search
+
+```typescript
+// Simple search
+const products = await query($.Product).search('laptop gaming').execute()
+
+// Search with options
+const results = await query($.Product)
+  .search('laptop', {
+    fields: ['name', 'description', 'tags'],
+    fuzzy: true,
+    boost: {
+      name: 3,
+      tags: 2,
+      description: 1,
+    },
+  })
+  .execute()
+
+// Search with filters
+const laptops = await query($.Product)
+  .search('laptop')
+  .where({
+    category: 'Electronics',
+    price: { $lte: 2000 },
+  })
+  .orderBy('price', 'asc')
+  .execute()
+```
+
+## Data Transformations
+
+### Normalization
+
+```typescript
+import { transform } from 'sdk.do/data'
+
+// Basic normalization
+const normalized = await transform(rawData, $.Customer.normalize)
+
+// Normalization with options
+const normalized = await transform(rawData, $.Customer.normalize, {
+  lowercase: ['email'],
+  uppercase: ['country'],
+  trim: ['name', 'address'],
+  parse: {
+    phoneNumber: 'e164',
+    zipCode: 'postal',
+  },
+})
+
+// Custom normalization
+const normalized = await transform(rawData, {
+  name: (value) =>
+    value
+      .trim()
+      .split(' ')
+      .map((s) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase())
+      .join(' '),
+  email: (value) => value.toLowerCase().trim(),
+  phone: (value) => value.replace(/\D/g, ''),
+})
+```
+
+### Format Conversion
+
+```typescript
+// Convert between formats
+const csv = await transform(jsonData, {
+  from: 'json',
+  to: 'csv',
+  options: {
+    headers: true,
+    delimiter: ',',
+    quote: '"',
+  },
+})
+
+// JSON to XML
+const xml = await transform(jsonData, {
+  from: 'json',
+  to: 'xml',
+  options: {
+    rootElement: 'customers',
+    itemElement: 'customer',
+  },
+})
+
+// CSV to JSON
+const json = await transform(csvData, {
+  from: 'csv',
+  to: 'json',
+  options: {
+    headers: true,
+    skipEmptyLines: true,
+  },
+})
+```
+
+### Data Enrichment
+
+```typescript
+// Enrich with additional data
+const enriched = await transform(customer, $.Customer.enrich, {
+  sources: ['geocode', 'creditScore', 'preferences'],
+})
+
+// Custom enrichment
+const enriched = await transform(order, async (order) => {
+  const customer = await data.get($.Customer, order.customerId)
+  const products = await Promise.all(order.items.map((item) => data.get($.Product, item.productId)))
+
+  return {
+    ...order,
+    customer,
+    items: order.items.map((item, i) => ({
+      ...item,
+      product: products[i],
+    })),
+  }
+})
+```
+
+### Chained Transformations
+
+```typescript
+// Chain multiple transformations
+const processed = await transform(rawData)
+  .normalize($.Customer)
+  .validate($.Customer)
+  .enrich(['geocode', 'preferences'])
+  .map((customer) => ({
+    ...customer,
+    fullName: `${customer.firstName} ${customer.lastName}`,
+  }))
+  .execute()
+```
+
+## Batch Operations
+
+### Batch Create
+
+```typescript
+import { batch } from 'sdk.do/data'
+
+// Create multiple records
+const users = [
+  { name: 'Alice', email: 'alice@example.com' },
+  { name: 'Bob', email: 'bob@example.com' },
+  { name: 'Carol', email: 'carol@example.com' },
+  // ... 1000 more users
+]
+
+await batch.create($.User, users, {
+  batchSize: 100,
+  parallel: 4,
+  onProgress: (processed, total) => {
+    console.log(`Progress: ${processed}/${total} (${((processed / total) * 100).toFixed(2)}%)`)
+  },
+  onError: (error, record) => {
+    console.error('Failed to create:', record, error)
+  },
+})
+```
+
+### Batch Update
+
+```typescript
+// Update multiple records
+await batch.update($.Product, {
+  where: {
+    category: 'Electronics',
+    price: { $lt: 100 },
+  },
+  set: {
+    onSale: true,
+    discount: 0.1,
+  },
+  batchSize: 500,
+})
+
+// Custom batch update
+const updates = [
+  { id: 'product-1', price: 99.99 },
+  { id: 'product-2', price: 149.99 },
+  { id: 'product-3', price: 199.99 },
+]
+
+await batch.updateMany($.Product, updates, {
+  batchSize: 100,
+  parallel: 2,
+})
+```
+
+### Batch Transform
+
+```typescript
+// Transform large dataset
+const transformed = await batch.transform(
+  records,
+  async (record) => {
+    const normalized = await transform(record, $.Order.normalize)
+    const validated = await validate(normalized, $.Order)
+    return validated ? normalized : null
+  },
+  {
+    concurrency: 10,
+    errorHandling: 'continue', // 'continue' | 'stop' | 'skip'
+    onProgress: (processed, total) => {
+      console.log(`Transformed ${processed}/${total}`)
+    },
+  }
+)
+```
+
+### Batch Delete
+
+```typescript
+// Delete multiple records
+await batch.delete($.Order, {
+  where: {
+    status: 'cancelled',
+    createdAt: { $lt: '2024-01-01' },
+  },
+  batchSize: 1000,
+  dryRun: true, // Preview before deleting
+})
+
+// After confirming, delete for real
+await batch.delete($.Order, {
+  where: {
+    status: 'cancelled',
+    createdAt: { $lt: '2024-01-01' },
+  },
+  batchSize: 1000,
+  dryRun: false,
+})
+```
+
+## Configuration
+
+### Global Configuration
+
+```typescript
+import { configure } from 'sdk.do/data'
+
+configure({
+  // Validation settings
+  validation: {
+    strict: true, // Throw on validation errors
+    throwOnError: true,
+    autoValidate: true, // Validate on create/update
+  },
+
+  // Transform settings
+  transforms: {
+    autoNormalize: true, // Auto-normalize on create
+    autoTrim: true, // Auto-trim strings
+    autoLowercase: ['email'], // Auto-lowercase specific fields
+  },
+
+  // Performance settings
+  batch: {
+    defaultSize: 100,
+    maxConcurrency: 10,
+  },
+
+  // Cache settings
+  cache: {
+    enabled: true,
+    ttl: '5m',
+    invalidateOnUpdate: true,
+  },
+
+  // Logging
+  logging: {
+    enabled: true,
+    level: 'info', // 'debug' | 'info' | 'warn' | 'error'
+    queries: true, // Log queries
+    performance: true, // Log performance metrics
+  },
+})
+```
+
+### Per-operation Configuration
+
+```typescript
+// Configure individual operations
+await data.create($.User, userData, {
+  validate: true,
+  normalize: true,
+  cache: false,
+})
+
+await query($.User).where({ status: 'active' }).cache({ ttl: '10m' }).execute()
+```
+
+## Error Handling
+
+### Basic Error Handling
+
+```typescript
+import { data, DataError } from 'sdk.do/data'
+
+try {
+  await data.create($.Customer, customerData)
+} catch (error) {
+  if (error instanceof DataError) {
+    console.log('Data error:', error.message)
+    console.log('Code:', error.code)
+    console.log('Details:', error.details)
+  } else {
+    console.log('Unexpected error:', error)
+  }
+}
+```
+
+### Error Codes
+
+```typescript
+try {
+  await data.create($.Customer, customerData)
+} catch (error) {
+  if (error instanceof DataError) {
+    switch (error.code) {
+      case 'VALIDATION_ERROR':
+        console.log('Validation failed:', error.details)
+        break
+      case 'DUPLICATE_KEY':
+        console.log('Record already exists')
+        break
+      case 'NOT_FOUND':
+        console.log('Record not found')
+        break
+      case 'CONSTRAINT_VIOLATION':
+        console.log('Constraint violated:', error.constraint)
+        break
+      case 'PERMISSION_DENIED':
+        console.log('Permission denied')
+        break
+      default:
+        console.log('Unknown error:', error.message)
+    }
+  }
+}
+```
+
+### Validation Errors
+
+```typescript
+try {
+  await data.create($.Product, productData, { validate: true })
+} catch (error) {
+  if (error instanceof DataError && error.code === 'VALIDATION_ERROR') {
+    console.log('Validation errors:')
+    error.details.errors.forEach((err) => {
+      console.log(`- ${err.path}: ${err.message}`)
+    })
+  }
+}
+```
+
+## Next Steps
+
+Now that you understand the basics, explore:
+
+- [Architecture](./architecture.mdx) - Deep dive into data.do architecture
+- [Best Practices](./best-practices.mdx) - Learn recommended patterns
+- [Advanced Patterns](../examples/advanced-patterns.mdx) - Complex transformations and pipelines
+- [API Reference](../api/reference.mdx) - Complete API documentation
+
+## Common Patterns
+
+### CRUD with Validation
+
+```typescript
+// Create with validation
+const user = await data.create(
+  $.User,
+  {
+    name: 'Alice',
+    email: 'alice@example.com',
+  },
+  {
+    validate: true,
+    schema: $.User,
+  }
+)
+
+// Update with validation
+await data.update(
+  user.$id,
+  {
+    email: 'alice.johnson@example.com',
+  },
+  {
+    validate: true,
+  }
+)
+```
+
+### Paginated Listing
+
+```typescript
+async function listUsers(page = 1, pageSize = 10) {
+  return await data.list($.User, {
+    limit: pageSize,
+    offset: (page - 1) * pageSize,
+    orderBy: { createdAt: 'desc' },
+  })
+}
+
+// Usage
+const page1 = await listUsers(1)
+const page2 = await listUsers(2)
+```
+
+### Search and Filter
+
+```typescript
+async function searchProducts(searchTerm: string, filters: any = {}) {
+  return await query($.Product)
+    .search(searchTerm, {
+      fields: ['name', 'description'],
+      fuzzy: true,
+    })
+    .where(filters)
+    .orderBy('relevance', 'desc')
+    .limit(20)
+    .execute()
+}
+
+// Usage
+const results = await searchProducts('laptop', {
+  category: 'Electronics',
+  price: { $lte: 1500 },
+})
+```
+
+### Upsert Pattern
+
+```typescript
+async function saveCustomer(customerData: any) {
+  return await data.upsert($.Customer, customerData, {
+    key: 'email',
+    validate: true,
+  })
+}
+
+// Usage
+await saveCustomer({
+  email: 'alice@example.com',
+  name: 'Alice Johnson',
+  phone: '+1-555-0123',
+})
+```
+
+## License
+
+- Documentation: [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/)
+- Code Examples: [MIT](https://opensource.org/licenses/MIT)

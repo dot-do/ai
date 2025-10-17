@@ -1,0 +1,1052 @@
+---
+$id: https://db.do/api
+$type: APIReference
+title: Database API Reference
+description: Complete API reference for db SDK function database operations
+keywords: [database, api, reference, documentation, functions, types]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Database API Reference
+
+Complete API reference for the `db` SDK function database operations.
+
+## Overview
+
+The `db` function provides six core operations for working with semantic data:
+
+- `db.list()` - Query multiple entities
+- `db.get()` - Retrieve single entity
+- `db.create()` - Create new entity
+- `db.update()` - Modify existing entity
+- `db.delete()` - Remove entity
+- `db.relate()` - Query relationships
+
+## db.list()
+
+Query multiple entities with filtering, sorting, and pagination.
+
+### Signature
+
+```typescript
+function list<T>(type: SchemaType<T>, options?: ListOptions): Promise<T[]>
+```
+
+### Parameters
+
+#### `type: SchemaType<T>` (required)
+
+The Schema.org type to query.
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Business entities
+$.Business
+$.Organization
+$.Corporation
+
+// People
+$.Person
+$.Employee
+$.Customer
+
+// Products
+$.Product
+$.Service
+$.Brand
+```
+
+#### `options?: ListOptions` (optional)
+
+Query options for filtering, sorting, and pagination.
+
+```typescript
+interface ListOptions {
+  where?: WhereClause
+  orderBy?: OrderBy | OrderBy[]
+  limit?: number
+  offset?: number
+  after?: string
+  include?: string[]
+  cache?: boolean
+  cacheTTL?: number
+}
+```
+
+**`where?: WhereClause`** - Filter conditions
+
+```typescript
+{
+  // Exact match
+  field: value
+
+  // Comparison operators
+  field: {
+    $gt: value
+  } // Greater than
+  field: {
+    $gte: value
+  } // Greater than or equal
+  field: {
+    $lt: value
+  } // Less than
+  field: {
+    $lte: value
+  } // Less than or equal
+  field: {
+    $ne: value
+  } // Not equal
+
+  // Array operators
+  field: {
+    $in: [values]
+  } // In array
+  field: {
+    $nin: [values]
+  } // Not in array
+
+  // Logical operators
+  $and: [conditions]
+  $or: [conditions]
+  $not: condition
+
+  // Text operators
+  field: {
+    $contains: 'text'
+  }
+  field: {
+    $startsWith: 'text'
+  }
+  field: {
+    $endsWith: 'text'
+  }
+
+  // Existence
+  field: {
+    $exists: true
+  }
+  field: {
+    $exists: false
+  }
+}
+```
+
+**`orderBy?: OrderBy | OrderBy[]`** - Sort order
+
+```typescript
+// Single field
+{
+  field: 'asc' | 'desc'
+}
+
+// Multiple fields
+;[{ field1: 'asc' }, { field2: 'desc' }]
+```
+
+**`limit?: number`** - Maximum results to return
+
+**`offset?: number`** - Number of results to skip (offset pagination)
+
+**`after?: string`** - Entity ID to start after (cursor pagination)
+
+**`include?: string[]`** - Related entities to include
+
+**`cache?: boolean`** - Enable caching
+
+**`cacheTTL?: number`** - Cache TTL in seconds
+
+### Returns
+
+`Promise<T[]>` - Array of entities matching the query
+
+### Examples
+
+**Basic query:**
+
+```typescript
+const businesses = await db.list($.Business)
+```
+
+**With filter:**
+
+```typescript
+const tech = await db.list($.Business, {
+  where: { industry: 'Technology' },
+})
+```
+
+**With sorting:**
+
+```typescript
+const sorted = await db.list($.Business, {
+  orderBy: { name: 'asc' },
+})
+```
+
+**With pagination:**
+
+```typescript
+const page = await db.list($.Business, {
+  limit: 50,
+  offset: 0,
+})
+```
+
+**With relationships:**
+
+```typescript
+const full = await db.list($.Business, {
+  include: ['brands', 'address'],
+})
+```
+
+**Complex query:**
+
+```typescript
+const results = await db.list($.Business, {
+  where: {
+    industry: 'Technology',
+    numberOfEmployees: { $gte: 50 },
+    'address.addressRegion': 'CA',
+  },
+  orderBy: [{ numberOfEmployees: 'desc' }, { name: 'asc' }],
+  limit: 20,
+  include: ['brands', 'address'],
+})
+```
+
+### Error Codes
+
+- `VALIDATION_ERROR` - Invalid query parameters
+- `DATABASE_ERROR` - Database query failed
+- `TIMEOUT` - Query timeout exceeded
+
+## db.get()
+
+Retrieve a single entity by ID.
+
+### Signature
+
+```typescript
+function get<T>(type: SchemaType<T>, id: string, options?: GetOptions): Promise<T>
+```
+
+### Parameters
+
+#### `type: SchemaType<T>` (required)
+
+The Schema.org type.
+
+#### `id: string` (required)
+
+The entity ID to retrieve.
+
+#### `options?: GetOptions` (optional)
+
+```typescript
+interface GetOptions {
+  include?: string[]
+  cache?: boolean
+  cacheTTL?: number
+}
+```
+
+**`include?: string[]`** - Related entities to include
+
+**`cache?: boolean`** - Enable caching
+
+**`cacheTTL?: number`** - Cache TTL in seconds
+
+### Returns
+
+`Promise<T>` - The entity
+
+### Examples
+
+**Basic get:**
+
+```typescript
+const business = await db.get($.Business, 'biz_123')
+```
+
+**With relationships:**
+
+```typescript
+const full = await db.get($.Business, 'biz_123', {
+  include: ['brands', 'employees', 'address'],
+})
+```
+
+### Error Codes
+
+- `NOT_FOUND` - Entity does not exist
+- `VALIDATION_ERROR` - Invalid parameters
+- `DATABASE_ERROR` - Database query failed
+
+## db.create()
+
+Create a new entity.
+
+### Signature
+
+```typescript
+function create<T>(type: SchemaType<T>, data: Partial<T>): Promise<T>
+```
+
+### Parameters
+
+#### `type: SchemaType<T>` (required)
+
+The Schema.org type to create.
+
+#### `data: Partial<T>` (required)
+
+Entity data conforming to the Schema.org type.
+
+### Returns
+
+`Promise<T>` - The created entity with generated `$id` and `$type`
+
+### Examples
+
+**Basic create:**
+
+```typescript
+const business = await db.create($.Business, {
+  name: 'Acme Corp',
+  industry: 'Technology',
+})
+```
+
+**With nested objects:**
+
+```typescript
+const business = await db.create($.Business, {
+  name: 'Acme Corp',
+  industry: 'Technology',
+  address: {
+    $type: 'PostalAddress',
+    streetAddress: '123 Main St',
+    addressLocality: 'San Francisco',
+    addressRegion: 'CA',
+    addressCountry: 'US',
+  },
+})
+```
+
+**With references:**
+
+```typescript
+const brand = await db.create($.Brand, {
+  name: 'TechBrand',
+  owner: { $id: 'biz_123' },
+})
+```
+
+### Error Codes
+
+- `VALIDATION_ERROR` - Entity data validation failed
+- `DUPLICATE_KEY` - Unique constraint violation
+- `DATABASE_ERROR` - Database operation failed
+
+## db.update()
+
+Modify an existing entity.
+
+### Signature
+
+```typescript
+function update<T>(type: SchemaType<T>, id: string, data: Partial<T>): Promise<T>
+```
+
+### Parameters
+
+#### `type: SchemaType<T>` (required)
+
+The Schema.org type.
+
+#### `id: string` (required)
+
+The entity ID to update.
+
+#### `data: Partial<T>` (required)
+
+Fields to update (partial update).
+
+### Returns
+
+`Promise<T>` - The updated entity
+
+### Examples
+
+**Update fields:**
+
+```typescript
+await db.update($.Business, 'biz_123', {
+  industry: 'Software',
+  numberOfEmployees: 75,
+})
+```
+
+**Update nested object:**
+
+```typescript
+await db.update($.Business, 'biz_123', {
+  address: {
+    $type: 'PostalAddress',
+    streetAddress: '456 New St',
+    addressLocality: 'San Francisco',
+    addressRegion: 'CA',
+  },
+})
+```
+
+### Error Codes
+
+- `NOT_FOUND` - Entity does not exist
+- `VALIDATION_ERROR` - Update data validation failed
+- `DATABASE_ERROR` - Database operation failed
+
+## db.delete()
+
+Remove an entity.
+
+### Signature
+
+```typescript
+function delete(
+  type: SchemaType,
+  id: string,
+  options?: DeleteOptions
+): Promise<void>
+```
+
+### Parameters
+
+#### `type: SchemaType` (required)
+
+The Schema.org type.
+
+#### `id: string` (required)
+
+The entity ID to delete.
+
+#### `options?: DeleteOptions` (optional)
+
+```typescript
+interface DeleteOptions {
+  cascade?: boolean
+}
+```
+
+**`cascade?: boolean`** - Delete related entities
+
+### Returns
+
+`Promise<void>`
+
+### Examples
+
+**Basic delete:**
+
+```typescript
+await db.delete($.Business, 'biz_123')
+```
+
+**Cascade delete:**
+
+```typescript
+await db.delete($.Business, 'biz_123', {
+  cascade: true,
+})
+```
+
+### Error Codes
+
+- `NOT_FOUND` - Entity does not exist
+- `CONSTRAINT_VIOLATION` - Has dependent entities (without cascade)
+- `DATABASE_ERROR` - Database operation failed
+
+## db.relate()
+
+Query semantic relationships between entities.
+
+### Signature
+
+```typescript
+function relate<S, O>(subject: S | string, predicate: Predicate, object: SchemaType<O>, options?: RelateOptions): Promise<O[]>
+```
+
+### Parameters
+
+#### `subject: S | string` (required)
+
+The source entity or entity ID.
+
+#### `predicate: Predicate` (required)
+
+The relationship predicate.
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Ownership
+$.owns
+$.ownedBy
+
+// Employment
+$.employs
+$.worksFor
+
+// Offerings
+$.offers
+$.offeredBy
+
+// Service
+$.serves
+$.servedBy
+
+// Authorship
+$.wrote
+$.author
+
+// Membership
+$.member
+$.memberOf
+```
+
+#### `object: SchemaType<O>` (required)
+
+The target type to query.
+
+#### `options?: RelateOptions` (optional)
+
+```typescript
+interface RelateOptions {
+  where?: WhereClause
+  orderBy?: OrderBy | OrderBy[]
+  limit?: number
+  offset?: number
+  cache?: boolean
+  cacheTTL?: number
+}
+```
+
+### Returns
+
+`Promise<O[]>` - Array of related entities
+
+### Examples
+
+**Basic relationship:**
+
+```typescript
+const business = await db.get($.Business, 'biz_123')
+const brands = await db.relate(business, $.owns, $.Brand)
+```
+
+**Using entity ID:**
+
+```typescript
+const brands = await db.relate('biz_123', $.owns, $.Brand)
+```
+
+**With filter:**
+
+```typescript
+const activeBrands = await db.relate(business, $.owns, $.Brand, {
+  where: { status: 'active' },
+})
+```
+
+**With sorting:**
+
+```typescript
+const sorted = await db.relate(business, $.owns, $.Brand, {
+  orderBy: { name: 'asc' },
+})
+```
+
+### Error Codes
+
+- `NOT_FOUND` - Subject entity does not exist
+- `VALIDATION_ERROR` - Invalid parameters
+- `DATABASE_ERROR` - Database query failed
+
+## Batch Operations
+
+Efficient bulk operations.
+
+### db.createMany()
+
+Create multiple entities.
+
+#### Signature
+
+```typescript
+function createMany<T>(type: SchemaType<T>, data: Partial<T>[]): Promise<T[]>
+```
+
+#### Example
+
+```typescript
+const businesses = await db.createMany($.Business, [
+  { name: 'Acme Corp', industry: 'Tech' },
+  { name: 'Globex Inc', industry: 'Manufacturing' },
+])
+```
+
+### db.updateMany()
+
+Update multiple entities.
+
+#### Signature
+
+```typescript
+function updateMany<T>(type: SchemaType<T>, options: UpdateManyOptions<T>): Promise<number>
+```
+
+#### Parameters
+
+```typescript
+interface UpdateManyOptions<T> {
+  where: WhereClause
+  data: Partial<T>
+}
+```
+
+#### Example
+
+```typescript
+await db.updateMany($.Business, {
+  where: { industry: 'Technology' },
+  data: { verified: true },
+})
+```
+
+### db.deleteMany()
+
+Delete multiple entities.
+
+#### Signature
+
+```typescript
+function deleteMany(type: SchemaType, options: DeleteManyOptions): Promise<number>
+```
+
+#### Parameters
+
+```typescript
+interface DeleteManyOptions {
+  where: WhereClause
+}
+```
+
+#### Example
+
+```typescript
+await db.deleteMany($.Business, {
+  where: { status: 'inactive' },
+})
+```
+
+## Relationship Operations
+
+Additional relationship operations.
+
+### db.countRelations()
+
+Count related entities.
+
+#### Signature
+
+```typescript
+function countRelations<S, O>(subject: S | string, predicate: Predicate, object: SchemaType<O>, options?: CountOptions): Promise<number>
+```
+
+#### Example
+
+```typescript
+const count = await db.countRelations(business, $.owns, $.Brand)
+```
+
+### db.hasRelation()
+
+Check if relationship exists.
+
+#### Signature
+
+```typescript
+function hasRelation<S, O>(subject: S | string, predicate: Predicate, target: O | string): Promise<boolean>
+```
+
+#### Example
+
+```typescript
+const owns = await db.hasRelation(business, $.owns, brand)
+```
+
+### db.createRelation()
+
+Create explicit relationship.
+
+#### Signature
+
+```typescript
+function createRelation<S, O>(subject: S | string, predicate: Predicate, object: O | string): Promise<void>
+```
+
+#### Example
+
+```typescript
+await db.createRelation(business, $.owns, brand)
+```
+
+### db.deleteRelation()
+
+Delete specific relationship.
+
+#### Signature
+
+```typescript
+function deleteRelation<S, O>(subject: S | string, predicate: Predicate, object: O | string): Promise<void>
+```
+
+#### Example
+
+```typescript
+await db.deleteRelation(business, $.owns, brand)
+```
+
+## Aggregation Operations
+
+### db.count()
+
+Count entities matching criteria.
+
+#### Signature
+
+```typescript
+function count(type: SchemaType, options?: CountOptions): Promise<number>
+```
+
+#### Example
+
+```typescript
+const count = await db.count($.Business, {
+  where: { industry: 'Technology' },
+})
+```
+
+### db.aggregate()
+
+Perform aggregation operations.
+
+#### Signature
+
+```typescript
+function aggregate(type: SchemaType, options: AggregateOptions): Promise<any>
+```
+
+#### Parameters
+
+```typescript
+interface AggregateOptions {
+  $avg?: string
+  $sum?: string
+  $min?: string
+  $max?: string
+  $count?: boolean
+  groupBy?: string | string[]
+  where?: WhereClause
+}
+```
+
+#### Examples
+
+**Average:**
+
+```typescript
+const avgEmployees = await db.aggregate($.Business, {
+  $avg: 'numberOfEmployees',
+  where: { industry: 'Technology' },
+})
+```
+
+**Sum:**
+
+```typescript
+const totalRevenue = await db.aggregate($.Business, {
+  $sum: 'revenue',
+})
+```
+
+**Group by:**
+
+```typescript
+const byIndustry = await db.aggregate($.Business, {
+  groupBy: 'industry',
+  $count: true,
+})
+```
+
+## Configuration
+
+### db.config()
+
+Configure database client.
+
+#### Signature
+
+```typescript
+function config(options: DbConfig): void
+```
+
+#### Parameters
+
+```typescript
+interface DbConfig {
+  region?: string
+  cacheTTL?: number
+  timeout?: number
+  retry?: boolean
+  retryAttempts?: number
+}
+```
+
+#### Example
+
+```typescript
+db.config({
+  region: 'auto',
+  cacheTTL: 300,
+  timeout: 5000,
+  retry: true,
+  retryAttempts: 3,
+})
+```
+
+## Type Definitions
+
+### SchemaType
+
+Schema.org type from `schema.org.ai` package.
+
+```typescript
+import { $ } from 'sdk.do'
+
+type SchemaType<T> = {
+  $type: string
+  // ... Schema.org properties
+}
+
+// Examples
+$.Business
+$.Organization
+$.Person
+$.Product
+// ... 817 total types
+```
+
+See [schema.org.ai](https://schema.org.ai) for all available types.
+
+### Predicate
+
+Semantic relationship predicate.
+
+```typescript
+type Predicate = {
+  toString(): string
+}
+
+// Examples
+$.owns
+$.employs
+$.offers
+$.serves
+$.wrote
+```
+
+### Entity
+
+Base entity structure with required fields.
+
+```typescript
+interface Entity {
+  $id: string
+  $type: string
+  [key: string]: any
+}
+```
+
+### WhereClause
+
+Filter conditions for queries.
+
+```typescript
+type WhereClause = {
+  [field: string]:
+    | any // Exact match
+    | { $gt: any } // Greater than
+    | { $gte: any } // Greater than or equal
+    | { $lt: any } // Less than
+    | { $lte: any } // Less than or equal
+    | { $ne: any } // Not equal
+    | { $in: any[] } // In array
+    | { $nin: any[] } // Not in array
+    | { $contains: string } // Contains substring
+    | { $startsWith: string } // Starts with
+    | { $endsWith: string } // Ends with
+    | { $exists: boolean } // Field exists
+  $and?: WhereClause[]
+  $or?: WhereClause[]
+  $not?: WhereClause
+}
+```
+
+### OrderBy
+
+Sort specification.
+
+```typescript
+type OrderBy = {
+  [field: string]: 'asc' | 'desc'
+}
+```
+
+## Environment Variables
+
+Configure database via environment variables:
+
+```bash
+# Connection
+DATABASE_URL=...
+DATABASE_REGION=auto
+
+# Performance
+DATABASE_CACHE_TTL=300
+DATABASE_TIMEOUT=5000
+
+# Retry
+DATABASE_RETRY=true
+DATABASE_RETRY_ATTEMPTS=3
+```
+
+## Error Handling
+
+All database functions throw errors with this structure:
+
+```typescript
+interface DbError extends Error {
+  code: string
+  message: string
+  details?: any
+}
+```
+
+### Common Error Codes
+
+- `NOT_FOUND` - Entity does not exist
+- `VALIDATION_ERROR` - Data validation failed
+- `DUPLICATE_KEY` - Unique constraint violation
+- `CONSTRAINT_VIOLATION` - Foreign key or constraint violation
+- `DATABASE_ERROR` - General database error
+- `TIMEOUT` - Operation timeout
+- `PERMISSION_DENIED` - Insufficient permissions
+
+### Example
+
+```typescript
+try {
+  const business = await db.get($.Business, 'biz_123')
+} catch (error) {
+  if (error.code === 'NOT_FOUND') {
+    console.error('Business not found')
+  } else if (error.code === 'DATABASE_ERROR') {
+    console.error('Database error:', error.message)
+  } else {
+    throw error
+  }
+}
+```
+
+## Best Practices
+
+### 1. Use Type-Safe Queries
+
+```typescript
+// Good - type-safe
+const businesses = await db.list($.Business, {
+  where: { industry: 'Technology' },
+})
+
+// Avoid - untyped
+const businesses = await db.list('businesses', {
+  where: { industry: 'Technology' },
+})
+```
+
+### 2. Implement Error Handling
+
+```typescript
+try {
+  const result = await db.operation()
+} catch (error) {
+  // Handle specific errors
+}
+```
+
+### 3. Use Pagination
+
+```typescript
+// Good - paginate
+const page = await db.list($.Business, { limit: 50 })
+
+// Avoid - fetch all
+const all = await db.list($.Business)
+```
+
+### 4. Include Relationships Efficiently
+
+```typescript
+// Good - include in query
+const business = await db.get($.Business, 'biz_123', {
+  include: ['brands'],
+})
+
+// Avoid - separate query
+const business = await db.get($.Business, 'biz_123')
+const brands = await db.relate(business, $.owns, $.Brand)
+```
+
+### 5. Use Batch Operations
+
+```typescript
+// Good - batch
+await db.createMany($.Business, businesses)
+
+// Avoid - individual
+for (const biz of businesses) {
+  await db.create($.Business, biz)
+}
+```
+
+## See Also
+
+- [Getting Started](../docs/getting-started) - Quick start guide
+- [Operations Guide](../docs/operations) - Detailed operations docs
+- [Relationships Guide](../docs/relationships) - Relationship documentation
+- [Examples](../examples/) - Code examples
+
+## Support
+
+- [GitHub Issues](https://github.com/dot-do/ai/issues) - Report bugs
+- [Discord Community](https://discord.gg/dotdo) - Get help
+- [Documentation](https://db.do) - Full documentation
+
+## License
+
+MIT (Open Source)

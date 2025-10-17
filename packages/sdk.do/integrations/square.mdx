@@ -1,0 +1,685 @@
+---
+$id: https://integrations.do/square
+$type: Integration
+name: Square
+service: square
+description: Payment processing and POS platform for businesses
+category: payments
+sdkBased: true
+sdkPackage: 'square'
+sdkVersion: ^40.0.0
+sdkImport: Client
+
+auth:
+  type: oauth2
+  authorizationUrl: https://connect.squareup.com/oauth2/authorize
+  tokenUrl: https://connect.squareup.com/oauth2/token
+  scopes:
+    - PAYMENTS_WRITE
+    - PAYMENTS_READ
+    - ORDERS_WRITE
+    - ORDERS_READ
+    - CUSTOMERS_WRITE
+    - CUSTOMERS_READ
+
+resources:
+  - name: Payment
+    plural: Payments
+    description: Process payment transactions
+    operations:
+      - name: create
+        method: POST
+        path: /v2/payments
+        params:
+          - name: source_id
+            type: string
+            required: true
+            description: Payment source ID (card nonce)
+          - name: idempotency_key
+            type: string
+            required: true
+            description: Unique idempotency key
+          - name: amount_money
+            type: object
+            required: true
+            description: Amount with currency
+          - name: customer_id
+            type: string
+            required: false
+            description: Customer ID
+          - name: location_id
+            type: string
+            required: false
+            description: Location ID
+          - name: reference_id
+            type: string
+            required: false
+            description: Reference ID
+          - name: note
+            type: string
+            required: false
+            description: Payment note
+        returns: Payment
+
+      - name: get
+        method: GET
+        path: /v2/payments/{payment_id}
+        params:
+          - name: payment_id
+            type: string
+            required: true
+            description: Payment ID
+        returns: Payment
+
+      - name: list
+        method: GET
+        path: /v2/payments
+        params:
+          - name: begin_time
+            type: string
+            required: false
+            description: Start time (RFC 3339)
+          - name: end_time
+            type: string
+            required: false
+            description: End time (RFC 3339)
+          - name: location_id
+            type: string
+            required: false
+            description: Filter by location
+        returns: Payment[]
+        pagination:
+          type: cursor
+          cursorField: cursor
+          defaultLimit: 100
+
+      - name: cancel
+        method: POST
+        path: /v2/payments/{payment_id}/cancel
+        params:
+          - name: payment_id
+            type: string
+            required: true
+            description: Payment ID
+        returns: Payment
+
+  - name: Customer
+    plural: Customers
+    description: Manage customer profiles
+    operations:
+      - name: create
+        method: POST
+        path: /v2/customers
+        params:
+          - name: given_name
+            type: string
+            required: false
+            description: Customer first name
+          - name: family_name
+            type: string
+            required: false
+            description: Customer last name
+          - name: email_address
+            type: string
+            required: false
+            description: Customer email
+          - name: phone_number
+            type: string
+            required: false
+            description: Customer phone
+        returns: Customer
+
+      - name: get
+        method: GET
+        path: /v2/customers/{customer_id}
+        params:
+          - name: customer_id
+            type: string
+            required: true
+            description: Customer ID
+        returns: Customer
+
+      - name: update
+        method: PUT
+        path: /v2/customers/{customer_id}
+        params:
+          - name: customer_id
+            type: string
+            required: true
+            description: Customer ID
+          - name: given_name
+            type: string
+            required: false
+            description: Updated first name
+          - name: email_address
+            type: string
+            required: false
+            description: Updated email
+        returns: Customer
+
+      - name: delete
+        method: DELETE
+        path: /v2/customers/{customer_id}
+        params:
+          - name: customer_id
+            type: string
+            required: true
+            description: Customer ID
+        returns: boolean
+
+      - name: list
+        method: GET
+        path: /v2/customers
+        params:
+          - name: limit
+            type: number
+            required: false
+            description: Results per page
+        returns: Customer[]
+        pagination:
+          type: cursor
+          cursorField: cursor
+          limitField: limit
+          defaultLimit: 100
+
+  - name: Order
+    plural: Orders
+    description: Create and manage orders
+    operations:
+      - name: create
+        method: POST
+        path: /v2/orders
+        params:
+          - name: location_id
+            type: string
+            required: true
+            description: Location ID
+          - name: line_items
+            type: array
+            required: false
+            description: Order line items
+          - name: customer_id
+            type: string
+            required: false
+            description: Customer ID
+        returns: Order
+
+      - name: get
+        method: GET
+        path: /v2/orders/{order_id}
+        params:
+          - name: order_id
+            type: string
+            required: true
+            description: Order ID
+        returns: Order
+
+      - name: update
+        method: PUT
+        path: /v2/orders/{order_id}
+        params:
+          - name: order_id
+            type: string
+            required: true
+            description: Order ID
+          - name: order
+            type: object
+            required: true
+            description: Updated order data
+        returns: Order
+
+      - name: list
+        method: GET
+        path: /v2/orders/search
+        params:
+          - name: location_ids
+            type: array
+            required: true
+            description: Location IDs to search
+          - name: limit
+            type: number
+            required: false
+            description: Results per page
+        returns: Order[]
+        pagination:
+          type: cursor
+          cursorField: cursor
+          limitField: limit
+          defaultLimit: 100
+
+  - name: Invoice
+    plural: Invoices
+    description: Create and manage invoices
+    operations:
+      - name: create
+        method: POST
+        path: /v2/invoices
+        params:
+          - name: invoice
+            type: object
+            required: true
+            description: Invoice data
+          - name: idempotency_key
+            type: string
+            required: true
+            description: Unique idempotency key
+        returns: Invoice
+
+      - name: get
+        method: GET
+        path: /v2/invoices/{invoice_id}
+        params:
+          - name: invoice_id
+            type: string
+            required: true
+            description: Invoice ID
+        returns: Invoice
+
+      - name: update
+        method: PUT
+        path: /v2/invoices/{invoice_id}
+        params:
+          - name: invoice_id
+            type: string
+            required: true
+            description: Invoice ID
+          - name: invoice
+            type: object
+            required: true
+            description: Updated invoice data
+        returns: Invoice
+
+      - name: delete
+        method: DELETE
+        path: /v2/invoices/{invoice_id}
+        params:
+          - name: invoice_id
+            type: string
+            required: true
+            description: Invoice ID
+        returns: boolean
+
+      - name: list
+        method: GET
+        path: /v2/invoices
+        params:
+          - name: location_id
+            type: string
+            required: true
+            description: Location ID
+          - name: limit
+            type: number
+            required: false
+            description: Results per page
+        returns: Invoice[]
+        pagination:
+          type: cursor
+          cursorField: cursor
+          limitField: limit
+          defaultLimit: 100
+
+webhooks:
+  enabled: true
+  signatureHeader: X-Square-Hmacsha256-Signature
+  signatureAlgorithm: sha256
+  verificationMethod: signature
+  events:
+    - name: payment.created
+      type: payment.created
+      description: Payment was created
+    - name: payment.updated
+      type: payment.updated
+      description: Payment was updated
+    - name: order.created
+      type: order.created
+      description: Order was created
+    - name: order.updated
+      type: order.updated
+      description: Order was updated
+    - name: customer.created
+      type: customer.created
+      description: Customer was created
+    - name: customer.updated
+      type: customer.updated
+      description: Customer was updated
+    - name: invoice.published
+      type: invoice.published
+      description: Invoice was published
+    - name: invoice.payment_made
+      type: invoice.payment_made
+      description: Invoice payment was made
+
+errors:
+  mapping:
+    - code: UNAUTHORIZED
+      type: authentication
+      statusCode: 401
+      message: Unauthorized access
+      retryable: false
+    - code: FORBIDDEN
+      type: authorization
+      statusCode: 403
+      message: Forbidden
+      retryable: false
+    - code: NOT_FOUND
+      type: not_found
+      statusCode: 404
+      message: Resource not found
+      retryable: false
+    - code: BAD_REQUEST
+      type: validation
+      statusCode: 400
+      message: Bad request
+      retryable: false
+    - code: RATE_LIMITED
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+    - code: INTERNAL_SERVER_ERROR
+      type: server
+      statusCode: 500
+      message: Internal server error
+      retryable: true
+  retryable: [RATE_LIMITED, INTERNAL_SERVER_ERROR, 429, 500, 503]
+  nonRetryable: [UNAUTHORIZED, FORBIDDEN, NOT_FOUND, BAD_REQUEST, 401, 403, 404, 400]
+
+tests:
+  enabled: true
+  cleanup: true
+  scenarios:
+    - name: Payment Processing
+      description: Test payment operations
+      steps:
+        - action: create
+          resource: Payment
+        - action: retrieve
+          resource: Payment
+        - action: list
+          resource: Payment
+        - action: custom
+          resource: Payment
+
+    - name: Customer Management
+      description: Test customer CRUD operations
+      steps:
+        - action: create
+          resource: Customer
+        - action: retrieve
+          resource: Customer
+        - action: update
+          resource: Customer
+        - action: list
+          resource: Customer
+        - action: delete
+          resource: Customer
+
+    - name: Order Management
+      description: Test order operations
+      steps:
+        - action: create
+          resource: Order
+        - action: retrieve
+          resource: Order
+        - action: update
+          resource: Order
+        - action: list
+          resource: Order
+
+    - name: Invoice Management
+      description: Test invoice CRUD operations
+      steps:
+        - action: create
+          resource: Invoice
+        - action: retrieve
+          resource: Invoice
+        - action: update
+          resource: Invoice
+        - action: list
+          resource: Invoice
+        - action: delete
+          resource: Invoice
+
+    - name: Webhook Verification
+      description: Test webhook signature verification
+      steps:
+        - action: assert
+          expects:
+            status: 200
+
+docs:
+  homepage: https://squareup.com
+  apiDocs: https://developer.squareup.com/reference/square
+  sdkDocs: https://github.com/square/square-nodejs-sdk
+  guides:
+    quickstart: https://developer.squareup.com/docs/sdks/nodejs/quick-start
+    webhooks: https://developer.squareup.com/docs/webhooks/overview
+    authentication: https://developer.squareup.com/docs/build-basics/access-tokens
+---
+
+# Square Integration
+
+Square is a comprehensive payment processing and point-of-sale platform for businesses of all sizes.
+
+## Features
+
+- **Payments**: Process credit card and mobile payments
+- **Customers**: Manage customer profiles and data
+- **Orders**: Create and track orders
+- **Invoices**: Generate and send invoices
+- **OAuth 2.0**: Secure authentication
+- **Webhooks**: Real-time event notifications
+
+## Quick Start
+
+```typescript
+import { SquareClient } from '@dotdo/sdk.do/integrations/square'
+
+const square = new SquareClient({
+  accessToken: process.env.SQUARE_ACCESS_TOKEN,
+  environment: 'sandbox', // or 'production'
+})
+
+// Create a payment
+const payment = await square.payment.create({
+  source_id: 'cnon:card-nonce-ok',
+  idempotency_key: crypto.randomUUID(),
+  amount_money: {
+    amount: 1000n, // $10.00 (in cents)
+    currency: 'USD',
+  },
+  location_id: 'LOCATION_ID',
+})
+```
+
+## Authentication
+
+Square uses OAuth 2.0 authentication:
+
+```bash
+export SQUARE_ACCESS_TOKEN=your_access_token
+export SQUARE_LOCATION_ID=your_location_id
+```
+
+## Resources
+
+### Payments
+
+Process payments:
+
+```typescript
+// Create payment
+const payment = await square.payment.create({
+  source_id: 'card_nonce',
+  idempotency_key: crypto.randomUUID(),
+  amount_money: {
+    amount: 5000n,
+    currency: 'USD',
+  },
+  customer_id: 'CUSTOMER_ID',
+  location_id: 'LOCATION_ID',
+  note: 'Online purchase',
+})
+
+// Get payment
+const payment = await square.payment.get({ payment_id: 'PAYMENT_ID' })
+
+// List payments
+const payments = await square.payment.list({
+  begin_time: '2025-01-01T00:00:00Z',
+  end_time: '2025-12-31T23:59:59Z',
+})
+
+// Cancel payment
+await square.payment.cancel({ payment_id: 'PAYMENT_ID' })
+```
+
+### Customers
+
+Manage customers:
+
+```typescript
+// Create customer
+const customer = await square.customer.create({
+  given_name: 'John',
+  family_name: 'Doe',
+  email_address: 'john@example.com',
+  phone_number: '+15551234567',
+})
+
+// Get customer
+const customer = await square.customer.get({ customer_id: 'CUSTOMER_ID' })
+
+// Update customer
+await square.customer.update({
+  customer_id: 'CUSTOMER_ID',
+  email_address: 'newemail@example.com',
+})
+
+// List customers
+const customers = await square.customer.list({ limit: 50 })
+
+// Delete customer
+await square.customer.delete({ customer_id: 'CUSTOMER_ID' })
+```
+
+### Orders
+
+Manage orders:
+
+```typescript
+// Create order
+const order = await square.order.create({
+  location_id: 'LOCATION_ID',
+  line_items: [
+    {
+      name: 'Product Name',
+      quantity: '1',
+      base_price_money: {
+        amount: 5000n,
+        currency: 'USD',
+      },
+    },
+  ],
+  customer_id: 'CUSTOMER_ID',
+})
+
+// Get order
+const order = await square.order.get({ order_id: 'ORDER_ID' })
+
+// Search orders
+const orders = await square.order.list({
+  location_ids: ['LOCATION_ID'],
+  limit: 100,
+})
+```
+
+### Invoices
+
+Create and manage invoices:
+
+```typescript
+// Create invoice
+const invoice = await square.invoice.create({
+  invoice: {
+    location_id: 'LOCATION_ID',
+    order_id: 'ORDER_ID',
+    primary_recipient: {
+      customer_id: 'CUSTOMER_ID',
+    },
+    payment_requests: [
+      {
+        request_type: 'BALANCE',
+        due_date: '2025-12-31',
+      },
+    ],
+  },
+  idempotency_key: crypto.randomUUID(),
+})
+
+// Get invoice
+const invoice = await square.invoice.get({ invoice_id: 'INVOICE_ID' })
+
+// List invoices
+const invoices = await square.invoice.list({
+  location_id: 'LOCATION_ID',
+})
+```
+
+## Webhooks
+
+Square supports webhooks with HMAC-SHA256 signature verification:
+
+```typescript
+import { SquareWebhookHandler, WebhookEventRouter } from '@dotdo/sdk.do/integrations/square'
+
+const handler = new SquareWebhookHandler(process.env.SQUARE_WEBHOOK_SIGNATURE_KEY, process.env.SQUARE_WEBHOOK_URL)
+const event = await handler.handleRequest(request)
+
+const router = new WebhookEventRouter()
+router.onPaymentCreated(async (event) => {
+  console.log('Payment created:', event.data)
+})
+
+router.onOrderUpdated(async (event) => {
+  console.log('Order updated:', event.data)
+})
+
+await router.route(event)
+```
+
+## Error Handling
+
+```typescript
+import { SquareError } from '@dotdo/sdk.do/integrations/square'
+
+try {
+  await square.payment.create({
+    /* ... */
+  })
+} catch (error) {
+  if (error instanceof SquareError) {
+    console.error('Square Error:', error.code, error.message)
+    if (error.isRetriable()) {
+      // Retry logic
+    }
+  }
+}
+```
+
+## Best Practices
+
+1. **Idempotency**: Always use unique idempotency keys for payment creation
+2. **Location IDs**: Payments and orders are tied to specific locations
+3. **Amount Format**: Use BigInt for amounts (in smallest currency unit)
+4. **Card Nonces**: Card nonces can only be used once
+5. **Webhooks**: Verify webhook signatures for security
+6. **Rate Limits**: Implement exponential backoff for rate limit errors
+
+## API Reference
+
+Full API documentation: https://developer.squareup.com/reference/square
+
+## License
+
+MIT

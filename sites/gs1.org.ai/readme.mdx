@@ -1,0 +1,285 @@
+---
+$id: https://gs1.org.ai
+$type: WebSite
+name: gs1.org.ai
+description: An MDXLD-based AI-native extension of GS1 standards for product identification and supply chain
+license: CC-BY-4.0
+---
+
+# gs1.org.ai
+
+**An MDXLD-based AI-native extension of [GS1](https://www.gs1.org) standards**
+
+gs1.org.ai extends GS1 standards for product identification, barcodes, and supply chain data with AI-native features, using the [MDXLD](/mdxld) format for linked data in MDX. It provides a modern, type-safe, and AI-friendly way to work with GS1 identifiers and product data.
+
+## Key Features
+
+> **Note**: The `gs1.org.ai` package is currently in development. This documentation describes the planned API and features. Some functionality may not yet be implemented.
+
+### 🔗 Linked Data with `$` Prefix
+
+gs1.org.ai uses the `$` prefix for consistency with MDXLD and schema.org.ai:
+
+```typescript
+// gs1.org.ai (MDXLD)
+{
+  '$context': 'https://gs1.org',
+  '$type': 'Product',
+  '$id': 'https://id.gs1.org/01/00614141000012',
+  'gtin': '00614141000012',
+  'name': 'Product Name',
+  'brand': 'Brand Name'
+}
+```
+
+### 🤖 AI-Native Design
+
+gs1.org.ai is designed from the ground up for AI systems:
+
+- **Tree-shakeable**: Import only the types and data you need _(planned)_
+- **TypeScript-first**: Full type safety with generated TypeScript definitions
+- **MDX Integration**: Native support for embedded GS1 data in MDX documents
+- **Validation**: Built-in validation for GTINs and other GS1 identifiers _(planned)_
+
+### 📦 GS1 Standards Support
+
+Support for key GS1 standards:
+
+- **GTIN** (Global Trade Item Number) - Product identification
+- **GLN** (Global Location Number) - Location identification
+- **SSCC** (Serial Shipping Container Code) - Logistics units
+- **GRAI** (Global Returnable Asset Identifier) - Returnable assets
+- **GIAI** (Global Individual Asset Identifier) - Individual assets
+- **GSRN** (Global Service Relation Number) - Service relationships
+
+## MDXLD Integration
+
+MDXLD enables `$id` and `$type` in MDX frontmatter for GS1 linked data:
+
+```mdx
+---
+$id: https://id.gs1.org/01/00614141000012
+$type: Product
+gtin: '00614141000012'
+name: Organic Coffee Beans
+brand: Example Brand
+netContent:
+  $type: QuantitativeValue
+  value: 500
+  unitCode: GRM
+---
+
+# Organic Coffee Beans
+
+Product information and details...
+```
+
+The frontmatter is automatically parsed and validated as GS1 linked data, making it easy for AI systems to understand and process product information.
+
+## Core Packages
+
+### `gs1.org.ai`
+
+Tree-shakeable GS1 types and data with full TypeScript support.
+
+```bash
+pnpm add gs1.org.ai
+```
+
+Features:
+
+- Full GS1 identifier support with `$` prefix
+- Tree-shakeable exports
+- TypeScript type definitions
+- GTIN validation utilities
+- Product and location lookup
+
+### `mdxld`
+
+Enable `$id` and `$type` in MDX frontmatter for linked data.
+
+```bash
+pnpm add mdxld
+```
+
+Features:
+
+- Parse and validate MDXLD frontmatter
+- Convert between nested and flattened formats
+- JSON-LD conversion
+- TypeScript support
+
+## Use Cases
+
+### Product Catalogs
+
+Embed GS1 product data directly in your MDX content:
+
+```mdx
+---
+$type: Product
+$id: https://id.gs1.org/01/00614141000012
+gtin: '00614141000012'
+name: Premium Coffee Blend
+brand: Coffee Co
+manufacturer:
+  $type: Organization
+  name: Coffee Manufacturing Inc
+  gln: '0614141000005'
+netContent:
+  $type: QuantitativeValue
+  value: 1
+  unitCode: KGM
+---
+
+# Premium Coffee Blend
+
+Rich, aromatic coffee sourced from sustainable farms...
+```
+
+### Supply Chain Tracking
+
+Track products through the supply chain with GS1 identifiers:
+
+```typescript
+import type { Product, Location } from 'gs1.org.ai/types'
+
+const shipment = {
+  $type: 'ParcelDelivery',
+  $id: 'https://id.gs1.org/00/006141410000000001',
+  trackingNumber: '006141410000000001',
+  itemShipped: {
+    $type: 'Product',
+    gtin: '00614141000012',
+  },
+  originAddress: {
+    $type: 'Location',
+    gln: '0614141000005',
+  },
+}
+```
+
+### E-commerce Integration
+
+Integrate GS1 standards with e-commerce platforms:
+
+```typescript
+import { validateGTIN, parseGTIN } from 'gs1.org.ai'
+
+const gtin = '00614141000012'
+const isValid = validateGTIN(gtin)
+const parsed = parseGTIN(gtin)
+
+console.log(parsed)
+// {
+//   valid: true,
+//   type: 'GTIN-14',
+//   indicator: '0',
+//   companyPrefix: '061414',
+//   itemReference: '100001',
+//   checkDigit: '2'
+// }
+```
+
+## API Reference
+
+> **Note**: The following APIs are planned and not yet implemented. This section describes the intended functionality of the `gs1.org.ai` package.
+
+### GTIN Validation
+
+```typescript
+import { validateGTIN, parseGTIN, calculateCheckDigit } from 'gs1.org.ai'
+
+// Validate GTIN
+const isValid = validateGTIN('00614141000012')
+
+// Parse GTIN structure
+const parsed = parseGTIN('00614141000012')
+
+// Calculate check digit
+const checkDigit = calculateCheckDigit('0061414100001')
+```
+
+### Identifier Lookup
+
+```typescript
+import { getProduct, getLocation, validateGLN } from 'gs1.org.ai'
+
+// Get product by GTIN
+const product = await getProduct('00614141000012')
+
+// Get location by GLN
+const location = await getLocation('0614141000005')
+
+// Validate GLN
+const isValidGLN = validateGLN('0614141000005')
+```
+
+### MDXLD Parsing
+
+```typescript
+import { parseMDXLD, validateLinkedData, toJSONLD } from 'mdxld'
+
+// Parse MDX with GS1 linked data
+const parsed = parseMDXLD(mdxContent)
+
+// Validate
+const validation = validateLinkedData(parsed.data, {
+  validateId: true,
+  requireType: true,
+})
+
+// Convert to JSON-LD
+const jsonld = toJSONLD(parsed.data)
+```
+
+## Comparison with Traditional GS1
+
+| Feature      | Traditional GS1 | gs1.org.ai           |
+| ------------ | --------------- | -------------------- |
+| Format       | XML, EDI        | MDXLD + JSON-LD      |
+| Type Safety  | No              | Yes (TypeScript)     |
+| Tree-shaking | No              | Yes _(planned)_      |
+| MDX Support  | No              | Native               |
+| AI-native    | No              | Yes                  |
+| Validation   | External tools  | Built-in _(planned)_ |
+
+## GS1 Standards Compliance
+
+gs1.org.ai maintains compatibility with official GS1 standards while providing modern, developer-friendly interfaces:
+
+- GS1 General Specifications
+- GS1 Digital Link standard
+- GS1 Web Vocabulary
+- EPCIS (Electronic Product Code Information Services)
+
+## License
+
+gs1.org.ai is released under the [Creative Commons Attribution 4.0 International License (CC-BY-4.0)](https://creativecommons.org/licenses/by/4.0/).
+
+This means you are free to:
+
+- **Share**: Copy and redistribute the material in any medium or format
+- **Adapt**: Remix, transform, and build upon the material for any purpose, even commercially
+
+Under the following terms:
+
+- **Attribution**: You must give appropriate credit, provide a link to the license, and indicate if changes were made
+
+## Resources
+
+- [GS1 official site](https://www.gs1.org)
+- [GS1 Digital Link](https://www.gs1.org/standards/gs1-digital-link)
+- [MDXLD documentation](/mdxld)
+- [schema.org.ai documentation](/schema.org.ai)
+- [Creative Commons BY 4.0 License](https://creativecommons.org/licenses/by/4.0/)
+
+## Contributing
+
+gs1.org.ai is part of the [`.do` platform](https://do) ecosystem. Contributions are welcome!
+
+The GS1 standards are sourced from official GS1 specifications and adapted to use the `$` prefix convention and modern TypeScript interfaces.
+
+## Acknowledgments
+
+gs1.org.ai builds upon the excellent work of [GS1](https://www.gs1.org) and the global standards community. We maintain compatibility with GS1 standards while adding modern, AI-native features for developers and AI systems.

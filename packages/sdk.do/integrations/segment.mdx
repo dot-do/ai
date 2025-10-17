@@ -1,0 +1,495 @@
+---
+$id: https://integrations.do/segment
+$type: Integration
+name: Segment
+service: segment
+description: Customer data platform for collecting, cleaning, and controlling data
+category: analytics
+sdkBased: true
+sdkPackage: '@segment/analytics-node'
+sdkVersion: ^2.0.0
+sdkImport: Analytics
+
+auth:
+  type: api-key
+  location: header
+  headerName: Authorization
+  scheme: Basic
+
+resources:
+  - name: Event
+    plural: Events
+    description: Track user events and actions
+    operations:
+      - name: track
+        method: POST
+        path: /v1/track
+        params:
+          - name: userId
+            type: string
+            required: false
+            description: User ID (required if anonymousId not provided)
+          - name: anonymousId
+            type: string
+            required: false
+            description: Anonymous ID (required if userId not provided)
+          - name: event
+            type: string
+            required: true
+            description: Event name
+          - name: properties
+            type: object
+            required: false
+            description: Event properties
+          - name: context
+            type: object
+            required: false
+            description: Context information
+          - name: timestamp
+            type: string
+            required: false
+            description: Event timestamp (ISO 8601)
+        returns: Event
+
+      - name: batch
+        method: POST
+        path: /v1/batch
+        params:
+          - name: batch
+            type: array
+            required: true
+            description: Array of track/identify/group/page events
+        returns: boolean
+
+  - name: Identify
+    plural: Identifies
+    description: Identify users and their traits
+    operations:
+      - name: identify
+        method: POST
+        path: /v1/identify
+        params:
+          - name: userId
+            type: string
+            required: false
+            description: User ID (required if anonymousId not provided)
+          - name: anonymousId
+            type: string
+            required: false
+            description: Anonymous ID (required if userId not provided)
+          - name: traits
+            type: object
+            required: false
+            description: User traits (name, email, etc.)
+          - name: context
+            type: object
+            required: false
+            description: Context information
+          - name: timestamp
+            type: string
+            required: false
+            description: Event timestamp (ISO 8601)
+        returns: Identify
+
+  - name: Group
+    plural: Groups
+    description: Associate users with groups
+    operations:
+      - name: group
+        method: POST
+        path: /v1/group
+        params:
+          - name: userId
+            type: string
+            required: false
+            description: User ID (required if anonymousId not provided)
+          - name: anonymousId
+            type: string
+            required: false
+            description: Anonymous ID (required if userId not provided)
+          - name: groupId
+            type: string
+            required: true
+            description: Group ID
+          - name: traits
+            type: object
+            required: false
+            description: Group traits
+          - name: context
+            type: object
+            required: false
+            description: Context information
+        returns: Group
+
+  - name: Page
+    plural: Pages
+    description: Track page views
+    operations:
+      - name: page
+        method: POST
+        path: /v1/page
+        params:
+          - name: userId
+            type: string
+            required: false
+            description: User ID (required if anonymousId not provided)
+          - name: anonymousId
+            type: string
+            required: false
+            description: Anonymous ID (required if userId not provided)
+          - name: name
+            type: string
+            required: false
+            description: Page name
+          - name: category
+            type: string
+            required: false
+            description: Page category
+          - name: properties
+            type: object
+            required: false
+            description: Page properties
+          - name: context
+            type: object
+            required: false
+            description: Context information
+        returns: Page
+
+webhooks:
+  enabled: true
+  signatureHeader: X-Signature
+  signatureAlgorithm: sha1
+  verificationMethod: signature
+  events:
+    - name: track
+      type: track
+      description: Track event received
+    - name: identify
+      type: identify
+      description: Identify call received
+    - name: group
+      type: group
+      description: Group call received
+    - name: page
+      type: page
+      description: Page call received
+    - name: screen
+      type: screen
+      description: Screen call received
+
+errors:
+  mapping:
+    - code: invalid_write_key
+      type: authentication
+      statusCode: 401
+      message: Invalid write key
+      retryable: false
+    - code: forbidden
+      type: authorization
+      statusCode: 403
+      message: Forbidden
+      retryable: false
+    - code: no_user_anon_id
+      type: validation
+      statusCode: 400
+      message: Must provide userId or anonymousId
+      retryable: false
+    - code: missing_event
+      type: validation
+      statusCode: 400
+      message: Missing event field for track call
+      retryable: false
+    - code: rate_limit
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+    - code: server_error
+      type: server
+      statusCode: 500
+      message: Internal server error
+      retryable: true
+  retryable: [rate_limit, server_error, 429, 500, 503]
+  nonRetryable: [invalid_write_key, forbidden, no_user_anon_id, missing_event, 401, 403, 400]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Event Tracking
+      description: Test track event operations
+      steps:
+        - action: custom
+          resource: Event
+
+    - name: User Identification
+      description: Test identify operations
+      steps:
+        - action: custom
+          resource: Identify
+
+    - name: Group Operations
+      description: Test group associations
+      steps:
+        - action: custom
+          resource: Group
+
+    - name: Page Tracking
+      description: Test page view tracking
+      steps:
+        - action: custom
+          resource: Page
+
+    - name: Webhook Verification
+      description: Test webhook signature verification
+      steps:
+        - action: assert
+          expects:
+            status: 200
+
+docs:
+  homepage: https://segment.com
+  apiDocs: https://segment.com/docs/connections/sources/catalog/libraries/server/http-api/
+  sdkDocs: https://github.com/segmentio/analytics-node
+  guides:
+    quickstart: https://segment.com/docs/connections/sources/catalog/libraries/server/node/
+    webhooks: https://segment.com/docs/connections/destinations/catalog/webhooks/
+    authentication: https://segment.com/docs/connections/sources/catalog/libraries/server/http-api/
+---
+
+# Segment Integration
+
+Segment is a customer data platform that helps you collect, clean, and control your customer data for analytics, marketing, and data warehousing.
+
+## Features
+
+- **Event Tracking**: Track user events and actions
+- **User Identification**: Identify users with traits
+- **Group Operations**: Associate users with companies/organizations
+- **Page Tracking**: Track page views and navigation
+- **Batch API**: Send multiple events in one request
+- **Webhooks**: Receive events with SHA-1 signature verification
+
+## Quick Start
+
+```typescript
+import { SegmentClient } from '@dotdo/sdk.do/integrations/segment'
+
+const segment = new SegmentClient({
+  apiKey: process.env.SEGMENT_WRITE_KEY,
+})
+
+// Track an event
+await segment.event.track({
+  userId: 'user123',
+  event: 'Product Purchased',
+  properties: {
+    product: 'Pro Plan',
+    revenue: 99.0,
+    currency: 'USD',
+  },
+})
+
+// Identify a user
+await segment.identify.identify({
+  userId: 'user123',
+  traits: {
+    name: 'John Doe',
+    email: 'john@example.com',
+    plan: 'pro',
+  },
+})
+
+// Associate with a group
+await segment.group.group({
+  userId: 'user123',
+  groupId: 'company456',
+  traits: {
+    name: 'Acme Inc',
+    employees: 100,
+  },
+})
+```
+
+## Authentication
+
+Segment uses API key (write key) authentication:
+
+```bash
+export SEGMENT_WRITE_KEY=your_write_key
+```
+
+## Resources
+
+### Events
+
+Track user events:
+
+```typescript
+// Track event with user ID
+await segment.event.track({
+  userId: 'user123',
+  event: 'Button Clicked',
+  properties: {
+    button: 'signup',
+    page: 'homepage',
+  },
+})
+
+// Track event with anonymous ID
+await segment.event.track({
+  anonymousId: 'anon123',
+  event: 'Page Viewed',
+  properties: {
+    path: '/pricing',
+    referrer: 'google.com',
+  },
+})
+
+// Batch events
+await segment.event.batch({
+  batch: [
+    {
+      type: 'track',
+      userId: 'user123',
+      event: 'Event A',
+    },
+    {
+      type: 'track',
+      userId: 'user123',
+      event: 'Event B',
+    },
+  ],
+})
+```
+
+### Identify
+
+Identify users and their traits:
+
+```typescript
+// Identify with traits
+await segment.identify.identify({
+  userId: 'user123',
+  traits: {
+    name: 'Jane Smith',
+    email: 'jane@example.com',
+    firstName: 'Jane',
+    lastName: 'Smith',
+    company: 'Acme Inc',
+    title: 'CEO',
+    createdAt: '2025-01-01T00:00:00Z',
+  },
+})
+
+// Identify anonymous user
+await segment.identify.identify({
+  anonymousId: 'anon123',
+  traits: {
+    interests: ['tech', 'startups'],
+  },
+})
+```
+
+### Groups
+
+Associate users with groups:
+
+```typescript
+// Associate user with company
+await segment.group.group({
+  userId: 'user123',
+  groupId: 'company456',
+  traits: {
+    name: 'Acme Corporation',
+    industry: 'Technology',
+    employees: 500,
+    plan: 'enterprise',
+  },
+})
+```
+
+### Pages
+
+Track page views:
+
+```typescript
+// Track page view
+await segment.page.page({
+  userId: 'user123',
+  name: 'Pricing',
+  category: 'Marketing',
+  properties: {
+    url: 'https://example.com/pricing',
+    title: 'Pricing - Example',
+    referrer: 'https://google.com',
+  },
+})
+
+// Track anonymous page view
+await segment.page.page({
+  anonymousId: 'anon123',
+  name: 'Homepage',
+  properties: {
+    url: 'https://example.com',
+  },
+})
+```
+
+## Webhooks
+
+Segment can send webhooks with SHA-1 HMAC signature verification:
+
+```typescript
+import { SegmentWebhookHandler, WebhookEventRouter } from '@dotdo/sdk.do/integrations/segment'
+
+const handler = new SegmentWebhookHandler(process.env.SEGMENT_WEBHOOK_SECRET)
+const event = await handler.handleRequest(request)
+
+const router = new WebhookEventRouter()
+router.onTrack(async (event) => {
+  console.log('Track event:', event.data)
+})
+
+router.onIdentify(async (event) => {
+  console.log('Identify call:', event.data)
+})
+
+await router.route(event)
+```
+
+## Error Handling
+
+```typescript
+import { SegmentError } from '@dotdo/sdk.do/integrations/segment'
+
+try {
+  await segment.event.track({
+    /* ... */
+  })
+} catch (error) {
+  if (error instanceof SegmentError) {
+    console.error('Segment Error:', error.code, error.message)
+    if (error.isRetriable()) {
+      // Retry logic
+    }
+  }
+}
+```
+
+## Best Practices
+
+1. **User Identification**: Always provide either userId or anonymousId
+2. **Event Names**: Use clear, consistent event naming (e.g., "Product Purchased")
+3. **Properties**: Include relevant context in properties object
+4. **Batch API**: Use batch for sending multiple events efficiently
+5. **Context**: Include device, location, and app context when available
+6. **Timestamps**: Use ISO 8601 format for timestamps
+
+## API Reference
+
+Full API documentation: https://segment.com/docs/connections/sources/catalog/libraries/server/http-api/
+
+## License
+
+MIT

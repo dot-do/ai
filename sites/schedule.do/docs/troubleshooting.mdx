@@ -1,0 +1,331 @@
+---
+$id: https://schedule.do/docs/troubleshooting
+$type: TechArticle
+title: schedule.do Troubleshooting
+description: Common issues and solutions for schedule.do
+keywords: [schedule, cron, timer, interval, task, workflow, recurring, calendar, troubleshooting, issues, debugging, solutions]
+---
+
+# schedule.do Troubleshooting
+
+Common issues and their solutions when working with schedule.do.
+
+## Installation Issues
+
+### Package Not Found
+
+**Problem**: Cannot find package schedule.do
+
+```
+Error: Cannot find package 'schedule.do'
+```
+
+**Solution**: Verify package name and registry:
+
+```bash
+# Install from npm registry
+pnpm add schedule.do
+
+# Or specify registry
+pnpm add schedule.do --registry=https://registry.npmjs.org
+```
+
+### Version Conflicts
+
+**Problem**: Dependency version conflicts
+
+**Solution**: Update dependencies:
+
+```bash
+# Update specific package
+pnpm update schedule.do
+
+# Update all dependencies
+pnpm update
+```
+
+## Configuration Issues
+
+### Missing API Key
+
+**Problem**: API key not found
+
+```
+Error: SCHEDULE_API_KEY is required
+```
+
+**Solution**: Set environment variable:
+
+```bash
+export SCHEDULE_API_KEY=your-key-here
+```
+
+### Invalid Configuration
+
+**Problem**: Configuration validation fails
+
+**Solution**: Check configuration format:
+
+```typescript
+import { schedule } from 'schedule.do'
+
+const config = {
+  // Required fields
+  apiKey: process.env.API_KEY,
+
+  // Optional fields
+  timeout: 30000,
+  retries: 3,
+}
+
+const instance = await schedule.create(config)
+```
+
+## Runtime Issues
+
+### Operation Timeout
+
+**Problem**: Operations timing out
+
+```
+Error: Operation timed out after 30000ms
+```
+
+**Solution 1**: Increase timeout:
+
+```typescript
+const result = await schedule(data, {
+  timeout: 60000, // 60 seconds
+})
+```
+
+**Solution 2**: Optimize data processing:
+
+```typescript
+// Process in smaller batches
+const batchSize = 100
+for (let i = 0; i < items.length; i += batchSize) {
+  const batch = items.slice(i, i + batchSize)
+  await schedule.batch(batch)
+}
+```
+
+### Memory Issues
+
+**Problem**: Out of memory errors
+
+**Solution**: Process data in streams:
+
+```typescript
+import { createReadStream } from 'fs'
+
+const stream = createReadStream('large-file.json')
+await schedule.processStream(stream)
+```
+
+### Rate Limiting
+
+**Problem**: Rate limit exceeded
+
+```
+Error: Rate limit exceeded. Retry after 60 seconds.
+```
+
+**Solution**: Implement exponential backoff:
+
+```typescript
+async function withRetry(fn, maxRetries = 3) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn()
+    } catch (error) {
+      if (i === maxRetries - 1) throw error
+
+      const delay = Math.pow(2, i) * 1000
+      await new Promise((resolve) => setTimeout(resolve, delay))
+    }
+  }
+}
+
+const result = await withRetry(() => schedule(data))
+```
+
+## Data Issues
+
+### Invalid Input Format
+
+**Problem**: Input data format incorrect
+
+**Solution**: Validate input before processing:
+
+```typescript
+import { z } from 'zod'
+
+const schema = z.object({
+  data: z.string(),
+  options: z.object({}).optional(),
+})
+
+try {
+  const validated = schema.parse(input)
+  const result = await schedule(validated)
+} catch (error) {
+  console.error('Validation failed:', error.errors)
+}
+```
+
+### Data Loss
+
+**Problem**: Data missing from results
+
+**Solution**: Enable detailed logging:
+
+```typescript
+const result = await schedule(data, {
+  debug: true,
+  logLevel: 'verbose',
+})
+
+console.log('Processing details:', result.metadata)
+```
+
+## Type Errors
+
+### TypeScript Compilation Errors
+
+**Problem**: TypeScript errors during compilation
+
+**Solution**: Import types correctly:
+
+```typescript
+import type { ScheduleOptions, ScheduleResult } from 'schedule.do'
+
+const options: ScheduleOptions = {
+  // Type-safe configuration
+}
+
+const result: ScheduleResult = await schedule(options)
+```
+
+### Type Inference Issues
+
+**Problem**: Types not inferred correctly
+
+**Solution**: Explicitly specify types:
+
+```typescript
+const result = await schedule<MyType>(data)
+```
+
+## Integration Issues
+
+### SDK Integration Failures
+
+**Problem**: Integration with sdk.do fails
+
+**Solution**: Verify SDK version compatibility:
+
+```bash
+# Check versions
+pnpm list schedule.do sdk.do
+
+# Update if needed
+pnpm update schedule.do sdk.do
+```
+
+### Event Handling Issues
+
+**Problem**: Events not firing
+
+**Solution**: Ensure event listeners are registered:
+
+```typescript
+import { on } from 'sdk.do'
+
+// Register before events are sent
+on($.Data.processed, async (data) => {
+  console.log('Data processed:', data)
+})
+
+// Then perform operation
+await schedule(data)
+```
+
+## Performance Issues
+
+### Slow Operations
+
+**Problem**: Operations taking too long
+
+**Solution 1**: Enable caching:
+
+```typescript
+const result = await schedule(data, {
+  cache: true,
+  cacheTTL: 3600,
+})
+```
+
+**Solution 2**: Use parallel processing:
+
+```typescript
+const results = await Promise.all(items.map((item) => schedule(item)))
+```
+
+### High Memory Usage
+
+**Problem**: Memory usage too high
+
+**Solution**: Process in chunks:
+
+```typescript
+const chunkSize = 1000
+
+for (let i = 0; i < data.length; i += chunkSize) {
+  const chunk = data.slice(i, i + chunkSize)
+  await schedule.process(chunk)
+
+  // Allow garbage collection
+  if (global.gc) global.gc()
+}
+```
+
+## Debugging
+
+### Enable Debug Mode
+
+```typescript
+const result = await schedule(data, {
+  debug: true,
+  verbose: true,
+})
+
+console.log('Debug info:', result.debug)
+```
+
+### Inspect Internal State
+
+```typescript
+import { schedule } from 'schedule.do'
+
+const instance = schedule.create(config)
+
+// Access internal state
+console.log('State:', instance.getState())
+
+// Get metrics
+console.log('Metrics:', instance.getMetrics())
+```
+
+## Getting Help
+
+If you're still experiencing issues:
+
+1. Check the [API Reference](../api/reference)
+2. Review [Best Practices](./best-practices)
+3. Search [GitHub Issues](https://github.com/dot-do/ai/issues)
+4. Ask in community discussions
+
+---
+
+Part of the [schedule.do](https://schedule.do) documentation.

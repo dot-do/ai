@@ -1,0 +1,562 @@
+---
+$id: https://integrations.do/datadog
+$type: Integration
+name: Datadog
+service: datadog
+description: Infrastructure monitoring, APM, and log management platform
+category: developer-tools
+sdkBased: true
+sdkPackage: '@datadog/datadog-api-client'
+sdkVersion: ^1.43.0
+sdkImport: client
+
+auth:
+  type: api-key
+  location: header
+  headerName: DD-API-KEY
+  scheme: Bearer
+
+resources:
+  - name: Metric
+    plural: Metrics
+    description: Submit and query metrics data
+    operations:
+      - name: submit
+        method: POST
+        path: /api/v2/series
+        params:
+          - name: series
+            type: array
+            required: true
+            description: Array of metric series
+        returns: Metric
+
+      - name: query
+        method: GET
+        path: /api/v1/query
+        params:
+          - name: query
+            type: string
+            required: true
+            description: Metric query
+          - name: from
+            type: number
+            required: true
+            description: Start timestamp (seconds)
+          - name: to
+            type: number
+            required: true
+            description: End timestamp (seconds)
+        returns: Metric[]
+
+      - name: list
+        method: GET
+        path: /api/v1/metrics
+        params:
+          - name: from
+            type: number
+            required: false
+            description: Start timestamp
+        returns: Metric[]
+
+  - name: Event
+    plural: Events
+    description: Post and retrieve events
+    operations:
+      - name: create
+        method: POST
+        path: /api/v1/events
+        params:
+          - name: title
+            type: string
+            required: true
+            description: Event title
+          - name: text
+            type: string
+            required: true
+            description: Event text
+          - name: tags
+            type: array
+            required: false
+            description: Event tags
+        returns: Event
+
+      - name: get
+        method: GET
+        path: /api/v1/events/{event_id}
+        params:
+          - name: event_id
+            type: number
+            required: true
+            description: Event ID
+        returns: Event
+
+      - name: list
+        method: GET
+        path: /api/v1/events
+        params:
+          - name: start
+            type: number
+            required: true
+            description: Start timestamp
+          - name: end
+            type: number
+            required: true
+            description: End timestamp
+        returns: Event[]
+
+  - name: Monitor
+    plural: Monitors
+    description: Create and manage monitors
+    operations:
+      - name: create
+        method: POST
+        path: /api/v1/monitor
+        params:
+          - name: type
+            type: string
+            required: true
+            description: Monitor type (metric alert, service check, etc.)
+          - name: query
+            type: string
+            required: true
+            description: Monitor query
+          - name: name
+            type: string
+            required: true
+            description: Monitor name
+          - name: message
+            type: string
+            required: false
+            description: Alert message
+        returns: Monitor
+
+      - name: get
+        method: GET
+        path: /api/v1/monitor/{monitor_id}
+        params:
+          - name: monitor_id
+            type: number
+            required: true
+            description: Monitor ID
+        returns: Monitor
+
+      - name: update
+        method: PUT
+        path: /api/v1/monitor/{monitor_id}
+        params:
+          - name: monitor_id
+            type: number
+            required: true
+            description: Monitor ID
+          - name: query
+            type: string
+            required: false
+            description: Updated query
+        returns: Monitor
+
+      - name: delete
+        method: DELETE
+        path: /api/v1/monitor/{monitor_id}
+        params:
+          - name: monitor_id
+            type: number
+            required: true
+            description: Monitor ID
+        returns: boolean
+
+      - name: list
+        method: GET
+        path: /api/v1/monitor
+        params:
+          - name: group_states
+            type: string
+            required: false
+            description: Filter by states (all, alert, warn, no data)
+        returns: Monitor[]
+
+  - name: Dashboard
+    plural: Dashboards
+    description: Create and manage dashboards
+    operations:
+      - name: create
+        method: POST
+        path: /api/v1/dashboard
+        params:
+          - name: title
+            type: string
+            required: true
+            description: Dashboard title
+          - name: layout_type
+            type: string
+            required: true
+            description: Layout type (ordered or free)
+          - name: widgets
+            type: array
+            required: true
+            description: Dashboard widgets
+        returns: Dashboard
+
+      - name: get
+        method: GET
+        path: /api/v1/dashboard/{dashboard_id}
+        params:
+          - name: dashboard_id
+            type: string
+            required: true
+            description: Dashboard ID
+        returns: Dashboard
+
+      - name: update
+        method: PUT
+        path: /api/v1/dashboard/{dashboard_id}
+        params:
+          - name: dashboard_id
+            type: string
+            required: true
+            description: Dashboard ID
+          - name: title
+            type: string
+            required: false
+            description: Updated title
+        returns: Dashboard
+
+      - name: delete
+        method: DELETE
+        path: /api/v1/dashboard/{dashboard_id}
+        params:
+          - name: dashboard_id
+            type: string
+            required: true
+            description: Dashboard ID
+        returns: boolean
+
+      - name: list
+        method: GET
+        path: /api/v1/dashboard
+        params: []
+        returns: Dashboard[]
+
+webhooks:
+  enabled: false
+  events: []
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 403
+      type: authorization
+      statusCode: 403
+      message: Forbidden
+      retryable: false
+    - code: 404
+      type: not_found
+      statusCode: 404
+      message: Resource not found
+      retryable: false
+    - code: 400
+      type: validation
+      statusCode: 400
+      message: Bad request
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+    - code: 500
+      type: server
+      statusCode: 500
+      message: Internal server error
+      retryable: true
+  retryable: [429, 500, 502, 503]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: true
+  scenarios:
+    - name: Metric Operations
+      description: Test metric submission and querying
+      steps:
+        - action: custom
+          resource: Metric
+        - action: list
+          resource: Metric
+
+    - name: Event Management
+      description: Test event CRUD operations
+      steps:
+        - action: create
+          resource: Event
+        - action: retrieve
+          resource: Event
+        - action: list
+          resource: Event
+
+    - name: Monitor Management
+      description: Test monitor CRUD operations
+      steps:
+        - action: create
+          resource: Monitor
+        - action: retrieve
+          resource: Monitor
+        - action: update
+          resource: Monitor
+        - action: list
+          resource: Monitor
+        - action: delete
+          resource: Monitor
+
+    - name: Dashboard Management
+      description: Test dashboard CRUD operations
+      steps:
+        - action: create
+          resource: Dashboard
+        - action: retrieve
+          resource: Dashboard
+        - action: update
+          resource: Dashboard
+        - action: list
+          resource: Dashboard
+        - action: delete
+          resource: Dashboard
+
+docs:
+  homepage: https://www.datadoghq.com
+  apiDocs: https://docs.datadoghq.com/api/latest/
+  sdkDocs: https://github.com/DataDog/datadog-api-client-typescript
+  guides:
+    quickstart: https://docs.datadoghq.com/api/latest/using-the-api/
+    authentication: https://docs.datadoghq.com/api/latest/authentication/
+---
+
+# Datadog Integration
+
+Datadog is a comprehensive infrastructure monitoring, APM, and log management platform.
+
+## Features
+
+- **Metrics**: Submit and query metrics data
+- **Events**: Post and retrieve events
+- **Monitors**: Create alerts and monitors
+- **Dashboards**: Visualize data with custom dashboards
+- **API Key Authentication**: Secure API access
+- **APM**: Application performance monitoring
+
+## Quick Start
+
+```typescript
+import { DatadogClient } from '@dotdo/sdk.do/integrations/datadog'
+
+const datadog = new DatadogClient({
+  apiKey: process.env.DATADOG_API_KEY,
+  appKey: process.env.DATADOG_APP_KEY,
+  site: 'datadoghq.com', // or datadoghq.eu
+})
+
+// Submit metrics
+await datadog.metric.submit({
+  series: [
+    {
+      metric: 'system.cpu.usage',
+      points: [[Date.now() / 1000, 0.5]],
+      type: 'gauge',
+      tags: ['environment:production'],
+    },
+  ],
+})
+
+// Create monitor
+const monitor = await datadog.monitor.create({
+  type: 'metric alert',
+  query: 'avg(last_5m):avg:system.cpu.usage > 0.9',
+  name: 'High CPU Usage',
+  message: '@pagerduty CPU usage is above 90%',
+})
+```
+
+## Authentication
+
+Datadog uses API Key + Application Key authentication:
+
+```bash
+export DATADOG_API_KEY=your_api_key
+export DATADOG_APP_KEY=your_app_key
+```
+
+## Resources
+
+### Metrics
+
+Submit and query metrics:
+
+```typescript
+// Submit metrics
+await datadog.metric.submit({
+  series: [
+    {
+      metric: 'custom.metric',
+      points: [[Math.floor(Date.now() / 1000), 42]],
+      type: 'gauge',
+      tags: ['env:prod', 'service:api'],
+    },
+  ],
+})
+
+// Query metrics
+const data = await datadog.metric.query({
+  query: 'avg:system.cpu.usage{*}',
+  from: Math.floor(Date.now() / 1000) - 3600,
+  to: Math.floor(Date.now() / 1000),
+})
+
+// List metrics
+const metrics = await datadog.metric.list({
+  from: Math.floor(Date.now() / 1000) - 86400,
+})
+```
+
+### Events
+
+Post and retrieve events:
+
+```typescript
+// Create event
+const event = await datadog.event.create({
+  title: 'Deployment completed',
+  text: 'Version 2.0 deployed to production',
+  tags: ['deployment', 'production'],
+})
+
+// Get event
+const event = await datadog.event.get({
+  event_id: 123456,
+})
+
+// List events
+const events = await datadog.event.list({
+  start: Math.floor(Date.now() / 1000) - 3600,
+  end: Math.floor(Date.now() / 1000),
+})
+```
+
+### Monitors
+
+Create and manage monitors:
+
+```typescript
+// Create monitor
+const monitor = await datadog.monitor.create({
+  type: 'metric alert',
+  query: 'avg(last_5m):avg:system.disk.used{*} > 90',
+  name: 'Disk Usage Alert',
+  message: '@slack-ops Disk usage is above 90%',
+})
+
+// Get monitor
+const monitor = await datadog.monitor.get({
+  monitor_id: 789,
+})
+
+// Update monitor
+await datadog.monitor.update({
+  monitor_id: 789,
+  query: 'avg(last_5m):avg:system.disk.used{*} > 95',
+})
+
+// List monitors
+const monitors = await datadog.monitor.list({
+  group_states: 'alert',
+})
+
+// Delete monitor
+await datadog.monitor.delete({
+  monitor_id: 789,
+})
+```
+
+### Dashboards
+
+Create and manage dashboards:
+
+```typescript
+// Create dashboard
+const dashboard = await datadog.dashboard.create({
+  title: 'System Metrics',
+  layout_type: 'ordered',
+  widgets: [
+    {
+      definition: {
+        type: 'timeseries',
+        requests: [
+          {
+            q: 'avg:system.cpu.usage{*}',
+          },
+        ],
+        title: 'CPU Usage',
+      },
+    },
+  ],
+})
+
+// Get dashboard
+const dashboard = await datadog.dashboard.get({
+  dashboard_id: 'abc-123-def',
+})
+
+// Update dashboard
+await datadog.dashboard.update({
+  dashboard_id: 'abc-123-def',
+  title: 'Updated System Metrics',
+})
+
+// List dashboards
+const dashboards = await datadog.dashboard.list()
+
+// Delete dashboard
+await datadog.dashboard.delete({
+  dashboard_id: 'abc-123-def',
+})
+```
+
+## Error Handling
+
+```typescript
+import { DatadogError } from '@dotdo/sdk.do/integrations/datadog'
+
+try {
+  await datadog.monitor.create({
+    /* ... */
+  })
+} catch (error) {
+  if (error instanceof DatadogError) {
+    console.error('Datadog Error:', error.code, error.message)
+    if (error.isRetriable()) {
+      // Retry logic
+    }
+  }
+}
+```
+
+## Best Practices
+
+1. **API + App Keys**: Both keys required for most operations
+2. **Timestamps**: Use Unix timestamps (seconds)
+3. **Tags**: Use consistent tagging strategy
+4. **Metrics**: Submit metrics in batches for efficiency
+5. **Monitors**: Use template variables for reusable monitors
+6. **Rate Limits**: Respect rate limits (varies by endpoint)
+7. **Site**: Specify correct site (datadoghq.com or datadoghq.eu)
+
+## API Reference
+
+Full API documentation: https://docs.datadoghq.com/api/latest/
+
+## License
+
+MIT

@@ -1,0 +1,112 @@
+---
+$id: https://tom.do/app
+$type: WebPage
+title: Talk to Tom - Your 10,000x Engineer
+description: Chat, call, or text with Tom - your personal AI software engineering agent
+---
+
+import { $, db, agent, send, on } from 'sdk.do'
+
+# Talk to Tom
+
+<VoiceCall agent="tom" />
+<TextChat agent="tom" />
+<SMSWidget phoneNumber="+1-555-TOM-CODE" />
+
+## Quick Actions
+
+<AgentActions>
+  <Action
+    label="Start Video Call"
+    icon="video"
+    onClick={async () => {
+      const session = await agent.create({
+        $type: $.AgentSession,
+        agent: 'tom',
+        mode: 'video_call',
+        capabilities: ['screen_share', 'code_review', 'pair_programming']
+      })
+
+      return session
+    }}
+
+/>
+
+  <Action
+    label="Schedule Meeting"
+    icon="calendar"
+    onClick={async () => {
+      const meeting = await db.create($.Meeting, {
+        agent: 'tom',
+        attendees: [$.user],
+        duration: 30,
+        type: 'code_review'
+      })
+
+      await send($.Meeting.scheduled, meeting)
+      return meeting
+    }}
+
+/>
+
+  <Action
+    label="Send Code for Review"
+    icon="code"
+    onClick={async () => {
+      // Open file picker
+      const files = await selectFiles()
+
+      const review = await agent.execute({
+        agent: 'tom',
+        task: 'code_review',
+        files: files,
+        priority: 'high'
+      })
+
+      return review
+    }}
+
+/>
+
+</AgentActions>
+
+## Recent Conversations
+
+<ConversationHistory agent="tom" limit={10} />
+
+## Tom's Capabilities
+
+export const TomCapabilities = () => {
+  const capabilities = [
+    {
+      category: 'Software Development',
+      skills: ['Full-stack development', 'Architecture design', 'API development', 'Database design']
+    },
+    {
+      category: 'Code Review',
+      skills: ['Security analysis', 'Performance optimization', 'Best practices', 'Refactoring suggestions']
+    },
+    {
+      category: 'DevOps',
+      skills: ['CI/CD setup', 'Infrastructure as code', 'Deployment automation', 'Monitoring setup']
+    },
+    {
+      category: 'Problem Solving',
+      skills: ['Bug fixing', 'Technical debt reduction', 'System debugging', 'Performance tuning']
+    }
+  ]
+
+return (
+
+<div className="grid grid-cols-2 gap-4">
+  {capabilities.map((cat) => (
+    <CapabilityCard key={cat.category} {...cat} />
+  ))}
+</div>
+) }
+
+<TomCapabilities />
+
+## Start a Group Chat
+
+<GroupChatInvite agents={['tom', 'amy', 'dara']} />

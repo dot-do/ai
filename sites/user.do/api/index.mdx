@@ -1,0 +1,1015 @@
+---
+$id: https://user.do/api
+$type: APIReference
+title: User API Reference
+description: Complete API reference for user.do user context and authentication
+keywords: [user, api, reference, documentation, functions]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# User API Reference
+
+Complete API reference for user.do user context, authentication, and permissions.
+
+## Overview
+
+The User API provides functions for:
+
+- `user.current()` - Get current authenticated user
+- `user.isAuthenticated()` - Check if user is authenticated
+- `user.can()` - Check user permissions
+- `user.hasRole()` - Check user role
+- `user.session()` - Get session details
+- `user.login()` - Authenticate user
+- `user.endSession()` - Logout user
+
+## user.current()
+
+Get the current authenticated user.
+
+### Signature
+
+```typescript
+function current(): Promise<Person>
+```
+
+### Returns
+
+Returns a `Promise<Person>` that resolves to the current user object following Schema.org Person type.
+
+```typescript
+interface Person {
+  $id: string
+  $type: 'Person'
+  name: string
+  email: string
+  role?: string
+  organization?: {
+    $id: string
+    name: string
+    $type: 'Organization'
+  }
+  givenName?: string
+  familyName?: string
+  jobTitle?: string
+  image?: string
+  telephone?: string
+  address?: PostalAddress
+}
+```
+
+### Example
+
+```typescript
+import { user } from 'sdk.do'
+
+const currentUser = await user.current()
+
+console.log(currentUser.name) // "John Smith"
+console.log(currentUser.email) // "john@example.com"
+console.log(currentUser.role) // "admin"
+```
+
+### Error Codes
+
+- `UNAUTHENTICATED` - No user is currently authenticated
+
+## user.isAuthenticated()
+
+Check if a user is currently authenticated.
+
+### Signature
+
+```typescript
+function isAuthenticated(): Promise<boolean>
+```
+
+### Returns
+
+Returns `Promise<boolean>` - `true` if user is authenticated, `false` otherwise.
+
+### Example
+
+```typescript
+import { user } from 'sdk.do'
+
+if (await user.isAuthenticated()) {
+  console.log('User is logged in')
+} else {
+  console.log('User is not logged in')
+}
+```
+
+## user.can()
+
+Check if the current user has permission to perform an action on a resource.
+
+### Signature
+
+```typescript
+function can(action: string, resource: SchemaType | Entity): Promise<boolean>
+```
+
+### Parameters
+
+#### `action: string` (required)
+
+The action to check permission for:
+
+- `'create'` - Create new entities
+- `'read'` - View/access entities
+- `'edit'` or `'update'` - Modify entities
+- `'delete'` - Remove entities
+- `'publish'` - Publish content
+- `'manage'` - Full management access
+- Custom actions: `'approve'`, `'archive'`, etc.
+
+#### `resource: SchemaType | Entity` (required)
+
+The resource to check permission against:
+
+- Schema.org type: `$.Product`, `$.Order`, `$.Business`
+- Entity instance: `product`, `order`, `business`
+
+### Returns
+
+Returns `Promise<boolean>` - `true` if user has permission, `false` otherwise.
+
+### Examples
+
+**Type-level permission:**
+
+```typescript
+import { $, user } from 'sdk.do'
+
+// Check if user can edit products (any product)
+const canEdit = await user.can('edit', $.Product)
+```
+
+**Instance-level permission:**
+
+```typescript
+import { $, db, user } from 'sdk.do'
+
+// Check if user can edit specific product
+const product = await db.get($.Product, 'prod_123')
+const canEdit = await user.can('edit', product)
+```
+
+**Multiple permission checks:**
+
+```typescript
+const canCreate = await user.can('create', $.Product)
+const canEdit = await user.can('edit', $.Product)
+const canDelete = await user.can('delete', $.Product)
+
+console.log({ canCreate, canEdit, canDelete })
+```
+
+## user.permissions()
+
+Check multiple permissions at once for efficiency.
+
+### Signature
+
+```typescript
+function permissions(checks: Array<{ action: string; resource: SchemaType | Entity }>): Promise<Record<string, boolean>>
+```
+
+### Parameters
+
+#### `checks: Array<{ action, resource }>` (required)
+
+Array of permission checks to perform.
+
+### Returns
+
+Returns `Promise<Record<string, boolean>>` - Object mapping permission strings to boolean results.
+
+### Example
+
+```typescript
+import { $, user } from 'sdk.do'
+
+const permissions = await user.permissions([
+  { action: 'create', resource: $.Product },
+  { action: 'edit', resource: $.Product },
+  { action: 'delete', resource: $.Product },
+  { action: 'view', resource: $.Report },
+])
+
+console.log(permissions)
+// {
+//   'create:Product': true,
+//   'edit:Product': true,
+//   'delete:Product': false,
+//   'view:Report': false
+// }
+```
+
+## user.hasRole()
+
+Check if the current user has a specific role.
+
+### Signature
+
+```typescript
+function hasRole(role: string): Promise<boolean>
+```
+
+### Parameters
+
+#### `role: string` (required)
+
+The role to check for (e.g., 'admin', 'editor', 'viewer').
+
+### Returns
+
+Returns `Promise<boolean>` - `true` if user has the role, `false` otherwise.
+
+### Example
+
+```typescript
+import { user } from 'sdk.do'
+
+// Check if user is admin
+if (await user.hasRole('admin')) {
+  console.log('User is an administrator')
+}
+
+// Check if user is editor
+if (await user.hasRole('editor')) {
+  console.log('User is an editor')
+}
+```
+
+## user.hasAnyRole()
+
+Check if the current user has any of the specified roles.
+
+### Signature
+
+```typescript
+function hasAnyRole(roles: string[]): Promise<boolean>
+```
+
+### Parameters
+
+#### `roles: string[]` (required)
+
+Array of roles to check.
+
+### Returns
+
+Returns `Promise<boolean>` - `true` if user has any of the roles, `false` otherwise.
+
+### Example
+
+```typescript
+import { user } from 'sdk.do'
+
+// Check if user is admin or editor
+if (await user.hasAnyRole(['admin', 'editor'])) {
+  console.log('User can edit content')
+}
+```
+
+## user.belongsTo()
+
+Check if the current user belongs to a specific organization.
+
+### Signature
+
+```typescript
+function belongsTo(organizationId: string): Promise<boolean>
+```
+
+### Parameters
+
+#### `organizationId: string` (required)
+
+The organization ID to check.
+
+### Returns
+
+Returns `Promise<boolean>` - `true` if user belongs to organization, `false` otherwise.
+
+### Example
+
+```typescript
+import { user } from 'sdk.do'
+
+if (await user.belongsTo('org_123')) {
+  console.log('User belongs to this organization')
+}
+```
+
+## user.session()
+
+Get the current user's session details.
+
+### Signature
+
+```typescript
+function session(): Promise<Session>
+```
+
+### Returns
+
+Returns `Promise<Session>` with session information.
+
+```typescript
+interface Session {
+  id: string
+  userId: string
+  createdAt: string
+  expiresAt: string
+  isActive: boolean
+  metadata?: Record<string, any>
+}
+```
+
+### Example
+
+```typescript
+import { user } from 'sdk.do'
+
+const session = await user.session()
+
+console.log(session.id) // "session_789"
+console.log(session.expiresAt) // "2025-10-11T12:00:00Z"
+console.log(session.isActive) // true
+```
+
+## user.refreshSession()
+
+Refresh the current session to extend its expiration.
+
+### Signature
+
+```typescript
+function refreshSession(): Promise<Session>
+```
+
+### Returns
+
+Returns `Promise<Session>` with updated session information.
+
+### Example
+
+```typescript
+import { user } from 'sdk.do'
+
+// Refresh session
+await user.refreshSession()
+
+// Get updated session
+const session = await user.session()
+console.log('New expiration:', session.expiresAt)
+```
+
+## user.endSession()
+
+End the current session (logout).
+
+### Signature
+
+```typescript
+function endSession(): Promise<void>
+```
+
+### Returns
+
+Returns `Promise<void>`.
+
+### Example
+
+```typescript
+import { user } from 'sdk.do'
+
+// Logout
+await user.endSession()
+
+// Verify logout
+const isAuthenticated = await user.isAuthenticated()
+console.log(isAuthenticated) // false
+```
+
+## user.login()
+
+Authenticate a user with various methods.
+
+### Signature
+
+```typescript
+function login(credentials: LoginCredentials): Promise<Session>
+```
+
+### Parameters
+
+#### `credentials: LoginCredentials` (required)
+
+Login credentials, format depends on authentication method.
+
+**Email/Password:**
+
+```typescript
+{
+  email: string
+  password: string
+}
+```
+
+**OAuth:**
+
+```typescript
+{
+  provider: 'oauth' | 'google' | 'github' | 'microsoft'
+  redirectUri: string
+}
+```
+
+**API Key:**
+
+```typescript
+{
+  apiKey: string
+}
+```
+
+### Returns
+
+Returns `Promise<Session>` with new session information.
+
+### Examples
+
+**Email/Password:**
+
+```typescript
+import { user } from 'sdk.do'
+
+await user.login({
+  email: 'john@example.com',
+  password: 'secure-password',
+})
+
+const currentUser = await user.current()
+console.log(`Logged in as: ${currentUser.name}`)
+```
+
+**OAuth:**
+
+```typescript
+import { user } from 'sdk.do'
+
+const authUrl = await user.login({
+  provider: 'google',
+  redirectUri: 'https://app.example.com/auth/callback',
+})
+
+// Redirect user to authUrl
+```
+
+### Error Codes
+
+- `INVALID_CREDENTIALS` - Invalid email or password
+- `ACCOUNT_LOCKED` - Account has been locked
+- `ACCOUNT_DISABLED` - Account has been disabled
+
+## user.sendMagicLink()
+
+Send a magic link for passwordless authentication.
+
+### Signature
+
+```typescript
+function sendMagicLink(options: MagicLinkOptions): Promise<MagicLink>
+```
+
+### Parameters
+
+```typescript
+interface MagicLinkOptions {
+  email: string
+  redirectUri: string
+}
+```
+
+### Returns
+
+```typescript
+interface MagicLink {
+  email: string
+  url: string
+  expiresAt: string
+}
+```
+
+### Example
+
+```typescript
+import { user } from 'sdk.do'
+
+const magicLink = await user.sendMagicLink({
+  email: 'john@example.com',
+  redirectUri: 'https://app.example.com/auth/verify',
+})
+
+console.log('Magic link sent to:', magicLink.email)
+```
+
+## user.verifyMagicLink()
+
+Verify a magic link token and create session.
+
+### Signature
+
+```typescript
+function verifyMagicLink(token: string): Promise<Session>
+```
+
+### Parameters
+
+#### `token: string` (required)
+
+The magic link token to verify.
+
+### Returns
+
+Returns `Promise<Session>` with new session information.
+
+### Example
+
+```typescript
+import { user } from 'sdk.do'
+
+const session = await user.verifyMagicLink(token)
+const currentUser = await user.current()
+
+console.log(`Logged in as: ${currentUser.name}`)
+```
+
+## user.setProvider()
+
+Configure the user context provider.
+
+### Signature
+
+```typescript
+function setProvider(provider: UserProvider): void
+```
+
+### Parameters
+
+#### `provider: UserProvider` (required)
+
+Function that extracts user from context.
+
+```typescript
+type UserProvider = (context: RequestContext) => Promise<Person | null>
+```
+
+### Example
+
+```typescript
+import { user, db, $ } from 'sdk.do'
+
+user.setProvider(async (context) => {
+  // Extract token from Authorization header
+  const authHeader = context.headers.get('Authorization')
+  const token = authHeader?.replace('Bearer ', '')
+
+  if (!token) {
+    return null
+  }
+
+  // Verify token and get user ID
+  const decoded = await verifyJWT(token)
+
+  // Get user from database
+  const currentUser = await db.get($.Person, decoded.userId)
+
+  return currentUser
+})
+```
+
+## user.generateJWT()
+
+Generate a JWT token for a user.
+
+### Signature
+
+```typescript
+function generateJWT(options: JWTOptions): Promise<string>
+```
+
+### Parameters
+
+```typescript
+interface JWTOptions {
+  userId: string
+  expiresIn?: string // Default: '24h'
+  claims?: Record<string, any>
+}
+```
+
+### Returns
+
+Returns `Promise<string>` - JWT token.
+
+### Example
+
+```typescript
+import { user } from 'sdk.do'
+
+const token = await user.generateJWT({
+  userId: 'user_123',
+  expiresIn: '24h',
+  claims: {
+    role: 'admin',
+    organization: 'org_456',
+  },
+})
+
+console.log(token) // "eyJhbGciOiJIUzI1NiIs..."
+```
+
+## user.verifyJWT()
+
+Verify a JWT token.
+
+### Signature
+
+```typescript
+function verifyJWT(token: string): Promise<JWTPayload>
+```
+
+### Parameters
+
+#### `token: string` (required)
+
+The JWT token to verify.
+
+### Returns
+
+```typescript
+interface JWTPayload {
+  userId: string
+  iat: number
+  exp: number
+  [key: string]: any
+}
+```
+
+### Example
+
+```typescript
+import { user } from 'sdk.do'
+
+const decoded = await user.verifyJWT(token)
+
+console.log(decoded.userId) // "user_123"
+console.log(decoded.exp) // 1728561600
+```
+
+### Error Codes
+
+- `TOKEN_EXPIRED` - Token has expired
+- `INVALID_TOKEN` - Token is invalid or malformed
+
+## user.authenticateJWT()
+
+Authenticate using a JWT token.
+
+### Signature
+
+```typescript
+function authenticateJWT(token: string): Promise<void>
+```
+
+### Parameters
+
+#### `token: string` (required)
+
+The JWT token to authenticate with.
+
+### Returns
+
+Returns `Promise<void>`.
+
+### Example
+
+```typescript
+import { user } from 'sdk.do'
+
+const token = request.headers.get('Authorization')?.replace('Bearer ', '')
+
+await user.authenticateJWT(token)
+
+const currentUser = await user.current()
+console.log(`Authenticated as: ${currentUser.name}`)
+```
+
+## user.generateApiKey()
+
+Generate an API key for a user.
+
+### Signature
+
+```typescript
+function generateApiKey(options: ApiKeyOptions): Promise<ApiKey>
+```
+
+### Parameters
+
+```typescript
+interface ApiKeyOptions {
+  userId: string
+  name: string
+  scopes?: string[]
+}
+```
+
+### Returns
+
+```typescript
+interface ApiKey {
+  key: string
+  name: string
+  scopes: string[]
+  createdAt: string
+}
+```
+
+### Example
+
+```typescript
+import { user } from 'sdk.do'
+
+const apiKey = await user.generateApiKey({
+  userId: 'user_123',
+  name: 'Production API Key',
+  scopes: ['read', 'write'],
+})
+
+console.log(apiKey.key) // "sk_live_abc123..."
+```
+
+## user.authenticateApiKey()
+
+Authenticate using an API key.
+
+### Signature
+
+```typescript
+function authenticateApiKey(apiKey: string): Promise<void>
+```
+
+### Parameters
+
+#### `apiKey: string` (required)
+
+The API key to authenticate with.
+
+### Returns
+
+Returns `Promise<void>`.
+
+### Example
+
+```typescript
+import { user } from 'sdk.do'
+
+const apiKey = request.headers.get('X-API-Key')
+
+await user.authenticateApiKey(apiKey)
+
+const currentUser = await user.current()
+console.log(`Authenticated as: ${currentUser.name}`)
+```
+
+## user.revokeApiKey()
+
+Revoke an API key.
+
+### Signature
+
+```typescript
+function revokeApiKey(apiKey: string): Promise<void>
+```
+
+### Parameters
+
+#### `apiKey: string` (required)
+
+The API key to revoke.
+
+### Returns
+
+Returns `Promise<void>`.
+
+### Example
+
+```typescript
+import { user } from 'sdk.do'
+
+await user.revokeApiKey('sk_live_abc123...')
+
+console.log('API key revoked')
+```
+
+## Type Definitions
+
+### Person
+
+Schema.org Person type representing a user.
+
+```typescript
+interface Person {
+  $id: string
+  $type: 'Person'
+  name: string
+  email: string
+  role?: string
+  organization?: Organization
+  givenName?: string
+  familyName?: string
+  jobTitle?: string
+  image?: string
+  telephone?: string
+  address?: PostalAddress
+}
+```
+
+### Organization
+
+Schema.org Organization type.
+
+```typescript
+interface Organization {
+  $id: string
+  $type: 'Organization'
+  name: string
+  email?: string
+  url?: string
+}
+```
+
+### Session
+
+User session information.
+
+```typescript
+interface Session {
+  id: string
+  userId: string
+  createdAt: string
+  expiresAt: string
+  isActive: boolean
+  metadata?: Record<string, any>
+}
+```
+
+### PostalAddress
+
+Schema.org PostalAddress type.
+
+```typescript
+interface PostalAddress {
+  $type: 'PostalAddress'
+  streetAddress?: string
+  addressLocality?: string
+  addressRegion?: string
+  postalCode?: string
+  addressCountry?: string
+}
+```
+
+## Environment Variables
+
+Configure user service via environment variables:
+
+```bash
+# Session configuration
+SESSION_SECRET=your-secret-key
+SESSION_DURATION=86400000  # 24 hours
+
+# Authentication provider
+AUTH_PROVIDER=oauth
+AUTH_DOMAIN=auth.example.com
+
+# JWT configuration
+JWT_SECRET=your-jwt-secret
+JWT_ALGORITHM=HS256
+JWT_EXPIRES_IN=24h
+
+# OAuth configuration
+OAUTH_CLIENT_ID=your-client-id
+OAUTH_CLIENT_SECRET=your-client-secret
+OAUTH_REDIRECT_URI=https://app.example.com/auth/callback
+
+# Magic link configuration
+MAGIC_LINK_EXPIRY=600000  # 10 minutes
+EMAIL_FROM=noreply@example.com
+```
+
+## Error Handling
+
+All user functions throw errors with the following structure:
+
+```typescript
+interface UserError extends Error {
+  code: string
+  message: string
+  details?: any
+}
+```
+
+### Common Error Codes
+
+- `UNAUTHENTICATED` - User is not authenticated
+- `UNAUTHORIZED` - User lacks required permission
+- `INVALID_CREDENTIALS` - Invalid login credentials
+- `TOKEN_EXPIRED` - JWT token has expired
+- `INVALID_TOKEN` - JWT token is invalid
+- `SESSION_EXPIRED` - User session has expired
+- `ACCOUNT_LOCKED` - User account is locked
+- `ACCOUNT_DISABLED` - User account is disabled
+
+### Example
+
+```typescript
+import { user } from 'sdk.do'
+
+try {
+  const currentUser = await user.current()
+  console.log(currentUser.name)
+} catch (error) {
+  if (error.code === 'UNAUTHENTICATED') {
+    console.log('User is not logged in')
+    // Redirect to login
+  } else {
+    console.error('Error:', error.message)
+  }
+}
+```
+
+## Best Practices
+
+### 1. Cache User Context
+
+```typescript
+const currentUser = await user.current()
+
+// Use cached user multiple times
+console.log(currentUser.name)
+console.log(currentUser.email)
+console.log(currentUser.role)
+```
+
+### 2. Check Authentication Before Access
+
+```typescript
+if (!(await user.isAuthenticated())) {
+  throw new Error('Authentication required')
+}
+
+const currentUser = await user.current()
+```
+
+### 3. Use Specific Permissions
+
+```typescript
+// Good: Specific action
+await user.can('edit', $.Product)
+
+// Bad: Generic action
+await user.can('access', $.Product)
+```
+
+### 4. Handle Errors Gracefully
+
+```typescript
+try {
+  if (!(await user.can('delete', product))) {
+    return { error: 'Permission denied' }
+  }
+  await db.delete(product.$id)
+} catch (error) {
+  console.error('Error:', error)
+  return { error: 'Operation failed' }
+}
+```
+
+## See Also
+
+- [Getting Started](../docs/getting-started) - Setup guide
+- [Authentication](../docs/authentication) - Authentication patterns
+- [Permissions](../docs/permissions) - Permission checking
+- [Examples](../examples/) - Code examples
+
+## License
+
+CC-BY-4.0 (Open Source)

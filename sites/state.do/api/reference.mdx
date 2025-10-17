@@ -1,0 +1,876 @@
+---
+$id: https://state.do/api/reference
+$type: APIReference
+title: state.do API Reference
+description: Complete API documentation for state.do
+keywords: [api, reference, functions, types, methods]
+author:
+  $type: Organization
+  name: .do Platform
+license: CC-BY-4.0
+---
+
+# state.do API Reference
+
+Complete API documentation for state.do.
+
+## Core Functions
+
+### state.get()
+
+Get or create a state object instance.
+
+**Signature:**
+
+```typescript
+async function get<T>(type: Type<T>, id: string, options?: StateOptions): Promise<T>
+```
+
+**Parameters:**
+
+- `type` - State object type (e.g., `$.Counter`, `$.Session`)
+- `id` - Unique identifier for the state object
+- `options` - Optional configuration
+
+**Returns:** Promise resolving to state object instance
+
+**Example:**
+
+```typescript
+import { $, state } from 'sdk.do'
+
+const counter = await state.get($.Counter, 'global-counter')
+const session = await state.get($.UserSession, `user:${userId}`)
+```
+
+**Options:**
+
+```typescript
+interface StateOptions {
+  region?: 'us-east' | 'us-west' | 'eu-west' | 'ap-south' | 'auto'
+  namespace?: string
+  create?: boolean // Default: true
+}
+```
+
+### state.save()
+
+Save state object to persistent storage.
+
+**Signature:**
+
+```typescript
+async function save(object: any): Promise<void>
+```
+
+**Parameters:**
+
+- `object` - State object instance to save
+
+**Returns:** Promise resolving when saved
+
+**Example:**
+
+```typescript
+import { state } from 'sdk.do'
+
+export class Counter {
+  count: number = 0
+
+  async increment() {
+    this.count++
+    await state.save(this)
+    return this.count
+  }
+}
+```
+
+### state.delete()
+
+Delete a state object.
+
+**Signature:**
+
+```typescript
+async function delete(type: Type<any>, id: string): Promise<boolean>
+```
+
+**Parameters:**
+
+- `type` - State object type
+- `id` - State object identifier
+
+**Returns:** Promise resolving to `true` if deleted, `false` if not found
+
+**Example:**
+
+```typescript
+import { $, state } from 'sdk.do'
+
+await state.delete($.Counter, 'temp-counter')
+await state.delete($.Session, `session:${sessionId}`)
+```
+
+### state.list()
+
+List all state objects of a given type.
+
+**Signature:**
+
+```typescript
+async function list(type: Type<any>, options?: ListOptions): Promise<string[]>
+```
+
+**Parameters:**
+
+- `type` - State object type to list
+- `options` - Optional filtering and pagination
+
+**Returns:** Promise resolving to array of state object IDs
+
+**Example:**
+
+```typescript
+import { $, state } from 'sdk.do'
+
+const allSessions = await state.list($.Session)
+const recentSessions = await state.list($.Session, {
+  prefix: 'user:',
+  limit: 100,
+})
+```
+
+**Options:**
+
+```typescript
+interface ListOptions {
+  prefix?: string
+  limit?: number
+  cursor?: string
+}
+```
+
+### state.alarm()
+
+Schedule an alarm for future execution.
+
+**Signature:**
+
+```typescript
+async function alarm(object: any, timestamp: number | Date): Promise<void>
+```
+
+**Parameters:**
+
+- `object` - State object instance
+- `timestamp` - Time to fire alarm (milliseconds or Date)
+
+**Returns:** Promise resolving when alarm is scheduled
+
+**Example:**
+
+```typescript
+import { state } from 'sdk.do'
+
+export class Reminder {
+  async schedule(delayMs: number) {
+    await state.alarm(this, Date.now() + delayMs)
+  }
+
+  async onAlarm() {
+    console.log('Alarm fired!')
+  }
+}
+```
+
+### state.config()
+
+Configure state management settings.
+
+**Signature:**
+
+```typescript
+function config(options: StateConfig): void
+```
+
+**Parameters:**
+
+- `options` - Configuration options
+
+**Example:**
+
+```typescript
+import { state } from 'sdk.do'
+
+state.config({
+  namespace: 'production',
+  region: 'auto',
+  ttl: 3600000, // 1 hour
+})
+```
+
+**Options:**
+
+```typescript
+interface StateConfig {
+  namespace?: string
+  region?: 'us-east' | 'us-west' | 'eu-west' | 'ap-south' | 'auto'
+  ttl?: number
+  persistence?: 'memory' | 'disk' | 'auto'
+}
+```
+
+## Durable Object API
+
+### DurableObjectState
+
+Core state management interface for Durable Objects.
+
+```typescript
+interface DurableObjectState {
+  // Storage interface
+  storage: DurableObjectStorage
+
+  // Object ID
+  id: DurableObjectId
+
+  // Wait until promise
+  waitUntil(promise: Promise<any>): void
+
+  // Block concurrent execution
+  blockConcurrencyWhile<T>(callback: () => Promise<T>): Promise<T>
+
+  // WebSocket methods
+  acceptWebSocket(ws: WebSocket, tags?: string[]): void
+  getWebSockets(tag?: string): WebSocket[]
+  setWebSocketAutoResponse(request: WebSocketRequestResponsePair): void
+  getWebSocketAutoResponse(): WebSocketRequestResponsePair | null
+  getTags(ws: WebSocket): string[]
+}
+```
+
+### DurableObjectStorage
+
+Persistent key-value storage interface.
+
+```typescript
+interface DurableObjectStorage {
+  // Get single value
+  get<T = any>(key: string): Promise<T | undefined>
+
+  // Get multiple values
+  get<T = any>(keys: string[]): Promise<Map<string, T>>
+
+  // Put single value
+  put<T = any>(key: string, value: T): Promise<void>
+
+  // Put multiple values
+  put<T = any>(entries: Record<string, T>): Promise<void>
+
+  // Delete single key
+  delete(key: string): Promise<boolean>
+
+  // Delete multiple keys
+  delete(keys: string[]): Promise<number>
+
+  // Delete all keys
+  deleteAll(): Promise<void>
+
+  // List entries
+  list<T = any>(options?: ListOptions): Promise<Map<string, T>>
+
+  // Transaction
+  transaction<T>(closure: (txn: DurableObjectTransaction) => Promise<T>): Promise<T>
+
+  // Alarm methods
+  getAlarm(): Promise<number | null>
+  setAlarm(scheduledTime: number | Date): Promise<void>
+  deleteAlarm(): Promise<void>
+
+  // Sync method
+  sync(): Promise<void>
+}
+```
+
+**List Options:**
+
+```typescript
+interface ListOptions {
+  start?: string
+  startAfter?: string
+  end?: string
+  prefix?: string
+  reverse?: boolean
+  limit?: number
+  allowConcurrency?: boolean
+  noCache?: boolean
+}
+```
+
+### DurableObjectTransaction
+
+Transactional storage operations.
+
+```typescript
+interface DurableObjectTransaction {
+  get<T = any>(key: string): Promise<T | undefined>
+  get<T = any>(keys: string[]): Promise<Map<string, T>>
+  put<T = any>(key: string, value: T): Promise<void>
+  put<T = any>(entries: Record<string, T>): Promise<void>
+  delete(key: string): Promise<boolean>
+  delete(keys: string[]): Promise<number>
+  deleteAll(): Promise<void>
+  list<T = any>(options?: ListOptions): Promise<Map<string, T>>
+  rollback(): void
+}
+```
+
+## State Types
+
+### Built-in State Types
+
+```typescript
+// Counter
+$.Counter
+
+// Session
+$.Session
+$.UserSession
+
+// Cache
+$.Cache
+$.SimpleCache
+
+// Queue
+$.Queue
+$.SimpleQueue
+
+// Lock
+$.Lock
+$.DistributedLock
+
+// Rate Limiter
+$.RateLimiter
+
+// Leaderboard
+$.Leaderboard
+$.Scoreboard
+
+// Time Series
+$.TimeSeries
+
+// Event Sourcing
+$.EventSourcedEntity
+
+// Document
+$.Document
+$.CollaborativeDocument
+```
+
+### Custom State Types
+
+Define custom state types:
+
+```typescript
+import { $, state } from 'sdk.do'
+
+// Define type
+const MyStateType = $.defineType('MyStateType', {
+  properties: {
+    data: { type: 'object' },
+    version: { type: 'number' },
+  },
+})
+
+// Use type
+const instance = await state.get(MyStateType, 'my-instance')
+```
+
+## Error Codes
+
+### Common Errors
+
+```typescript
+// State not found
+'STATE_NOT_FOUND'
+
+// Access denied
+'STATE_ACCESS_DENIED'
+
+// Storage operation failed
+'STATE_STORAGE_ERROR'
+
+// Conflict detected
+'STATE_CONFLICT'
+
+// Alarm error
+'STATE_ALARM_ERROR'
+
+// Transaction error
+'STATE_TRANSACTION_ERROR'
+
+// WebSocket error
+'STATE_WEBSOCKET_ERROR'
+```
+
+### Error Handling
+
+```typescript
+import { $, state } from 'sdk.do'
+
+try {
+  const counter = await state.get($.Counter, 'test')
+  await counter.increment()
+} catch (error) {
+  if (error.code === 'STATE_NOT_FOUND') {
+    console.error('State not found')
+  } else if (error.code === 'STATE_CONFLICT') {
+    console.error('Conflict detected, retry')
+  } else {
+    console.error('Error:', error.message)
+  }
+}
+```
+
+## Storage Limits
+
+### Size Limits
+
+```typescript
+interface StorageLimits {
+  // Single value size
+  maxValueSize: 128_000 // 128 KB
+
+  // Total storage per object
+  maxObjectSize: 1_073_741_824 // 1 GB
+
+  // Key length
+  maxKeyLength: 2048 // bytes
+
+  // Keys per object
+  maxKeys: Infinity
+
+  // List results
+  maxListLimit: 10_000
+}
+```
+
+### Rate Limits
+
+```typescript
+interface RateLimits {
+  // Requests per second per object
+  requestsPerSecond: 1000
+
+  // Storage operations per second
+  storageOpsPerSecond: 10_000
+
+  // WebSocket messages per second
+  messagesPerSecond: 100
+
+  // CPU time per request
+  cpuTimeMs: 30_000 // 30 seconds
+}
+```
+
+## WebSocket API
+
+### WebSocket Methods
+
+```typescript
+interface WebSocketMethods {
+  // Accept WebSocket connection
+  accept(ws: WebSocket): void
+
+  // Send message
+  send(data: string | ArrayBuffer): void
+
+  // Close connection
+  close(code?: number, reason?: string): void
+
+  // Get ready state
+  readyState: number // CONNECTING, OPEN, CLOSING, CLOSED
+}
+```
+
+### WebSocket Events
+
+```typescript
+interface WebSocketEvents {
+  // Connection opened
+  onopen: (event: Event) => void
+
+  // Message received
+  onmessage: (event: MessageEvent) => void
+
+  // Connection closed
+  onclose: (event: CloseEvent) => void
+
+  // Error occurred
+  onerror: (event: ErrorEvent) => void
+}
+```
+
+### WebSocket Example
+
+```typescript
+import { $, state } from 'sdk.do'
+
+export class WebSocketHandler {
+  connections: Set<WebSocket> = new Set()
+
+  async connect(ws: WebSocket) {
+    // Accept connection
+    ws.accept()
+
+    // Add to set
+    this.connections.add(ws)
+
+    // Handle events
+    ws.addEventListener('message', (event) => {
+      console.log('Received:', event.data)
+      ws.send(`Echo: ${event.data}`)
+    })
+
+    ws.addEventListener('close', () => {
+      this.connections.delete(ws)
+    })
+
+    ws.addEventListener('error', (error) => {
+      console.error('WebSocket error:', error)
+    })
+
+    await state.save(this)
+  }
+
+  broadcast(message: string) {
+    for (const ws of this.connections) {
+      try {
+        ws.send(message)
+      } catch (error) {
+        this.connections.delete(ws)
+      }
+    }
+  }
+}
+```
+
+## Alarm API
+
+### Alarm Methods
+
+```typescript
+interface AlarmMethods {
+  // Get scheduled alarm time
+  getAlarm(): Promise<number | null>
+
+  // Schedule alarm
+  setAlarm(scheduledTime: number | Date): Promise<void>
+
+  // Cancel alarm
+  deleteAlarm(): Promise<void>
+}
+```
+
+### Alarm Handler
+
+```typescript
+export class AlarmHandler {
+  async fetch(request: Request) {
+    // Schedule alarm
+    await this.ctx.storage.setAlarm(Date.now() + 60000) // 1 minute
+    return new Response('Alarm scheduled')
+  }
+
+  async alarm() {
+    // Called when alarm fires
+    console.log('Alarm executed at', new Date().toISOString())
+
+    // Reschedule if needed
+    await this.ctx.storage.setAlarm(Date.now() + 60000)
+  }
+}
+```
+
+### Alarm Patterns
+
+```typescript
+// One-time alarm
+await this.ctx.storage.setAlarm(Date.now() + 3600000) // 1 hour
+
+// Recurring alarm
+async alarm() {
+  await this.doWork()
+  await this.ctx.storage.setAlarm(Date.now() + 60000) // Every minute
+}
+
+// Conditional alarm
+async alarm() {
+  const needsWork = await this.ctx.storage.get('needsWork')
+  if (needsWork) {
+    await this.doWork()
+    await this.ctx.storage.setAlarm(Date.now() + 60000)
+  }
+}
+```
+
+## Transaction API
+
+### Transaction Methods
+
+```typescript
+interface TransactionMethods {
+  // Start transaction
+  transaction<T>(callback: (txn: Transaction) => Promise<T>): Promise<T>
+
+  // Rollback transaction
+  rollback(): void
+}
+```
+
+### Transaction Example
+
+```typescript
+export class TransactionalState {
+  async transfer(fromKey: string, toKey: string, amount: number) {
+    await this.ctx.storage.transaction(async (txn) => {
+      // All operations are atomic
+      const fromBalance = (await txn.get<number>(fromKey)) || 0
+      const toBalance = (await txn.get<number>(toKey)) || 0
+
+      if (fromBalance < amount) {
+        throw new Error('Insufficient funds')
+      }
+
+      await txn.put(fromKey, fromBalance - amount)
+      await txn.put(toKey, toBalance + amount)
+    })
+  }
+}
+```
+
+## Migration API
+
+### Migration Configuration
+
+```toml
+# wrangler.toml
+
+[[migrations]]
+tag = "v1"
+new_classes = ["Counter"]
+
+[[migrations]]
+tag = "v2"
+renamed_classes = [
+  { from = "Counter", to = "AdvancedCounter" }
+]
+
+[[migrations]]
+tag = "v3"
+deleted_classes = ["OldCounter"]
+
+[[migrations]]
+tag = "v4"
+new_sqlite_classes = ["SQLiteCounter"]
+```
+
+### Migration Strategy
+
+```typescript
+export class VersionedState {
+  version: number = 1
+  data: any
+
+  async migrate() {
+    if (this.version < 2) {
+      await this.migrateV1toV2()
+    }
+    if (this.version < 3) {
+      await this.migrateV2toV3()
+    }
+  }
+
+  async migrateV1toV2() {
+    // Migration logic
+    this.version = 2
+    await state.save(this)
+  }
+
+  async migrateV2toV3() {
+    // Migration logic
+    this.version = 3
+    await state.save(this)
+  }
+}
+```
+
+## Performance API
+
+### Metrics Collection
+
+```typescript
+export class MetricsCollector {
+  metrics = {
+    requests: 0,
+    storageReads: 0,
+    storageWrites: 0,
+    latency: [] as number[],
+  }
+
+  async recordRequest(callback: () => Promise<any>) {
+    const start = Date.now()
+    this.metrics.requests++
+
+    try {
+      const result = await callback()
+      const duration = Date.now() - start
+      this.metrics.latency.push(duration)
+      return result
+    } finally {
+      await state.save(this)
+    }
+  }
+
+  async getMetrics() {
+    return {
+      ...this.metrics,
+      avgLatency: this.metrics.latency.reduce((a, b) => a + b, 0) / this.metrics.latency.length,
+      p95Latency: this.calculatePercentile(this.metrics.latency, 0.95),
+    }
+  }
+
+  calculatePercentile(values: number[], percentile: number): number {
+    const sorted = values.slice().sort((a, b) => a - b)
+    const index = Math.floor(sorted.length * percentile)
+    return sorted[index]
+  }
+}
+```
+
+## Testing API
+
+### Test Helpers
+
+```typescript
+import { state } from 'sdk.do'
+
+// Get test instance
+export async function getTestState<T>(type: Type<T>, id?: string): Promise<T> {
+  const testId = id || `test-${Math.random()}`
+  return await state.get(type, testId)
+}
+
+// Clean up test state
+export async function cleanupTestState<T>(type: Type<T>, id: string): Promise<void> {
+  await state.delete(type, id)
+}
+
+// Mock state for testing
+export function mockState<T>(initialData: Partial<T>): T {
+  return new Proxy({} as T, {
+    get(target, prop) {
+      return initialData[prop as keyof T]
+    },
+  })
+}
+```
+
+### Test Example
+
+```typescript
+import { describe, it, expect, afterEach } from 'vitest'
+import { $, state } from 'sdk.do'
+
+describe('Counter', () => {
+  const testId = 'test-counter'
+
+  afterEach(async () => {
+    await state.delete($.Counter, testId)
+  })
+
+  it('increments counter', async () => {
+    const counter = await state.get($.Counter, testId)
+    await counter.increment()
+    const value = await counter.get()
+    expect(value).toBe(1)
+  })
+
+  it('handles multiple operations', async () => {
+    const counter = await state.get($.Counter, testId)
+    await counter.increment()
+    await counter.increment()
+    await counter.decrement()
+    const value = await counter.get()
+    expect(value).toBe(1)
+  })
+})
+```
+
+## Environment Variables
+
+### Configuration
+
+```bash
+# No API keys required for state.do
+# Configuration is in wrangler.toml
+
+# Optional: Set custom namespace
+STATE_NAMESPACE=production
+
+# Optional: Set region preference
+STATE_REGION=us-east
+
+# Optional: Enable debug logging
+STATE_DEBUG=true
+```
+
+## TypeScript Types
+
+### Core Types
+
+```typescript
+// State object type
+type StateObject = {
+  [key: string]: any
+}
+
+// State options
+interface StateOptions {
+  region?: string
+  namespace?: string
+  create?: boolean
+}
+
+// List options
+interface ListOptions {
+  prefix?: string
+  limit?: number
+  cursor?: string
+}
+
+// State config
+interface StateConfig {
+  namespace?: string
+  region?: string
+  ttl?: number
+  persistence?: 'memory' | 'disk' | 'auto'
+}
+```
+
+## Next Steps
+
+- Review [Getting Started](../docs/getting-started) for basic usage
+- Explore [Examples](../examples/basic-usage) for practical patterns
+- Read [Best Practices](../docs/best-practices) for optimization
+- Check [Troubleshooting](../docs/troubleshooting) for common issues
+
+## Resources
+
+- [Cloudflare Durable Objects API](https://developers.cloudflare.com/durable-objects/api/)
+- [Workers Runtime API](https://developers.cloudflare.com/workers/runtime-apis/)
+- [sdk.do Documentation](https://sdk.do)
+
+---
+
+Documentation licensed under [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/).

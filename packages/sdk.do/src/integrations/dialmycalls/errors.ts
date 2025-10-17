@@ -1,0 +1,159 @@
+/**
+ * Dialmycalls Errors
+ *
+ * Auto-generated error handling for Dialmycalls Integration.
+ * Generated from MDXLD Integration definition.
+ *
+ * @see https://integrations.do/dialmycalls
+ */
+
+/**
+ * Error type enum
+ */
+export enum DialmycallsErrorType {
+  Authentication = 'authentication',
+  Authorization = 'authorization',
+  Validation = 'validation',
+  NotFound = 'not_found',
+  RateLimit = 'rate_limit',
+  Server = 'server',
+  Network = 'network',
+  Unknown = 'unknown',
+}
+
+/**
+ * Dialmycalls Error class
+ *
+ * Custom error class for Dialmycalls Integration operations.
+ */
+export class DialmycallsError extends Error {
+  public readonly code: string | number
+  public readonly type: DialmycallsErrorType
+  public readonly statusCode?: number
+  public readonly retryable: boolean
+  public readonly originalError?: Error
+
+  constructor(
+    message: string,
+    code: string | number,
+    type: DialmycallsErrorType,
+    options?: {
+      statusCode?: number
+      retryable?: boolean
+      originalError?: Error
+    }
+  ) {
+    super(message)
+    this.name = 'DialmycallsError'
+    this.code = code
+    this.type = type
+    this.statusCode = options?.statusCode
+    this.retryable = options?.retryable ?? false
+    this.originalError = options?.originalError
+
+    // Maintain proper stack trace
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, DialmycallsError)
+    }
+  }
+
+  /**
+   * Create error from API error response
+   *
+   * @param error - Original error
+   * @returns DialmycallsError instance
+   */
+  static fromError(error: any): DialmycallsError {
+    const code = error.code || error.error_code || error.type || 'unknown'
+    const statusCode = error.statusCode || error.status
+    const message = error.message || 'An unknown error occurred'
+
+    // Map error codes to types
+    const errorMap: Record<string, { type: DialmycallsErrorType; retryable: boolean }> = {
+      '401': { type: DialmycallsErrorType.Authentication, retryable: false },
+      '429': { type: DialmycallsErrorType.RateLimit, retryable: true },
+    }
+
+    const mapping = errorMap[code]
+    if (mapping) {
+      return new DialmycallsError(message, code, mapping.type, {
+        statusCode,
+        retryable: mapping.retryable,
+        originalError: error,
+      })
+    }
+
+    // Default error mapping based on status code
+    let type = DialmycallsErrorType.Unknown
+    let retryable = false
+
+    if (statusCode === 401) {
+      type = DialmycallsErrorType.Authentication
+    } else if (statusCode === 403) {
+      type = DialmycallsErrorType.Authorization
+    } else if (statusCode === 404) {
+      type = DialmycallsErrorType.NotFound
+    } else if (statusCode === 422 || statusCode === 400) {
+      type = DialmycallsErrorType.Validation
+    } else if (statusCode === 429) {
+      type = DialmycallsErrorType.RateLimit
+      retryable = true
+    } else if (statusCode && statusCode >= 500) {
+      type = DialmycallsErrorType.Server
+      retryable = true
+    }
+
+    return new DialmycallsError(message, code, type, {
+      statusCode,
+      retryable,
+      originalError: error,
+    })
+  }
+
+  /** Check if error is retryable */
+  isRetriable(): boolean {
+    return this.retryable
+  }
+
+  /** Check if error is authentication error */
+  isAuthenticationError(): boolean {
+    return this.type === DialmycallsErrorType.Authentication
+  }
+
+  /** Check if error is authorization error */
+  isAuthorizationError(): boolean {
+    return this.type === DialmycallsErrorType.Authorization
+  }
+
+  /** Check if error is validation error */
+  isValidationError(): boolean {
+    return this.type === DialmycallsErrorType.Validation
+  }
+
+  /** Check if error is not found error */
+  isNotFoundError(): boolean {
+    return this.type === DialmycallsErrorType.NotFound
+  }
+
+  /** Check if error is rate limit error */
+  isRateLimitError(): boolean {
+    return this.type === DialmycallsErrorType.RateLimit
+  }
+
+  /** Check if error is server error */
+  isServerError(): boolean {
+    return this.type === DialmycallsErrorType.Server
+  }
+
+  /** Get error details as object */
+  toJSON() {
+    return {
+      name: this.name,
+      message: this.message,
+      code: this.code,
+      type: this.type,
+      statusCode: this.statusCode,
+      retryable: this.retryable,
+    }
+  }
+}

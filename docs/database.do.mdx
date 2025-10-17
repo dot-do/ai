@@ -1,0 +1,965 @@
+---
+title: Database.do - Semantic Database Operations
+---
+
+# Database.do - Semantic Database Operations
+
+The `.do` platform provides a semantic database layer built on PostgreSQL (via Hyperdrive) and SQLite (via Durable Objects), enabling type-safe operations with `.md`/`.mdx` files as the data layer.
+
+## Table of Contents
+
+- [Quick Start](#quick-start)
+- [Core Concepts](#core-concepts)
+- [Data Modeling](#data-modeling)
+- [CRUD Operations](#crud-operations)
+- [Query Patterns](#query-patterns)
+- [Relationships](#relationships)
+- [Batch Operations](#batch-operations)
+- [Transactions](#transactions)
+- [Search & Filtering](#search--filtering)
+- [Pagination](#pagination)
+- [Best Practices](#best-practices)
+- [Real-World Examples](#real-world-examples)
+
+## Quick Start
+
+```bash
+pnpm install sdk.do
+```
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Create entity
+const user = await db.create($.Person, {
+  $id: 'john-doe',
+  $type: $.Person,
+  name: 'John Doe',
+  email: 'john@example.com',
+  jobTitle: 'Engineer',
+})
+
+// List entities
+const users = await db.list($.Person, {
+  where: { jobTitle: 'Engineer' },
+  limit: 10,
+})
+
+// Get by ID
+const person = await db.get($.Person, 'john-doe')
+
+// Update entity
+await db.update($.Person, 'john-doe', {
+  jobTitle: 'Senior Engineer',
+})
+
+// Create relationship
+await db.relate(user, $.worksFor, organization)
+
+// Query relationships
+const colleagues = await db.related(organization, $.employs, $.Person)
+```
+
+## Core Concepts
+
+### Semantic Types
+
+The database uses semantic types from Schema.org, GS1, and O\*NET:
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Schema.org types
+$.Person
+$.Organization
+$.Product
+$.Order
+$.BlogPosting
+
+// Business types
+$.Business
+$.Brand
+$.Service
+
+// GS1 types (supply chain)
+$.EPCISEvent
+$.ObjectEvent
+
+// O*NET types (occupations)
+$.Occupation
+$.Task
+$.Skill
+```
+
+### Entity Structure
+
+All entities follow this structure:
+
+```typescript
+interface Entity {
+  $id: string // Unique identifier
+  $type: string // Semantic type (e.g., $.Person)
+  [key: string]: any // Additional properties
+}
+```
+
+### File-Based Storage
+
+Entities are stored as `.md`/`.mdx` files with frontmatter:
+
+```markdown
+---
+$id: john-doe
+$type: Person
+name: John Doe
+email: john@example.com
+jobTitle: Engineer
+salary: 120000
+worksFor: acme-corp
+---
+
+# John Doe's Profile
+
+Additional content in Markdown...
+```
+
+## Data Modeling
+
+### Schema Design
+
+Define semantic schemas using Schema.org vocabulary:
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Person schema
+interface PersonEntity {
+  $id: string
+  $type: typeof $.Person
+  name: string
+  email: string
+  jobTitle?: string
+  worksFor?: string // Reference to Organization
+  salary?: number
+  skills?: string[]
+}
+
+// Organization schema
+interface OrganizationEntity {
+  $id: string
+  $type: typeof $.Organization
+  name: string
+  legalName: string
+  url: string
+  employees?: number
+  foundingDate?: string
+}
+
+// Product schema
+interface ProductEntity {
+  $id: string
+  $type: typeof $.Product
+  name: string
+  description: string
+  price: number
+  manufacturer?: string // Reference to Organization
+  category: string
+  sku: string
+}
+```
+
+### Type Safety
+
+Use TypeScript interfaces for type-safe operations:
+
+```typescript
+// Type-safe create
+const user = await db.create<PersonEntity>($.Person, {
+  $id: 'alice-smith',
+  $type: $.Person,
+  name: 'Alice Smith',
+  email: 'alice@example.com',
+  jobTitle: 'Engineer',
+})
+
+// Type-safe get
+const person = await db.get<PersonEntity>($.Person, 'alice-smith')
+
+// TypeScript knows about all properties
+console.log(person.name, person.email, person.jobTitle)
+```
+
+### Relationships
+
+Model relationships using semantic predicates:
+
+```typescript
+// Employment relationship
+$.Person.worksFor.Organization
+
+// Ownership relationship
+$.Organization.owns.Brand
+
+// Manufacturing relationship
+$.Product.manufacturer.Organization
+
+// Membership relationship
+$.Person.memberOf.Organization
+
+// Authorship relationship
+$.BlogPosting.author.Person
+```
+
+## CRUD Operations
+
+### Create
+
+```typescript
+// Create single entity
+const business = await db.create($.Business, {
+  $id: 'acme-corp',
+  $type: $.Business,
+  name: 'ACME Corporation',
+  legalName: 'ACME Corp.',
+  url: 'https://acme.com',
+})
+
+// Create with generated ID
+const order = await db.create($.Order, {
+  $id: `order-${Date.now()}`,
+  $type: $.Order,
+  orderNumber: 'ORD-12345',
+  total: 299.99,
+  customer: 'customer-123',
+})
+```
+
+### Read
+
+```typescript
+// Get by ID
+const user = await db.get($.Person, 'john-doe')
+
+// Check existence
+if (!user) {
+  console.log('User not found')
+}
+
+// Get with error handling
+try {
+  const product = await db.get($.Product, 'product-456')
+} catch (error) {
+  console.error('Failed to get product:', error)
+}
+```
+
+### Update
+
+```typescript
+// Partial update
+await db.update($.Person, 'john-doe', {
+  jobTitle: 'Senior Engineer',
+  salary: 150000,
+})
+
+// Full replacement (with spread)
+const user = await db.get($.Person, 'john-doe')
+await db.update($.Person, 'john-doe', {
+  ...user,
+  email: 'john.doe@newemail.com',
+})
+
+// Conditional update
+const user = await db.get($.Person, 'john-doe')
+if (user.salary < 100000) {
+  await db.update($.Person, 'john-doe', {
+    salary: 100000,
+  })
+}
+```
+
+### Delete
+
+```typescript
+// Delete entity
+await db.delete($.Person, 'john-doe')
+
+// Delete with confirmation
+const user = await db.get($.Person, 'john-doe')
+if (user) {
+  await db.delete($.Person, 'john-doe')
+  console.log('User deleted')
+}
+
+// Soft delete (mark as deleted)
+await db.update($.Person, 'john-doe', {
+  deletedAt: new Date().toISOString(),
+  status: 'deleted',
+})
+```
+
+## Query Patterns
+
+### List All
+
+```typescript
+// List all entities of a type
+const users = await db.list($.Person)
+
+// List with limit
+const products = await db.list($.Product, {
+  limit: 10,
+})
+
+// List with offset (pagination)
+const orders = await db.list($.Order, {
+  limit: 20,
+  offset: 40, // Page 3
+})
+```
+
+### Filter
+
+```typescript
+// Simple filter
+const engineers = await db.list($.Person, {
+  where: { jobTitle: 'Engineer' },
+})
+
+// Multiple conditions (AND)
+const activeUsers = await db.list($.Person, {
+  where: {
+    status: 'active',
+    verified: true,
+  },
+})
+
+// Comparison operators
+const highEarners = await db.list($.Person, {
+  where: {
+    salary: { $gte: 100000 },
+  },
+})
+```
+
+### Sorting
+
+```typescript
+// Sort ascending
+const users = await db.list($.Person, {
+  orderBy: { name: 'asc' },
+})
+
+// Sort descending
+const recentOrders = await db.list($.Order, {
+  orderBy: { createdAt: 'desc' },
+})
+
+// Multiple sort fields
+const products = await db.list($.Product, {
+  orderBy: {
+    category: 'asc',
+    price: 'desc',
+  },
+})
+```
+
+### Advanced Queries
+
+```typescript
+// MongoDB-style operators
+const results = await db.list($.Product, {
+  where: {
+    price: { $gte: 100, $lte: 500 },
+    category: { $in: ['Electronics', 'Computers'] },
+    stock: { $gt: 0 },
+    discontinued: { $ne: true },
+  },
+})
+
+// Text search
+const articles = await db.list($.BlogPosting, {
+  where: {
+    $text: { $search: 'typescript tutorial' },
+  },
+})
+
+// Date range
+const recentOrders = await db.list($.Order, {
+  where: {
+    createdAt: {
+      $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+  },
+})
+```
+
+## Relationships
+
+### Create Relationships
+
+```typescript
+// Person works for Organization
+const person = await db.get($.Person, 'john-doe')
+const org = await db.get($.Organization, 'acme-corp')
+
+await db.relate(person, $.worksFor, org)
+
+// Organization owns Brand
+const brand = await db.get($.Brand, 'acme-brand')
+await db.relate(org, $.owns, brand)
+
+// Product manufactured by Organization
+const product = await db.get($.Product, 'widget-123')
+await db.relate(product, $.manufacturer, org)
+```
+
+### Query Relationships
+
+```typescript
+// Get all employees of an organization
+const employees = await db.related(organization, $.employs, $.Person)
+
+// Get all brands owned by organization
+const brands = await db.related(organization, $.owns, $.Brand)
+
+// Get employer of a person
+const employer = await db.related(person, $.worksFor, $.Organization)
+```
+
+### Relationship Traversal
+
+```typescript
+// Multi-hop traversal
+async function getColleagues(personId: string) {
+  // 1. Get person
+  const person = await db.get($.Person, personId)
+
+  // 2. Get their organization
+  const orgs = await db.related(person, $.worksFor, $.Organization)
+  if (orgs.length === 0) return []
+
+  // 3. Get all employees of that organization
+  const colleagues = await db.related(orgs[0], $.employs, $.Person)
+
+  // 4. Filter out the original person
+  return colleagues.filter((c) => c.$id !== personId)
+}
+
+// Get products by manufacturer
+async function getProductsByManufacturer(orgId: string) {
+  const org = await db.get($.Organization, orgId)
+  return await db.related(org, $.manufactures, $.Product)
+}
+```
+
+### Remove Relationships
+
+```typescript
+// Remove relationship
+await db.unrelate(person, $.worksFor, organization)
+
+// Remove all relationships of a type
+const orgs = await db.related(person, $.worksFor, $.Organization)
+for (const org of orgs) {
+  await db.unrelate(person, $.worksFor, org)
+}
+```
+
+## Batch Operations
+
+### Batch Create
+
+```typescript
+// Create multiple entities
+const users = [
+  { $id: 'user-1', $type: $.Person, name: 'Alice', email: 'alice@example.com' },
+  { $id: 'user-2', $type: $.Person, name: 'Bob', email: 'bob@example.com' },
+  { $id: 'user-3', $type: $.Person, name: 'Charlie', email: 'charlie@example.com' },
+]
+
+for (const user of users) {
+  await db.create($.Person, user)
+}
+
+// Or use Promise.all for parallel creation
+await Promise.all(users.map((user) => db.create($.Person, user)))
+```
+
+### Batch Update
+
+```typescript
+// Update multiple entities
+const engineers = await db.list($.Person, {
+  where: { jobTitle: 'Engineer' },
+})
+
+await Promise.all(
+  engineers.map((engineer) =>
+    db.update($.Person, engineer.$id, {
+      salary: engineer.salary * 1.1, // 10% raise
+    })
+  )
+)
+```
+
+### Batch Delete
+
+```typescript
+// Delete multiple entities
+const inactiveUsers = await db.list($.Person, {
+  where: { status: 'inactive' },
+})
+
+await Promise.all(inactiveUsers.map((user) => db.delete($.Person, user.$id)))
+```
+
+## Transactions
+
+### Basic Transaction
+
+```typescript
+// Transactional operations (if supported by backend)
+await db.transaction(async (tx) => {
+  // Create order
+  const order = await tx.create($.Order, {
+    $id: 'order-123',
+    $type: $.Order,
+    total: 99.99,
+  })
+
+  // Deduct inventory
+  const product = await tx.get($.Product, 'product-456')
+  await tx.update($.Product, 'product-456', {
+    stock: product.stock - 1,
+  })
+
+  // Create invoice
+  await tx.create($.Invoice, {
+    $id: 'invoice-123',
+    $type: $.Invoice,
+    orderId: order.$id,
+    amount: order.total,
+  })
+})
+```
+
+### Rollback on Error
+
+```typescript
+try {
+  await db.transaction(async (tx) => {
+    await tx.update($.Account, 'account-1', {
+      balance: account1.balance - 100,
+    })
+
+    await tx.update($.Account, 'account-2', {
+      balance: account2.balance + 100,
+    })
+
+    // If any operation fails, entire transaction rolls back
+  })
+} catch (error) {
+  console.error('Transaction failed:', error)
+  // All changes are reverted
+}
+```
+
+## Search & Filtering
+
+### Full-Text Search
+
+```typescript
+// Search across text fields
+const articles = await db.search($.BlogPosting, {
+  $text: { $search: 'typescript tutorial' },
+})
+
+// Search with filters
+const results = await db.search($.Product, {
+  $text: { $search: 'laptop' },
+  category: 'Electronics',
+  price: { $lte: 1000 },
+})
+```
+
+### Fuzzy Search
+
+```typescript
+// Find similar names
+const users = await db.search($.Person, {
+  name: { $regex: /john/i }, // Case-insensitive
+})
+
+// Find by email domain
+const companyEmails = await db.search($.Person, {
+  email: { $regex: /@acme\.com$/ },
+})
+```
+
+### Aggregations
+
+```typescript
+// Count entities
+const userCount = await db.count($.Person)
+
+// Count with filter
+const engineerCount = await db.count($.Person, {
+  where: { jobTitle: 'Engineer' },
+})
+
+// Aggregate queries
+const avgSalary = await db.aggregate($.Person, {
+  operation: 'avg',
+  field: 'salary',
+  where: { jobTitle: 'Engineer' },
+})
+```
+
+## Pagination
+
+### Offset Pagination
+
+```typescript
+const pageSize = 20
+const pageNumber = 3
+
+const users = await db.list($.Person, {
+  limit: pageSize,
+  offset: (pageNumber - 1) * pageSize,
+})
+```
+
+### Cursor Pagination
+
+```typescript
+// First page
+const page1 = await db.list($.Product, {
+  limit: 10,
+  orderBy: { createdAt: 'desc' },
+})
+
+// Next page using last item as cursor
+const lastItem = page1[page1.length - 1]
+const page2 = await db.list($.Product, {
+  limit: 10,
+  where: {
+    createdAt: { $lt: lastItem.createdAt },
+  },
+  orderBy: { createdAt: 'desc' },
+})
+```
+
+### Infinite Scroll
+
+```typescript
+async function* infiniteScroll(type: string, pageSize: number = 20) {
+  let offset = 0
+
+  while (true) {
+    const page = await db.list(type, {
+      limit: pageSize,
+      offset,
+    })
+
+    if (page.length === 0) break
+
+    yield page
+    offset += pageSize
+
+    if (page.length < pageSize) break
+  }
+}
+
+// Usage
+for await (const page of infiniteScroll($.Person, 10)) {
+  console.log('Page:', page)
+}
+```
+
+## Best Practices
+
+### Unique IDs
+
+Use meaningful, URL-friendly IDs:
+
+```typescript
+// Good
+$id: 'john-doe'
+$id: 'acme-corp'
+$id: 'order-2025-01-15-001'
+
+// Avoid
+$id: '123'
+$id: 'a1b2c3d4'
+$id: 'John Doe' // Spaces not URL-friendly
+```
+
+### Type Consistency
+
+Always use semantic types:
+
+```typescript
+// Good
+$type: $.Person
+$type: $.Organization
+$type: $.Product
+
+// Avoid
+$type: 'Person'
+$type: 'person'
+$type: 'User' // Not a semantic type
+```
+
+### Validation
+
+Validate data before saving:
+
+```typescript
+function validateEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
+
+async function createUser(data: { email: string; name: string }) {
+  if (!validateEmail(data.email)) {
+    throw new Error('Invalid email format')
+  }
+
+  if (!data.name || data.name.length < 2) {
+    throw new Error('Name must be at least 2 characters')
+  }
+
+  return await db.create($.Person, {
+    $id: data.email.split('@')[0],
+    $type: $.Person,
+    ...data,
+  })
+}
+```
+
+### Error Handling
+
+Always handle database errors:
+
+```typescript
+try {
+  const user = await db.get($.Person, 'john-doe')
+  if (!user) {
+    // Handle not found
+    return { error: 'User not found' }
+  }
+  return { user }
+} catch (error) {
+  console.error('Database error:', error)
+  return { error: 'Failed to fetch user' }
+}
+```
+
+### Caching
+
+Cache frequently accessed data:
+
+```typescript
+const cache = new Map()
+
+async function getCachedUser(id: string) {
+  if (cache.has(id)) {
+    return cache.get(id)
+  }
+
+  const user = await db.get($.Person, id)
+  cache.set(id, user)
+
+  // Clear cache after 5 minutes
+  setTimeout(() => cache.delete(id), 5 * 60 * 1000)
+
+  return user
+}
+```
+
+### Indexing
+
+Create indexes for frequently queried fields:
+
+```typescript
+// In your schema definition
+{
+  indexes: [
+    { fields: ['email'], unique: true },
+    { fields: ['jobTitle'] },
+    { fields: ['createdAt'] },
+    { fields: ['status', 'verified'] }, // Compound index
+  ]
+}
+```
+
+## Real-World Examples
+
+### User Management System
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Create user with profile
+async function registerUser(data: { email: string; name: string; password: string }) {
+  // Hash password
+  const passwordHash = await hashPassword(data.password)
+
+  // Create user
+  const user = await db.create($.Person, {
+    $id: data.email.split('@')[0],
+    $type: $.Person,
+    name: data.name,
+    email: data.email,
+    passwordHash,
+    status: 'active',
+    verified: false,
+    createdAt: new Date().toISOString(),
+  })
+
+  // Send verification email
+  await sendVerificationEmail(user.email)
+
+  return user
+}
+
+// Get user profile with relationships
+async function getUserProfile(userId: string) {
+  const user = await db.get($.Person, userId)
+  if (!user) return null
+
+  // Get organization
+  const orgs = await db.related(user, $.worksFor, $.Organization)
+
+  // Get projects
+  const projects = await db.related(user, $.participatesIn, $.Project)
+
+  return {
+    ...user,
+    organization: orgs[0],
+    projects,
+  }
+}
+```
+
+### E-Commerce Product Catalog
+
+```typescript
+// Create product with manufacturer
+async function addProduct(productData: any) {
+  const product = await db.create($.Product, {
+    $id: productData.sku,
+    $type: $.Product,
+    name: productData.name,
+    description: productData.description,
+    price: productData.price,
+    category: productData.category,
+    stock: productData.stock,
+    sku: productData.sku,
+  })
+
+  // Link to manufacturer
+  const manufacturer = await db.get($.Organization, productData.manufacturerId)
+  await db.relate(product, $.manufacturer, manufacturer)
+
+  return product
+}
+
+// Search products
+async function searchProducts(query: string, filters: any) {
+  return await db.search($.Product, {
+    $text: { $search: query },
+    ...filters,
+    stock: { $gt: 0 }, // Only in-stock items
+  })
+}
+
+// Get related products
+async function getRelatedProducts(productId: string) {
+  const product = await db.get($.Product, productId)
+
+  // Get products in same category
+  return await db.list($.Product, {
+    where: {
+      category: product.category,
+      $id: { $ne: productId }, // Exclude current product
+    },
+    limit: 5,
+  })
+}
+```
+
+### Blog Platform
+
+```typescript
+// Create blog post with author
+async function publishPost(postData: any, authorId: string) {
+  const post = await db.create($.BlogPosting, {
+    $id: `post-${Date.now()}`,
+    $type: $.BlogPosting,
+    headline: postData.title,
+    articleBody: postData.content,
+    datePublished: new Date().toISOString(),
+    wordCount: postData.content.split(' ').length,
+  })
+
+  // Link author
+  const author = await db.get($.Person, authorId)
+  await db.relate(post, $.author, author)
+
+  return post
+}
+
+// Get author's posts
+async function getAuthorPosts(authorId: string) {
+  const author = await db.get($.Person, authorId)
+  return await db.related(author, $.creator, $.BlogPosting)
+}
+
+// Get recent posts with authors
+async function getRecentPosts(limit: number = 10) {
+  const posts = await db.list($.BlogPosting, {
+    limit,
+    orderBy: { datePublished: 'desc' },
+  })
+
+  // Fetch authors for each post
+  return await Promise.all(
+    posts.map(async (post) => {
+      const authors = await db.related(post, $.author, $.Person)
+      return {
+        ...post,
+        author: authors[0],
+      }
+    })
+  )
+}
+```
+
+## API Reference
+
+Complete API documentation:
+
+- [`db.create()`](#create) - Create entity
+- [`db.get()`](#read) - Get entity by ID
+- [`db.list()`](#list-all) - List entities
+- [`db.update()`](#update) - Update entity
+- [`db.delete()`](#delete) - Delete entity
+- [`db.relate()`](#create-relationships) - Create relationship
+- [`db.related()`](#query-relationships) - Query relationships
+- [`db.unrelate()`](#remove-relationships) - Remove relationship
+- [`db.search()`](#full-text-search) - Full-text search
+- [`db.count()`](#aggregations) - Count entities
+- [`db.aggregate()`](#aggregations) - Aggregate queries
+- [`db.transaction()`](#transactions) - Execute transaction
+
+## Related
+
+- [SDK.do Documentation](./SDK.mdx) - Main SDK guide
+- [Events.do](./events.do.mdx) - Event-driven patterns
+- [OAuth.do](./oauth.do.mdx) - Authentication
+- [Storage.do](./storage.do.mdx) - File storage
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform)

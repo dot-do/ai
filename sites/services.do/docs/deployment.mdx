@@ -1,0 +1,726 @@
+---
+$id: https://services.do/docs/deployment
+$type: TechArticle
+title: Service Deployment Strategies
+description: Learn about different deployment strategies for services including rolling, canary, and blue-green deployments
+keywords: [deployment, rolling-deployment, canary, blue-green, cloudflare-workers, zero-downtime]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Service Deployment Strategies
+
+services.do supports multiple deployment strategies to ensure zero-downtime deployments and safe rollouts of new service versions.
+
+## Overview
+
+Choosing the right deployment strategy depends on your requirements:
+
+| Strategy       | Use Case            | Rollback Time | Risk Level |
+| -------------- | ------------------- | ------------- | ---------- |
+| **Rolling**    | General purpose     | Medium        | Low        |
+| **Canary**     | High-risk changes   | Fast          | Very Low   |
+| **Blue-Green** | Critical services   | Instant       | Low        |
+| **Recreate**   | Development/testing | Fast          | High       |
+
+## Rolling Deployment
+
+Rolling deployment gradually replaces instances of the old version with the new version.
+
+### Basic Rolling Deployment
+
+```typescript
+import $, { service } from 'sdk.do'
+
+await service.deploy({
+  name: 'UserService',
+  version: '2.0.0',
+  strategy: 'rolling',
+  rollout: {
+    batchSize: 25, // Update 25% of instances at a time
+    interval: 120, // Wait 2 minutes between batches
+    healthCheck: true, // Verify health before proceeding
+    autoRollback: true, // Automatically rollback on failure
+  },
+})
+```
+
+### Configuration Options
+
+```typescript
+interface RollingDeploymentConfig {
+  batchSize: number | string // Number or percentage (e.g., "25%")
+  interval: number // Seconds to wait between batches
+  healthCheck: boolean // Check health after each batch
+  autoRollback: boolean // Rollback on failure
+  maxUnavailable: number // Max instances that can be down
+  minHealthyInstances: number // Min instances that must stay healthy
+}
+```
+
+### Advanced Rolling Deployment
+
+```typescript
+await service.deploy({
+  strategy: 'rolling',
+  rollout: {
+    batchSize: '20%',
+    interval: 300,
+    healthCheck: true,
+    autoRollback: true,
+
+    // Health check configuration
+    healthCheckConfig: {
+      endpoint: '/health',
+      timeout: 5000,
+      successThreshold: 2, // Must pass 2 checks
+      failureThreshold: 3, // Fail after 3 failures
+    },
+
+    // Pause deployment for manual verification
+    pausePoints: [
+      { after: 25, duration: 300 }, // Pause after 25% for 5 minutes
+      { after: 50, duration: 600 }, // Pause after 50% for 10 minutes
+    ],
+
+    // Maximum time for entire deployment
+    timeout: 3600, // 1 hour
+  },
+})
+```
+
+### Monitoring Rolling Deployment
+
+```typescript
+const deployment = await service.deploy({
+  strategy: 'rolling',
+  rollout: { batchSize: 25, interval: 120 },
+})
+
+// Monitor deployment progress
+deployment.on('batch.started', (event) => {
+  console.log(`Batch ${event.batch} started (${event.percentage}%)`)
+})
+
+deployment.on('batch.completed', (event) => {
+  console.log(`Batch ${event.batch} completed`)
+  console.log(`Healthy instances: ${event.healthy}/${event.total}`)
+})
+
+deployment.on('health.check', (event) => {
+  console.log(`Health check: ${event.status}`)
+})
+
+deployment.on('error', (error) => {
+  console.error('Deployment error:', error)
+})
+
+// Wait for completion
+await deployment.wait()
+console.log('Deployment completed successfully!')
+```
+
+## Canary Deployment
+
+Canary deployment routes a small percentage of traffic to the new version, gradually increasing if metrics are healthy.
+
+### Basic Canary Deployment
+
+```typescript
+import $, { service } from 'sdk.do'
+
+await service.deploy({
+  name: 'OrderService',
+  version: '2.0.0',
+  strategy: 'canary',
+  canary: {
+    percentage: 5, // Start with 5% traffic
+    duration: 600, // 10 minutes per stage
+    steps: [5, 10, 25, 50, 100], // Traffic percentage steps
+    autoPromote: true, // Automatically promote if healthy
+  },
+})
+```
+
+### Canary with Metrics
+
+Monitor key metrics to automatically promote or rollback:
+
+```typescript
+await service.deploy({
+  strategy: 'canary',
+  canary: {
+    percentage: 5,
+    duration: 300,
+    steps: [5, 10, 25, 50, 100],
+    autoPromote: true,
+
+    // Define metrics to monitor
+    metrics: [
+      {
+        name: 'error_rate',
+        threshold: 0.01, // Max 1% error rate
+        comparison: 'less_than',
+      },
+      {
+        name: 'latency_p99',
+        threshold: 500, // Max 500ms p99 latency
+        comparison: 'less_than',
+      },
+      {
+        name: 'success_rate',
+        threshold: 0.99, // Min 99% success rate
+        comparison: 'greater_than',
+      },
+    ],
+
+    // Analysis configuration
+    analysis: {
+      interval: 60, // Check metrics every minute
+      successThreshold: 3, // Must pass 3 consecutive checks
+      failureThreshold: 2, // Fail after 2 consecutive failures
+    },
+
+    // Rollback configuration
+    rollback: {
+      automatic: true,
+      onMetricFailure: true,
+      onErrorSpike: true,
+    },
+  },
+})
+```
+
+### Monitoring Canary Deployment
+
+```typescript
+const deployment = await service.deploy({
+  strategy: 'canary',
+  canary: {
+    percentage: 5,
+    steps: [5, 10, 25, 50, 100],
+    duration: 300,
+  },
+})
+
+// Monitor canary progress
+deployment.on('canary.started', (event) => {
+  console.log(`Canary started: ${event.percentage}% traffic`)
+})
+
+deployment.on('canary.promoted', (event) => {
+  console.log(`Canary promoted to ${event.percentage}%`)
+  console.log(`Metrics: ${JSON.stringify(event.metrics)}`)
+})
+
+deployment.on('metrics.analyzed', (event) => {
+  console.log('Metrics analysis:', event.results)
+})
+
+deployment.on('canary.failed', (event) => {
+  console.error('Canary failed:', event.reason)
+  console.error('Metrics:', event.metrics)
+})
+
+await deployment.wait()
+```
+
+### Manual Canary Control
+
+For critical deployments, use manual promotion:
+
+```typescript
+const deployment = await service.deploy({
+  strategy: 'canary',
+  canary: {
+    percentage: 5,
+    steps: [5, 10, 25, 50, 100],
+    autoPromote: false, // Manual promotion required
+  },
+})
+
+// Monitor metrics manually
+const metrics = await deployment.getMetrics()
+console.log('Canary metrics:', metrics)
+
+if (metrics.error_rate < 0.01 && metrics.latency_p99 < 500) {
+  // Promote to next stage
+  await deployment.promote()
+} else {
+  // Rollback
+  await deployment.rollback()
+}
+```
+
+## Blue-Green Deployment
+
+Blue-green deployment maintains two identical environments and switches traffic between them.
+
+### Basic Blue-Green Deployment
+
+```typescript
+import $, { service } from 'sdk.do'
+
+await service.deploy({
+  name: 'PaymentService',
+  version: '2.0.0',
+  strategy: 'blue-green',
+  blueGreen: {
+    testing: true, // Test green environment first
+    autoSwitch: false, // Manual traffic switch
+    switchDelay: 0, // No delay
+  },
+})
+```
+
+### Blue-Green with Testing
+
+```typescript
+await service.deploy({
+  strategy: 'blue-green',
+  blueGreen: {
+    testing: true,
+    autoSwitch: false,
+
+    // Test configuration
+    testConfig: {
+      // Smoke tests to run on green environment
+      smokeTests: [
+        {
+          name: 'health_check',
+          endpoint: '/health',
+          expectedStatus: 200,
+        },
+        {
+          name: 'api_version',
+          endpoint: '/version',
+          expectedBody: { version: '2.0.0' },
+        },
+        {
+          name: 'database_connection',
+          endpoint: '/health/database',
+          expectedStatus: 200,
+        },
+      ],
+
+      // Integration tests
+      integrationTests: async (environment) => {
+        // Run custom integration tests
+        const results = await runIntegrationTests(environment.url)
+        return results.passed
+      },
+
+      // Load testing
+      loadTest: {
+        duration: 300, // 5 minutes
+        rps: 100, // 100 requests per second
+        successThreshold: 0.99, // 99% success rate required
+      },
+    },
+
+    // Switch configuration
+    switchDelay: 300, // Wait 5 minutes after tests pass
+    rollbackWindow: 3600, // Can rollback within 1 hour
+  },
+})
+```
+
+### Monitoring Blue-Green Deployment
+
+```typescript
+const deployment = await service.deploy({
+  strategy: 'blue-green',
+  blueGreen: {
+    testing: true,
+    autoSwitch: false,
+  },
+})
+
+// Monitor deployment
+deployment.on('environment.created', (event) => {
+  console.log(`Green environment created: ${event.url}`)
+})
+
+deployment.on('tests.started', (event) => {
+  console.log('Running tests on green environment')
+})
+
+deployment.on('tests.completed', (event) => {
+  console.log(`Tests ${event.passed ? 'passed' : 'failed'}`)
+  console.log(`Results: ${JSON.stringify(event.results)}`)
+})
+
+deployment.on('traffic.switched', (event) => {
+  console.log(`Traffic switched from ${event.from} to ${event.to}`)
+})
+
+// Wait for green environment to be ready
+await deployment.waitForGreen()
+
+// Get green environment details
+const green = deployment.getGreenEnvironment()
+console.log('Green environment URL:', green.url)
+
+// Manually verify green environment
+const isReady = await manualVerification(green.url)
+
+if (isReady) {
+  // Switch traffic to green
+  await deployment.switchTraffic('green')
+  console.log('Traffic switched to green environment')
+} else {
+  // Abort deployment
+  await deployment.abort()
+  console.log('Deployment aborted')
+}
+```
+
+### Instant Rollback
+
+Blue-green deployments allow instant rollback:
+
+```typescript
+// If issues are detected after switching
+await service.switchTraffic('blue')
+console.log('Rolled back to blue environment')
+
+// Or use the deployment handle
+await deployment.rollback()
+```
+
+## Deployment Configuration
+
+### Environment-Specific Deployments
+
+```typescript
+import $, { service } from 'sdk.do'
+
+const apiService = service({
+  name: 'APIService',
+  environments: {
+    development: {
+      strategy: 'recreate', // Fast deployments for dev
+      resources: { cpu: 50, memory: 64 },
+    },
+    staging: {
+      strategy: 'rolling',
+      rollout: { batchSize: 50, interval: 60 },
+    },
+    production: {
+      strategy: 'canary',
+      canary: {
+        percentage: 1,
+        steps: [1, 5, 10, 25, 50, 100],
+        duration: 600,
+        metrics: ['error_rate', 'latency', 'success_rate'],
+      },
+    },
+  },
+})
+
+// Deploy to production with canary strategy
+await apiService.deploy({ environment: 'production' })
+```
+
+### Resource Configuration
+
+```typescript
+await service.deploy({
+  resources: {
+    cpu: 100, // CPU units
+    memory: 128, // MB
+    timeout: 30, // Seconds
+    maxConcurrency: 10, // Max concurrent requests
+  },
+  scaling: {
+    enabled: true,
+    min: 1,
+    max: 100,
+    targetCPU: 70, // Scale at 70% CPU
+    targetMemory: 80, // Scale at 80% memory
+  },
+})
+```
+
+### Network Configuration
+
+```typescript
+await service.deploy({
+  network: {
+    regions: ['auto'], // Deploy globally
+    customDomains: [{ domain: 'api.example.com', ssl: true }],
+    routes: [
+      { pattern: '/api/*', service: 'APIService' },
+      { pattern: '/users/*', service: 'UserService' },
+    ],
+  },
+})
+```
+
+## Deployment Hooks
+
+Execute custom logic at different deployment stages:
+
+```typescript
+await service.deploy({
+  hooks: {
+    // Before deployment starts
+    preDeployment: async () => {
+      console.log('Running pre-deployment tasks')
+      await runMigrations()
+      await warmupCache()
+    },
+
+    // After deployment completes
+    postDeployment: async () => {
+      console.log('Running post-deployment tasks')
+      await notifyTeam()
+      await updateMetrics()
+    },
+
+    // Before rollback
+    preRollback: async () => {
+      console.log('Preparing for rollback')
+      await logRollbackReason()
+    },
+
+    // After rollback completes
+    postRollback: async () => {
+      console.log('Rollback completed')
+      await alertTeam()
+    },
+
+    // On deployment failure
+    onFailure: async (error) => {
+      console.error('Deployment failed:', error)
+      await sendAlert({ severity: 'critical', error })
+    },
+
+    // On deployment success
+    onSuccess: async () => {
+      console.log('Deployment succeeded')
+      await sendNotification({ status: 'success' })
+    },
+  },
+})
+```
+
+## Multi-Service Deployments
+
+Deploy multiple services together:
+
+```typescript
+import $, { deployMany } from 'sdk.do'
+
+// Deploy multiple services in order
+await deployMany({
+  services: [
+    { service: databaseService, strategy: 'recreate' },
+    { service: cacheService, strategy: 'rolling' },
+    { service: apiService, strategy: 'canary' },
+    { service: frontendService, strategy: 'blue-green' },
+  ],
+  parallel: false, // Deploy in sequence
+  stopOnFailure: true, // Stop if any deployment fails
+})
+```
+
+### Parallel Deployments
+
+```typescript
+// Deploy services in parallel
+await deployMany({
+  services: [
+    { service: userService, strategy: 'rolling' },
+    { service: orderService, strategy: 'rolling' },
+    { service: paymentService, strategy: 'rolling' },
+  ],
+  parallel: true, // Deploy simultaneously
+  maxParallel: 3, // Max 3 concurrent deployments
+})
+```
+
+## Deployment Validation
+
+Validate deployments before and after:
+
+```typescript
+await service.deploy({
+  validation: {
+    // Pre-deployment validation
+    preDeploy: {
+      checkDependencies: true,
+      checkResources: true,
+      checkConfiguration: true,
+      customChecks: [
+        async () => {
+          // Custom validation logic
+          const isValid = await validateDeployment()
+          return isValid
+        },
+      ],
+    },
+
+    // Post-deployment validation
+    postDeploy: {
+      smokeTests: [
+        { endpoint: '/health', expectedStatus: 200 },
+        { endpoint: '/version', expectedVersion: '2.0.0' },
+      ],
+      integrationTests: true,
+      loadTest: {
+        duration: 60,
+        rps: 50,
+      },
+    },
+  },
+})
+```
+
+## Rollback Strategies
+
+### Automatic Rollback
+
+```typescript
+await service.deploy({
+  strategy: 'canary',
+  rollback: {
+    automatic: true,
+    triggers: [
+      {
+        metric: 'error_rate',
+        threshold: 0.05,
+        duration: 60, // If error rate > 5% for 1 minute
+      },
+      {
+        metric: 'latency_p99',
+        threshold: 1000,
+        duration: 120, // If p99 latency > 1s for 2 minutes
+      },
+    ],
+  },
+})
+```
+
+### Manual Rollback
+
+```typescript
+// Rollback to previous version
+await service.rollback()
+
+// Rollback to specific version
+await service.rollback({ version: '1.5.0' })
+
+// Rollback with strategy
+await service.rollback({
+  strategy: 'immediate', // or 'gradual'
+  cleanup: true, // Remove failed version
+})
+```
+
+## Best Practices
+
+### 1. Choose the Right Strategy
+
+- **Development**: Use `recreate` for fast iterations
+- **Staging**: Use `rolling` for realistic testing
+- **Production**: Use `canary` or `blue-green` for safety
+
+### 2. Always Monitor Metrics
+
+```typescript
+// Define key metrics for every deployment
+metrics: ['error_rate', 'latency_p50', 'latency_p99', 'success_rate', 'request_rate']
+```
+
+### 3. Test Before Promoting
+
+```typescript
+// Run smoke tests on new version
+smokeTests: [
+  { endpoint: '/health', expectedStatus: 200 },
+  { endpoint: '/api/test', expectedResponse: { ok: true } },
+]
+```
+
+### 4. Set Appropriate Timeouts
+
+```typescript
+rollout: {
+  batchSize: 25,
+  interval: 120, // 2 minutes between batches
+  timeout: 3600 // 1 hour max deployment time
+}
+```
+
+### 5. Enable Auto-Rollback
+
+```typescript
+rollback: {
+  automatic: true,
+  onMetricFailure: true,
+  onErrorSpike: true
+}
+```
+
+## Troubleshooting
+
+### Deployment Stuck
+
+**Issue**: Deployment hangs at certain percentage
+
+**Solution**: Check health checks and adjust timeout:
+
+```typescript
+healthCheckConfig: {
+  timeout: 10000, // Increase timeout
+  successThreshold: 1, // Reduce threshold
+  failureThreshold: 5 // Increase tolerance
+}
+```
+
+### Rollback Fails
+
+**Issue**: Automatic rollback not working
+
+**Solution**: Verify rollback triggers:
+
+```typescript
+rollback: {
+  automatic: true,
+  triggers: [
+    {
+      metric: 'error_rate',
+      threshold: 0.05,
+      duration: 60
+    }
+  ]
+}
+```
+
+### Metrics Not Available
+
+**Issue**: Deployment fails due to missing metrics
+
+**Solution**: Ensure metrics are being collected:
+
+```typescript
+monitoring: {
+  enabled: true,
+  metrics: ['error_rate', 'latency'],
+  provider: 'cloudflare' // or custom provider
+}
+```
+
+## Next Steps
+
+- [Service Management](./management.mdx) - Learn about scaling and monitoring
+- [API Reference](../api/) - Complete deployment API documentation
+- [Examples](../examples/deploy-service.mdx) - Real-world deployment examples
+
+## Resources
+
+- [Cloudflare Workers Deployments](https://developers.cloudflare.com/workers/platform/deployments/)
+- [Deployment Best Practices](https://services.do/docs/best-practices)
+- [Monitoring Guide](./management.mdx#monitoring)

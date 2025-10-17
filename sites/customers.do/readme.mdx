@@ -1,0 +1,504 @@
+---
+$id: https://customers.do
+$type: WebSite
+title: customers.do - Customer Management for Business-as-Code
+description: Build autonomous customer management systems with semantic patterns. Manage customer profiles, purchase history, segmentation, and loyalty programs using Schema.org Person and Organization types.
+keywords: [customers, customer management, CRM, customer profiles, segmentation, loyalty, Business-as-Code, Schema.org]
+author:
+  $type: Organization
+  name: .do Platform
+license: MIT
+---
+
+# customers.do
+
+**Semantic Customer Management for Business-as-Code**
+
+customers.do provides a comprehensive customer management framework for the `.do` platform, enabling you to build autonomous CRM systems using semantic patterns with Schema.org Person and Organization types.
+
+## What is Customer Management?
+
+Customer management encompasses the complete customer lifecycle:
+
+- **Customer Profiles**: Store and manage customer information
+- **Purchase History**: Track customer orders and transactions
+- **Customer Segmentation**: Group customers by behavior, value, demographics
+- **Loyalty Programs**: Reward repeat customers
+- **Customer Communication**: Email, SMS, and notification preferences
+- **Customer Analytics**: LTV, churn risk, engagement metrics
+
+## Quick Start
+
+```bash
+pnpm add sdk.do
+```
+
+```typescript
+import $, { db } from 'sdk.do'
+
+// Create a customer
+const customer = await db.create($.Person, {
+  $type: 'Person',
+  name: 'Jane Smith',
+  email: 'jane@example.com',
+  telephone: '+1-555-0123',
+  address: {
+    $type: 'PostalAddress',
+    streetAddress: '123 Main St',
+    addressLocality: 'San Francisco',
+    addressRegion: 'CA',
+    postalCode: '94102',
+    addressCountry: 'US',
+  },
+  customerSegment: 'Premium',
+  loyaltyTier: 'Silver',
+  totalOrders: 0,
+  totalSpent: 0,
+  lifetimeValue: 0,
+  customerSince: new Date().toISOString(),
+})
+```
+
+## Key Features
+
+### Customer Profiles
+
+Comprehensive customer data management:
+
+```typescript
+interface Customer extends Person {
+  $type: 'Person'
+  name: string
+  email: string
+  telephone?: string
+  address?: PostalAddress
+  birthDate?: string
+  gender?: string
+
+  // Customer metrics
+  totalOrders: number
+  totalSpent: number
+  lifetimeValue: number
+  averageOrderValue: number
+  customerSince: string
+  lastOrderDate?: string
+  lastPurchaseDate?: string
+
+  // Segmentation
+  customerSegment?: string
+  loyaltyTier?: string
+  churnRisk?: 'Low' | 'Medium' | 'High'
+  engagement?: 'Active' | 'Inactive' | 'AtRisk'
+
+  // Preferences
+  emailOptIn?: boolean
+  smsOptIn?: boolean
+  communicationPreferences?: string[]
+  preferredLanguage?: string
+  timezone?: string
+
+  // Tags
+  tags?: string[]
+  customFields?: Record<string, any>
+}
+
+// Update customer profile
+await db.update(customer, {
+  address: newAddress,
+  telephone: newPhone,
+  emailOptIn: true,
+  preferredLanguage: 'en-US',
+})
+```
+
+### Purchase History Tracking
+
+Automatically track customer purchases:
+
+```typescript
+import { on } from 'sdk.do'
+
+// Update customer metrics on order creation
+await on($.Order.created, async (order) => {
+  const customer = await db.get($.Person, order.customer.$id)
+
+  await db.update(customer, {
+    totalOrders: (customer.totalOrders || 0) + 1,
+    lastOrderDate: order.orderDate,
+    firstOrderDate: customer.firstOrderDate || order.orderDate,
+  })
+})
+
+// Update customer spend on order delivery
+await on($.Order.delivered, async (order) => {
+  const customer = await db.get($.Person, order.customer.$id)
+  const orderTotal = calculateOrderTotal(order).total
+
+  await db.update(customer, {
+    totalSpent: (customer.totalSpent || 0) + orderTotal,
+    lastPurchaseDate: new Date().toISOString(),
+    averageOrderValue: (customer.totalSpent + orderTotal) / (customer.totalOrders || 1),
+  })
+
+  // Check for loyalty tier upgrade
+  await checkLoyaltyTierUpgrade(customer)
+})
+
+// Get customer purchase history
+async function getCustomerPurchaseHistory(customerId: string) {
+  const orders = await db.list($.Order, {
+    where: { 'customer.$id': customerId },
+    sort: { orderDate: -1 },
+  })
+
+  return orders
+}
+```
+
+### Customer Segmentation
+
+Segment customers for targeted marketing:
+
+```typescript
+// Segment by spend level
+async function segmentBySpendLevel() {
+  const highValue = await db.list($.Person, {
+    where: { totalSpent: { $gte: 5000 } },
+  })
+
+  const mediumValue = await db.list($.Person, {
+    where: {
+      totalSpent: { $gte: 1000, $lt: 5000 },
+    },
+  })
+
+  const lowValue = await db.list($.Person, {
+    where: { totalSpent: { $lt: 1000 } },
+  })
+
+  // Update segments
+  for (const customer of highValue) {
+    await db.update(customer, { customerSegment: 'Premium' })
+  }
+  for (const customer of mediumValue) {
+    await db.update(customer, { customerSegment: 'Standard' })
+  }
+  for (const customer of lowValue) {
+    await db.update(customer, { customerSegment: 'Basic' })
+  }
+}
+
+// Segment by engagement
+async function segmentByEngagement() {
+  const now = Date.now()
+  const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000
+  const ninetyDaysAgo = now - 90 * 24 * 60 * 60 * 1000
+
+  // Active: purchased in last 30 days
+  const active = await db.list($.Person, {
+    where: {
+      lastPurchaseDate: { $gte: new Date(thirtyDaysAgo).toISOString() },
+    },
+  })
+
+  // At Risk: 30-90 days since purchase
+  const atRisk = await db.list($.Person, {
+    where: {
+      lastPurchaseDate: {
+        $gte: new Date(ninetyDaysAgo).toISOString(),
+        $lt: new Date(thirtyDaysAgo).toISOString(),
+      },
+    },
+  })
+
+  // Inactive: 90+ days since purchase
+  const inactive = await db.list($.Person, {
+    where: {
+      lastPurchaseDate: { $lt: new Date(ninetyDaysAgo).toISOString() },
+    },
+  })
+
+  // Update engagement
+  for (const customer of active) {
+    await db.update(customer, { engagement: 'Active' })
+  }
+  for (const customer of atRisk) {
+    await db.update(customer, { engagement: 'AtRisk' })
+  }
+  for (const customer of inactive) {
+    await db.update(customer, { engagement: 'Inactive' })
+  }
+}
+
+// RFM Segmentation (Recency, Frequency, Monetary)
+async function performRFMSegmentation() {
+  const customers = await db.list($.Person)
+
+  for (const customer of customers) {
+    const recency = calculateRecency(customer.lastPurchaseDate)
+    const frequency = customer.totalOrders
+    const monetary = customer.totalSpent
+
+    const rfmScore = calculateRFMScore(recency, frequency, monetary)
+    const segment = assignRFMSegment(rfmScore)
+
+    await db.update(customer, {
+      rfmScore,
+      customerSegment: segment,
+    })
+  }
+}
+```
+
+### Loyalty Programs
+
+Reward and retain customers:
+
+```typescript
+interface LoyaltyProgram {
+  tiers: {
+    name: string
+    minSpend: number
+    benefits: string[]
+    discountPercent: number
+  }[]
+}
+
+const loyaltyProgram: LoyaltyProgram = {
+  tiers: [
+    {
+      name: 'Bronze',
+      minSpend: 0,
+      benefits: ['Free shipping on orders $50+'],
+      discountPercent: 0,
+    },
+    {
+      name: 'Silver',
+      minSpend: 500,
+      benefits: ['Free shipping', 'Early access to sales', '5% off all orders'],
+      discountPercent: 5,
+    },
+    {
+      name: 'Gold',
+      minSpend: 2000,
+      benefits: ['Free express shipping', 'Early access', '10% off', 'Birthday gift'],
+      discountPercent: 10,
+    },
+    {
+      name: 'Platinum',
+      minSpend: 5000,
+      benefits: ['All Gold benefits', '15% off', 'Dedicated support'],
+      discountPercent: 15,
+    },
+  ],
+}
+
+async function checkLoyaltyTierUpgrade(customer: Customer) {
+  const currentTier = loyaltyProgram.tiers.find((t) => t.name === customer.loyaltyTier)
+  const newTier = loyaltyProgram.tiers.reverse().find((t) => customer.totalSpent >= t.minSpend)
+
+  if (newTier && newTier.name !== currentTier?.name) {
+    await db.update(customer, {
+      loyaltyTier: newTier.name,
+    })
+
+    // Send tier upgrade notification
+    await send({
+      $type: 'EmailMessage',
+      recipient: customer.email,
+      subject: `Welcome to ${newTier.name} tier!`,
+      html: `
+        <h1>Congratulations!</h1>
+        <p>You've been upgraded to ${newTier.name} tier!</p>
+        <h2>Your new benefits:</h2>
+        <ul>
+          ${newTier.benefits.map((b) => `<li>${b}</li>`).join('')}
+        </ul>
+      `,
+    })
+  }
+}
+```
+
+### Churn Prediction
+
+Identify customers at risk of churning:
+
+```typescript
+async function calculateChurnRisk(customer: Customer): Promise<'Low' | 'Medium' | 'High'> {
+  const daysSinceLastPurchase = Math.floor((Date.now() - new Date(customer.lastPurchaseDate || customer.customerSince).getTime()) / (24 * 60 * 60 * 1000))
+
+  const avgDaysBetweenOrders =
+    customer.totalOrders > 1
+      ? Math.floor(
+          (new Date(customer.lastOrderDate).getTime() - new Date(customer.firstOrderDate).getTime()) / ((customer.totalOrders - 1) * 24 * 60 * 60 * 1000)
+        )
+      : 30
+
+  // High risk: 2x average time between orders
+  if (daysSinceLastPurchase > avgDaysBetweenOrders * 2) {
+    return 'High'
+  }
+
+  // Medium risk: 1.5x average time
+  if (daysSinceLastPurchase > avgDaysBetweenOrders * 1.5) {
+    return 'Medium'
+  }
+
+  return 'Low'
+}
+
+// Update churn risk daily
+import { every } from 'sdk.do'
+
+await every('0 2 * * *', async () => {
+  const customers = await db.list($.Person)
+
+  for (const customer of customers) {
+    const churnRisk = await calculateChurnRisk(customer)
+
+    await db.update(customer, { churnRisk })
+
+    // Send re-engagement campaign to high-risk customers
+    if (churnRisk === 'High') {
+      await sendReEngagementCampaign(customer)
+    }
+  }
+})
+```
+
+### Customer Analytics
+
+Track key customer metrics:
+
+```typescript
+async function getCustomerAnalytics(timeframe: 'day' | 'week' | 'month' | 'year') {
+  const customers = await db.list($.Person)
+
+  const analytics = {
+    totalCustomers: customers.length,
+    newCustomers: 0,
+    activeCustomers: 0,
+    churnedCustomers: 0,
+    averageLTV: 0,
+    averageOrderValue: 0,
+    repeatPurchaseRate: 0,
+    customersBySegment: {},
+    customersByTier: {},
+  }
+
+  const now = Date.now()
+  const timeframeDays = { day: 1, week: 7, month: 30, year: 365 }[timeframe]
+  const cutoff = new Date(now - timeframeDays * 24 * 60 * 60 * 1000).toISOString()
+
+  for (const customer of customers) {
+    // Count new customers
+    if (customer.customerSince >= cutoff) {
+      analytics.newCustomers++
+    }
+
+    // Count active customers
+    if (customer.lastPurchaseDate && customer.lastPurchaseDate >= cutoff) {
+      analytics.activeCustomers++
+    }
+
+    // Count churned customers
+    if (customer.churnRisk === 'High') {
+      analytics.churnedCustomers++
+    }
+
+    // Aggregate metrics
+    analytics.averageLTV += customer.lifetimeValue || 0
+    analytics.averageOrderValue += customer.averageOrderValue || 0
+
+    // Count by segment
+    analytics.customersBySegment[customer.customerSegment] = (analytics.customersBySegment[customer.customerSegment] || 0) + 1
+
+    // Count by tier
+    analytics.customersByTier[customer.loyaltyTier] = (analytics.customersByTier[customer.loyaltyTier] || 0) + 1
+
+    // Repeat purchase rate
+    if (customer.totalOrders > 1) {
+      analytics.repeatPurchaseRate++
+    }
+  }
+
+  analytics.averageLTV /= customers.length
+  analytics.averageOrderValue /= customers.length
+  analytics.repeatPurchaseRate = (analytics.repeatPurchaseRate / customers.length) * 100
+
+  return analytics
+}
+```
+
+## Semantic Patterns
+
+```typescript
+import $ from 'sdk.do'
+
+// Customer types
+$.Person
+$.Organization
+$.Customer
+$.CustomerSegment
+$.LoyaltyProgram
+
+// Customer events
+$.Customer.created
+$.Customer.updated
+$.Customer.purchased
+$.Customer.churned
+$.Customer.upgraded
+
+// Customer relationships
+$.Customer.placed.Order
+$.Customer.has.Address
+$.Customer.belongs.to.Segment
+$.Customer.enrolled.in.LoyaltyProgram
+$.Customer.received.Communication
+```
+
+## Integration
+
+```typescript
+// Orders → Customers
+await on($.Order.created, async (order) => {
+  await updateCustomerMetrics(order.customer.$id, order)
+})
+
+// Customers → Marketing
+await on($.Customer.created, async (customer) => {
+  await sendWelcomeEmail(customer)
+  await addToMarketingList(customer)
+})
+
+// Customers → Analytics
+await on($.Customer.updated, async (customer) => {
+  await updateCustomerAnalytics(customer)
+})
+```
+
+## Documentation
+
+- [Getting Started](./docs/getting-started)
+- [Architecture](./docs/architecture)
+- [Best Practices](./docs/best-practices)
+- [Troubleshooting](./docs/troubleshooting)
+- [API Reference](./api/)
+- [Examples](./examples/)
+
+## Related Projects
+
+- [orders.do](https://orders.do) - Order management
+- [invoices.do](https://invoices.do) - Invoice management
+- [payments.do](https://payments.do) - Payment processing
+- [products.do](https://products.do) - Product catalog
+- [sdk.do](https://sdk.do) - Core SDK
+
+## License
+
+MIT (Open Source)
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

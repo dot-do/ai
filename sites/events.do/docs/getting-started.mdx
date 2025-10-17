@@ -1,0 +1,530 @@
+---
+$id: https://events.do/docs/getting-started
+$type: TechArticle
+title: Getting Started with events.do
+description: Install and configure the event system for Business-as-Code applications
+keywords: [events, getting-started, installation, setup, event-driven]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Getting Started
+
+Get up and running with events.do in under 5 minutes. Learn how to set up event listeners and publishers for your Business-as-Code applications.
+
+## Installation
+
+Install the SDK:
+
+```bash
+pnpm add sdk.do
+```
+
+Or use npm/yarn:
+
+```bash
+npm install sdk.do
+# or
+yarn add sdk.do
+```
+
+## Basic Setup
+
+Import the event functions from the SDK:
+
+```typescript
+import { on, send } from 'sdk.do'
+```
+
+That's it! You're ready to start using events.
+
+## Your First Event
+
+Let's create a simple event listener and publisher:
+
+### 1. Create an Event Listener
+
+```typescript
+import { on } from 'sdk.do'
+
+// Listen for user registration events
+on('User.registered', async (event) => {
+  console.log('New user registered:', event.data.email)
+
+  // Send welcome email
+  await sendWelcomeEmail(event.data.email)
+})
+```
+
+### 2. Publish an Event
+
+```typescript
+import { send } from 'sdk.do'
+
+// When a user registers
+async function registerUser(userData) {
+  // Create user in database
+  const user = await createUser(userData)
+
+  // Publish registration event
+  await send('User.registered', {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    registeredAt: new Date(),
+  })
+
+  return user
+}
+```
+
+### 3. Run Your Application
+
+When you run your application:
+
+1. The event listener is registered
+2. When `registerUser()` is called, it publishes `User.registered`
+3. The listener receives the event and sends a welcome email
+
+```typescript
+// Register a new user
+await registerUser({
+  email: 'user@example.com',
+  name: 'John Doe',
+  password: 'secure-password',
+})
+
+// Console output: "New user registered: user@example.com"
+// Welcome email is sent
+```
+
+## Event Naming Convention
+
+events.do uses the `Object.Action` pattern:
+
+- **Object**: The business entity (capitalized, e.g., `Order`, `User`, `Payment`)
+- **Action**: Past-tense verb (e.g., `created`, `updated`, `shipped`, `completed`)
+
+### Good Examples
+
+```typescript
+on('Order.created', handler) // ✅ Clear and semantic
+on('Payment.completed', handler) // ✅ Past tense
+on('User.registered', handler) // ✅ Business action
+on('Product.outOfStock', handler) // ✅ State change
+```
+
+### Bad Examples
+
+```typescript
+on('order_create', handler) // ❌ Snake case
+on('createOrder', handler) // ❌ Camel case, present tense
+on('PAYMENT_DONE', handler) // ❌ Screaming case
+on('user-new', handler) // ❌ Kebab case
+```
+
+## Event Data Structure
+
+Events follow a standard structure:
+
+```typescript
+interface Event<T = any> {
+  type: string // Event name (e.g., 'Order.created')
+  data: T // Event payload
+  metadata?: {
+    timestamp: Date
+    source?: string
+    correlationId?: string
+    userId?: string
+  }
+}
+```
+
+### Example Event
+
+```typescript
+{
+  type: 'Order.created',
+  data: {
+    id: '12345',
+    customer: 'acme-corp',
+    items: [
+      { product: 'widget', quantity: 10, price: 99.99 }
+    ],
+    total: 999.90
+  },
+  metadata: {
+    timestamp: new Date('2024-01-15T10:30:00Z'),
+    source: 'checkout-service',
+    correlationId: 'session-abc123',
+    userId: 'user-456'
+  }
+}
+```
+
+## Multiple Event Listeners
+
+You can register multiple listeners for the same event:
+
+```typescript
+// Send confirmation email
+on('Order.created', async (event) => {
+  await sendOrderConfirmation(event.data)
+})
+
+// Update analytics
+on('Order.created', async (event) => {
+  await trackOrderMetrics(event.data)
+})
+
+// Notify warehouse
+on('Order.created', async (event) => {
+  await notifyWarehouse(event.data)
+})
+```
+
+All three listeners will be called when `Order.created` is published.
+
+## Pattern Matching
+
+Listen to multiple related events:
+
+```typescript
+// Listen to all Order events
+on('Order.*', async (event) => {
+  await auditLog(event.type, event.data)
+})
+
+// Listen to specific events
+on(['Order.created', 'Order.updated'], async (event) => {
+  await syncToAnalytics(event)
+})
+```
+
+## Event Chains
+
+Events can trigger other events, creating workflows:
+
+```typescript
+// Step 1: Order created
+on('Order.created', async (event) => {
+  // Validate order
+  const valid = await validateOrder(event.data)
+
+  if (valid) {
+    await send('Order.validated', event.data)
+  } else {
+    await send('Order.rejected', {
+      ...event.data,
+      reason: 'validation-failed',
+    })
+  }
+})
+
+// Step 2: Order validated
+on('Order.validated', async (event) => {
+  // Request payment
+  await send('Payment.requested', {
+    orderId: event.data.id,
+    amount: event.data.total,
+  })
+})
+
+// Step 3: Payment completed
+on('Payment.completed', async (event) => {
+  // Ship order
+  await send('Order.shipped', {
+    orderId: event.data.orderId,
+    trackingNumber: await generateTracking(),
+  })
+})
+```
+
+## Error Handling
+
+Always handle errors in event listeners:
+
+```typescript
+on('Order.created', async (event) => {
+  try {
+    await processOrder(event.data)
+  } catch (error) {
+    console.error('Failed to process order:', error)
+
+    // Publish error event for monitoring
+    await send('Order.processingFailed', {
+      orderId: event.data.id,
+      error: error.message,
+      timestamp: new Date(),
+    })
+  }
+})
+```
+
+## TypeScript Support
+
+Define typed events for better IDE support:
+
+```typescript
+import type { Event } from 'sdk.do'
+
+// Define event type
+interface OrderCreatedEvent
+  extends Event<{
+    id: string
+    customer: string
+    items: Array<{
+      product: string
+      quantity: number
+      price: number
+    }>
+    total: number
+  }> {
+  type: 'Order.created'
+}
+
+// Type-safe listener
+on('Order.created', async (event: OrderCreatedEvent) => {
+  // TypeScript knows event.data structure
+  console.log(`Order ${event.data.id} total: $${event.data.total}`)
+})
+```
+
+## Configuration
+
+### Event Bus Configuration
+
+Configure the event bus (optional):
+
+```typescript
+import { configureEvents } from 'sdk.do'
+
+configureEvents({
+  // Maximum retries for failed handlers
+  maxRetries: 3,
+
+  // Retry delay in milliseconds
+  retryDelay: 1000,
+
+  // Enable event persistence
+  persist: true,
+
+  // Event storage backend
+  storage: 'redis', // or 'memory', 'postgres', etc.
+
+  // Enable event replay
+  replay: true,
+})
+```
+
+### Environment Variables
+
+Configure via environment variables:
+
+```bash
+# Event bus backend
+EVENT_BUS_BACKEND=redis
+
+# Redis connection (if using Redis)
+REDIS_URL=redis://localhost:6379
+
+# Enable event persistence
+EVENT_PERSIST=true
+
+# Enable debug logging
+EVENT_DEBUG=true
+```
+
+## Testing Events
+
+### Test Event Listeners
+
+```typescript
+import { on, send } from 'sdk.do'
+import { expect, test } from 'vitest'
+
+test('handles order creation', async () => {
+  let receivedEvent
+
+  // Register test listener
+  on('Order.created', async (event) => {
+    receivedEvent = event
+  })
+
+  // Publish event
+  await send('Order.created', {
+    id: '12345',
+    total: 100,
+  })
+
+  // Assert
+  expect(receivedEvent.data.id).toBe('12345')
+  expect(receivedEvent.data.total).toBe(100)
+})
+```
+
+### Mock Event Publishing
+
+```typescript
+import { send } from 'sdk.do'
+import { vi } from 'vitest'
+
+// Mock send function
+vi.mock('sdk.do', () => ({
+  send: vi.fn(),
+}))
+
+test('publishes order event', async () => {
+  await createOrder({ id: '12345' })
+
+  expect(send).toHaveBeenCalledWith('Order.created', {
+    id: '12345',
+  })
+})
+```
+
+## Next Steps
+
+Now that you understand the basics, explore:
+
+- [Event Listeners](./listeners) - Deep dive into `on` patterns
+- [Event Publishers](./publishers) - Master `send` patterns
+- [Examples](../examples/) - Real-world event patterns
+- [API Reference](../api/) - Complete API documentation
+
+## Common Patterns
+
+### Audit Logging
+
+```typescript
+on('*', async (event) => {
+  await db.create($.AuditLog, {
+    eventType: event.type,
+    eventData: event.data,
+    timestamp: event.metadata.timestamp,
+    userId: event.metadata.userId,
+  })
+})
+```
+
+### Event Replay
+
+```typescript
+import { replay } from 'sdk.do'
+
+// Replay all Order events from last hour
+await replay({
+  pattern: 'Order.*',
+  since: new Date(Date.now() - 3600000),
+})
+```
+
+### Event Versioning
+
+```typescript
+// Handle different event versions
+on('Order.created', async (event) => {
+  const version = event.metadata.version || 1
+
+  switch (version) {
+    case 1:
+      await processOrderV1(event.data)
+      break
+    case 2:
+      await processOrderV2(event.data)
+      break
+    default:
+      throw new Error(`Unsupported version: ${version}`)
+  }
+})
+```
+
+## Troubleshooting
+
+### Events Not Being Received
+
+1. **Check listener is registered before events are published**:
+
+```typescript
+// ❌ Bad - listener registered after event
+await send('Order.created', data)
+on('Order.created', handler) // Too late!
+
+// ✅ Good - listener registered first
+on('Order.created', handler)
+await send('Order.created', data)
+```
+
+2. **Check event names match exactly** (case-sensitive):
+
+```typescript
+// ❌ Won't match
+on('order.created', handler)
+await send('Order.created', data)
+
+// ✅ Matches
+on('Order.created', handler)
+await send('Order.created', data)
+```
+
+3. **Enable debug logging**:
+
+```typescript
+import { configureEvents } from 'sdk.do'
+
+configureEvents({ debug: true })
+```
+
+### Handler Errors
+
+If a handler throws an error, the event bus will retry (if configured):
+
+```typescript
+on('Order.created', async (event) => {
+  try {
+    await riskyOperation(event.data)
+  } catch (error) {
+    console.error('Handler failed:', error)
+
+    // Option 1: Re-throw to trigger retry
+    throw error
+
+    // Option 2: Publish error event and continue
+    await send('Order.processingFailed', {
+      orderId: event.data.id,
+      error: error.message,
+    })
+  }
+})
+```
+
+## Best Practices
+
+1. **Register listeners on startup**: Register all listeners when your application starts, before handling requests
+
+2. **Use semantic naming**: Follow `Object.Action` pattern consistently
+
+3. **Include full context**: Event data should be self-contained
+
+4. **Handle errors gracefully**: Don't let one failed handler break the chain
+
+5. **Use TypeScript types**: Define event interfaces for type safety
+
+6. **Keep handlers focused**: Each handler should do one thing well
+
+7. **Add metadata**: Include timestamp, source, correlation IDs for tracing
+
+8. **Test event flows**: Write tests for event chains and error cases
+
+## Resources
+
+- [Event Listeners Documentation](./listeners)
+- [Event Publishers Documentation](./publishers)
+- [API Reference](../api/)
+- [Examples](../examples/)
+- [sdk.do Documentation](https://sdk.do)
+
+---
+
+Ready to dive deeper? Continue to [Event Listeners](./listeners) to master the `on` function.

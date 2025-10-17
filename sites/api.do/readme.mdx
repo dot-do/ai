@@ -1,0 +1,675 @@
+---
+$id: https://api.do
+$type: WebSite
+name: api.do
+description: External API integration with semantic context for Business-as-Code
+license: CC-BY-4.0
+---
+
+# api.do
+
+**External API integration with semantic context for Business-as-Code**
+
+api.do provides a unified interface for calling external APIs with semantic context, authentication handling, and Schema.org type support. Built on the `.do` platform's semantic patterns, it enables AI agents and developers to integrate external services naturally using `$.Subject.predicate.Object` patterns.
+
+## Quick Start
+
+```typescript
+import { $, api } from 'sdk.do'
+
+// Simple GET request
+const data = await api.get('https://api.example.com/users')
+
+// POST with semantic context
+const user = await api.post('https://api.example.com/users', {
+  $type: 'Person',
+  name: 'John Smith',
+  email: 'john@example.com',
+})
+
+// GraphQL query with schema
+const products = await api.graphql('https://api.example.com/graphql', {
+  query: `
+    query GetProducts {
+      products { id name price }
+    }
+  `,
+  schema: $.Product,
+})
+
+// Authenticated request
+const orders = await api.get('https://api.example.com/orders', {
+  auth: {
+    type: 'bearer',
+    token: process.env.API_TOKEN,
+  },
+})
+```
+
+## Key Features
+
+### 🌐 Universal API Integration
+
+Call any external API with consistent interface:
+
+```typescript
+import { api } from 'sdk.do'
+
+// REST APIs
+const rest = await api.get('https://api.rest.com/data')
+
+// GraphQL APIs
+const graphql = await api.graphql('https://api.graphql.com', {
+  query: '{ users { name } }',
+})
+
+// SOAP/XML APIs
+const soap = await api.soap('https://api.soap.com', {
+  action: 'GetCustomers',
+  body: { customerId: '123' },
+})
+
+// Webhooks
+await api.webhook('https://webhook.site/unique-id', {
+  event: 'order.created',
+  data: order,
+})
+```
+
+### 🔐 Authentication Patterns
+
+Built-in support for common authentication methods:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Bearer token
+await api.get('https://api.example.com/data', {
+  auth: {
+    type: 'bearer',
+    token: 'your-token',
+  },
+})
+
+// API key
+await api.get('https://api.example.com/data', {
+  auth: {
+    type: 'apiKey',
+    key: 'your-key',
+    header: 'X-API-Key',
+  },
+})
+
+// OAuth 2.0
+await api.get('https://api.example.com/data', {
+  auth: {
+    type: 'oauth2',
+    accessToken: 'access-token',
+    refreshToken: 'refresh-token',
+  },
+})
+
+// Basic auth
+await api.get('https://api.example.com/data', {
+  auth: {
+    type: 'basic',
+    username: 'user',
+    password: 'pass',
+  },
+})
+```
+
+### 📊 Schema.org Integration
+
+Map external API responses to Schema.org types:
+
+```typescript
+import { $, api } from 'sdk.do'
+
+// Map API response to Schema.org Person
+const person = await api.get('https://api.example.com/users/123', {
+  schema: $.Person,
+  mapping: {
+    full_name: 'name',
+    email_address: 'email',
+    phone_number: 'telephone',
+  },
+})
+
+// Result is typed as Person
+console.log(person.$type) // "Person"
+console.log(person.name) // Mapped from full_name
+console.log(person.email) // Mapped from email_address
+```
+
+### 🔄 Request/Response Transformation
+
+Transform requests and responses with semantic patterns:
+
+```typescript
+import { $, api } from 'sdk.do'
+
+// Transform outgoing request
+await api.post(
+  'https://api.example.com/orders',
+  {
+    $type: 'Order',
+    customer: { $id: 'customer_123' },
+    items: [{ $id: 'product_456', quantity: 2 }],
+  },
+  {
+    transform: {
+      request: (data) => ({
+        customer_id: data.customer.$id,
+        line_items: data.items.map((i) => ({
+          product_id: i.$id,
+          qty: i.quantity,
+        })),
+      }),
+    },
+  }
+)
+
+// Transform incoming response
+const user = await api.get('https://api.example.com/users/123', {
+  transform: {
+    response: (data) => ({
+      $type: 'Person',
+      $id: `person_${data.id}`,
+      name: `${data.first_name} ${data.last_name}`,
+      email: data.email,
+    }),
+  },
+})
+```
+
+## Features
+
+- **HTTP Methods** - GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS
+- **Authentication** - Bearer, API Key, OAuth 2.0, Basic, Custom
+- **Schema Mapping** - Map external APIs to Schema.org types
+- **Request/Response Transform** - Transform data with semantic patterns
+- **GraphQL Support** - Query GraphQL APIs with typed responses
+- **Webhook Integration** - Send and receive webhook events
+- **Rate Limiting** - Built-in rate limiting and retry logic
+- **Error Handling** - Structured error responses with retry strategies
+- **Type Safety** - Full TypeScript support with Schema.org types
+
+## Documentation
+
+- [Getting Started](./docs/getting-started) - Installation and basic setup
+- [Making Requests](./docs/making-requests) - HTTP methods and patterns
+- [Authentication](./docs/authentication) - Auth methods and configuration
+- [API Reference](./api/) - Complete API documentation
+
+## Examples
+
+- [REST API Integration](./examples/rest-api) - Integrate REST APIs
+- [GraphQL API](./examples/graphql-api) - Query GraphQL endpoints
+- [Webhook Integration](./examples/webhook-integration) - Send and receive webhooks
+
+## Use Cases
+
+### Third-Party API Integration
+
+Integrate external services into Business-as-Code workflows:
+
+```typescript
+import { $, api, db, on } from 'sdk.do'
+
+// When order is created, sync to external fulfillment API
+on($.Order.created, async (event) => {
+  const order = event.data
+
+  // Send to fulfillment service
+  const fulfillment = await api.post(
+    'https://fulfillment.com/api/orders',
+    {
+      order_id: order.$id,
+      items: order.orderItems,
+      shipping_address: order.shippingAddress,
+    },
+    {
+      auth: {
+        type: 'apiKey',
+        key: process.env.FULFILLMENT_API_KEY,
+      },
+    }
+  )
+
+  // Update order with fulfillment ID
+  await db.update(order.$id, {
+    fulfillmentId: fulfillment.id,
+    fulfillmentStatus: fulfillment.status,
+  })
+})
+```
+
+### Multi-Service Data Enrichment
+
+Enrich entities with data from multiple APIs:
+
+```typescript
+import { $, ai, api, db } from 'sdk.do'
+
+async function enrichOrganization(orgId: string) {
+  const org = await db.get($.Organization, orgId)
+
+  // Get company data from Clearbit
+  const clearbitData = await api.get(`https://company.clearbit.com/v2/companies/find?domain=${org.domain}`, {
+    auth: {
+      type: 'bearer',
+      token: process.env.CLEARBIT_API_KEY,
+    },
+  })
+
+  // Get funding data from Crunchbase
+  const crunchbaseData = await api.get(`https://api.crunchbase.com/v4/entities/organizations/${org.name}`, {
+    auth: {
+      type: 'apiKey',
+      key: process.env.CRUNCHBASE_API_KEY,
+      header: 'X-cb-user-key',
+    },
+  })
+
+  // Update organization with enriched data
+  await db.update(orgId, {
+    employees: clearbitData.metrics.employees,
+    revenue: clearbitData.metrics.estimatedAnnualRevenue,
+    funding: crunchbaseData.properties.total_funding_usd,
+    category: clearbitData.category.industry,
+  })
+}
+```
+
+### GraphQL API Queries
+
+Query GraphQL APIs with semantic patterns:
+
+```typescript
+import { $, api } from 'sdk.do'
+
+// Query GitHub GraphQL API
+const repos = await api.graphql('https://api.github.com/graphql', {
+  query: `
+    query($org: String!) {
+      organization(login: $org) {
+        repositories(first: 10) {
+          nodes {
+            name
+            description
+            stargazerCount
+            url
+          }
+        }
+      }
+    }
+  `,
+  variables: {
+    org: 'dot-do',
+  },
+  auth: {
+    type: 'bearer',
+    token: process.env.GITHUB_TOKEN,
+  },
+  schema: $.SoftwareSourceCode,
+})
+
+// Results mapped to Schema.org type
+for (const repo of repos) {
+  console.log(repo.$type) // "SoftwareSourceCode"
+  console.log(repo.name)
+  console.log(repo.codeRepository) // Mapped from url
+}
+```
+
+### Webhook Event Handling
+
+Receive and process webhook events:
+
+```typescript
+import { $, api, db, on } from 'sdk.do'
+
+// Receive Stripe webhook
+on($.WebhookEvent.received, async (event) => {
+  if (event.source === 'stripe') {
+    const stripeEvent = event.data
+
+    switch (stripeEvent.type) {
+      case 'payment_intent.succeeded':
+        const payment = stripeEvent.data.object
+
+        // Update order status
+        const order = await db.get($.Order, payment.metadata.order_id)
+        await db.update(order.$id, {
+          paymentStatus: 'paid',
+          paidDate: new Date(),
+        })
+
+        // Notify fulfillment service
+        await api.post('https://fulfillment.com/api/notify', {
+          order_id: order.$id,
+          status: 'ready_to_ship',
+        })
+        break
+
+      case 'payment_intent.payment_failed':
+        // Handle failed payment
+        break
+    }
+  }
+})
+```
+
+## Integration with `.do` Platform
+
+api.do integrates seamlessly with other `.do` platform services:
+
+```typescript
+import { $, ai, api, db, on } from 'sdk.do'
+
+// AI-powered API interaction
+on($.Customer.created, async (event) => {
+  const customer = event.data
+
+  // Enrich customer with external data
+  const enrichedData = await api.get(`https://api.clearbit.com/v2/people/find?email=${customer.email}`, {
+    auth: {
+      type: 'bearer',
+      token: process.env.CLEARBIT_API_KEY,
+    },
+  })
+
+  // Use AI to analyze and categorize
+  const analysis = await ai.generate('Analyze customer profile and suggest category', {
+    context: { customer, enrichedData },
+    structured: true,
+  })
+
+  // Update customer in database
+  await db.update(customer.$id, {
+    linkedin: enrichedData.linkedin,
+    twitter: enrichedData.twitter,
+    category: analysis.category,
+    segment: analysis.segment,
+  })
+})
+```
+
+## Semantic Patterns
+
+api.do uses `$.Subject.predicate.Object` patterns for API operations:
+
+```typescript
+import { $, api } from 'sdk.do'
+
+// Semantic API calls with context
+await api.call({
+  subject: $.Organization,
+  predicate: $.retrieves,
+  object: $.Product,
+  from: 'https://api.example.com/products',
+  auth: { type: 'bearer', token: 'token' },
+})
+
+// Event-based API integration
+on($.Order.created, async (order) => {
+  await api.call({
+    subject: order,
+    predicate: $.sendTo,
+    object: $.ExternalService,
+    endpoint: 'https://service.com/api/orders',
+  })
+})
+```
+
+## Configuration
+
+### Environment Variables
+
+```bash
+# API timeouts
+API_TIMEOUT=30000              # Default timeout (ms)
+API_RETRY_ATTEMPTS=3          # Retry attempts
+API_RETRY_DELAY=1000          # Retry delay (ms)
+
+# Rate limiting
+API_RATE_LIMIT=100            # Requests per minute
+API_RATE_LIMIT_WINDOW=60000   # Rate limit window (ms)
+
+# External service API keys
+GITHUB_API_KEY=ghp_...
+STRIPE_API_KEY=sk_live_...
+CLEARBIT_API_KEY=sk_...
+OPENAI_API_KEY=sk-...
+```
+
+### Global Configuration
+
+```typescript
+import { api } from 'sdk.do'
+
+api.config({
+  timeout: 30000,
+  retries: 3,
+  retryDelay: 1000,
+  headers: {
+    'User-Agent': 'MyApp/1.0',
+  },
+})
+```
+
+## HTTP Methods
+
+### GET
+
+```typescript
+const data = await api.get('https://api.example.com/users')
+const user = await api.get('https://api.example.com/users/123')
+```
+
+### POST
+
+```typescript
+const created = await api.post('https://api.example.com/users', {
+  name: 'John Smith',
+  email: 'john@example.com',
+})
+```
+
+### PUT
+
+```typescript
+const updated = await api.put('https://api.example.com/users/123', {
+  name: 'John Smith Updated',
+})
+```
+
+### PATCH
+
+```typescript
+const patched = await api.patch('https://api.example.com/users/123', {
+  email: 'newemail@example.com',
+})
+```
+
+### DELETE
+
+```typescript
+await api.delete('https://api.example.com/users/123')
+```
+
+## Error Handling
+
+api.do provides structured error handling:
+
+```typescript
+import { api } from 'sdk.do'
+
+try {
+  const data = await api.get('https://api.example.com/data')
+} catch (error) {
+  if (error.code === 'RATE_LIMIT_EXCEEDED') {
+    console.log(`Rate limited. Retry after ${error.retryAfter}ms`)
+  } else if (error.code === 'AUTH_FAILED') {
+    console.log('Authentication failed, check credentials')
+  } else if (error.code === 'NOT_FOUND') {
+    console.log('Resource not found')
+  } else {
+    console.error('API call failed:', error.message)
+  }
+}
+```
+
+## Rate Limiting
+
+Built-in rate limiting with automatic retry:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Automatic rate limiting
+const results = await Promise.all(
+  urls.map((url) =>
+    api.get(url, {
+      rateLimit: {
+        maxRequests: 100,
+        perMilliseconds: 60000,
+      },
+    })
+  )
+)
+
+// Custom retry strategy
+const data = await api.get('https://api.example.com/data', {
+  retry: {
+    attempts: 5,
+    delay: 1000,
+    backoff: 'exponential',
+  },
+})
+```
+
+## Best Practices
+
+### 1. Use Schema Mapping
+
+Map external APIs to Schema.org types for consistency:
+
+```typescript
+// Good: Schema mapping
+const person = await api.get('https://api.example.com/users/123', {
+  schema: $.Person,
+  mapping: { full_name: 'name' },
+})
+
+// Avoid: Raw responses
+const raw = await api.get('https://api.example.com/users/123')
+```
+
+### 2. Handle Authentication Securely
+
+Store credentials in environment variables:
+
+```typescript
+// Good: Environment variables
+await api.get('https://api.example.com/data', {
+  auth: {
+    type: 'bearer',
+    token: process.env.API_TOKEN,
+  },
+})
+
+// Avoid: Hardcoded credentials
+await api.get('https://api.example.com/data', {
+  auth: { type: 'bearer', token: 'hardcoded-token' },
+})
+```
+
+### 3. Implement Error Handling
+
+Always handle API errors gracefully:
+
+```typescript
+try {
+  const data = await api.get('https://api.example.com/data')
+} catch (error) {
+  // Handle specific error types
+  // Implement fallback logic
+  // Log errors for monitoring
+}
+```
+
+### 4. Use Rate Limiting
+
+Respect API rate limits:
+
+```typescript
+await api.get('https://api.example.com/data', {
+  rateLimit: {
+    maxRequests: 100,
+    perMilliseconds: 60000,
+  },
+})
+```
+
+### 5. Transform Responses
+
+Transform external API responses to semantic types:
+
+```typescript
+const user = await api.get('https://api.example.com/users/123', {
+  schema: $.Person,
+  transform: {
+    response: (data) => ({
+      $type: 'Person',
+      name: `${data.first_name} ${data.last_name}`,
+      email: data.email_address,
+    }),
+  },
+})
+```
+
+## License
+
+api.do is released under the [Creative Commons Attribution 4.0 International License (CC-BY-4.0)](https://creativecommons.org/licenses/by/4.0/).
+
+This means you are free to:
+
+- **Share**: Copy and redistribute the material in any medium or format
+- **Adapt**: Remix, transform, and build upon the material for any purpose, even commercially
+
+Under the following terms:
+
+- **Attribution**: You must give appropriate credit, provide a link to the license, and indicate if changes were made
+
+## Resources
+
+- [sdk.do](https://sdk.do) - Core SDK documentation
+- [schema.org.ai](https://schema.org.ai) - Schema.org types for AI
+- [db.do](https://db.do) - Database operations
+- [ai.do](https://ai.do) - AI services
+- [`.do` Platform](https://do)
+
+## Related Domains
+
+- **[ai.do](https://ai.do)** - AI services integration
+- **[db.do](https://db.do)** - Database operations
+- **[on.do](https://on.do)** - Event listeners
+- **[send.do](https://send.do)** - Event publishing
+- **[every.do](https://every.do)** - Scheduled workflows
+
+## Contributing
+
+api.do is part of the [`.do` platform](https://do) ecosystem. Contributions are welcome!
+
+See the [ai repository](https://github.com/dot-do/ai) for contribution guidelines.
+
+## Acknowledgments
+
+api.do builds upon:
+
+- [Fetch API](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API) - Web standard for HTTP requests
+- [Schema.org](https://schema.org) - Structured data vocabulary
+- [JSON-LD](https://www.w3.org/TR/json-ld11/) - Linked data format
+- [GraphQL](https://graphql.org) - Query language for APIs

@@ -1,0 +1,613 @@
+---
+$id: https://bots.do
+$type: WebSite
+title: bots.do - Digital Worker Bot Framework
+description: Build autonomous digital worker bots with the .do platform. Create intelligent bots for task automation, multi-agent systems, and Business-as-Code workflows.
+keywords: [bots, digital workers, automation, task bots, multi-agent, autonomous bots, Business-as-Code, bot framework]
+author:
+  $type: Organization
+  name: .do Platform
+license: MIT
+---
+
+# bots.do
+
+**Digital Worker Bot Framework for Business Automation**
+
+bots.do is the bot framework for the `.do` platform, enabling you to build autonomous digital worker bots that automate tasks, execute workflows, and collaborate in multi-agent systems. Create bots with specific capabilities, tools, and behaviors that can work independently or as part of larger agent teams.
+
+## What are Bots?
+
+Bots are specialized autonomous entities that:
+
+- **Execute**: Perform specific tasks with precision and consistency
+- **Automate**: Handle repetitive workflows without human intervention
+- **Integrate**: Connect with APIs, databases, and external systems
+- **Collaborate**: Work with other bots and agents in coordinated systems
+- **Scale**: Handle high-volume operations efficiently
+
+Unlike general-purpose agents, bots are optimized for specific, well-defined tasks with predictable patterns and high-volume execution requirements.
+
+## Quick Start
+
+```bash
+pnpm add sdk.do
+```
+
+```typescript
+import $, { bot } from 'sdk.do'
+
+// Define a simple bot
+const emailBot = await bot.create({
+  $type: 'Bot',
+  name: 'Email Processor Bot',
+  task: 'Process incoming emails',
+  capabilities: ['email_parsing', 'classification', 'routing'],
+  triggers: ['$.Email.received'],
+  model: 'gpt-5-mini',
+})
+
+// Execute bot task
+const result = await emailBot.execute({
+  input: { email: emailData },
+})
+```
+
+## Key Features
+
+### Task-Specific Bots
+
+Create bots optimized for specific tasks:
+
+```typescript
+const dataBot = await bot.create({
+  $type: 'Bot',
+  name: 'Data Sync Bot',
+  task: 'Synchronize data between systems',
+  schedule: '$.Every15Minutes',
+  capabilities: ['data_extraction', 'data_transformation', 'data_loading'],
+  sources: ['crm', 'database', 'api'],
+  destinations: ['warehouse', 'analytics'],
+  errorHandling: {
+    retry: { attempts: 3, backoff: 'exponential' },
+    alertOnFailure: true,
+  },
+})
+```
+
+### High-Volume Automation
+
+Handle large-scale operations:
+
+```typescript
+const processingBot = await bot.create({
+  $type: 'Bot',
+  name: 'Invoice Processing Bot',
+  task: 'Process invoices',
+  throughput: {
+    target: 1000, // invoices per hour
+    concurrency: 10,
+    batchSize: 100,
+  },
+  pipeline: ['extract_data', 'validate_fields', 'calculate_totals', 'store_record', 'send_notification'],
+})
+
+// Process batch
+await processingBot.processBatch({
+  invoices: invoiceList,
+})
+```
+
+### Event-Driven Execution
+
+Trigger bots from events:
+
+```typescript
+import { on } from 'sdk.do'
+
+// Bot triggered by events
+const notificationBot = await bot.create({
+  $type: 'Bot',
+  name: 'Notification Bot',
+  task: 'Send notifications',
+  channels: ['email', 'slack', 'sms'],
+})
+
+// Listen for events
+await on($.Order.completed, async (order) => {
+  await notificationBot.execute({
+    action: 'send_confirmation',
+    recipient: order.customer,
+    data: order,
+  })
+})
+
+await on($.Payment.failed, async (payment) => {
+  await notificationBot.execute({
+    action: 'send_alert',
+    recipient: 'finance@company.com',
+    data: payment,
+  })
+})
+```
+
+### Multi-Bot Orchestration
+
+Coordinate multiple bots:
+
+```typescript
+const botTeam = await bot.createTeam({
+  name: 'Order Processing Team',
+  bots: [
+    {
+      id: 'validator',
+      bot: validationBot,
+      role: 'Validate order data',
+    },
+    {
+      id: 'inventory',
+      bot: inventoryBot,
+      role: 'Check inventory availability',
+    },
+    {
+      id: 'payment',
+      bot: paymentBot,
+      role: 'Process payment',
+    },
+    {
+      id: 'fulfillment',
+      bot: fulfillmentBot,
+      role: 'Create fulfillment order',
+    },
+  ],
+  workflow: {
+    type: 'sequential',
+    stages: [
+      { bot: 'validator', continueOnSuccess: true },
+      { bot: 'inventory', continueOnSuccess: true },
+      { bot: 'payment', continueOnSuccess: true },
+      { bot: 'fulfillment', continueOnSuccess: true },
+    ],
+    errorHandling: 'rollback',
+  },
+})
+
+// Execute orchestrated workflow
+const result = await botTeam.processOrder(orderData)
+```
+
+### Bot Intelligence Levels
+
+Choose the right intelligence level:
+
+```typescript
+// Rule-based bot (fastest, most predictable)
+const ruleBot = await bot.create({
+  $type: 'Bot',
+  name: 'Rule Bot',
+  intelligence: 'rules',
+  rules: [
+    { if: 'amount > 10000', then: 'flag_for_review' },
+    { if: 'customer.vip === true', then: 'priority_processing' },
+    { if: 'region === "EU"', then: 'apply_gdpr_rules' }
+  ]
+})
+
+// AI-powered bot (adaptive, context-aware)
+const aiBot = await bot.create({
+  $type: 'Bot',
+  name: 'AI Bot',
+  intelligence: 'ai',
+  model: 'gpt-5-mini',
+  context: 'Process customer inquiries with contextual understanding',
+  capabilities: ['natural_language', 'sentiment_analysis', 'intent_classification']
+})
+
+// Hybrid bot (rules + AI)
+const hybridBot = await bot.create({
+  $type: 'Bot',
+  name: 'Hybrid Bot',
+  intelligence: 'hybrid',
+  rules: [...], // Fast path for common cases
+  model: 'gpt-5-mini', // AI for complex cases
+  fallback: 'ai' // Use AI when rules don't match
+})
+```
+
+## Semantic Patterns
+
+bots.do uses semantic `$.Subject.predicate.Object` patterns:
+
+```typescript
+import $ from 'sdk.do'
+
+// Bot types
+$.Bot
+$.BotTeam
+$.BotCapability
+$.BotTask
+$.BotWorkflow
+
+// Bot operations
+$.Bot.executes.Task
+$.Bot.processes.Data
+$.Bot.triggers.on.Event
+$.Bot.integrates.with.System
+$.Bot.collaborates.with.Bot
+
+// Bot relationships
+$.Bot.has.Capability
+$.Bot.uses.Tool
+$.Bot.belongs.to.Team
+$.Bot.subscribes.to.Event
+$.Bot.produces.Result
+```
+
+## Bot Types
+
+### Data Processing Bots
+
+Handle data operations:
+
+```typescript
+const etlBot = await bot.create({
+  $type: 'DataBot',
+  name: 'ETL Bot',
+  operations: ['extract', 'transform', 'load'],
+  sources: [
+    { type: 'api', endpoint: 'https://api.example.com/data' },
+    { type: 'database', connection: 'postgres://...' },
+    { type: 'file', path: 's3://bucket/data' },
+  ],
+  transformations: ['normalize_dates', 'convert_currency', 'deduplicate_records', 'enrich_with_lookup'],
+  destination: {
+    type: 'warehouse',
+    connection: 'bigquery://...',
+    table: 'processed_data',
+  },
+})
+```
+
+### Communication Bots
+
+Handle messaging and notifications:
+
+```typescript
+const commBot = await bot.create({
+  $type: 'CommunicationBot',
+  name: 'Communication Bot',
+  channels: {
+    email: { provider: 'sendgrid', apiKey: '...' },
+    slack: { workspace: 'company', token: '...' },
+    sms: { provider: 'twilio', accountSid: '...' },
+  },
+  templates: {
+    orderConfirmation: { template: 'order_conf_v1' },
+    passwordReset: { template: 'pwd_reset_v1' },
+    weeklyDigest: { template: 'digest_v1' },
+  },
+  deliveryTracking: true,
+  rateLimits: {
+    email: 100, // per minute
+    slack: 50,
+    sms: 20,
+  },
+})
+```
+
+### Integration Bots
+
+Connect systems:
+
+```typescript
+const syncBot = await bot.create({
+  $type: 'IntegrationBot',
+  name: 'CRM Sync Bot',
+  systems: {
+    source: { type: 'crm', provider: 'salesforce' },
+    target: { type: 'database', provider: 'postgres' },
+  },
+  syncStrategy: {
+    mode: 'bidirectional',
+    frequency: '$.Every5Minutes',
+    conflictResolution: 'source_wins',
+    fieldMapping: {
+      'Contact.Name': 'customers.full_name',
+      'Contact.Email': 'customers.email',
+      'Contact.Phone': 'customers.phone',
+    },
+  },
+  changeDetection: 'timestamp',
+})
+```
+
+### Monitoring Bots
+
+Watch systems and trigger alerts:
+
+```typescript
+const monitorBot = await bot.create({
+  $type: 'MonitoringBot',
+  name: 'System Monitor Bot',
+  monitors: [
+    {
+      name: 'API Health',
+      check: 'http_status',
+      endpoint: 'https://api.example.com/health',
+      interval: '$.Every1Minute',
+      alertOn: [500, 503, 504],
+    },
+    {
+      name: 'Database Performance',
+      check: 'query_time',
+      threshold: 1000, // ms
+      interval: '$.Every5Minutes',
+      alertOn: 'threshold_exceeded',
+    },
+    {
+      name: 'Error Rate',
+      check: 'error_percentage',
+      threshold: 5, // percent
+      window: '$.Last15Minutes',
+      alertOn: 'threshold_exceeded',
+    },
+  ],
+  alerts: {
+    channels: ['slack', 'pagerduty'],
+    escalation: {
+      level1: { delay: 5, recipients: ['oncall@company.com'] },
+      level2: { delay: 15, recipients: ['engineering-leads@company.com'] },
+      level3: { delay: 30, recipients: ['cto@company.com'] },
+    },
+  },
+})
+```
+
+### Workflow Bots
+
+Execute complex workflows:
+
+```typescript
+const workflowBot = await bot.create({
+  $type: 'WorkflowBot',
+  name: 'Onboarding Workflow Bot',
+  workflow: {
+    trigger: '$.Employee.hired',
+    steps: [
+      {
+        id: 'create_accounts',
+        action: 'provision_accounts',
+        systems: ['email', 'slack', 'jira', 'github'],
+        waitFor: 'completion',
+      },
+      {
+        id: 'send_welcome',
+        action: 'send_email',
+        template: 'welcome',
+        waitFor: 'completion',
+      },
+      {
+        id: 'assign_buddy',
+        action: 'assign_mentor',
+        criteria: { department: 'same', seniority: 'senior' },
+        waitFor: 'completion',
+      },
+      {
+        id: 'schedule_meetings',
+        action: 'book_meetings',
+        meetings: ['it_setup', 'hr_orientation', 'team_intro'],
+        waitFor: 'completion',
+      },
+      {
+        id: 'send_checklist',
+        action: 'create_task_list',
+        tasks: 'onboarding_checklist',
+        assignTo: 'new_employee',
+      },
+    ],
+    errorHandling: {
+      strategy: 'continue',
+      logErrors: true,
+      notifyOnFailure: true,
+    },
+  },
+})
+```
+
+## Bot Lifecycle
+
+### 1. Define Bot
+
+```typescript
+const botDef = {
+  $type: 'Bot',
+  name: 'Invoice Bot',
+  task: 'Process invoices',
+  capabilities: ['pdf_parsing', 'data_extraction', 'validation'],
+  model: 'gpt-5-mini',
+}
+```
+
+### 2. Create Bot Instance
+
+```typescript
+const bot = await bot.create(botDef)
+```
+
+### 3. Configure Bot Behavior
+
+```typescript
+await bot.configure({
+  concurrency: 5,
+  batchSize: 100,
+  retryPolicy: { attempts: 3, backoff: 'exponential' },
+  monitoring: { logLevel: 'info', metricsEnabled: true },
+})
+```
+
+### 4. Deploy Bot
+
+```typescript
+await bot.deploy({
+  environment: 'production',
+  scaling: {
+    min: 1,
+    max: 10,
+    metric: 'queue_depth',
+    threshold: 100,
+  },
+})
+```
+
+### 5. Monitor Bot
+
+```typescript
+const status = await bot.getStatus()
+// {
+//   state: 'running',
+//   tasksProcessed: 15420,
+//   successRate: 0.987,
+//   avgProcessingTime: 234,
+//   lastError: null
+// }
+```
+
+## Architecture
+
+### Bot Core
+
+```typescript
+interface Bot {
+  $type: 'Bot'
+  $id: string
+  name: string
+  task: string
+  capabilities: BotCapability[]
+  intelligence: 'rules' | 'ai' | 'hybrid'
+  model?: string
+  triggers: Trigger[]
+  schedule?: Schedule
+  state: BotState
+}
+```
+
+### Execution Engine
+
+```typescript
+interface ExecutionEngine {
+  mode: 'sync' | 'async' | 'stream'
+  concurrency: number
+  batchSize: number
+  timeout: number
+  retryPolicy: RetryPolicy
+}
+```
+
+### Integration Layer
+
+```typescript
+interface IntegrationLayer {
+  apis: APIConnection[]
+  databases: DatabaseConnection[]
+  queues: QueueConnection[]
+  webhooks: WebhookEndpoint[]
+}
+```
+
+### Monitoring System
+
+```typescript
+interface MonitoringSystem {
+  metrics: Metric[]
+  logs: LogStream
+  alerts: AlertConfig[]
+  dashboards: Dashboard[]
+}
+```
+
+## Documentation
+
+- [Getting Started](./docs/getting-started) - Setup and first bot
+- [Architecture](./docs/architecture) - Bot architecture and design
+- [Best Practices](./docs/best-practices) - Bot development best practices
+- [Troubleshooting](./docs/troubleshooting) - Common issues and solutions
+- [API Reference](./api/) - Complete API documentation
+- [Examples](./examples/) - Real-world bot examples
+
+## Examples
+
+- [Basic Usage](./examples/basic-usage) - Simple bot implementation
+- [Advanced Patterns](./examples/advanced-patterns) - Complex bot patterns
+- [Integration](./examples/integration) - System integration examples
+- [Real-World Use Case](./examples/real-world-use-case) - Production bot example
+
+## Use Cases
+
+### Customer Support Automation
+
+```typescript
+const supportBot = await bot.create({
+  name: 'Support Ticket Bot',
+  task: 'Triage support tickets',
+  workflow: ['classify_ticket', 'check_knowledge_base', 'auto_respond_or_route', 'update_crm'],
+})
+```
+
+### Data Pipeline Automation
+
+```typescript
+const pipelineBot = await bot.create({
+  name: 'Data Pipeline Bot',
+  task: 'Run ETL pipeline',
+  schedule: '$.Daily',
+  steps: ['extract', 'transform', 'validate', 'load', 'notify'],
+})
+```
+
+### Marketing Automation
+
+```typescript
+const marketingBot = await bot.create({
+  name: 'Email Campaign Bot',
+  task: 'Manage email campaigns',
+  capabilities: ['segmentation', 'personalization', 'scheduling', 'analytics'],
+})
+```
+
+## Integration with .do Platform
+
+```typescript
+import $, { bot, db, on, send, every } from 'sdk.do'
+
+// Bot with database access
+const bot = await bot.create({
+  name: 'DB Bot',
+  tools: { database: db },
+})
+
+// Bot with event handling
+await on($.Order.created, async (order) => {
+  await orderBot.execute({ input: order })
+})
+
+// Bot with scheduled tasks
+await every($.Hourly, async () => {
+  await syncBot.execute({ task: 'sync_data' })
+})
+```
+
+## Related Projects
+
+- [agents.do](https://agents.do) - Agent framework for autonomous workers
+- [worker.do](https://worker.do) - Individual worker agent management
+- [workers.do](https://workers.do) - Worker fleet orchestration
+- [sdk.do](https://sdk.do) - Core SDK with bot support
+- [workflows.do](https://workflows.do) - Workflow orchestration
+
+## License
+
+MIT (Open Source)
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

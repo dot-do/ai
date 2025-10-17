@@ -1,0 +1,760 @@
+---
+$id: https://queue.do/docs/troubleshooting
+$type: TechArticle
+title: queue.do Troubleshooting
+description: Common issues and solutions when working with queue.do task queues.
+keywords: [queue, troubleshooting, debugging, errors, performance issues]
+---
+
+# queue.do Troubleshooting
+
+Common issues and their solutions when working with queue.do.
+
+## Tasks Not Processing
+
+### Issue: Tasks stuck in pending state
+
+**Symptoms:**
+
+- Tasks enqueued but never processed
+- Pending count keeps growing
+- No errors in logs
+
+**Solutions:**
+
+1. **Check if workers are running:**
+
+```typescript
+// Ensure worker is started
+await queue.worker($.Task, handler)
+```
+
+2. **Verify task type matches:**
+
+```typescript
+// Enqueue
+await queue.enqueue($.EmailTask, data)
+
+// Worker must match exact type
+await queue.worker($.EmailTask, handler) // ✓ Correct
+await queue.worker($.Task, handler) // ✗ Wrong type
+```
+
+3. **Check worker concurrency:**
+
+```typescript
+// Increase concurrency if needed
+await queue.worker($.Task, handler, {
+  concurrency: 10, // Up from default 1
+})
+```
+
+4. **Verify Redis connection:**
+
+```bash
+# Test Redis connection
+redis-cli ping
+# Should return: PONG
+
+# Check queue keys
+redis-cli KEYS "queue:*"
+```
+
+### Issue: Worker crashes immediately
+
+**Symptoms:**
+
+- Worker starts then stops
+- Error in logs
+- Tasks never processed
+
+**Solutions:**
+
+1. **Check for handler errors:**
+
+```typescript
+await queue.worker($.Task, async (task) => {
+  try {
+    return await processTask(task)
+  } catch (error) {
+    console.error('Handler error:', error)
+    throw error
+  }
+})
+```
+
+2. **Verify async/await usage:**
+
+```typescript
+// Bad - missing await
+await queue.worker($.Task, (task) => {
+  processTask(task) // Not awaited!
+})
+
+// Good - proper async
+await queue.worker($.Task, async (task) => {
+  await processTask(task)
+})
+```
+
+3. **Check for unhandled promise rejections:**
+
+```typescript
+process.on('unhandledRejection', (error) => {
+  console.error('Unhandled rejection:', error)
+})
+```
+
+## Connection Issues
+
+### Issue: Redis connection failures
+
+**Symptoms:**
+
+- "Connection refused" errors
+- "ECONNRESET" errors
+- Intermittent task processing
+
+**Solutions:**
+
+1. **Verify Redis is running:**
+
+```bash
+# Check Redis status
+redis-cli ping
+
+# Check Redis logs
+tail -f /var/log/redis/redis-server.log
+```
+
+2. **Check connection string:**
+
+```bash
+# Correct format
+export QUEUE_REDIS_URL=redis://localhost:6379
+
+# With password
+export QUEUE_REDIS_URL=redis://:password@localhost:6379
+
+# With database
+export QUEUE_REDIS_URL=redis://localhost:6379/1
+```
+
+3. **Configure connection retry:**
+
+```typescript
+const queue = createQueue({
+  backend: 'redis',
+  redisUrl: process.env.QUEUE_REDIS_URL,
+  maxRetriesPerRequest: 3,
+  retryStrategy: (times) => {
+    return Math.min(times * 50, 2000)
+  },
+})
+```
+
+4. **Check firewall/network:**
+
+```bash
+# Test connectivity
+telnet localhost 6379
+
+# Check for firewall rules
+sudo iptables -L
+```
+
+### Issue: Database connection pool exhausted
+
+**Symptoms:**
+
+- "connection pool exhausted" errors
+- Slow task processing
+- Timeouts
+
+**Solutions:**
+
+1. **Increase pool size:**
+
+```typescript
+const db = new Pool({
+  max: 50, // Up from default 10
+  idleTimeoutMillis: 30000,
+})
+```
+
+2. **Ensure connections are released:**
+
+```typescript
+// Bad - connection leak
+await queue.worker($.Task, async (task) => {
+  const client = await pool.connect()
+  await client.query('SELECT * FROM tasks')
+  // Missing client.release()!
+})
+
+// Good - always release
+await queue.worker($.Task, async (task) => {
+  const client = await pool.connect()
+  try {
+    return await client.query('SELECT * FROM tasks')
+  } finally {
+    client.release()
+  }
+})
+```
+
+3. **Monitor pool metrics:**
+
+```typescript
+setInterval(() => {
+  console.log('Pool status:', {
+    total: pool.totalCount,
+    idle: pool.idleCount,
+    waiting: pool.waitingCount,
+  })
+}, 10000)
+```
+
+## Performance Issues
+
+### Issue: Slow task processing
+
+**Symptoms:**
+
+- High latency
+- Tasks taking too long
+- Growing queue backlog
+
+**Solutions:**
+
+1. **Increase concurrency:**
+
+```typescript
+// Process more tasks in parallel
+await queue.worker($.Task, handler, {
+  concurrency: 20, // Up from 1
+})
+```
+
+2. **Profile handler performance:**
+
+```typescript
+await queue.worker($.Task, async (task) => {
+  const start = Date.now()
+
+  const result = await processTask(task)
+
+  const duration = Date.now() - start
+  if (duration > 5000) {
+    console.warn('Slow task:', {
+      taskId: task.id,
+      duration,
+    })
+  }
+
+  return result
+})
+```
+
+3. **Add more worker instances:**
+
+```bash
+# Start multiple workers
+node worker.js & # Worker 1
+node worker.js & # Worker 2
+node worker.js & # Worker 3
+```
+
+4. **Optimize handler code:**
+
+```typescript
+// Bad - sequential processing
+await queue.worker($.Task, async (task) => {
+  await operation1()
+  await operation2()
+  await operation3()
+})
+
+// Good - parallel processing
+await queue.worker($.Task, async (task) => {
+  await Promise.all([operation1(), operation2(), operation3()])
+})
+```
+
+### Issue: High memory usage
+
+**Symptoms:**
+
+- Process memory growing
+- Out of memory errors
+- Slow garbage collection
+
+**Solutions:**
+
+1. **Limit concurrency:**
+
+```typescript
+// Reduce concurrent tasks for memory-intensive operations
+await queue.worker($.ReportTask, handler, {
+  concurrency: 2, // Low concurrency
+})
+```
+
+2. **Process in batches:**
+
+```typescript
+await queue.worker($.Task, async (task) => {
+  const { items } = task.data
+
+  // Process in smaller batches
+  for (let i = 0; i < items.length; i += 100) {
+    const batch = items.slice(i, i + 100)
+    await processBatch(batch)
+
+    // Allow GC between batches
+    if (global.gc) global.gc()
+  }
+})
+```
+
+3. **Monitor memory:**
+
+```typescript
+setInterval(() => {
+  const mem = process.memoryUsage()
+  console.log('Memory:', {
+    heapUsed: `${(mem.heapUsed / 1024 / 1024).toFixed(2)}MB`,
+    heapTotal: `${(mem.heapTotal / 1024 / 1024).toFixed(2)}MB`,
+  })
+
+  if (mem.heapUsed > 500 * 1024 * 1024) {
+    console.warn('High memory usage!')
+  }
+}, 30000)
+```
+
+4. **Use streams for large data:**
+
+```typescript
+await queue.worker($.FileProcessTask, async (task) => {
+  const { fileUrl } = task.data
+
+  // Bad - load entire file
+  const data = await fs.readFile(fileUrl)
+  await processData(data)
+
+  // Good - use streams
+  const stream = fs.createReadStream(fileUrl)
+  await processStream(stream)
+})
+```
+
+## Retry Issues
+
+### Issue: Tasks retrying too many times
+
+**Symptoms:**
+
+- Same task failing repeatedly
+- Dead letter queue filling up
+- Wasted resources
+
+**Solutions:**
+
+1. **Check error type:**
+
+```typescript
+await queue.worker($.Task, async (task) => {
+  try {
+    return await processTask(task)
+  } catch (error) {
+    // Don't retry non-transient errors
+    if (error instanceof ValidationError) {
+      task.retries = 0 // Stop retrying
+    }
+    throw error
+  }
+})
+```
+
+2. **Adjust retry configuration:**
+
+```typescript
+// Too aggressive
+await queue.enqueue($.Task, data, {
+  retries: 10, // Too many
+  retryDelay: 100, // Too fast
+})
+
+// Better
+await queue.enqueue($.Task, data, {
+  retries: 3,
+  retryDelay: 1000,
+  retryBackoff: 'exponential',
+})
+```
+
+3. **Add circuit breaker:**
+
+```typescript
+const breaker = new CircuitBreaker(processTask, {
+  timeout: 10000,
+  errorThresholdPercentage: 50,
+  resetTimeout: 30000,
+})
+
+await queue.worker($.Task, async (task) => {
+  try {
+    return await breaker.fire(task)
+  } catch (error) {
+    if (breaker.opened) {
+      // Stop retrying when circuit open
+      task.retries = 0
+    }
+    throw error
+  }
+})
+```
+
+### Issue: Tasks not retrying
+
+**Symptoms:**
+
+- Tasks fail once and stop
+- No retry attempts
+- Immediately moved to dead letter queue
+
+**Solutions:**
+
+1. **Verify retry configuration:**
+
+```typescript
+// Check retries are configured
+await queue.enqueue($.Task, data, {
+  retries: 3, // Must be > 0
+})
+```
+
+2. **Check worker retry settings:**
+
+```typescript
+await queue.worker($.Task, handler, {
+  retries: 3, // Worker-level retries
+  onRetry: (task, attempt, error) => {
+    console.log(`Retry ${attempt}:`, error.message)
+  },
+})
+```
+
+3. **Ensure errors are thrown:**
+
+```typescript
+// Bad - error swallowed
+await queue.worker($.Task, async (task) => {
+  try {
+    await processTask(task)
+  } catch (error) {
+    console.log(error)
+    return { error } // Treated as success!
+  }
+})
+
+// Good - error propagated
+await queue.worker($.Task, async (task) => {
+  try {
+    return await processTask(task)
+  } catch (error) {
+    console.error(error)
+    throw error // Will trigger retry
+  }
+})
+```
+
+## Data Issues
+
+### Issue: Task data corruption
+
+**Symptoms:**
+
+- Unexpected data in tasks
+- JSON parse errors
+- Missing fields
+
+**Solutions:**
+
+1. **Validate task data:**
+
+```typescript
+import { z } from 'zod'
+
+const EmailTaskSchema = z.object({
+  to: z.string().email(),
+  subject: z.string(),
+  body: z.string(),
+})
+
+await queue.worker($.EmailTask, async (task) => {
+  // Validate before processing
+  const data = EmailTaskSchema.parse(task.data)
+  return await sendEmail(data)
+})
+```
+
+2. **Handle serialization:**
+
+```typescript
+// Bad - Date not serialized
+await queue.enqueue($.Task, {
+  date: new Date(), // Becomes string!
+})
+
+// Good - explicit serialization
+await queue.enqueue($.Task, {
+  date: new Date().toISOString(),
+})
+
+// Handle in worker
+await queue.worker($.Task, async (task) => {
+  const date = new Date(task.data.date)
+  return await processTask(date)
+})
+```
+
+3. **Version task schemas:**
+
+```typescript
+await queue.enqueue($.Task, {
+  version: 2,
+  data: {
+    /* new format */
+  },
+})
+
+await queue.worker($.Task, async (task) => {
+  switch (task.data.version) {
+    case 1:
+      return await processV1(task.data)
+    case 2:
+      return await processV2(task.data)
+    default:
+      throw new Error(`Unknown version: ${task.data.version}`)
+  }
+})
+```
+
+### Issue: Large task payloads
+
+**Symptoms:**
+
+- Redis OOM errors
+- Slow enqueue/dequeue
+- Network timeouts
+
+**Solutions:**
+
+1. **Store references instead:**
+
+```typescript
+// Bad - large data in task
+await queue.enqueue($.Task, {
+  imageData: base64Image, // 10MB payload
+  document: largeObject,
+})
+
+// Good - reference external storage
+const imageUrl = await uploadToS3(imageData)
+const docId = await saveToDatabase(document)
+
+await queue.enqueue($.Task, {
+  imageUrl,
+  docId,
+})
+```
+
+2. **Set payload size limits:**
+
+```typescript
+async function enqueueWithLimit(type, data, options) {
+  const size = JSON.stringify(data).length
+
+  if (size > 1024 * 1024) {
+    // 1MB limit
+    throw new Error('Task payload too large')
+  }
+
+  return await queue.enqueue(type, data, options)
+}
+```
+
+## Monitoring Issues
+
+### Issue: Missing metrics
+
+**Symptoms:**
+
+- No visibility into queue health
+- Can't diagnose issues
+- No alerting
+
+**Solutions:**
+
+1. **Add instrumentation:**
+
+```typescript
+import { metrics } from './monitoring'
+
+await queue.worker($.Task, async (task) => {
+  const start = Date.now()
+
+  try {
+    const result = await processTask(task)
+
+    metrics.increment('queue.task.success', {
+      type: task.$type,
+    })
+
+    metrics.histogram('queue.task.duration', Date.now() - start)
+
+    return result
+  } catch (error) {
+    metrics.increment('queue.task.error', {
+      type: task.$type,
+      error: error.constructor.name,
+    })
+
+    throw error
+  }
+})
+```
+
+2. **Export queue metrics:**
+
+```typescript
+// Prometheus metrics endpoint
+app.get('/metrics', async (req, res) => {
+  const queueMetrics = await queue.metrics()
+
+  res.set('Content-Type', 'text/plain')
+  res.send(`
+# HELP queue_pending_tasks Number of pending tasks
+# TYPE queue_pending_tasks gauge
+queue_pending_tasks ${queueMetrics.pending}
+
+# HELP queue_processing_tasks Number of processing tasks
+# TYPE queue_processing_tasks gauge
+queue_processing_tasks ${queueMetrics.processing}
+
+# HELP queue_failed_tasks Number of failed tasks
+# TYPE queue_failed_tasks gauge
+queue_failed_tasks ${queueMetrics.failed}
+  `)
+})
+```
+
+3. **Set up alerts:**
+
+```typescript
+every('*/5 * * * *', async () => {
+  const metrics = await queue.metrics()
+
+  if (metrics.pending > 10000) {
+    await alertOps({
+      severity: 'warning',
+      title: 'High Queue Backlog',
+      message: `${metrics.pending} pending tasks`,
+    })
+  }
+
+  if (metrics.errorRate > 0.1) {
+    await alertOps({
+      severity: 'critical',
+      title: 'High Error Rate',
+      message: `${(metrics.errorRate * 100).toFixed(1)}% errors`,
+    })
+  }
+})
+```
+
+## Debugging Tips
+
+### Enable Debug Logging
+
+```bash
+# Enable debug logs
+export DEBUG=queue:*
+
+# Or in code
+import debug from 'debug'
+const log = debug('queue:worker')
+
+await queue.worker($.Task, async (task) => {
+  log('Processing task:', task.id)
+  const result = await processTask(task)
+  log('Task completed:', task.id, result)
+  return result
+})
+```
+
+### Inspect Queue State
+
+```typescript
+// List tasks
+const pending = await queue.list({ state: 'pending' })
+const processing = await queue.list({ state: 'processing' })
+const failed = await queue.list({ state: 'failed' })
+
+console.log('Queue state:', {
+  pending: pending.length,
+  processing: processing.length,
+  failed: failed.length,
+})
+
+// Inspect specific task
+const task = await queue.get(taskId)
+console.log('Task details:', {
+  id: task.id,
+  state: task.state,
+  attempts: task.attempts,
+  error: task.error,
+})
+```
+
+### Monitor Redis
+
+```bash
+# Monitor Redis commands
+redis-cli MONITOR
+
+# Check memory usage
+redis-cli INFO memory
+
+# List queue keys
+redis-cli KEYS "queue:*"
+
+# Get queue length
+redis-cli LLEN queue:pending
+```
+
+## Getting Help
+
+If you're still experiencing issues:
+
+1. Check [GitHub Issues](https://github.com/dot-do/ai/issues)
+2. Review [Documentation](https://queue.do)
+3. Ask in [Discussions](https://github.com/dot-do/ai/discussions)
+4. Review [Best Practices](./best-practices)
+
+When reporting issues, include:
+
+- queue.do version
+- Environment (Node.js version, Redis version)
+- Queue configuration
+- Error messages and stack traces
+- Steps to reproduce
+
+## Related
+
+- [Getting Started](./getting-started)
+- [Architecture](./architecture)
+- [Best Practices](./best-practices)
+- [API Reference](../api/)

@@ -1,0 +1,632 @@
+---
+$id: https://integrations.do/intercom
+$type: Integration
+name: Intercom
+service: intercom
+description: Customer messaging platform for sales, marketing, and support
+category: communication
+sdkBased: true
+sdkPackage: '@intercom/intercom-node'
+sdkVersion: ^3.0.0
+sdkImport: Client
+
+auth:
+  type: api-key
+  location: header
+  headerName: Authorization
+  scheme: Bearer
+
+resources:
+  - name: Contact
+    plural: Contacts
+    sdkPath: contacts
+    description: Manage customer contacts
+    operations:
+      - name: create
+        method: create
+        params:
+          - name: email
+            type: string
+            required: false
+            description: Contact email
+          - name: phone
+            type: string
+            required: false
+            description: Contact phone number
+          - name: name
+            type: string
+            required: false
+            description: Contact name
+          - name: custom_attributes
+            type: object
+            required: false
+            description: Custom contact attributes
+        returns: Contact
+
+      - name: get
+        method: find
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Contact ID
+        returns: Contact
+
+      - name: update
+        method: update
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Contact ID
+          - name: email
+            type: string
+            required: false
+            description: Updated email
+          - name: name
+            type: string
+            required: false
+            description: Updated name
+          - name: custom_attributes
+            type: object
+            required: false
+            description: Updated custom attributes
+        returns: Contact
+
+      - name: delete
+        method: delete
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Contact ID
+        returns: boolean
+
+      - name: list
+        method: list
+        params:
+          - name: per_page
+            type: number
+            required: false
+            description: Results per page
+        returns: Contact[]
+        pagination:
+          type: cursor
+          cursorField: starting_after
+          limitField: per_page
+          defaultLimit: 50
+
+  - name: Conversation
+    plural: Conversations
+    sdkPath: conversations
+    description: Manage customer conversations
+    operations:
+      - name: create
+        method: create
+        params:
+          - name: from
+            type: object
+            required: true
+            description: From user/contact
+          - name: body
+            type: string
+            required: true
+            description: Message body
+        returns: Conversation
+
+      - name: get
+        method: find
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Conversation ID
+        returns: Conversation
+
+      - name: reply
+        method: reply
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Conversation ID
+          - name: message_type
+            type: string
+            required: true
+            description: Message type (comment, note)
+          - name: body
+            type: string
+            required: true
+            description: Reply body
+        returns: Conversation
+
+      - name: list
+        method: list
+        params:
+          - name: per_page
+            type: number
+            required: false
+            description: Results per page
+        returns: Conversation[]
+        pagination:
+          type: cursor
+          cursorField: starting_after
+          limitField: per_page
+          defaultLimit: 50
+
+  - name: Message
+    plural: Messages
+    sdkPath: messages
+    description: Send messages to contacts
+    operations:
+      - name: create
+        method: create
+        params:
+          - name: message_type
+            type: string
+            required: true
+            description: Message type (in_app, email)
+          - name: from
+            type: object
+            required: true
+            description: From admin
+          - name: to
+            type: object
+            required: true
+            description: To user/contact
+          - name: body
+            type: string
+            required: true
+            description: Message body
+          - name: subject
+            type: string
+            required: false
+            description: Email subject (for email messages)
+        returns: Message
+
+  - name: Tag
+    plural: Tags
+    sdkPath: tags
+    description: Manage conversation and contact tags
+    operations:
+      - name: create
+        method: create
+        params:
+          - name: name
+            type: string
+            required: true
+            description: Tag name
+        returns: Tag
+
+      - name: get
+        method: find
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Tag ID
+        returns: Tag
+
+      - name: list
+        method: list
+        params: []
+        returns: Tag[]
+
+      - name: delete
+        method: delete
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Tag ID
+        returns: boolean
+
+  - name: Article
+    plural: Articles
+    sdkPath: articles
+    description: Manage help center articles
+    operations:
+      - name: create
+        method: create
+        params:
+          - name: title
+            type: string
+            required: true
+            description: Article title
+          - name: body
+            type: string
+            required: true
+            description: Article body (HTML)
+          - name: author_id
+            type: string
+            required: true
+            description: Author admin ID
+        returns: Article
+
+      - name: get
+        method: find
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Article ID
+        returns: Article
+
+      - name: update
+        method: update
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Article ID
+          - name: title
+            type: string
+            required: false
+            description: Updated title
+          - name: body
+            type: string
+            required: false
+            description: Updated body
+        returns: Article
+
+      - name: list
+        method: list
+        params:
+          - name: per_page
+            type: number
+            required: false
+            description: Results per page
+        returns: Article[]
+
+webhooks:
+  enabled: true
+  signatureHeader: X-Hub-Signature
+  signatureAlgorithm: sha256
+  verificationMethod: signature
+  events:
+    - name: conversation.created
+      type: conversation.created
+      description: New conversation created
+    - name: conversation.admin.replied
+      type: conversation.admin.replied
+      description: Admin replied to conversation
+    - name: conversation.user.replied
+      type: conversation.user.replied
+      description: User replied to conversation
+    - name: conversation.closed
+      type: conversation.closed
+      description: Conversation was closed
+    - name: conversation.opened
+      type: conversation.opened
+      description: Conversation was opened
+    - name: contact.created
+      type: contact.created
+      description: New contact created
+    - name: contact.updated
+      type: contact.updated
+      description: Contact was updated
+    - name: contact.deleted
+      type: contact.deleted
+      description: Contact was deleted
+    - name: contact.tag.created
+      type: contact.tag.created
+      description: Tag added to contact
+    - name: contact.tag.deleted
+      type: contact.tag.deleted
+      description: Tag removed from contact
+
+errors:
+  mapping:
+    - code: unauthorized
+      type: authentication
+      statusCode: 401
+      message: Unauthorized access
+      retryable: false
+    - code: forbidden
+      type: authorization
+      statusCode: 403
+      message: Insufficient permissions
+      retryable: false
+    - code: not_found
+      type: not_found
+      statusCode: 404
+      message: Resource not found
+      retryable: false
+    - code: rate_limit_exceeded
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+    - code: service_unavailable
+      type: server
+      statusCode: 503
+      message: Service temporarily unavailable
+      retryable: true
+  retryable: [rate_limit_exceeded, service_unavailable, 429, 503]
+  nonRetryable: [unauthorized, forbidden, not_found, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: true
+  scenarios:
+    - name: Contact Management
+      description: Test contact CRUD operations
+      steps:
+        - action: create
+          resource: Contact
+        - action: retrieve
+          resource: Contact
+        - action: update
+          resource: Contact
+        - action: list
+          resource: Contact
+        - action: delete
+          resource: Contact
+
+    - name: Conversation Handling
+      description: Test conversation operations
+      steps:
+        - action: create
+          resource: Conversation
+        - action: retrieve
+          resource: Conversation
+        - action: list
+          resource: Conversation
+
+    - name: Messaging
+      description: Test message sending
+      steps:
+        - action: create
+          resource: Message
+
+    - name: Tag Management
+      description: Test tag CRUD operations
+      steps:
+        - action: create
+          resource: Tag
+        - action: retrieve
+          resource: Tag
+        - action: list
+          resource: Tag
+        - action: delete
+          resource: Tag
+
+    - name: Article Management
+      description: Test help article operations
+      steps:
+        - action: create
+          resource: Article
+        - action: retrieve
+          resource: Article
+        - action: update
+          resource: Article
+        - action: list
+          resource: Article
+
+    - name: Webhook Verification
+      description: Test webhook signature verification
+      steps:
+        - action: assert
+          expects:
+            status: 200
+
+docs:
+  homepage: https://www.intercom.com
+  apiDocs: https://developers.intercom.com/docs/references/rest-api/
+  sdkDocs: https://github.com/intercom/intercom-node
+  guides:
+    quickstart: https://developers.intercom.com/docs/build-an-integration/learn-more/quickstart/
+    webhooks: https://developers.intercom.com/docs/references/webhooks/
+    authentication: https://developers.intercom.com/docs/build-an-integration/learn-more/authentication/
+---
+
+# Intercom Integration
+
+Intercom is a customer messaging platform that enables businesses to communicate with customers through live chat, email, and in-app messages.
+
+## Features
+
+- **Contacts**: Manage customer contacts and profiles
+- **Conversations**: Handle customer conversations and replies
+- **Messages**: Send targeted messages to customers
+- **Tags**: Organize contacts and conversations with tags
+- **Articles**: Manage help center articles
+- **Webhooks**: Real-time event notifications
+- **API Key Auth**: Simple authentication
+
+## Quick Start
+
+```typescript
+import { IntercomClient } from '@dotdo/sdk.do/integrations/intercom'
+
+const intercom = new IntercomClient({
+  apiKey: process.env.INTERCOM_ACCESS_TOKEN,
+})
+
+// Create a contact
+const contact = await intercom.contact.create({
+  email: 'user@example.com',
+  name: 'John Doe',
+})
+
+// Send a message
+const message = await intercom.message.create({
+  message_type: 'in_app',
+  from: { type: 'admin', id: 'admin-id' },
+  to: { type: 'user', id: contact.id },
+  body: 'Welcome to our platform!',
+})
+```
+
+## Authentication
+
+Intercom uses API token authentication:
+
+```bash
+export INTERCOM_ACCESS_TOKEN=your_access_token
+```
+
+## Resources
+
+### Contacts
+
+Manage customer contacts:
+
+```typescript
+// Create contact
+const contact = await intercom.contact.create({
+  email: 'user@example.com',
+  name: 'Jane Smith',
+  custom_attributes: {
+    plan: 'pro',
+    signup_date: '2025-10-12',
+  },
+})
+
+// Update contact
+await intercom.contact.update({
+  id: contact.id,
+  custom_attributes: {
+    plan: 'enterprise',
+  },
+})
+
+// List contacts
+const contacts = await intercom.contact.list({ per_page: 50 })
+```
+
+### Conversations
+
+Handle customer conversations:
+
+```typescript
+// Create conversation
+const conversation = await intercom.conversation.create({
+  from: { type: 'user', id: 'user-id' },
+  body: 'I need help with...',
+})
+
+// Reply to conversation
+await intercom.conversation.reply({
+  id: conversation.id,
+  message_type: 'comment',
+  body: 'Happy to help!',
+})
+
+// List conversations
+const conversations = await intercom.conversation.list()
+```
+
+### Messages
+
+Send messages to customers:
+
+```typescript
+// Send in-app message
+const message = await intercom.message.create({
+  message_type: 'in_app',
+  from: { type: 'admin', id: 'admin-id' },
+  to: { type: 'user', email: 'user@example.com' },
+  body: 'Check out our new features!',
+})
+
+// Send email
+const email = await intercom.message.create({
+  message_type: 'email',
+  from: { type: 'admin', id: 'admin-id' },
+  to: { type: 'user', email: 'user@example.com' },
+  subject: 'Important Update',
+  body: 'We have important news...',
+})
+```
+
+### Tags
+
+Organize with tags:
+
+```typescript
+// Create tag
+const tag = await intercom.tag.create({ name: 'vip' })
+
+// List tags
+const tags = await intercom.tag.list()
+
+// Delete tag
+await intercom.tag.delete({ id: tag.id })
+```
+
+### Articles
+
+Manage help center articles:
+
+```typescript
+// Create article
+const article = await intercom.article.create({
+  title: 'Getting Started Guide',
+  body: '<h1>Welcome</h1><p>Getting started is easy...</p>',
+  author_id: 'admin-id',
+})
+
+// Update article
+await intercom.article.update({
+  id: article.id,
+  body: '<h1>Updated Guide</h1>',
+})
+
+// List articles
+const articles = await intercom.article.list()
+```
+
+## Webhooks
+
+Intercom supports webhooks for real-time notifications:
+
+```typescript
+import { IntercomWebhookHandler, WebhookEventRouter } from '@dotdo/sdk.do/integrations/intercom'
+
+const handler = new IntercomWebhookHandler(process.env.INTERCOM_WEBHOOK_SECRET)
+const event = await handler.handleRequest(request)
+
+const router = new WebhookEventRouter()
+router.onConversationCreated(async (event) => {
+  console.log('New conversation:', event.data)
+})
+
+await router.route(event)
+```
+
+## Error Handling
+
+```typescript
+import { IntercomError } from '@dotdo/sdk.do/integrations/intercom'
+
+try {
+  await intercom.contact.create({
+    /* ... */
+  })
+} catch (error) {
+  if (error instanceof IntercomError) {
+    console.error('Intercom Error:', error.code, error.message)
+    if (error.isRetriable()) {
+      // Retry logic
+    }
+  }
+}
+```
+
+## Best Practices
+
+1. **Rate Limits**: Intercom enforces rate limits - implement exponential backoff
+2. **Contact Deduplication**: Use email or external_id to avoid duplicate contacts
+3. **Custom Attributes**: Use custom attributes for flexible data storage
+4. **Webhooks**: Verify webhook signatures for security
+5. **Pagination**: Use cursor-based pagination for large datasets
+6. **Message Types**: Choose appropriate message type (in_app vs email)
+
+## API Reference
+
+Full API documentation: https://developers.intercom.com/docs/references/rest-api/
+
+## License
+
+MIT

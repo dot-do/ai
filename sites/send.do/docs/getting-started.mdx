@@ -1,0 +1,674 @@
+---
+$id: https://send.do/docs/getting-started
+$type: TechArticle
+title: Getting Started with send
+description: Install and configure event publishing with the send SDK function
+keywords: [getting-started, installation, setup, quickstart, send, events]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Getting Started with `send`
+
+Learn how to install and use the `send` function to publish business events in your Business-as-Code application.
+
+## Installation
+
+Install the `.do` SDK via npm or pnpm:
+
+```bash
+# Using pnpm (recommended)
+pnpm add sdk.do
+
+# Using npm
+npm install sdk.do
+
+# Using yarn
+yarn add sdk.do
+```
+
+## Basic Usage
+
+Import and use the `send` function to publish events:
+
+```typescript
+import { send } from 'sdk.do'
+
+// Publish a simple event
+await send('Order.created', {
+  id: '12345',
+  customer: 'acme-corp',
+  total: 1500.0,
+})
+```
+
+## Your First Event
+
+Let's create a simple event publishing flow:
+
+### 1. Define Your Event Data
+
+```typescript
+// Define the data structure for your event
+interface OrderCreatedData {
+  id: string
+  customer: {
+    id: string
+    name: string
+    email: string
+  }
+  items: Array<{
+    product: string
+    quantity: number
+    price: number
+  }>
+  total: number
+  currency: string
+  createdAt: Date
+}
+```
+
+### 2. Publish the Event
+
+```typescript
+import { send } from 'sdk.do'
+
+async function createOrder(orderData: OrderCreatedData) {
+  // Your business logic here
+  const order = await saveOrderToDatabase(orderData)
+
+  // Publish the Order.created event
+  await send<OrderCreatedData>('Order.created', {
+    id: order.id,
+    customer: {
+      id: order.customerId,
+      name: order.customerName,
+      email: order.customerEmail,
+    },
+    items: order.items,
+    total: order.total,
+    currency: order.currency,
+    createdAt: new Date(),
+  })
+
+  return order
+}
+```
+
+### 3. Add Event Metadata
+
+```typescript
+await send('Order.created', orderData, {
+  timestamp: new Date(),
+  source: 'order-service',
+  correlationId: requestId,
+  userId: currentUser.id,
+})
+```
+
+## Event Naming
+
+Events follow the `Object.Action` pattern:
+
+- **Object**: The business entity (Order, Payment, User, Product)
+- **Action**: Past tense verb (created, updated, deleted, shipped)
+
+```typescript
+// Lifecycle events
+await send('Order.created', orderData)
+await send('Order.updated', orderData)
+await send('Order.deleted', { id: orderId })
+
+// State change events
+await send('Order.validated', orderData)
+await send('Order.shipped', orderData)
+await send('Order.delivered', orderData)
+
+// Business action events
+await send('Payment.requested', paymentData)
+await send('Payment.completed', paymentData)
+await send('Inventory.reserved', reservationData)
+```
+
+See [Event Naming](./event-naming) for complete naming conventions.
+
+## Publishing Modes
+
+### Wait for Acknowledgment
+
+Wait for the event to be published before continuing:
+
+```typescript
+// Wait for publish to complete
+await send('Order.created', orderData)
+
+// Now safe to return response
+return { success: true, orderId: orderData.id }
+```
+
+### Fire and Forget
+
+Publish asynchronously without waiting:
+
+```typescript
+// Publish without waiting
+send('Metrics.updated', metricsData)
+
+// Continue immediately
+return response
+```
+
+## Complete Example
+
+Here's a complete example of an order creation flow with event publishing:
+
+```typescript
+import { send } from 'sdk.do'
+
+interface CreateOrderRequest {
+  customerId: string
+  items: Array<{
+    productId: string
+    quantity: number
+  }>
+}
+
+interface OrderCreatedEvent {
+  id: string
+  customer: {
+    id: string
+    name: string
+    email: string
+  }
+  items: Array<{
+    product: string
+    quantity: number
+    price: number
+    total: number
+  }>
+  subtotal: number
+  tax: number
+  total: number
+  currency: string
+  createdAt: Date
+}
+
+async function createOrder(request: CreateOrderRequest): Promise<string> {
+  // 1. Fetch customer data
+  const customer = await db.get($.Customer, request.customerId)
+
+  // 2. Fetch product data and calculate totals
+  const items = await Promise.all(
+    request.items.map(async (item) => {
+      const product = await db.get($.Product, item.productId)
+      return {
+        product: product.id,
+        quantity: item.quantity,
+        price: product.price,
+        total: product.price * item.quantity,
+      }
+    })
+  )
+
+  const subtotal = items.reduce((sum, item) => sum + item.total, 0)
+  const tax = subtotal * 0.1 // 10% tax
+  const total = subtotal + tax
+
+  // 3. Create order in database
+  const orderId = generateOrderId()
+  await db.create($.Order, {
+    id: orderId,
+    customerId: customer.id,
+    items,
+    subtotal,
+    tax,
+    total,
+    currency: 'USD',
+    status: 'created',
+    createdAt: new Date(),
+  })
+
+  // 4. Publish Order.created event
+  await send<OrderCreatedEvent>(
+    'Order.created',
+    {
+      id: orderId,
+      customer: {
+        id: customer.id,
+        name: customer.name,
+        email: customer.email,
+      },
+      items,
+      subtotal,
+      tax,
+      total,
+      currency: 'USD',
+      createdAt: new Date(),
+    },
+    {
+      timestamp: new Date(),
+      source: 'order-service',
+      userId: customer.id,
+    }
+  )
+
+  return orderId
+}
+```
+
+## Working with Event Listeners
+
+Events published with `send` are received by listeners registered with `on`:
+
+```typescript
+import { on, send } from 'sdk.do'
+
+// Register a listener
+on('Order.created', async (event) => {
+  console.log('New order:', event.data.id)
+
+  // Process the order
+  await processOrder(event.data)
+
+  // Publish follow-up event
+  await send('Order.processed', {
+    orderId: event.data.id,
+    processedAt: new Date(),
+  })
+})
+
+// Publish an event
+await send('Order.created', {
+  id: '12345',
+  customer: 'acme-corp',
+  total: 1500.0,
+})
+```
+
+## Event Data Best Practices
+
+### Include Complete Context
+
+Event data should be self-contained:
+
+```typescript
+// Good - Complete context
+await send('Order.created', {
+  id: '12345',
+  customer: {
+    id: 'cust-1',
+    name: 'Acme Corporation',
+    email: 'orders@acme.com',
+  },
+  items: [{ product: 'widget', quantity: 10, price: 99.99, total: 999.9 }],
+  subtotal: 999.9,
+  tax: 99.99,
+  total: 1099.89,
+  currency: 'USD',
+  createdAt: new Date(),
+})
+
+// Bad - Incomplete context
+await send('Order.created', {
+  id: '12345',
+})
+```
+
+### Use Immutable Data
+
+Event data should be immutable snapshots:
+
+```typescript
+// Good - Immutable snapshot
+const orderSnapshot = JSON.parse(JSON.stringify(order))
+await send('Order.created', orderSnapshot)
+
+// Bad - Mutable reference
+await send('Order.created', order) // order may change later
+```
+
+### Type Your Events
+
+Use TypeScript interfaces for type safety:
+
+```typescript
+interface OrderCreatedData {
+  id: string
+  customer: {
+    id: string
+    name: string
+  }
+  items: Array<{
+    product: string
+    quantity: number
+    price: number
+  }>
+  total: number
+}
+
+// TypeScript will validate the structure
+await send<OrderCreatedData>('Order.created', {
+  id: '12345',
+  customer: { id: 'cust-1', name: 'Acme' },
+  items: [{ product: 'widget', quantity: 10, price: 99.99 }],
+  total: 999.9,
+})
+```
+
+## Event Metadata
+
+Include metadata for tracing, debugging, and correlation:
+
+### Timestamp
+
+Always include when the event occurred:
+
+```typescript
+await send('Order.created', orderData, {
+  timestamp: new Date(),
+})
+```
+
+### Source Service
+
+Identify where the event came from:
+
+```typescript
+await send('Order.created', orderData, {
+  source: 'order-service',
+  sourceVersion: '2.1.0',
+})
+```
+
+### Correlation ID
+
+Link related events across services:
+
+```typescript
+const correlationId = generateCorrelationId()
+
+await send('Order.created', orderData, {
+  correlationId,
+})
+
+await send('Payment.requested', paymentData, {
+  correlationId, // Same ID links events
+})
+```
+
+### User Context
+
+Include who triggered the event:
+
+```typescript
+await send('Order.created', orderData, {
+  userId: currentUser.id,
+  userEmail: currentUser.email,
+  userRole: currentUser.role,
+})
+```
+
+## Error Handling
+
+Always handle publishing errors:
+
+```typescript
+try {
+  await send('Order.created', orderData)
+} catch (error) {
+  console.error('Failed to publish event:', error)
+
+  // Store for retry
+  await storeFailedEvent({
+    type: 'Order.created',
+    data: orderData,
+    error: error.message,
+  })
+
+  // Don't let event publishing failure break your flow
+  // The order was still created successfully
+}
+```
+
+## Integration with Database
+
+Automatically publish events on database changes:
+
+```typescript
+import { db, send } from 'sdk.do'
+
+// Configure database to auto-publish events
+db.on('create', async (entity) => {
+  await send(`${entity.$type}.created`, entity)
+})
+
+db.on('update', async (entity, changes) => {
+  await send(`${entity.$type}.updated`, {
+    ...entity,
+    changes,
+  })
+})
+
+db.on('delete', async (entity) => {
+  await send(`${entity.$type}.deleted`, {
+    id: entity.id,
+    deletedAt: new Date(),
+  })
+})
+```
+
+## Configuration
+
+### Environment Variables
+
+No configuration required! The `send` function works out of the box.
+
+For advanced use cases, configure the event bus:
+
+```typescript
+import { configureEvents } from 'sdk.do'
+
+configureEvents({
+  maxRetries: 3,
+  retryDelay: 1000,
+  persist: true,
+  storage: 'redis',
+})
+```
+
+## TypeScript Support
+
+Full TypeScript support with type inference:
+
+```typescript
+import { send } from 'sdk.do'
+import type { Event, EventMetadata } from 'sdk.do'
+
+// Typed event data
+interface OrderCreatedData {
+  id: string
+  customer: string
+  total: number
+}
+
+// Type-safe publishing
+await send<OrderCreatedData>('Order.created', {
+  id: '12345',
+  customer: 'acme',
+  total: 1500.0,
+})
+
+// Custom event types
+interface OrderCreatedEvent extends Event<OrderCreatedData> {
+  type: 'Order.created'
+}
+```
+
+## Next Steps
+
+Now that you've learned the basics, explore more advanced topics:
+
+- [Publishing Patterns](./patterns) - Advanced event publishing patterns
+- [Event Naming](./event-naming) - Complete naming conventions
+- [API Reference](../api/) - Complete API documentation
+- [Basic Publishing Example](../examples/basic-publishing) - More examples
+- [Workflow Events Example](../examples/workflow-events) - Event chains
+
+## Common Patterns
+
+### Publishing from API Endpoints
+
+```typescript
+app.post('/orders', async (req, res) => {
+  try {
+    const order = await createOrder(req.body)
+
+    // Publish event
+    await send('Order.created', order, {
+      source: 'orders-api',
+      userId: req.user.id,
+      correlationId: req.id,
+    })
+
+    res.json({ success: true, order })
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+```
+
+### Publishing from Webhooks
+
+```typescript
+app.post('/webhooks/stripe', async (req, res) => {
+  const event = req.body
+
+  // Publish Stripe webhook as internal event
+  await send(`Stripe.${event.type}`, event.data, {
+    source: 'stripe-webhook',
+    webhookId: event.id,
+    timestamp: new Date(event.created * 1000),
+  })
+
+  res.json({ received: true })
+})
+```
+
+### Publishing from Scheduled Jobs
+
+```typescript
+import { every, send } from 'sdk.do'
+
+every($.Daily, async () => {
+  const report = await generateDailyReport()
+
+  await send('Report.generated', report, {
+    source: 'scheduled-jobs',
+    timestamp: new Date(),
+  })
+})
+```
+
+## Testing
+
+### Unit Testing
+
+```typescript
+import { send } from 'sdk.do'
+import { vi } from 'vitest'
+
+// Mock send function
+vi.mock('sdk.do', () => ({
+  send: vi.fn(),
+}))
+
+test('publishes order created event', async () => {
+  await createOrder({ id: '12345' })
+
+  expect(send).toHaveBeenCalledWith(
+    'Order.created',
+    expect.objectContaining({
+      id: '12345',
+    })
+  )
+})
+```
+
+### Integration Testing
+
+```typescript
+import { on, send } from 'sdk.do'
+import { expect, test } from 'vitest'
+
+test('event flow', async () => {
+  const receivedEvents = []
+
+  on('Order.*', async (event) => {
+    receivedEvents.push(event.type)
+  })
+
+  await send('Order.created', { id: '12345' })
+  await send('Order.validated', { id: '12345' })
+
+  await delay(100) // Wait for handlers
+
+  expect(receivedEvents).toEqual(['Order.created', 'Order.validated'])
+})
+```
+
+## Troubleshooting
+
+### Events Not Being Received
+
+Make sure listeners are registered before publishing:
+
+```typescript
+// Good - listener registered first
+on('Order.created', handler)
+await send('Order.created', data)
+
+// Bad - event published before listener
+await send('Order.created', data)
+on('Order.created', handler) // Too late!
+```
+
+### Type Errors
+
+Use proper TypeScript types:
+
+```typescript
+// Define your types
+interface OrderData {
+  id: string
+  total: number
+}
+
+// Use them in send
+await send<OrderData>('Order.created', {
+  id: '12345',
+  total: 1500.0,
+})
+```
+
+### Performance Issues
+
+Use fire-and-forget for non-critical events:
+
+```typescript
+// Non-blocking
+send('Metrics.updated', metricsData)
+return response
+
+// Blocking (only if you need confirmation)
+await send('Order.created', orderData)
+return response
+```
+
+## See Also
+
+- [Publishing Patterns](./patterns) - Advanced patterns
+- [Event Naming](./event-naming) - Naming conventions
+- [API Reference](../api/) - Complete API
+- [on.do](https://on.do) - Event listeners
+- [events.do](https://events.do) - Event system

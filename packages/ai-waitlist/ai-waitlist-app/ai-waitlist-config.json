@@ -1,0 +1,61 @@
+{
+  "aiContext": {
+    "projectName": "ai-waitlist",
+    "projectDescription": "[![npm version](https://img.shields.io/npm/v/ai-waitlist.svg)](https://www.npmjs.com/package/ai-waitlist)",
+    "features": [
+      "Generate an AI-powered landing page using content from a project's README and the `.ai` folder",
+      "Implement authentication using oauth.do",
+      "Create an onboarding flow with questions to identify product-solution fit"
+    ],
+    "benefits": ["Benefit 1", "Benefit 2", "Benefit 3"],
+    "callToAction": {
+      "text": "Join the Waitlist",
+      "link": "/waitlist"
+    },
+    "questions": [
+      "What is your primary use case?",
+      "What problems are you trying to solve?",
+      "How are you currently solving this problem?",
+      "How large is your team?",
+      "What is your timeline for implementing a solution?"
+    ],
+    "theme": "light",
+    "primaryColor": "#0070f3",
+    "secondaryColor": "#6366f1",
+    "rawReadme": "# ai-waitlist\n\n[![npm version](https://img.shields.io/npm/v/ai-waitlist.svg)](https://www.npmjs.com/package/ai-waitlist)\n[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)\n\nAI-powered landing page generator with authentication and onboarding flow for product-solution fit assessment.\n\nBuilt on the primitives.org.ai platform, this package helps you quickly create a professional landing page with waitlist functionality for your project.\n\n## Features\n\n- Generate an AI-powered landing page using content from a project's README and the `.ai` folder\n- Implement authentication using oauth.do\n- Create an onboarding flow with questions to identify product-solution fit\n\n## Installation\n\n```bash\nnpm install ai-waitlist\n```\n\n## Usage\n\n### CLI\n\n```bash\nnpx ai-waitlist\n```\n\nThis will:\n1. Parse your project's README.md and .ai folder\n2. Generate an AI-powered landing page\n3. Set up authentication using oauth.do\n4. Create an onboarding flow questionnaire\n\n### API\n\n```typescript\nimport { generateLandingPage, setupAuth, createOnboardingFlow } from 'ai-waitlist'\n\n// Generate a landing page\nconst landingPage = await generateLandingPage({\n  projectDir: process.cwd(),\n  options: {\n    theme: 'light',\n    primaryColor: '#0070f3',\n    secondaryColor: '#6366f1'\n  }\n})\n\n// Set up authentication\nconst authConfig = setupAuth({\n  providers: ['github', 'google'],\n  callbackUrl: '/onboarding'\n})\n\n// Create onboarding flow\nconst onboardingFlow = createOnboardingFlow({\n  questions: [\n    { id: 'useCase', question: 'What is your primary use case?' },\n    { id: 'painPoints', question: 'What problems are you trying to solve?' }\n  ],\n  onComplete: (answers) => {\n    // Process answers\n    console.log('Onboarding completed:', answers)\n  }\n})\n```\n\n#### Using Components Directly\n\n```tsx\nimport { LandingPage, Auth, Onboarding } from 'ai-waitlist/components'\nimport { useAuth } from 'ai-waitlist/auth'\n\n// In your React component\nfunction MyWaitlistPage() {\n  const { user, isAuthenticated, signIn } = useAuth()\n  \n  return (\n    <div>\n      {!isAuthenticated ? (\n        <>\n          <LandingPage \n            aiContext={myContext}\n            showAuthButton={true}\n            authButtonText='Join Waitlist'\n            authButtonLink='/auth'\n          />\n          <Auth providers={['github', 'google']} />\n        </>\n      ) : (\n        <Onboarding \n          user={user}\n          onComplete={(answers) => console.log(answers)}\n        />\n      )}\n    </div>\n  )\n}\n```\n\n## Configuration\n\n### .ai Folder Structure\n\nYou can customize the landing page by creating a `.ai` folder in your project root with the following files:\n\n- `features.md` - List of features (one per line, starting with - or *)\n- `benefits.md` - List of benefits (one per line, starting with - or *)\n- `cta.md` - Call to action text or JSON with `{ \"text\": \"Join Waitlist\", \"link\": \"/auth\" }`\n- `questions.md` - Onboarding questions (one per line, starting with - or *)\n- `config.json` - Configuration options for theme, colors, and content priority\n\nExample `config.json`:\n```json\n{\n  \"theme\": \"light\",\n  \"primaryColor\": \"#0070f3\",\n  \"secondaryColor\": \"#6366f1\",\n  \"prioritizeAiContent\": true\n}\n```\n\nIf the `.ai` folder doesn't exist, a default one will be created with sample content.\n\n### Custom Themes\n\nYou can customize the theme by passing options to the `generateLandingPage` function:\n\n```typescript\nconst landingPage = await generateLandingPage({\n  projectDir: process.cwd(),\n  options: {\n    theme: 'dark',\n    primaryColor: '#6366f1',\n    secondaryColor: '#8b5cf6'\n  }\n})\n```\n\n## Advanced Usage\n\n### Custom Onboarding Questions\n\nYou can customize the onboarding questions by creating a `.ai/questions.md` file or by passing them directly to the `createOnboardingFlow` function:\n\n```typescript\nconst customQuestions = [\n  { \n    id: 'useCase', \n    question: 'What is your primary use case?',\n    type: 'text',\n    required: true\n  },\n  { \n    id: 'painPoints', \n    question: 'What problems are you trying to solve?',\n    type: 'text',\n    required: true\n  },\n  { \n    id: 'teamSize', \n    question: 'How large is your team?',\n    type: 'select',\n    options: ['1-5', '6-20', '21-100', '100+'],\n    required: true\n  }\n]\n\nconst onboardingFlow = createOnboardingFlow({ questions: customQuestions })\n```\n\n### Integrating with Existing Next.js Apps\n\nTo integrate with an existing Next.js application:\n\n1. Install the package: `npm install ai-waitlist`\n2. Add the auth API routes to your Next.js app:\n\n```typescript\n// pages/api/auth/[...auth].ts\nimport { authHandler } from 'ai-waitlist/auth'\n\nexport default authHandler\n```\n\n3. Add the onboarding API route:\n\n```typescript\n// pages/api/onboarding/submit.ts\nimport { onboardingHandler } from 'ai-waitlist/onboarding'\n\nexport default onboardingHandler\n```\n\n4. Import and use the components in your pages:\n\n```tsx\n// pages/index.tsx\nimport { LandingPage } from 'ai-waitlist/components'\nimport { useProjectContext } from 'ai-waitlist/context'\n\nexport default function Home() {\n  const { aiContext } = useProjectContext()\n  \n  return (\n    <LandingPage \n      aiContext={aiContext}\n      showAuthButton={true}\n    />\n  )\n}\n```\n\n## Dependencies\n\n- [ai-props](https://github.com/drivly/primitives.org.ai/tree/main/packages/ai-props) - AI-powered props for React components\n- [better-auth](https://github.com/drivly/oauth.do) - Authentication library from oauth.do\n- [mdxe](https://github.com/drivly/mdx) - Zero-Config Executable MDX\n\n## About\n\nPart of the [.do](https://dotdo.ai) platform by Drivly.\n",
+    "rawAiContent": {}
+  },
+  "authConfig": {
+    "providers": ["github", "google"],
+    "callbackUrl": "/onboarding",
+    "routes": {
+      "signIn": "/auth",
+      "signOut": "/auth/signout",
+      "callback": "/api/auth/callback",
+      "error": "/auth/error"
+    }
+  },
+  "onboardingFlow": {
+    "questions": [
+      {
+        "id": "useCase",
+        "question": "What is your primary use case?",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "painPoints",
+        "question": "What problems are you trying to solve?",
+        "type": "text",
+        "required": true
+      },
+      {
+        "id": "teamSize",
+        "question": "How large is your team?",
+        "type": "select",
+        "options": ["1-5", "6-20", "21-100", "100+"],
+        "required": true
+      }
+    ]
+  }
+}

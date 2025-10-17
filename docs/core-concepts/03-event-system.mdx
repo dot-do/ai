@@ -1,0 +1,456 @@
+---
+$id: /docs/core-concepts/event-system
+$type: Documentation
+title: Event System - Build Reactive Applications
+description: Learn how to use on, send, and every for event-driven architecture
+keywords: [events, reactive, pub-sub, webhooks, workflows]
+author: .do Team
+lastUpdated: 2025-10-13
+readingTime: 10 min
+---
+
+# Event System
+
+The `.do` platform provides a powerful event system for building reactive, event-driven applications. Use semantic events to decouple components, trigger workflows, and integrate with external systems.
+
+## Core Concepts
+
+### Events as Semantic Actions
+
+Events follow the `$.Subject.verb` pattern:
+
+```typescript
+import { on, send, $ } from 'sdk.do'
+
+// Semantic event names
+$.Order.created
+$.Customer.upgraded
+$.Payment.failed
+$.Inventory.depleted
+$.Report.generated
+```
+
+### Event Listeners with `on`
+
+Subscribe to events and react automatically:
+
+```typescript
+// Listen to order creation
+on($.Order.created, async (event) => {
+  console.log('New order:', event.data)
+
+  // Trigger fulfillment
+  await send($.Fulfillment.requested, {
+    orderId: event.data.id,
+    priority: event.data.value > 1000 ? 'high' : 'normal',
+  })
+})
+
+// Listen to customer upgrades
+on($.Customer.upgraded, async (event) => {
+  // Send welcome email
+  await $.Email.send({
+    to: event.data.email,
+    template: 'premium-welcome',
+    data: event.data,
+  })
+
+  // Update analytics
+  await $.Metric.increment('upgrades.total')
+})
+```
+
+### Event Publishing with `send`
+
+Publish events to trigger listeners:
+
+```typescript
+// Create an order and publish event
+const order = await db.create('Order', {
+  customer: customerId,
+  items: [...],
+  total: 299.97,
+})
+
+// Publish the event
+await send($.Order.created, {
+  id: order.$id,
+  customer: customerId,
+  value: order.total,
+  timestamp: new Date(),
+})
+```
+
+## Event Patterns
+
+### Fan-Out Pattern
+
+One event triggers multiple listeners:
+
+```typescript
+// Event: Order created
+await send($.Order.created, order)
+
+// Multiple listeners react independently:
+
+// Listener 1: Send confirmation email
+on($.Order.created, async (event) => {
+  await $.Email.send({ ... })
+})
+
+// Listener 2: Update inventory
+on($.Order.created, async (event) => {
+  await $.Inventory.decrement(event.data.items)
+})
+
+// Listener 3: Trigger analytics
+on($.Order.created, async (event) => {
+  await $.Analytics.track('order_created', event.data)
+})
+
+// Listener 4: Notify fulfillment
+on($.Order.created, async (event) => {
+  await send($.Fulfillment.requested, event.data)
+})
+```
+
+### Chain Pattern
+
+Events trigger other events in sequence:
+
+```typescript
+// Step 1: Order created
+on($.Order.created, async (event) => {
+  // Validate payment
+  const payment = await $.Payment.process(event.data)
+
+  if (payment.status === 'success') {
+    // Trigger next event
+    await send($.Payment.completed, {
+      orderId: event.data.id,
+      paymentId: payment.id,
+    })
+  } else {
+    await send($.Payment.failed, { ... })
+  }
+})
+
+// Step 2: Payment completed
+on($.Payment.completed, async (event) => {
+  // Trigger fulfillment
+  await send($.Fulfillment.requested, event.data)
+})
+
+// Step 3: Fulfillment requested
+on($.Fulfillment.requested, async (event) => {
+  // Process shipping
+  await $.Shipping.create(event.data)
+  await send($.Shipping.dispatched, event.data)
+})
+```
+
+### Conditional Processing
+
+Filter events based on conditions:
+
+```typescript
+// High-value orders get priority
+on($.Order.created, async (event) => {
+  if (event.data.value > 1000) {
+    await send($.Order.flagged.highValue, event.data)
+  }
+})
+
+// Failed payments trigger retry
+on($.Payment.failed, async (event) => {
+  if (event.data.attempts < 3) {
+    // Retry after delay
+    await send($.Payment.retry, {
+      ...event.data,
+      attempts: event.data.attempts + 1,
+      retryAt: Date.now() + 3600000, // 1 hour
+    })
+  } else {
+    await send($.Payment.giveUp, event.data)
+  }
+})
+```
+
+## Scheduled Events with `every`
+
+Automate recurring tasks:
+
+```typescript
+// Cron syntax
+every('0 2 * * *', async () => {
+  // Daily backup at 2 AM
+  await $.Database.backup({
+    destination: '$.R2.backups',
+    retention: '30 days',
+  })
+
+  await send($.Backup.completed, {
+    timestamp: new Date(),
+  })
+})
+
+// Semantic intervals
+every($.Hourly, async () => {
+  // Sync inventory every hour
+  await $.Inventory.sync()
+})
+
+every($.Daily, async () => {
+  // Generate daily reports
+  const report = await $.Report.generate({
+    type: '$.DailyRevenue',
+    date: new Date(),
+  })
+
+  await send($.Report.generated, report)
+})
+
+every($.Weekly, async () => {
+  // Send weekly newsletter
+  await $.Email.sendBatch({
+    template: 'weekly-digest',
+    recipients: await db.list('Customer', {
+      where: { subscribed: true },
+    }),
+  })
+})
+```
+
+## Event Payload Structure
+
+Events carry structured data:
+
+```typescript
+interface Event<T = any> {
+  // Event metadata
+  $type: string        // e.g., '$.Order.created'
+  $id: string          // Unique event ID
+  timestamp: Date      // When event occurred
+
+  // Event data
+  data: T              // Event-specific payload
+
+  // Optional metadata
+  source?: string      // Event source
+  correlationId?: string  // For tracing
+  version?: string     // Schema version
+}
+
+// Example event payload
+const orderEvent = {
+  $type: '$.Order.created',
+  $id: 'evt_01HJ6X2Y8Z9Q7W5V4T3R2P1N0M',
+  timestamp: new Date('2024-10-13T10:30:00Z'),
+  data: {
+    id: 'ord_123',
+    customer: 'cus_456',
+    items: [...],
+    total: 299.97,
+  },
+  source: 'checkout-api',
+  correlationId: 'req_789',
+}
+```
+
+## Error Handling
+
+Handle errors gracefully:
+
+```typescript
+on($.Order.created, async (event) => {
+  try {
+    await processOrder(event.data)
+  } catch (error) {
+    // Log error
+    console.error('Order processing failed:', error)
+
+    // Publish failure event
+    await send($.Order.failed, {
+      orderId: event.data.id,
+      error: error.message,
+      timestamp: new Date(),
+    })
+
+    // Alert team
+    await $.Slack.send({
+      channel: '#alerts',
+      text: `Order ${event.data.id} processing failed: ${error.message}`,
+    })
+  }
+})
+
+// Listen for failures
+on($.Order.failed, async (event) => {
+  // Move to dead letter queue
+  await $.Queue.push('failed-orders', event.data)
+
+  // Notify customer
+  await $.Email.send({
+    to: event.data.customer.email,
+    template: 'order-error',
+    data: event.data,
+  })
+})
+```
+
+## Retry Logic
+
+Implement automatic retries:
+
+```typescript
+on($.Payment.failed, async (event) => {
+  const { attempts = 0 } = event.data
+
+  if (attempts < 3) {
+    // Exponential backoff: 1min, 5min, 30min
+    const delays = [60000, 300000, 1800000]
+    const delay = delays[attempts]
+
+    // Schedule retry
+    setTimeout(async () => {
+      await send($.Payment.retry, {
+        ...event.data,
+        attempts: attempts + 1,
+      })
+    }, delay)
+  } else {
+    // Give up after 3 attempts
+    await send($.Payment.giveUp, event.data)
+  }
+})
+```
+
+## External Webhooks
+
+Integrate with external services:
+
+```typescript
+// Receive webhooks
+on($.Webhook.received.stripe, async (event) => {
+  const { type, data } = event.data
+
+  switch (type) {
+    case 'payment_intent.succeeded':
+      await send($.Payment.completed, data)
+      break
+
+    case 'customer.subscription.updated':
+      await send($.Subscription.updated, data)
+      break
+  }
+})
+
+// Send webhooks
+on($.Order.completed, async (event) => {
+  // Notify external fulfillment service
+  await api.post('https://fulfillment.example.com/webhooks', {
+    event: 'order.completed',
+    data: event.data,
+  })
+})
+```
+
+## Dead Letter Queues
+
+Handle persistently failing events:
+
+```typescript
+const MAX_RETRIES = 3
+
+on($.Order.created, async (event) => {
+  const { retries = 0 } = event.metadata
+
+  try {
+    await processOrder(event.data)
+  } catch (error) {
+    if (retries < MAX_RETRIES) {
+      // Retry with backoff
+      await send($.Order.created, {
+        ...event,
+        metadata: { ...event.metadata, retries: retries + 1 },
+      })
+    } else {
+      // Move to DLQ
+      await db.create('DeadLetter', {
+        event: event.$type,
+        data: event.data,
+        error: error.message,
+        timestamp: new Date(),
+      })
+
+      // Alert team
+      await $.Slack.send({
+        channel: '#alerts',
+        text: `Event moved to DLQ: ${event.$type}`,
+      })
+    }
+  }
+})
+```
+
+## Event Sourcing
+
+Store events as source of truth:
+
+```typescript
+// Store all events
+on('*', async (event) => {
+  await db.create('EventLog', {
+    type: event.$type,
+    data: event.data,
+    timestamp: event.timestamp,
+  })
+})
+
+// Rebuild state from events
+async function rebuildState(entityId: string) {
+  const events = await db.list('EventLog', {
+    where: { entityId },
+    sort: { timestamp: 'asc' },
+  })
+
+  let state = {}
+  for (const event of events) {
+    state = applyEvent(state, event)
+  }
+
+  return state
+}
+```
+
+## Best Practices
+
+1. **Use semantic event names**: Follow `$.Subject.verb` pattern
+2. **Keep events small**: Include only essential data
+3. **Make listeners idempotent**: Handle duplicate events gracefully
+4. **Log all events**: For debugging and audit trails
+5. **Version your events**: Support schema evolution
+6. **Use correlation IDs**: Track event chains across systems
+7. **Implement retries**: Handle transient failures
+8. **Monitor event latency**: Ensure timely processing
+
+## Performance
+
+Event system is optimized for:
+
+- **High throughput**: Process millions of events per second
+- **Low latency**: Sub-millisecond event delivery
+- **Guaranteed delivery**: At-least-once delivery semantics
+- **Ordering**: FIFO ordering within event type
+- **Scalability**: Horizontal scaling of listeners
+
+## Next Steps
+
+- [AI Services](./04-ai-services.mdx) - Integrate AI into event-driven workflows
+- [Workflows](/docs/workflows.do.mdx) - Orchestrate complex multi-step processes
+- [Webhooks](/docs/webhooks.do.mdx) - External webhook integration
+- [Events API Reference](/docs/api-reference/sdk/events.mdx) - Complete API docs
+
+---
+
+**Need help?** Join [Discord](https://discord.gg/dotdo) or check [examples](/docs/EXAMPLES).

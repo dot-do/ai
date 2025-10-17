@@ -1,0 +1,319 @@
+---
+$id: https://queue.do/examples/integration
+$type: HowTo
+title: Queue Integration Examples
+description: Examples of integrating queue.do with other .do platform services.
+keywords: [queue, integration, events, database, workflows, sdk]
+---
+
+# Queue Integration Examples
+
+## Integration with Events
+
+```typescript
+import $, { queue, on, send } from 'sdk.do'
+
+// Enqueue tasks on events
+on($.Order.created, async (order) => {
+  await queue.enqueue(
+    $.OrderProcessTask,
+    {
+      orderId: order.$id,
+      customerId: order.customer,
+      items: order.items,
+    },
+    {
+      priority: 'high',
+    }
+  )
+})
+
+// Send events after task completion
+await queue.worker($.OrderProcessTask, async (task) => {
+  const result = await processOrder(task.data)
+
+  // Send completion event
+  send($.Order.processed, {
+    orderId: task.data.orderId,
+    processedAt: new Date(),
+    result,
+  })
+
+  return result
+})
+```
+
+## Integration with Database
+
+```typescript
+import { queue, db } from 'sdk.do'
+
+// Queue tasks based on database queries
+const pendingOrders = await db.list($.Order, {
+  where: { status: 'pending' },
+})
+
+for (const order of pendingOrders) {
+  await queue.enqueue($.OrderProcessTask, {
+    orderId: order.$id,
+  })
+}
+
+// Update database in worker
+await queue.worker($.OrderProcessTask, async (task) => {
+  const { orderId } = task.data
+
+  // Get order
+  const order = await db.get($.Order, orderId)
+
+  // Process
+  const result = await processOrder(order)
+
+  // Update database
+  await db.update(order, {
+    status: 'processed',
+    processedAt: new Date(),
+    result,
+  })
+
+  return result
+})
+```
+
+## Integration with Scheduled Tasks
+
+```typescript
+import { queue, every } from 'sdk.do'
+
+// Schedule recurring queue tasks
+every($.Daily, async () => {
+  await queue.enqueue($.DailyReportTask, {
+    date: new Date().toISOString(),
+    type: 'sales_summary',
+  })
+})
+
+every('0 */6 * * *', async () => {
+  // Every 6 hours
+  await queue.enqueue($.DataSyncTask, {
+    source: 'crm',
+    destination: 'warehouse',
+  })
+})
+
+// Cleanup completed tasks daily
+every($.Daily, async () => {
+  const completed = await queue.list({
+    state: 'completed',
+    completedAt: {
+      $lt: Date.now() - 7 * 24 * 60 * 60 * 1000, // 7 days old
+    },
+  })
+
+  for (const task of completed) {
+    await queue.delete(task.id)
+  }
+
+  console.log(`Cleaned up ${completed.length} completed tasks`)
+})
+```
+
+## Integration with AI
+
+```typescript
+import { queue, ai } from 'sdk.do'
+
+// Enqueue AI tasks
+await queue.enqueue($.AIGenerationTask, {
+  prompt: 'Write a product description',
+  schema: $.ProductDescription,
+})
+
+// Process with AI
+await queue.worker(
+  $.AIGenerationTask,
+  async (task) => {
+    const { prompt, schema } = task.data
+
+    const result = await ai.generate(prompt, { schema })
+
+    return result
+  },
+  {
+    concurrency: 3, // Limit AI concurrency
+    timeout: 60000, // 60 second timeout
+  }
+)
+
+// Batch AI processing
+const products = await db.list($.Product, {
+  where: { description: null },
+})
+
+await queue.enqueue($.AIBatchTask, {
+  items: products.map((p) => ({
+    id: p.$id,
+    prompt: `Write description for: ${p.name}`,
+  })),
+})
+
+await queue.worker($.AIBatchTask, async (task) => {
+  const { items } = task.data
+
+  // Use AI batch API for cost savings
+  const results = await ai.batch(
+    items.map((item) => ({
+      prompt: item.prompt,
+      schema: $.ProductDescription,
+    }))
+  )
+
+  // Update products
+  for (let i = 0; i < items.length; i++) {
+    await db.update($.Product, items[i].id, {
+      description: results[i].description,
+    })
+  }
+
+  return { processed: items.length }
+})
+```
+
+## Multi-Stage Workflow
+
+```typescript
+import { queue, on } from 'sdk.do'
+
+// Stage 1: Image uploaded
+on($.Image.uploaded, async (image) => {
+  await queue.enqueue($.ImageValidateTask, {
+    imageId: image.$id,
+    url: image.url,
+  })
+})
+
+// Stage 2: Validate image
+await queue.worker($.ImageValidateTask, async (task) => {
+  const { imageId, url } = task.data
+
+  const valid = await validateImage(url)
+
+  if (valid) {
+    // Queue next stage
+    await queue.enqueue($.ImageProcessTask, {
+      imageId,
+      url,
+    })
+  }
+
+  return { valid }
+})
+
+// Stage 3: Process image
+await queue.worker($.ImageProcessTask, async (task) => {
+  const { imageId, url } = task.data
+
+  const processed = await processImage(url)
+
+  // Queue final stage
+  await queue.enqueue($.ImageOptimizeTask, {
+    imageId,
+    url: processed.url,
+  })
+
+  return processed
+})
+
+// Stage 4: Optimize image
+await queue.worker($.ImageOptimizeTask, async (task) => {
+  const { imageId, url } = task.data
+
+  const optimized = await optimizeImage(url)
+
+  // Update database
+  await db.update($.Image, imageId, {
+    optimizedUrl: optimized.url,
+    status: 'ready',
+  })
+
+  // Send completion event
+  send($.Image.ready, { imageId, url: optimized.url })
+
+  return optimized
+})
+```
+
+## Fan-out / Fan-in Pattern
+
+```typescript
+import { queue } from 'sdk.do'
+
+// Fan-out: Split work into multiple tasks
+await queue.worker($.ProcessLargeFileTask, async (task) => {
+  const { fileUrl } = task.data
+  const file = await downloadFile(fileUrl)
+
+  // Split into chunks
+  const chunks = splitIntoChunks(file, 1000)
+
+  // Enqueue processing for each chunk
+  const chunkTasks = []
+  for (let i = 0; i < chunks.length; i++) {
+    const taskId = await queue.enqueue($.ProcessChunkTask, {
+      parentTaskId: task.id,
+      chunkIndex: i,
+      data: chunks[i],
+    })
+    chunkTasks.push(taskId)
+  }
+
+  // Store chunk task IDs for fan-in
+  await db.create($.ChunkTracker, {
+    $id: task.id,
+    totalChunks: chunks.length,
+    chunkTasks,
+    completed: 0,
+  })
+
+  return { chunks: chunks.length }
+})
+
+// Process chunks
+await queue.worker($.ProcessChunkTask, async (task) => {
+  const { parentTaskId, chunkIndex, data } = task.data
+
+  const result = await processChunk(data)
+
+  // Track completion
+  const tracker = await db.get($.ChunkTracker, parentTaskId)
+  tracker.completed++
+
+  await db.update(tracker, { completed: tracker.completed })
+
+  // Fan-in: All chunks complete?
+  if (tracker.completed === tracker.totalChunks) {
+    await queue.enqueue($.CombineResultsTask, {
+      parentTaskId,
+      totalChunks: tracker.totalChunks,
+    })
+  }
+
+  return result
+})
+
+// Combine results
+await queue.worker($.CombineResultsTask, async (task) => {
+  const { parentTaskId, totalChunks } = task.data
+
+  // Get all chunk results
+  const results = await db.list($.ChunkResult, {
+    where: { parentTaskId },
+    orderBy: 'chunkIndex',
+  })
+
+  // Combine
+  const combined = combineResults(results)
+
+  return combined
+})
+```

@@ -1,0 +1,82 @@
+---
+$id: https://workers.do/examples/advanced-patterns
+$type: TechArticle
+title: Worker Fleet Advanced Patterns
+description: Advanced patterns for worker fleet management
+keywords: [workers, advanced, patterns, orchestration]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Advanced Patterns
+
+Advanced patterns for worker fleet management.
+
+## Multi-Fleet Orchestration
+
+```typescript
+import { $, workers } from 'sdk.do'
+
+const fleets = {
+  sdr: await workers.createFleet({ role: $.SDR, min: 10, max: 50 }),
+  bdr: await workers.createFleet({ role: $.BDR, min: 5, max: 20 }),
+  support: await workers.createFleet({ role: $.SupportAgent, min: 20, max: 100 }),
+}
+
+// Route tasks to appropriate fleet
+function routeTask(task) {
+  switch (task.type) {
+    case 'lead_qualification':
+      return fleets.sdr
+    case 'partnership_development':
+      return fleets.bdr
+    case 'customer_support':
+      return fleets.support
+  }
+}
+```
+
+## Capability-Based Routing
+
+```typescript
+const fleet = await workers.createFleet({
+  workerTemplate: {
+    role: $.ContentWriter,
+    capabilities: {
+      blog: { proficiency: 'expert' },
+      technical: { proficiency: 'advanced' },
+      social: { proficiency: 'intermediate' },
+    },
+  },
+})
+
+// Route tasks based on capability requirements
+await fleet.assignWork({
+  tasks: contentTasks,
+  routing: 'capability_match',
+  minProficiency: 'advanced',
+})
+```
+
+## Predictive Scaling
+
+```typescript
+import { $, workers, llm } from 'sdk.do'
+
+// Forecast demand
+const forecast = await llm.generate('Forecast task volume for next 24 hours based on historical data', {
+  schema: $.DemandForecast,
+  context: historicalData,
+  model: 'gpt-5',
+})
+
+// Proactive scaling
+if (forecast.peakVolume > currentCapacity * 1.5) {
+  await fleet.scale({ count: Math.ceil(forecast.peakVolume / tasksPerWorker) })
+}
+```
+
+## License
+
+MIT (Open Source)

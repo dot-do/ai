@@ -1,0 +1,691 @@
+---
+$id: https://every.do
+$type: WebSite
+name: every.do
+description: Scheduled workflows with semantic cron patterns and business schedules
+license: CC-BY-4.0
+keywords: [scheduler, cron, scheduled workflows, periodic tasks, automation, business-as-code]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# every.do
+
+**Scheduled workflows with semantic cron patterns and business schedules**
+
+every.do provides scheduled workflow execution for Business-as-Code applications using the `every` SDK function. It supports both traditional cron patterns and semantic schedules like `$.Daily`, `$.Hourly`, and `$.Weekly` for time-based automation.
+
+## Quick Start
+
+```bash
+pnpm add sdk.do
+```
+
+```typescript
+import { $, every } from 'sdk.do'
+
+// Run daily at midnight
+every($.Daily, async () => {
+  await generateDailyReport()
+})
+
+// Run every hour
+every($.Hourly, async () => {
+  await syncInventory()
+})
+
+// Run with cron pattern
+every('0 */6 * * *', async () => {
+  await backupDatabase()
+})
+```
+
+## Key Features
+
+### 🎯 Semantic Schedules
+
+Use human-readable semantic schedules instead of cron syntax:
+
+```typescript
+import { $, every } from 'sdk.do'
+
+// Semantic schedules
+every($.Minutely, handler) // Every minute
+every($.Hourly, handler) // Every hour at :00
+every($.Daily, handler) // Every day at midnight
+every($.Weekly, handler) // Every Monday at midnight
+every($.Monthly, handler) // First day of month at midnight
+every($.Quarterly, handler) // First day of quarter at midnight
+every($.Yearly, handler) // January 1st at midnight
+
+// Business schedules
+every($.BusinessDay, handler) // Every business day (Mon-Fri) at 9am
+every($.Weekend, handler) // Saturday and Sunday at 9am
+every($.EndOfMonth, handler) // Last day of each month at 11pm
+```
+
+### ⏰ Cron Patterns
+
+Full support for standard cron expressions:
+
+```typescript
+import { every } from 'sdk.do'
+
+// Traditional cron patterns
+every('0 0 * * *', handler) // Daily at midnight
+every('0 */2 * * *', handler) // Every 2 hours
+every('30 9 * * 1-5', handler) // Weekdays at 9:30am
+every('0 0 1 * *', handler) // First of month at midnight
+every('0 0 * * 0', handler) // Sundays at midnight
+every('*/15 * * * *', handler) // Every 15 minutes
+```
+
+### 📊 Business Workflows
+
+Pre-configured schedules for common business operations:
+
+```typescript
+import { $, every, db, send } from 'sdk.do'
+
+// Daily sales report
+every($.Daily, async () => {
+  const sales = await db.list($.Order, {
+    where: {
+      createdAt: { gte: startOfDay(), lt: endOfDay() },
+    },
+  })
+
+  const report = await generateSalesReport(sales)
+  await send('Report.generated', { type: 'daily-sales', report })
+})
+
+// Weekly inventory sync
+every($.Weekly, async () => {
+  await syncInventoryFromWarehouse()
+  await send('Inventory.synced', { timestamp: new Date() })
+})
+
+// Monthly billing
+every($.Monthly, async () => {
+  const customers = await db.list($.Customer, {
+    where: { subscription: { active: true } },
+  })
+
+  for (const customer of customers) {
+    await send('Invoice.generated', {
+      customerId: customer.$id,
+      month: getCurrentMonth(),
+    })
+  }
+})
+```
+
+### 🔄 Workflow Integration
+
+Scheduled tasks integrate seamlessly with the `.do` platform:
+
+```typescript
+import { $, every, db, ai, send } from 'sdk.do'
+
+// Automated content enrichment
+every($.Hourly, async () => {
+  const products = await db.list($.Product, {
+    where: { description: null },
+    limit: 100,
+  })
+
+  for (const product of products) {
+    const description = await ai.generate(`Generate product description for ${product.name}`, { schema: $.Product, context: product })
+
+    await db.update(product.$id, { description })
+  }
+})
+
+// Periodic data cleanup
+every($.Daily, async () => {
+  const expiredSessions = await db.list($.Session, {
+    where: { expiresAt: { lt: new Date() } },
+  })
+
+  await db.delete(expiredSessions.map((s) => s.$id))
+  await send('Sessions.cleaned', { count: expiredSessions.length })
+})
+
+// Scheduled notifications
+every($.Daily, async () => {
+  const dueReminders = await db.list($.Reminder, {
+    where: { dueDate: { lte: addDays(new Date(), 1) } },
+  })
+
+  for (const reminder of dueReminders) {
+    await send('Notification.scheduled', {
+      userId: reminder.userId,
+      type: 'reminder',
+      message: reminder.message,
+    })
+  }
+})
+```
+
+## Features
+
+- **Semantic Schedules**: Human-readable time patterns like `$.Daily`, `$.Hourly`, `$.Weekly`
+- **Cron Support**: Full standard cron syntax support
+- **Business Schedules**: Pre-configured patterns for business operations
+- **Type Safety**: Full TypeScript support with type inference
+- **Event Integration**: Publish events from scheduled tasks
+- **Database Access**: Full access to `db` operations in scheduled workflows
+- **AI Integration**: Use `ai` services in scheduled tasks
+- **Error Handling**: Built-in retry logic and error reporting
+- **Timezone Support**: Schedule tasks in specific timezones
+- **One-Time Execution**: Schedule tasks to run once at a specific time
+
+## Documentation
+
+- [Getting Started](./docs/getting-started) - Installation and basic setup
+- [Schedules](./docs/schedules) - Cron and semantic schedules
+- [Patterns](./docs/patterns) - Common scheduling patterns
+- [API Reference](./api/) - Complete API documentation
+
+## Examples
+
+- [Basic Schedules](./examples/basic-schedules) - Simple scheduled tasks
+- [Business Schedules](./examples/business-schedules) - Reports, backups, maintenance
+
+## Use Cases
+
+### Daily Reports and Analytics
+
+Generate and distribute reports on a daily basis:
+
+```typescript
+import { $, every, db, ai, send } from 'sdk.do'
+
+every($.Daily, async () => {
+  // Gather data
+  const orders = await db.list($.Order, {
+    where: { createdAt: { gte: startOfDay(), lt: endOfDay() } },
+  })
+
+  const revenue = orders.reduce((sum, order) => sum + order.total, 0)
+
+  // Generate insights with AI
+  const insights = await ai.generate(`Analyze daily sales performance: ${orders.length} orders, $${revenue} revenue`, {
+    schema: $.AnalysisReport,
+    structured: true,
+  })
+
+  // Send report
+  await send('Report.generated', {
+    type: 'daily-sales',
+    date: new Date(),
+    orderCount: orders.length,
+    revenue,
+    insights,
+  })
+})
+```
+
+### Automated Data Backups
+
+Schedule regular backups of critical data:
+
+```typescript
+import { $, every, db } from 'sdk.do'
+
+// Hourly incremental backups
+every($.Hourly, async () => {
+  const modifiedEntities = await db.list({
+    where: {
+      updatedAt: { gte: subHours(new Date(), 1) },
+    },
+  })
+
+  await backupToStorage(modifiedEntities, {
+    type: 'incremental',
+    timestamp: new Date(),
+  })
+})
+
+// Daily full backups
+every('0 2 * * *', async () => {
+  const allData = await db.export()
+
+  await backupToStorage(allData, {
+    type: 'full',
+    timestamp: new Date(),
+  })
+})
+```
+
+### Periodic Data Synchronization
+
+Sync data with external systems on a schedule:
+
+```typescript
+import { $, every, db, api } from 'sdk.do'
+
+// Sync inventory every 15 minutes
+every('*/15 * * * *', async () => {
+  const inventory = await api.fetch('https://warehouse.example.com/api/inventory')
+
+  for (const item of inventory) {
+    const product = await db.get($.Product, item.sku)
+
+    if (product) {
+      await db.update(product.$id, {
+        stockQuantity: item.quantity,
+        lastSynced: new Date(),
+      })
+    }
+  }
+
+  await send('Inventory.synced', {
+    itemCount: inventory.length,
+    timestamp: new Date(),
+  })
+})
+```
+
+### Scheduled Maintenance Tasks
+
+Run cleanup and optimization tasks during off-peak hours:
+
+```typescript
+import { $, every, db } from 'sdk.do'
+
+// Cleanup expired sessions daily at 3am
+every('0 3 * * *', async () => {
+  const expired = await db.list($.Session, {
+    where: { expiresAt: { lt: new Date() } },
+  })
+
+  await db.delete(expired.map((s) => s.$id))
+
+  await send('Maintenance.completed', {
+    task: 'session-cleanup',
+    recordsDeleted: expired.length,
+  })
+})
+
+// Optimize database weekly
+every($.Weekly, async () => {
+  await db.optimize()
+  await db.vacuum()
+
+  await send('Maintenance.completed', {
+    task: 'database-optimization',
+    timestamp: new Date(),
+  })
+})
+```
+
+### Recurring Notifications and Reminders
+
+Send scheduled notifications to users:
+
+```typescript
+import { $, every, db, send } from 'sdk.do'
+
+// Check for upcoming renewals daily
+every($.Daily, async () => {
+  const upcomingRenewals = await db.list($.Subscription, {
+    where: {
+      renewalDate: {
+        gte: new Date(),
+        lt: addDays(new Date(), 7),
+      },
+    },
+  })
+
+  for (const subscription of upcomingRenewals) {
+    await send('Notification.scheduled', {
+      userId: subscription.customerId,
+      type: 'renewal-reminder',
+      daysUntilRenewal: differenceInDays(subscription.renewalDate, new Date()),
+      subscription,
+    })
+  }
+})
+```
+
+## Integration with `.do` Platform
+
+every.do integrates seamlessly with other `.do` platform services:
+
+```typescript
+import { $, every, db, ai, on, send } from 'sdk.do'
+
+// Scheduled task that triggers events
+every($.Daily, async () => {
+  const report = await generateReport()
+  await send('Report.generated', report)
+})
+
+// Event listener reacts to scheduled task
+on('Report.generated', async (event) => {
+  const summary = await ai.generate(`Summarize this report: ${JSON.stringify(event.data)}`, { schema: $.ReportSummary })
+
+  await db.create($.ReportSummary, summary)
+})
+
+// Multiple scheduled tasks working together
+every($.Hourly, async () => {
+  await send('DataSync.triggered', { source: 'hourly-scheduler' })
+})
+
+on('DataSync.triggered', async (event) => {
+  await syncExternalData()
+})
+```
+
+## Semantic Patterns
+
+every.do uses `$.Subject.predicate.Object` patterns for semantic schedules:
+
+```typescript
+import { $, every } from 'sdk.do'
+
+// Time-based patterns
+every($.Daily, handler)
+every($.Weekly, handler)
+every($.Monthly, handler)
+every($.Quarterly, handler)
+every($.Yearly, handler)
+
+// Business patterns
+every($.BusinessDay, handler)
+every($.Weekend, handler)
+every($.EndOfMonth, handler)
+every($.EndOfQuarter, handler)
+every($.EndOfYear, handler)
+
+// Frequency patterns
+every($.Minutely, handler)
+every($.Hourly, handler)
+every($.Every15Minutes, handler)
+every($.Every6Hours, handler)
+```
+
+## Configuration
+
+### Environment Variables
+
+```bash
+# Timezone configuration (optional, defaults to UTC)
+SCHEDULE_TIMEZONE=America/New_York
+
+# Error handling (optional)
+SCHEDULE_RETRY_ATTEMPTS=3
+SCHEDULE_RETRY_DELAY=60000  # milliseconds
+
+# Logging (optional)
+SCHEDULE_LOG_LEVEL=info
+```
+
+### Advanced Configuration
+
+```typescript
+import { every } from 'sdk.do'
+
+// Configure timezone for a specific schedule
+every(
+  $.Daily,
+  async () => {
+    await dailyTask()
+  },
+  {
+    timezone: 'America/New_York',
+  }
+)
+
+// Configure error handling
+every(
+  $.Hourly,
+  async () => {
+    await riskyOperation()
+  },
+  {
+    retry: {
+      attempts: 5,
+      delay: 30000,
+      backoff: 'exponential',
+    },
+  }
+)
+
+// Configure execution constraints
+every(
+  '0 2 * * *',
+  async () => {
+    await longRunningTask()
+  },
+  {
+    timeout: 3600000, // 1 hour
+    maxConcurrent: 1, // Don't run if previous execution still running
+  }
+)
+```
+
+## Supported Schedules
+
+### Semantic Schedules
+
+- `$.Minutely` - Every minute
+- `$.Every5Minutes` - Every 5 minutes
+- `$.Every15Minutes` - Every 15 minutes
+- `$.Every30Minutes` - Every 30 minutes
+- `$.Hourly` - Every hour at :00
+- `$.Every2Hours` - Every 2 hours
+- `$.Every6Hours` - Every 6 hours
+- `$.Daily` - Every day at midnight UTC
+- `$.BusinessDay` - Monday-Friday at 9am UTC
+- `$.Weekend` - Saturday-Sunday at 9am UTC
+- `$.Weekly` - Every Monday at midnight UTC
+- `$.BiWeekly` - Every other Monday at midnight UTC
+- `$.Monthly` - First day of month at midnight UTC
+- `$.EndOfMonth` - Last day of month at 11pm UTC
+- `$.Quarterly` - First day of quarter at midnight UTC
+- `$.EndOfQuarter` - Last day of quarter at 11pm UTC
+- `$.Yearly` - January 1st at midnight UTC
+- `$.EndOfYear` - December 31st at 11pm UTC
+
+### Cron Patterns
+
+Standard cron syntax with five fields:
+
+```
+ ┌───────────── minute (0 - 59)
+ │ ┌───────────── hour (0 - 23)
+ │ │ ┌───────────── day of month (1 - 31)
+ │ │ │ ┌───────────── month (1 - 12)
+ │ │ │ │ ┌───────────── day of week (0 - 6) (Sunday to Saturday)
+ │ │ │ │ │
+ * * * * *
+```
+
+Examples:
+
+- `0 * * * *` - Every hour
+- `*/15 * * * *` - Every 15 minutes
+- `0 9 * * 1-5` - Weekdays at 9am
+- `0 0 1 * *` - First of month
+- `0 0 * * 0` - Sundays at midnight
+
+## Best Practices
+
+### 1. Use Semantic Schedules
+
+Prefer semantic schedules over cron for readability:
+
+```typescript
+// Good: Semantic and readable
+every($.Daily, handler)
+every($.BusinessDay, handler)
+
+// Avoid: Cryptic cron patterns
+every('0 0 * * *', handler)
+every('0 9 * * 1-5', handler)
+```
+
+### 2. Handle Long-Running Tasks
+
+Use timeouts and concurrency limits:
+
+```typescript
+every(
+  $.Hourly,
+  async () => {
+    await longTask()
+  },
+  {
+    timeout: 3600000, // 1 hour max
+    maxConcurrent: 1, // One at a time
+  }
+)
+```
+
+### 3. Publish Events
+
+Publish events for observability:
+
+```typescript
+every($.Daily, async () => {
+  const result = await processData()
+
+  await send('Task.completed', {
+    task: 'daily-processing',
+    timestamp: new Date(),
+    result,
+  })
+})
+```
+
+### 4. Implement Error Handling
+
+Always handle errors gracefully:
+
+```typescript
+every($.Hourly, async () => {
+  try {
+    await riskyOperation()
+  } catch (error) {
+    console.error('Scheduled task failed:', error)
+
+    await send('Task.failed', {
+      task: 'hourly-sync',
+      error: error.message,
+      timestamp: new Date(),
+    })
+  }
+})
+```
+
+### 5. Use Appropriate Frequencies
+
+Choose frequencies based on data update patterns:
+
+```typescript
+// High-frequency data (stock prices, inventory)
+every($.Every5Minutes, syncRealTimeData)
+
+// Standard business data (orders, customers)
+every($.Hourly, syncBusinessData)
+
+// Historical data (reports, analytics)
+every($.Daily, generateReports)
+
+// Archive data (compliance, audit logs)
+every($.Monthly, archiveOldRecords)
+```
+
+## Timezone Handling
+
+Schedule tasks in specific timezones:
+
+```typescript
+import { $, every } from 'sdk.do'
+
+// New York business hours
+every(
+  $.BusinessDay,
+  async () => {
+    await generateReport()
+  },
+  {
+    timezone: 'America/New_York',
+  }
+)
+
+// London trading hours
+every(
+  '0 8 * * 1-5',
+  async () => {
+    await syncMarketData()
+  },
+  {
+    timezone: 'Europe/London',
+  }
+)
+
+// Tokyo end of day
+every(
+  '0 18 * * 1-5',
+  async () => {
+    await closeDay()
+  },
+  {
+    timezone: 'Asia/Tokyo',
+  }
+)
+```
+
+## License
+
+every.do is released under the [Creative Commons Attribution 4.0 International License (CC-BY-4.0)](https://creativecommons.org/licenses/by/4.0/).
+
+This means you are free to:
+
+- **Share**: Copy and redistribute the material in any medium or format
+- **Adapt**: Remix, transform, and build upon the material for any purpose, even commercially
+
+Under the following terms:
+
+- **Attribution**: You must give appropriate credit, provide a link to the license, and indicate if changes were made
+
+## Resources
+
+- [sdk.do](https://sdk.do) - Core SDK documentation
+- [on.do](https://on.do) - Event listeners
+- [send.do](https://send.do) - Event publishing
+- [db.do](https://db.do) - Database operations
+- [workflows.do](https://workflows.do) - Workflow orchestration
+- [`.do` Platform](https://do)
+
+## Related Domains
+
+- **[on.do](https://on.do)** - Event listeners
+- **[send.do](https://send.do)** - Event publishing
+- **[db.do](https://db.do)** - Database operations
+- **[ai.do](https://ai.do)** - AI services
+- **[workflows.do](https://workflows.do)** - Workflow orchestration
+
+## Contributing
+
+every.do is part of the [`.do` platform](https://do) ecosystem. Contributions are welcome!
+
+See the [ai repository](https://github.com/dot-do/ai) for contribution guidelines.
+
+## Acknowledgments
+
+every.do builds upon:
+
+- **Cron syntax** - Standard Unix cron patterns
+- **Node cron** - Node.js scheduling libraries
+- **Business calendar** - Business day calculations
+- **Timezone support** - IANA timezone database
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

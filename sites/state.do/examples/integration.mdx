@@ -1,0 +1,844 @@
+---
+$id: https://state.do/examples/integration
+$type: HowTo
+title: Integration Examples
+description: Integrating state.do with other .do platform services
+keywords: [integration, database, events, ai, api, webhooks]
+author:
+  $type: Organization
+  name: .do Platform
+license: CC-BY-4.0
+---
+
+# Integration Examples
+
+Integrating state.do with other .do platform services.
+
+## Integration with db.do
+
+Combine state management with database operations:
+
+```typescript
+import { $, state, db } from 'sdk.do'
+
+export class UserProfileCache {
+  cache: Map<string, any> = new Map()
+  cacheTimestamps: Map<string, number> = new Map()
+  cacheTTL: number = 300000 // 5 minutes
+
+  async getProfile(userId: string) {
+    // Check cache
+    const cached = this.cache.get(userId)
+    const timestamp = this.cacheTimestamps.get(userId)
+
+    if (cached && timestamp && Date.now() - timestamp < this.cacheTTL) {
+      return cached
+    }
+
+    // Load from database
+    const profile = await db.get($.Person, userId)
+
+    // Update cache
+    this.cache.set(userId, profile)
+    this.cacheTimestamps.set(userId, Date.now())
+    await state.save(this)
+
+    return profile
+  }
+
+  async updateProfile(userId: string, updates: any) {
+    // Update database
+    const profile = await db.update($.Person, userId, updates)
+
+    // Update cache
+    this.cache.set(userId, profile)
+    this.cacheTimestamps.set(userId, Date.now())
+    await state.save(this)
+
+    return profile
+  }
+
+  async invalidate(userId: string) {
+    this.cache.delete(userId)
+    this.cacheTimestamps.delete(userId)
+    await state.save(this)
+  }
+
+  async invalidateAll() {
+    this.cache.clear()
+    this.cacheTimestamps.clear()
+    await state.save(this)
+  }
+}
+
+// Usage
+const cache = await state.get($.UserProfileCache, 'profiles')
+const profile = await cache.getProfile('user-123')
+await cache.updateProfile('user-123', { name: 'Updated Name' })
+```
+
+## Integration with on.do and send.do
+
+Event-driven state updates:
+
+```typescript
+import { $, state, on, send } from 'sdk.do'
+
+export class OrderStateMachine {
+  orderId: string
+  status: 'pending' | 'processing' | 'completed' | 'cancelled' = 'pending'
+  history: Array<{ status: string; timestamp: number }> = []
+
+  async initialize(orderId: string) {
+    this.orderId = orderId
+    await this.transition('pending')
+  }
+
+  async transition(newStatus: typeof this.status) {
+    const oldStatus = this.status
+    this.status = newStatus
+
+    this.history.push({
+      status: newStatus,
+      timestamp: Date.now(),
+    })
+
+    await state.save(this)
+
+    // Publish state change event
+    await send($.Order.statusChanged, {
+      orderId: this.orderId,
+      oldStatus,
+      newStatus,
+      timestamp: Date.now(),
+    })
+  }
+
+  async process() {
+    if (this.status !== 'pending') {
+      throw new Error(`Cannot process order in ${this.status} state`)
+    }
+
+    await this.transition('processing')
+  }
+
+  async complete() {
+    if (this.status !== 'processing') {
+      throw new Error(`Cannot complete order in ${this.status} state`)
+    }
+
+    await this.transition('completed')
+  }
+
+  async cancel() {
+    if (this.status === 'completed') {
+      throw new Error('Cannot cancel completed order')
+    }
+
+    await this.transition('cancelled')
+  }
+
+  async getStatus() {
+    return {
+      orderId: this.orderId,
+      status: this.status,
+      history: this.history,
+    }
+  }
+}
+
+// Event handlers
+on($.Order.created, async (event) => {
+  const order = await state.get($.OrderStateMachine, event.orderId)
+  await order.initialize(event.orderId)
+})
+
+on($.Payment.completed, async (event) => {
+  const order = await state.get($.OrderStateMachine, event.orderId)
+  await order.process()
+})
+
+on($.Shipment.delivered, async (event) => {
+  const order = await state.get($.OrderStateMachine, event.orderId)
+  await order.complete()
+})
+
+// Usage
+await send($.Order.created, { orderId: 'order-123', userId: 'user-1' })
+
+const order = await state.get($.OrderStateMachine, 'order-123')
+const status = await order.getStatus()
+console.log(status)
+```
+
+## Integration with ai.do
+
+AI-powered state management:
+
+```typescript
+import { $, state, ai } from 'sdk.do'
+
+export class SmartConversation {
+  messages: Array<{ role: 'user' | 'assistant'; content: string; timestamp: number }> = []
+  summary: string = ''
+  topics: string[] = []
+
+  async addMessage(role: 'user' | 'assistant', content: string) {
+    this.messages.push({
+      role,
+      content,
+      timestamp: Date.now(),
+    })
+
+    await state.save(this)
+
+    // Generate summary if conversation is long
+    if (this.messages.length % 10 === 0) {
+      await this.generateSummary()
+    }
+
+    // Extract topics
+    if (this.messages.length % 5 === 0) {
+      await this.extractTopics()
+    }
+  }
+
+  async generateSummary() {
+    const prompt = `Summarize this conversation in 2-3 sentences:\n\n${this.messages.map((m) => `${m.role}: ${m.content}`).join('\n')}`
+
+    this.summary = await ai.generate(prompt, {
+      model: 'gpt-5-mini',
+      schema: $.Text,
+    })
+
+    await state.save(this)
+  }
+
+  async extractTopics() {
+    const prompt = `Extract the main topics from this conversation as a comma-separated list:\n\n${this.messages.map((m) => m.content).join('\n')}`
+
+    const topicsText = await ai.generate(prompt, {
+      model: 'gpt-5-mini',
+      schema: $.Text,
+    })
+
+    this.topics = topicsText.split(',').map((t) => t.trim())
+    await state.save(this)
+  }
+
+  async generateResponse(userMessage: string) {
+    await this.addMessage('user', userMessage)
+
+    const context = this.summary || 'No previous context'
+
+    const response = await ai.generate(userMessage, {
+      context: {
+        previousSummary: context,
+        topics: this.topics,
+        recentMessages: this.messages.slice(-5),
+      },
+      model: 'claude-sonnet-4.5',
+      schema: $.Text,
+    })
+
+    await this.addMessage('assistant', response)
+
+    return response
+  }
+
+  async getConversation() {
+    return {
+      messages: this.messages,
+      summary: this.summary,
+      topics: this.topics,
+    }
+  }
+}
+
+// Usage
+const conversation = await state.get($.SmartConversation, 'chat:user-123')
+
+const response1 = await conversation.generateResponse('What is state.do?')
+console.log(response1)
+
+const response2 = await conversation.generateResponse('How does it integrate with AI?')
+console.log(response2)
+
+const data = await conversation.getConversation()
+console.log('Summary:', data.summary)
+console.log('Topics:', data.topics)
+```
+
+## Integration with api.do
+
+External API integration with caching:
+
+```typescript
+import { $, state, api } from 'sdk.do'
+
+export class APICache {
+  cache: Map<string, { data: any; timestamp: number; etag?: string }> = new Map()
+  ttl: number = 300000 // 5 minutes
+
+  async fetch(url: string, options: any = {}) {
+    const cacheKey = `${url}:${JSON.stringify(options)}`
+    const cached = this.cache.get(cacheKey)
+
+    // Check cache freshness
+    if (cached && Date.now() - cached.timestamp < this.ttl) {
+      return cached.data
+    }
+
+    // Add conditional headers if we have etag
+    if (cached?.etag) {
+      options.headers = {
+        ...options.headers,
+        'If-None-Match': cached.etag,
+      }
+    }
+
+    // Fetch from API
+    try {
+      const response = await api.fetch(url, options)
+
+      // 304 Not Modified - use cached data
+      if (response.status === 304 && cached) {
+        cached.timestamp = Date.now()
+        await state.save(this)
+        return cached.data
+      }
+
+      const data = await response.json()
+      const etag = response.headers.get('etag')
+
+      // Update cache
+      this.cache.set(cacheKey, {
+        data,
+        timestamp: Date.now(),
+        etag,
+      })
+
+      await state.save(this)
+
+      return data
+    } catch (error) {
+      // Return stale cache on error
+      if (cached) {
+        console.warn('API error, returning stale cache:', error)
+        return cached.data
+      }
+
+      throw error
+    }
+  }
+
+  async invalidate(pattern?: string) {
+    if (pattern) {
+      // Invalidate matching entries
+      for (const key of this.cache.keys()) {
+        if (key.includes(pattern)) {
+          this.cache.delete(key)
+        }
+      }
+    } else {
+      // Invalidate all
+      this.cache.clear()
+    }
+
+    await state.save(this)
+  }
+
+  async stats() {
+    return {
+      entries: this.cache.size,
+      oldestEntry: Math.min(...Array.from(this.cache.values()).map((v) => v.timestamp)),
+      newestEntry: Math.max(...Array.from(this.cache.values()).map((v) => v.timestamp)),
+    }
+  }
+}
+
+// Usage
+const cache = await state.get($.APICache, 'api-cache')
+
+const userData = await cache.fetch('https://api.example.com/users/123')
+console.log(userData)
+
+// Subsequent calls use cache
+const cachedData = await cache.fetch('https://api.example.com/users/123')
+
+// Invalidate specific entries
+await cache.invalidate('users')
+
+// Get cache stats
+const stats = await cache.stats()
+console.log('Cache entries:', stats.entries)
+```
+
+## WebSocket + State Integration
+
+Real-time state synchronization:
+
+```typescript
+import { $, state } from 'sdk.do'
+
+export class CollaborativeState {
+  data: any = {}
+  version: number = 0
+  clients: Set<WebSocket> = new Set()
+
+  async connect(ws: WebSocket) {
+    this.clients.add(ws)
+
+    // Send current state
+    ws.send(
+      JSON.stringify({
+        type: 'init',
+        data: this.data,
+        version: this.version,
+      })
+    )
+
+    // Handle messages
+    ws.addEventListener('message', async (event) => {
+      const message = JSON.parse(event.data as string)
+      await this.handleMessage(ws, message)
+    })
+
+    // Handle disconnect
+    ws.addEventListener('close', () => {
+      this.clients.delete(ws)
+    })
+  }
+
+  async handleMessage(sender: WebSocket, message: any) {
+    switch (message.type) {
+      case 'update':
+        await this.applyUpdate(message.path, message.value, sender)
+        break
+
+      case 'ping':
+        sender.send(JSON.stringify({ type: 'pong' }))
+        break
+    }
+  }
+
+  async applyUpdate(path: string, value: any, sender: WebSocket) {
+    // Update data
+    this.setPath(this.data, path, value)
+    this.version++
+
+    await state.save(this)
+
+    // Broadcast to all clients except sender
+    const update = JSON.stringify({
+      type: 'update',
+      path,
+      value,
+      version: this.version,
+    })
+
+    for (const client of this.clients) {
+      if (client !== sender) {
+        client.send(update)
+      }
+    }
+  }
+
+  setPath(obj: any, path: string, value: any) {
+    const keys = path.split('.')
+    let current = obj
+
+    for (let i = 0; i < keys.length - 1; i++) {
+      if (!(keys[i] in current)) {
+        current[keys[i]] = {}
+      }
+      current = current[keys[i]]
+    }
+
+    current[keys[keys.length - 1]] = value
+  }
+
+  async getData() {
+    return {
+      data: this.data,
+      version: this.version,
+      clients: this.clients.size,
+    }
+  }
+}
+
+// Usage in worker
+export default {
+  async fetch(request: Request, env: Env) {
+    const url = new URL(request.url)
+
+    if (url.pathname === '/collaborate') {
+      const docId = url.searchParams.get('doc')
+      const state = await state.get($.CollaborativeState, `doc:${docId}`)
+
+      if (request.headers.get('Upgrade') === 'websocket') {
+        const pair = new WebSocketPair()
+        const [client, server] = Object.values(pair)
+
+        server.accept()
+        await state.connect(server)
+
+        return new Response(null, {
+          status: 101,
+          webSocket: client,
+        })
+      }
+
+      const data = await state.getData()
+      return new Response(JSON.stringify(data))
+    }
+
+    return new Response('Not found', { status: 404 })
+  },
+}
+```
+
+## Integration with every.do
+
+Scheduled state maintenance:
+
+```typescript
+import { $, state, every } from 'sdk.do'
+
+export class ScheduledCleanup {
+  data: Map<string, { value: any; expiresAt: number }> = new Map()
+  lastCleanup: number = 0
+
+  async set(key: string, value: any, ttl: number = 3600000) {
+    this.data.set(key, {
+      value,
+      expiresAt: Date.now() + ttl,
+    })
+
+    await state.save(this)
+  }
+
+  async get(key: string) {
+    const entry = this.data.get(key)
+
+    if (!entry) return null
+
+    if (entry.expiresAt < Date.now()) {
+      this.data.delete(key)
+      await state.save(this)
+      return null
+    }
+
+    return entry.value
+  }
+
+  async cleanup() {
+    const now = Date.now()
+    let removed = 0
+
+    for (const [key, entry] of this.data) {
+      if (entry.expiresAt < now) {
+        this.data.delete(key)
+        removed++
+      }
+    }
+
+    this.lastCleanup = now
+    await state.save(this)
+
+    return {
+      removed,
+      remaining: this.data.size,
+      timestamp: now,
+    }
+  }
+}
+
+// Schedule cleanup every 5 minutes
+every($.Minutes(5), async () => {
+  const cleanup = await state.get($.ScheduledCleanup, 'scheduled-data')
+  const result = await cleanup.cleanup()
+
+  console.log(`Cleanup completed: removed ${result.removed} items, ${result.remaining} remaining`)
+})
+
+// Usage
+const data = await state.get($.ScheduledCleanup, 'scheduled-data')
+await data.set('temp-key', 'temp-value', 60000) // 1 minute TTL
+```
+
+## Integration with Multiple Services
+
+Complete example combining multiple integrations:
+
+```typescript
+import { $, state, db, ai, send, on } from 'sdk.do'
+
+export class SmartOrderProcessor {
+  orderId: string
+  status: string = 'pending'
+  items: any[] = []
+  predictions: any = null
+  events: any[] = []
+
+  async create(orderId: string, items: any[]) {
+    this.orderId = orderId
+    this.items = items
+    this.status = 'created'
+
+    await state.save(this)
+
+    // Store in database
+    await db.create($.Order, {
+      $id: orderId,
+      items,
+      status: this.status,
+      createdAt: Date.now(),
+    })
+
+    // Publish event
+    await send($.Order.created, {
+      orderId,
+      items,
+      timestamp: Date.now(),
+    })
+
+    // Generate AI predictions
+    await this.generatePredictions()
+  }
+
+  async generatePredictions() {
+    const prompt = `Analyze this order and predict:
+1. Estimated processing time
+2. Potential issues
+3. Recommended actions
+
+Order items: ${JSON.stringify(this.items)}`
+
+    const predictions = await ai.generate(prompt, {
+      model: 'gpt-5',
+      schema: $.StructuredValue,
+    })
+
+    this.predictions = predictions
+    await state.save(this)
+
+    // Update database
+    await db.update($.Order, this.orderId, {
+      predictions,
+    })
+  }
+
+  async updateStatus(newStatus: string) {
+    const oldStatus = this.status
+    this.status = newStatus
+
+    this.events.push({
+      type: 'status_change',
+      oldStatus,
+      newStatus,
+      timestamp: Date.now(),
+    })
+
+    await state.save(this)
+
+    // Update database
+    await db.update($.Order, this.orderId, {
+      status: newStatus,
+      updatedAt: Date.now(),
+    })
+
+    // Publish event
+    await send($.Order.statusChanged, {
+      orderId: this.orderId,
+      oldStatus,
+      newStatus,
+      timestamp: Date.now(),
+    })
+  }
+
+  async addEvent(type: string, data: any) {
+    this.events.push({
+      type,
+      data,
+      timestamp: Date.now(),
+    })
+
+    await state.save(this)
+  }
+
+  async getState() {
+    return {
+      orderId: this.orderId,
+      status: this.status,
+      items: this.items,
+      predictions: this.predictions,
+      events: this.events,
+    }
+  }
+}
+
+// Event handlers
+on($.Order.created, async (event) => {
+  const processor = await state.get($.SmartOrderProcessor, event.orderId)
+  await processor.create(event.orderId, event.items)
+})
+
+on($.Payment.completed, async (event) => {
+  const processor = await state.get($.SmartOrderProcessor, event.orderId)
+  await processor.updateStatus('paid')
+  await processor.addEvent('payment_completed', event)
+})
+
+on($.Shipment.created, async (event) => {
+  const processor = await state.get($.SmartOrderProcessor, event.orderId)
+  await processor.updateStatus('shipped')
+  await processor.addEvent('shipment_created', event)
+})
+
+// Usage
+await send($.Order.created, {
+  orderId: 'order-123',
+  items: [
+    { id: 'item-1', quantity: 2 },
+    { id: 'item-2', quantity: 1 },
+  ],
+})
+
+const processor = await state.get($.SmartOrderProcessor, 'order-123')
+const orderState = await processor.getState()
+console.log('Order state:', orderState)
+console.log('AI predictions:', orderState.predictions)
+```
+
+## External Webhook Integration
+
+Process and store webhook data:
+
+```typescript
+import { $, state, send } from 'sdk.do'
+
+export class WebhookProcessor {
+  webhooks: Array<{ id: string; source: string; data: any; timestamp: number }> = []
+  processed: Set<string> = new Set()
+
+  async process(webhookId: string, source: string, data: any) {
+    // Check for duplicates
+    if (this.processed.has(webhookId)) {
+      return { status: 'duplicate', webhookId }
+    }
+
+    // Store webhook
+    this.webhooks.push({
+      id: webhookId,
+      source,
+      data,
+      timestamp: Date.now(),
+    })
+
+    this.processed.add(webhookId)
+
+    await state.save(this)
+
+    // Process based on source
+    await this.processWebhook(source, data)
+
+    // Publish event
+    await send($.Webhook.received, {
+      webhookId,
+      source,
+      data,
+      timestamp: Date.now(),
+    })
+
+    return { status: 'processed', webhookId }
+  }
+
+  async processWebhook(source: string, data: any) {
+    switch (source) {
+      case 'stripe':
+        await this.processStripeWebhook(data)
+        break
+
+      case 'github':
+        await this.processGitHubWebhook(data)
+        break
+
+      case 'twilio':
+        await this.processTwilioWebhook(data)
+        break
+
+      default:
+        console.log('Unknown webhook source:', source)
+    }
+  }
+
+  async processStripeWebhook(data: any) {
+    if (data.type === 'payment_intent.succeeded') {
+      await send($.Payment.completed, {
+        orderId: data.metadata.orderId,
+        amount: data.amount,
+        timestamp: Date.now(),
+      })
+    }
+  }
+
+  async processGitHubWebhook(data: any) {
+    if (data.action === 'opened' && data.pull_request) {
+      await send($.PullRequest.created, {
+        repo: data.repository.full_name,
+        number: data.pull_request.number,
+        timestamp: Date.now(),
+      })
+    }
+  }
+
+  async processTwilioWebhook(data: any) {
+    if (data.MessageStatus === 'delivered') {
+      await send($.SMS.delivered, {
+        to: data.To,
+        sid: data.MessageSid,
+        timestamp: Date.now(),
+      })
+    }
+  }
+
+  async getWebhooks(source?: string) {
+    if (source) {
+      return this.webhooks.filter((w) => w.source === source)
+    }
+    return this.webhooks
+  }
+}
+
+// Usage in worker
+export default {
+  async fetch(request: Request, env: Env) {
+    const url = new URL(request.url)
+
+    if (url.pathname === '/webhook/stripe') {
+      const data = await request.json()
+      const webhookId = request.headers.get('stripe-signature')
+
+      const processor = await state.get($.WebhookProcessor, 'webhooks')
+      const result = await processor.process(webhookId, 'stripe', data)
+
+      return new Response(JSON.stringify(result))
+    }
+
+    return new Response('Not found', { status: 404 })
+  },
+}
+```
+
+## Next Steps
+
+- Study [Real-World Use Case](./real-world-use-case) for complete production example
+- Review [Best Practices](../docs/best-practices) for optimization strategies
+- Read [Architecture Guide](../docs/architecture) to understand internals
+- Check [API Reference](../api/reference) for complete documentation
+
+---
+
+Documentation licensed under [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/).
+Code examples licensed under MIT.

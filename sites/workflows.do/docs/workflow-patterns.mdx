@@ -1,0 +1,981 @@
+---
+$id: https://workflows.do/docs/workflow-patterns
+$type: TechArticle
+title: Workflow Patterns
+description: Common workflow patterns, best practices, and anti-patterns in declarative workflow orchestration
+keywords: [workflows, patterns, best practices, orchestration, design patterns]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Workflow Patterns
+
+Learn proven workflow patterns for building robust, maintainable, and scalable business processes. This guide covers common patterns, best practices, and anti-patterns to avoid.
+
+## Sequential Patterns
+
+### Basic Sequential Workflow
+
+The simplest pattern - steps execute one after another:
+
+```typescript
+const sequentialWorkflow = workflow({
+  name: 'SequentialProcess',
+  steps: [
+    {
+      name: 'Step1',
+      action: $.Action1,
+      onSuccess: 'Step2',
+    },
+    {
+      name: 'Step2',
+      action: $.Action2,
+      onSuccess: 'Step3',
+    },
+    {
+      name: 'Step3',
+      action: $.Action3,
+    },
+  ],
+})
+```
+
+**Use When:**
+
+- Steps depend on previous step outputs
+- Order matters for business logic
+- Simple, linear processes
+
+**Avoid When:**
+
+- Steps can run independently (use parallel pattern)
+- Process has complex branching (use conditional pattern)
+
+### Pipeline Pattern
+
+Chain transformations where each step transforms data:
+
+```typescript
+const pipelineWorkflow = workflow({
+  name: 'DataPipeline',
+  steps: [
+    {
+      name: 'Extract',
+      action: async (input) => {
+        const data = await $.Data.extract(input.source)
+        return { ...input, rawData: data }
+      },
+    },
+    {
+      name: 'Transform',
+      action: async (input) => {
+        const transformed = await $.Data.transform(input.rawData)
+        return { ...input, transformedData: transformed }
+      },
+    },
+    {
+      name: 'Load',
+      action: async (input) => {
+        await $.Data.load(input.transformedData)
+        return { success: true, recordsLoaded: input.transformedData.length }
+      },
+    },
+  ],
+})
+```
+
+**Use When:**
+
+- Data flows through transformations
+- Each step adds value to data
+- ETL processes
+
+## Parallel Patterns
+
+### Parallel Execution Pattern
+
+Execute independent steps concurrently:
+
+```typescript
+const parallelWorkflow = workflow({
+  name: 'ParallelProcessing',
+  steps: [
+    $.Data.fetch,
+    {
+      $type: 'ParallelStep',
+      name: 'ProcessInParallel',
+      branches: [
+        {
+          name: 'ValidateData',
+          action: $.Data.validate,
+        },
+        {
+          name: 'EnrichData',
+          action: $.Data.enrich,
+        },
+        {
+          name: 'AnalyzeData',
+          action: $.Data.analyze,
+        },
+      ],
+      waitForAll: true,
+    },
+    $.Results.aggregate,
+  ],
+})
+```
+
+**Use When:**
+
+- Steps are independent
+- Want to reduce total execution time
+- Operations can run concurrently
+
+**Avoid When:**
+
+- Steps have dependencies
+- Resource constraints prevent parallelism
+- Order matters
+
+### Fan-Out/Fan-In Pattern
+
+Process multiple items in parallel, then aggregate:
+
+```typescript
+const fanOutFanInWorkflow = workflow({
+  name: 'BulkProcessing',
+  steps: [
+    {
+      name: 'FetchOrders',
+      action: async () => {
+        return await db.list($.Order, { status: 'pending' })
+      },
+    },
+    {
+      $type: 'ParallelStep',
+      name: 'ProcessOrders',
+      branches: async (input) => {
+        // Create a branch for each order
+        return input.orders.map((order) => ({
+          name: `ProcessOrder_${order.id}`,
+          action: async () => await $.Order.process(order),
+        }))
+      },
+      waitForAll: true,
+    },
+    {
+      name: 'AggregateResults',
+      action: async (results) => {
+        return {
+          totalProcessed: results.length,
+          successful: results.filter((r) => r.success).length,
+          failed: results.filter((r) => !r.success).length,
+        }
+      },
+    },
+  ],
+})
+```
+
+**Use When:**
+
+- Processing collections
+- Independent operations on multiple items
+- Bulk operations
+
+## Conditional Patterns
+
+### Conditional Branching Pattern
+
+Execute different paths based on conditions:
+
+```typescript
+const conditionalWorkflow = workflow({
+  name: 'ConditionalProcessing',
+  steps: [
+    {
+      name: 'EvaluateCondition',
+      action: async (order) => {
+        return {
+          ...order,
+          isPremium: order.total > 1000,
+        }
+      },
+    },
+    {
+      name: 'PremiumPath',
+      condition: (input) => input.isPremium,
+      action: async (order) => {
+        await $.Discount.apply(order, 0.1)
+        await $.Shipping.expedite(order)
+        return order
+      },
+    },
+    {
+      name: 'StandardPath',
+      condition: (input) => !input.isPremium,
+      action: async (order) => {
+        await $.Shipping.standard(order)
+        return order
+      },
+    },
+    $.Order.fulfill,
+  ],
+})
+```
+
+**Use When:**
+
+- Different business rules for different scenarios
+- A/B testing workflows
+- Feature flags
+
+### Switch Pattern
+
+Select one path from multiple options:
+
+```typescript
+const switchWorkflow = workflow({
+  name: 'OrderRouting',
+  steps: [
+    {
+      name: 'ClassifyOrder',
+      action: async (order) => {
+        if (order.isDigital) return { ...order, type: 'digital' }
+        if (order.isInternational) return { ...order, type: 'international' }
+        return { ...order, type: 'standard' }
+      },
+    },
+    {
+      $type: 'SwitchStep',
+      name: 'RouteOrder',
+      cases: {
+        digital: [$.License.generate, $.Email.sendLicense],
+        international: [$.Customs.validate, $.Shipping.international, $.Tracking.create],
+        standard: [$.Warehouse.assign, $.Shipping.domestic],
+      },
+    },
+  ],
+})
+```
+
+**Use When:**
+
+- Multiple distinct paths
+- Routing based on data
+- Complex branching logic
+
+## Error Handling Patterns
+
+### Retry Pattern
+
+Automatically retry failed operations:
+
+```typescript
+const retryWorkflow = workflow({
+  name: 'ResilientAPI',
+  steps: [
+    {
+      name: 'CallExternalAPI',
+      action: $.API.call,
+      retryPolicy: {
+        maxAttempts: 3,
+        backoff: 'exponential',
+        initialDelay: 1000,
+        maxDelay: 10000,
+        retryableErrors: ['TimeoutError', 'NetworkError', 'RateLimitError'],
+      },
+      timeout: 30000,
+    },
+  ],
+})
+```
+
+**Use When:**
+
+- Transient failures expected
+- External API calls
+- Network operations
+
+**Best Practices:**
+
+- Use exponential backoff
+- Set maximum retry attempts
+- Only retry retryable errors
+- Set timeouts
+
+### Compensation Pattern
+
+Undo changes when workflow fails:
+
+```typescript
+const compensatingWorkflow = workflow({
+  name: 'BookingWithCompensation',
+  steps: [
+    {
+      name: 'ReserveFlight',
+      action: $.Flight.reserve,
+      compensation: $.Flight.cancel,
+    },
+    {
+      name: 'ReserveHotel',
+      action: $.Hotel.reserve,
+      compensation: $.Hotel.cancel,
+    },
+    {
+      name: 'ReserveCar',
+      action: $.Car.reserve,
+      compensation: $.Car.cancel,
+    },
+    {
+      name: 'ChargePayment',
+      action: $.Payment.charge,
+      compensation: $.Payment.refund,
+    },
+  ],
+  errorHandling: {
+    strategy: 'compensate',
+    compensateInReverse: true,
+  },
+})
+```
+
+**Use When:**
+
+- Distributed transactions
+- Need to maintain consistency
+- Multi-step booking/reservation systems
+
+**Best Practices:**
+
+- Compensate in reverse order
+- Make compensations idempotent
+- Log all compensation actions
+- Handle compensation failures
+
+### Circuit Breaker Pattern
+
+Prevent cascading failures:
+
+```typescript
+const circuitBreakerWorkflow = workflow({
+  name: 'ResilientService',
+  steps: [
+    {
+      name: 'CallDependency',
+      action: $.Dependency.call,
+      circuitBreaker: {
+        failureThreshold: 5,
+        successThreshold: 2,
+        timeout: 60000,
+        fallback: async () => {
+          return await $.Cache.get()
+        },
+      },
+    },
+  ],
+})
+```
+
+**Use When:**
+
+- Dependent services might fail
+- Want to fail fast
+- Need graceful degradation
+
+## Approval Patterns
+
+### Single Approver Pattern
+
+Simple approval by one person:
+
+```typescript
+const singleApprovalWorkflow = workflow({
+  name: 'ExpenseApproval',
+  steps: [
+    $.Expense.validate,
+    {
+      $type: 'ApprovalStep',
+      name: 'ManagerApproval',
+      approver: (expense) => expense.managerId,
+      timeout: '24h',
+      onApprove: 'ProcessExpense',
+      onReject: 'NotifyEmployee',
+      notificationTemplate: {
+        subject: 'Expense Approval Required',
+        body: 'Amount: {{amount}}, Category: {{category}}',
+      },
+    },
+    {
+      name: 'ProcessExpense',
+      condition: 'approved === true',
+      action: $.Expense.process,
+    },
+  ],
+})
+```
+
+**Use When:**
+
+- Simple approval workflows
+- Single decision maker
+- Fast approval needed
+
+### Multi-Level Approval Pattern
+
+Escalating approvals based on criteria:
+
+```typescript
+const multiLevelApprovalWorkflow = workflow({
+  name: 'PurchaseApproval',
+  steps: [
+    {
+      name: 'DetermineApprovalLevel',
+      action: (purchase) => {
+        if (purchase.amount > 10000) return { ...purchase, level: 3 }
+        if (purchase.amount > 1000) return { ...purchase, level: 2 }
+        return { ...purchase, level: 1 }
+      },
+    },
+    {
+      $type: 'ApprovalStep',
+      name: 'ManagerApproval',
+      condition: (purchase) => purchase.level >= 1,
+      approver: $.Manager,
+      timeout: '24h',
+    },
+    {
+      $type: 'ApprovalStep',
+      name: 'DirectorApproval',
+      condition: (purchase) => purchase.level >= 2,
+      approver: $.Director,
+      timeout: '48h',
+    },
+    {
+      $type: 'ApprovalStep',
+      name: 'CFOApproval',
+      condition: (purchase) => purchase.level >= 3,
+      approver: $.CFO,
+      timeout: '72h',
+    },
+    $.Purchase.execute,
+  ],
+})
+```
+
+**Use When:**
+
+- Large financial decisions
+- Regulatory requirements
+- Risk management
+
+### Consensus Pattern
+
+Require approval from multiple people:
+
+```typescript
+const consensusWorkflow = workflow({
+  name: 'HiringDecision',
+  steps: [
+    {
+      $type: 'ParallelApprovalStep',
+      name: 'TeamApproval',
+      approvers: [$.HiringManager, $.TeamLead, $.HRManager],
+      strategy: 'unanimous', // all must approve
+      timeout: '48h',
+    },
+    {
+      name: 'MakeOffer',
+      condition: 'allApproved === true',
+      action: $.Offer.create,
+    },
+  ],
+})
+```
+
+**Use When:**
+
+- Consensus required
+- Multiple stakeholders
+- Important decisions
+
+## Event-Driven Patterns
+
+### Event Trigger Pattern
+
+Start workflow based on events:
+
+```typescript
+import { $, workflow, on } from 'sdk.do'
+
+const eventWorkflow = workflow({
+  name: 'OrderProcessing',
+  steps: [$.Order.validate, $.Payment.process, $.Order.fulfill],
+})
+
+// Trigger on event
+on($.Order.created, async (order) => {
+  await eventWorkflow.execute(order)
+})
+
+// Trigger on multiple events
+on([$.Order.created, $.Order.updated], async (order) => {
+  if (order.status === 'pending') {
+    await eventWorkflow.execute(order)
+  }
+})
+```
+
+**Use When:**
+
+- Event-driven architecture
+- Reactive systems
+- Asynchronous processing
+
+### Saga Pattern
+
+Coordinate distributed transactions:
+
+```typescript
+const sagaWorkflow = workflow({
+  name: 'OrderSaga',
+  steps: [
+    {
+      name: 'CreateOrder',
+      action: $.Order.create,
+      compensation: $.Order.delete,
+    },
+    {
+      name: 'ReserveInventory',
+      action: $.Inventory.reserve,
+      compensation: $.Inventory.release,
+    },
+    {
+      name: 'ProcessPayment',
+      action: $.Payment.process,
+      compensation: $.Payment.refund,
+    },
+    {
+      name: 'CreateShipment',
+      action: $.Shipment.create,
+      compensation: $.Shipment.cancel,
+    },
+  ],
+  errorHandling: {
+    strategy: 'saga',
+    compensateInReverse: true,
+    logCompensations: true,
+  },
+})
+```
+
+**Use When:**
+
+- Microservices architecture
+- Distributed systems
+- Long-running transactions
+
+## State Machine Patterns
+
+### State Transition Pattern
+
+Model workflow as state machine:
+
+```typescript
+const stateMachineWorkflow = workflow({
+  name: 'OrderStateMachine',
+  initialState: 'created',
+  states: {
+    created: {
+      on: {
+        VALIDATE: {
+          target: 'validated',
+          action: $.Order.validate,
+        },
+        CANCEL: {
+          target: 'cancelled',
+          action: $.Order.cancel,
+        },
+      },
+    },
+    validated: {
+      on: {
+        PROCESS_PAYMENT: {
+          target: 'payment_processed',
+          action: $.Payment.process,
+        },
+        CANCEL: {
+          target: 'cancelled',
+          action: $.Order.cancel,
+        },
+      },
+    },
+    payment_processed: {
+      on: {
+        FULFILL: {
+          target: 'fulfilled',
+          action: $.Order.fulfill,
+        },
+        REFUND: {
+          target: 'refunded',
+          action: $.Payment.refund,
+        },
+      },
+    },
+    fulfilled: {
+      type: 'final',
+    },
+    cancelled: {
+      type: 'final',
+    },
+  },
+})
+```
+
+**Use When:**
+
+- Complex state transitions
+- Clearly defined states
+- Need audit trail of state changes
+
+## Composition Patterns
+
+### Workflow Composition Pattern
+
+Build complex workflows from simpler ones:
+
+```typescript
+// Reusable sub-workflows
+const validateOrderWorkflow = workflow({
+  name: 'ValidateOrder',
+  steps: [$.Order.checkInventory, $.Order.validateCustomer, $.Order.calculateTotals],
+})
+
+const processPaymentWorkflow = workflow({
+  name: 'ProcessPayment',
+  steps: [$.Payment.authorize, $.Payment.capture, $.Payment.recordTransaction],
+})
+
+// Composed workflow
+const orderWorkflow = workflow({
+  name: 'CompleteOrderProcessing',
+  steps: [validateOrderWorkflow, processPaymentWorkflow, $.Order.fulfill, $.Customer.notify],
+})
+```
+
+**Use When:**
+
+- Building complex workflows
+- Reusing workflow logic
+- Maintaining workflow libraries
+
+### Template Pattern
+
+Create workflow templates:
+
+```typescript
+const createApprovalWorkflow = (config) => {
+  return workflow({
+    name: config.name,
+    steps: [
+      {
+        name: 'Validate',
+        action: config.validateAction,
+      },
+      {
+        $type: 'ApprovalStep',
+        name: 'Approval',
+        approver: config.approver,
+        timeout: config.timeout || '24h',
+      },
+      {
+        name: 'Execute',
+        condition: 'approved === true',
+        action: config.executeAction,
+      },
+    ],
+  })
+}
+
+// Use template
+const expenseApproval = createApprovalWorkflow({
+  name: 'ExpenseApproval',
+  validateAction: $.Expense.validate,
+  approver: $.Manager,
+  executeAction: $.Expense.process,
+})
+```
+
+**Use When:**
+
+- Similar workflows with variations
+- Workflow-as-a-service
+- Standardizing patterns
+
+## Anti-Patterns
+
+### God Workflow
+
+**❌ Anti-Pattern**: Single workflow doing too much
+
+```typescript
+// ❌ Bad - workflow is too complex
+const godWorkflow = workflow({
+  name: 'DoEverything',
+  steps: [
+    // 50+ steps doing everything
+  ],
+})
+```
+
+**✅ Solution**: Break into smaller, focused workflows
+
+```typescript
+// ✅ Good - focused workflows
+const orderWorkflow = workflow({ name: 'Order', steps: [...] })
+const paymentWorkflow = workflow({ name: 'Payment', steps: [...] })
+const shipmentWorkflow = workflow({ name: 'Shipment', steps: [...] })
+```
+
+### Silent Failures
+
+**❌ Anti-Pattern**: Ignoring errors
+
+```typescript
+// ❌ Bad - errors ignored
+const silentWorkflow = workflow({
+  steps: [
+    {
+      action: async () => {
+        try {
+          await riskyOperation()
+        } catch (error) {
+          // Silently ignored!
+        }
+      },
+    },
+  ],
+})
+```
+
+**✅ Solution**: Handle errors explicitly
+
+```typescript
+// ✅ Good - explicit error handling
+const errorHandlingWorkflow = workflow({
+  steps: [
+    {
+      action: $.Operation,
+      retryPolicy: { maxAttempts: 3 },
+      onFailure: 'HandleError',
+    },
+  ],
+  errorHandling: {
+    strategy: 'compensate',
+  },
+})
+```
+
+### Tight Coupling
+
+**❌ Anti-Pattern**: Steps tightly coupled
+
+```typescript
+// ❌ Bad - steps know too much about each other
+const coupledWorkflow = workflow({
+  steps: [
+    {
+      action: async () => {
+        const result = await stepOneLogic()
+        // Directly manipulating next step's data
+        window.stepTwoInput = result
+        return result
+      },
+    },
+  ],
+})
+```
+
+**✅ Solution**: Use input/output contracts
+
+```typescript
+// ✅ Good - clean interfaces
+const decoupledWorkflow = workflow({
+  steps: [
+    {
+      name: 'Step1',
+      action: $.Action1,
+      output: 'step1Result',
+    },
+    {
+      name: 'Step2',
+      action: $.Action2,
+      input: (context) => context.step1Result,
+    },
+  ],
+})
+```
+
+### Infinite Retry
+
+**❌ Anti-Pattern**: Retrying forever
+
+```typescript
+// ❌ Bad - infinite retries
+const infiniteRetryWorkflow = workflow({
+  steps: [
+    {
+      action: $.Action,
+      retryPolicy: {
+        maxAttempts: Infinity, // Never give up!
+      },
+    },
+  ],
+})
+```
+
+**✅ Solution**: Set reasonable limits
+
+```typescript
+// ✅ Good - bounded retries with fallback
+const boundedRetryWorkflow = workflow({
+  steps: [
+    {
+      action: $.Action,
+      retryPolicy: {
+        maxAttempts: 3,
+        backoff: 'exponential',
+      },
+      fallback: $.FallbackAction,
+    },
+  ],
+})
+```
+
+## Best Practices
+
+### 1. Design for Idempotency
+
+Make steps safe to retry:
+
+```typescript
+const idempotentWorkflow = workflow({
+  steps: [
+    {
+      name: 'ProcessPayment',
+      action: async (order) => {
+        // Check if already processed
+        const existing = await db.get($.Payment, {
+          where: { orderId: order.id },
+        })
+        if (existing) return existing
+
+        // Process only if not already done
+        return await $.Payment.process(order)
+      },
+    },
+  ],
+})
+```
+
+### 2. Use Semantic Patterns
+
+Leverage `$.Subject.predicate.Object`:
+
+```typescript
+// Clear intent
+const workflow = workflow({
+  steps: [$.Order.validate, $.Payment.process, $.Order.fulfill],
+})
+```
+
+### 3. Add Observability
+
+Monitor workflow execution:
+
+```typescript
+const observableWorkflow = workflow({
+  name: 'Monitored',
+  steps: [...],
+  onStepStart: (step) => {
+    console.log(`Starting ${step.name}`)
+    metrics.increment('workflow.step.started')
+  },
+  onStepComplete: (step, result) => {
+    console.log(`Completed ${step.name}`)
+    metrics.increment('workflow.step.completed')
+  },
+  onError: (error) => {
+    console.error('Error:', error)
+    metrics.increment('workflow.error')
+  }
+})
+```
+
+### 4. Document Workflows
+
+Add descriptions and examples:
+
+```typescript
+const documentedWorkflow = workflow({
+  name: 'OrderProcessing',
+  description: `
+    Processes customer orders from creation to fulfillment.
+
+    Steps:
+    1. Validate order data
+    2. Process payment
+    3. Reserve inventory
+    4. Create shipment
+    5. Notify customer
+
+    Error Handling: Compensating transactions with refunds
+    Timeout: 5 minutes per step
+  `,
+  steps: [...]
+})
+```
+
+### 5. Version Workflows
+
+Track workflow versions:
+
+```typescript
+const versionedWorkflow = workflow({
+  name: 'OrderProcessing',
+  version: '2.0.0',
+  steps: [...],
+  changelog: {
+    '2.0.0': 'Added parallel inventory check',
+    '1.0.0': 'Initial version'
+  }
+})
+```
+
+## Summary
+
+Workflow patterns provide proven solutions for common orchestration challenges:
+
+- **Sequential**: Linear processes with dependencies
+- **Parallel**: Concurrent, independent operations
+- **Conditional**: Dynamic branching based on data
+- **Error Handling**: Resilient workflows with retry and compensation
+- **Approval**: Human-in-the-loop decision making
+- **Event-Driven**: Reactive, asynchronous processing
+- **State Machine**: Complex state transitions
+- **Composition**: Building complex workflows from simple ones
+
+Choose patterns based on your requirements, avoid anti-patterns, and follow best practices for maintainable, reliable workflows.
+
+## Next Steps
+
+- [Orchestration](./orchestration.mdx) - Advanced orchestration strategies
+- [API Reference](../api/index.mdx) - Complete API documentation
+- [Examples](../examples/basic-workflow.mdx) - Practical workflow examples
+
+## Resources
+
+- [workflows.do](https://workflows.do)
+- [Workflow Patterns](http://workflowpatterns.com)
+- [Enterprise Integration Patterns](https://www.enterpriseintegrationpatterns.com)

@@ -1,0 +1,631 @@
+---
+title: Cloudflare Workers on the .do Platform
+description: Deploy and manage serverless functions on Cloudflare's edge network
+---
+
+# Cloudflare Workers
+
+Cloudflare Workers are serverless functions that run on Cloudflare's global edge network. They provide low-latency compute at the edge, close to your users worldwide.
+
+## Platform Architecture
+
+The `.do` platform uses Cloudflare Workers extensively:
+
+```
+workers/
+├── admin/          # Admin dashboard and CMS
+├── agent/          # AI agent orchestration
+├── ai/             # AI inference and models
+├── api/            # REST API endpoints
+├── browser/        # Browser rendering (Puppeteer)
+├── do/             # Durable Objects coordination
+├── esbuild/        # Build and bundling service
+├── glyph/          # Typography and fonts
+├── graph/          # GraphQL API
+├── markdown/       # Markdown processing
+├── mcp/            # Model Context Protocol server
+├── mdx/            # MDX compilation and rendering
+├── oauth/          # OAuth authentication
+├── pipeline/       # Data processing pipelines
+├── template/       # Worker template (base)
+├── vapi/           # Voice API integration
+└── workers/        # Worker management
+```
+
+## Worker Development
+
+### Creating a New Worker
+
+1. **Clone from Template**
+
+```bash
+cp -r workers/template workers/my-worker
+cd workers/my-worker
+```
+
+2. **Configure Worker**
+
+Edit `wrangler.jsonc`:
+
+```jsonc
+{
+  "name": "my-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-10-04",
+  "observability": {
+    "enabled": true,
+  },
+}
+```
+
+3. **Implement Handler**
+
+Edit `src/index.ts`:
+
+```typescript
+interface Env {
+  // Define your bindings here
+}
+
+export default {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const url = new URL(request.url)
+
+    return new Response(
+      JSON.stringify({
+        message: 'Hello from my-worker!',
+        path: url.pathname,
+      }),
+      {
+        headers: { 'Content-Type': 'application/json' },
+      }
+    )
+  },
+} satisfies ExportedHandler<Env>
+```
+
+4. **Add Package Scripts**
+
+Edit `package.json`:
+
+```json
+{
+  "name": "my-worker",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "start": "wrangler dev",
+    "test": "vitest",
+    "cf-typegen": "wrangler types"
+  }
+}
+```
+
+### Local Development
+
+```bash
+# Start development server
+pnpm dev
+
+# Or run specific worker
+pnpm --filter ./workers/my-worker dev
+```
+
+The worker will be available at `http://localhost:8787`.
+
+### Testing
+
+```bash
+# Run tests
+pnpm test
+
+# Run tests for specific worker
+pnpm --filter ./workers/my-worker test
+
+# Watch mode
+pnpm test:watch
+```
+
+### Deployment
+
+```bash
+# Deploy all workers
+pnpm deploy
+
+# Deploy specific worker
+pnpm --filter ./workers/my-worker deploy
+```
+
+## Worker Patterns
+
+### Request Routing
+
+```typescript
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const url = new URL(request.url)
+
+    // Route by path
+    switch (url.pathname) {
+      case '/':
+        return handleHome(request)
+      case '/api/data':
+        return handleData(request, env)
+      case '/health':
+        return new Response('OK', { status: 200 })
+      default:
+        return new Response('Not Found', { status: 404 })
+    }
+  },
+}
+```
+
+### CORS Handling
+
+```typescript
+function handleCORS(request: Request): Response | null {
+  if (request.method === 'OPTIONS') {
+    return new Response(null, {
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      },
+    })
+  }
+  return null
+}
+
+export default {
+  async fetch(request: Request): Promise<Response> {
+    const corsResponse = handleCORS(request)
+    if (corsResponse) return corsResponse
+
+    const response = await handleRequest(request)
+    response.headers.set('Access-Control-Allow-Origin', '*')
+    return response
+  },
+}
+```
+
+### Error Handling
+
+```typescript
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    try {
+      return await handleRequest(request, env)
+    } catch (error) {
+      console.error('Worker error:', error)
+
+      return new Response(
+        JSON.stringify({
+          error: 'Internal Server Error',
+          message: error instanceof Error ? error.message : 'Unknown error',
+        }),
+        {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
+    }
+  },
+}
+```
+
+### Authentication
+
+```typescript
+interface Env {
+  AUTH_TOKEN: string
+}
+
+function authenticate(request: Request, env: Env): boolean {
+  const authHeader = request.headers.get('Authorization')
+  if (!authHeader) return false
+
+  const token = authHeader.replace('Bearer ', '')
+  return token === env.AUTH_TOKEN
+}
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    if (!authenticate(request, env)) {
+      return new Response('Unauthorized', { status: 401 })
+    }
+
+    return handleRequest(request, env)
+  },
+}
+```
+
+## Cloudflare Bindings
+
+### KV (Key-Value Store)
+
+```typescript
+interface Env {
+  MY_KV: KVNamespace
+}
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    // Write
+    await env.MY_KV.put('key', 'value')
+
+    // Read
+    const value = await env.MY_KV.get('key')
+
+    // Delete
+    await env.MY_KV.delete('key')
+
+    // List
+    const list = await env.MY_KV.list()
+
+    return Response.json({ value, list })
+  },
+}
+```
+
+Configure in `wrangler.jsonc`:
+
+```jsonc
+{
+  "kv_namespaces": [
+    {
+      "binding": "MY_KV",
+      "id": "your-kv-id",
+      "preview_id": "your-preview-kv-id",
+    },
+  ],
+}
+```
+
+### D1 (SQL Database)
+
+```typescript
+interface Env {
+  DB: D1Database
+}
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    // Query
+    const result = await env.DB.prepare('SELECT * FROM users WHERE id = ?').bind(1).first()
+
+    // Insert
+    await env.DB.prepare('INSERT INTO users (name, email) VALUES (?, ?)').bind('Alice', 'alice@example.com').run()
+
+    return Response.json(result)
+  },
+}
+```
+
+Configure in `wrangler.jsonc`:
+
+```jsonc
+{
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "my-database",
+      "database_id": "your-database-id",
+    },
+  ],
+}
+```
+
+### R2 (Object Storage)
+
+```typescript
+interface Env {
+  MY_BUCKET: R2Bucket
+}
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    // Put object
+    await env.MY_BUCKET.put('file.txt', 'Hello World')
+
+    // Get object
+    const object = await env.MY_BUCKET.get('file.txt')
+    if (object) {
+      return new Response(object.body)
+    }
+
+    // List objects
+    const list = await env.MY_BUCKET.list()
+
+    return Response.json(list)
+  },
+}
+```
+
+Configure in `wrangler.jsonc`:
+
+```jsonc
+{
+  "r2_buckets": [
+    {
+      "binding": "MY_BUCKET",
+      "bucket_name": "my-bucket",
+    },
+  ],
+}
+```
+
+### Durable Objects
+
+```typescript
+export class MyDurableObject extends DurableObject {
+  async fetch(request: Request): Promise<Response> {
+    // Access persistent storage
+    const count = (await this.ctx.storage.get<number>('count')) || 0
+    await this.ctx.storage.put('count', count + 1)
+
+    return Response.json({ count: count + 1 })
+  }
+}
+
+interface Env {
+  MY_DO: DurableObjectNamespace
+}
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    // Get DO instance
+    const id = env.MY_DO.idFromName('my-instance')
+    const stub = env.MY_DO.get(id)
+
+    // Forward request to DO
+    return stub.fetch(request)
+  },
+}
+```
+
+Configure in `wrangler.jsonc`:
+
+```jsonc
+{
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "MY_DO",
+        "class_name": "MyDurableObject",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_classes": ["MyDurableObject"],
+    },
+  ],
+}
+```
+
+### Service Bindings
+
+```typescript
+interface Env {
+  OTHER_WORKER: Fetcher
+}
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    // Call another worker
+    const response = await env.OTHER_WORKER.fetch(new Request('https://fake-host/api/data'))
+
+    return response
+  },
+}
+```
+
+Configure in `wrangler.jsonc`:
+
+```jsonc
+{
+  "services": [
+    {
+      "binding": "OTHER_WORKER",
+      "service": "other-worker-name",
+    },
+  ],
+}
+```
+
+## Snippets Integration
+
+Snippets are reusable Worker components that can be deployed and composed together.
+
+### Using Snippets
+
+Deploy a snippet:
+
+```bash
+pnpm deploy:snippet scraper
+```
+
+Reference as service binding:
+
+```jsonc
+{
+  "services": [
+    {
+      "binding": "SCRAPER",
+      "service": "snippet-scraper",
+    },
+  ],
+}
+```
+
+Use in your worker:
+
+```typescript
+interface Env {
+  SCRAPER: Fetcher
+}
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const response = await env.SCRAPER.fetch(new Request('https://snippet-scraper/h1/https://example.com'))
+    return response
+  },
+}
+```
+
+### Available Snippets
+
+- **scraper** - HTML scraping with selector syntax and framework prop extraction
+- **render** - Bidirectional Markdown/HTML conversion
+
+See [Snippet Documentation](/Snippet.mdx) for more details.
+
+## Best Practices
+
+### Performance
+
+1. **Minimize Cold Starts**
+   - Keep initialization code minimal
+   - Lazy load heavy dependencies
+   - Use module-level caching carefully
+
+2. **Use Streaming**
+   - Stream large responses
+   - Process data incrementally
+   - Reduce memory usage
+
+3. **Cache Strategically**
+   - Use Cache API for static assets
+   - Cache external API responses
+   - Set appropriate TTLs
+
+### Security
+
+1. **Validate Inputs**
+   - Sanitize user input
+   - Validate request parameters
+   - Check content types
+
+2. **Use Secrets**
+   - Store sensitive data in environment variables
+   - Use Wrangler secrets: `wrangler secret put SECRET_NAME`
+   - Never commit secrets to version control
+
+3. **Set Security Headers**
+   - Content-Security-Policy
+   - X-Content-Type-Options
+   - X-Frame-Options
+
+### Monitoring
+
+1. **Enable Observability**
+
+   ```jsonc
+   {
+     "observability": {
+       "enabled": true,
+       "head_sampling_rate": 1,
+     },
+   }
+   ```
+
+2. **Structured Logging**
+
+   ```typescript
+   console.log(
+     JSON.stringify({
+       level: 'info',
+       message: 'Request processed',
+       path: url.pathname,
+       method: request.method,
+     })
+   )
+   ```
+
+3. **Tail Logs**
+   ```bash
+   wrangler tail my-worker
+   ```
+
+### Error Handling
+
+1. **Catch All Errors**
+   - Wrap fetch handler in try/catch
+   - Return appropriate error responses
+   - Log errors for debugging
+
+2. **Graceful Degradation**
+   - Handle external service failures
+   - Provide fallback responses
+   - Set timeouts for external requests
+
+3. **User-Friendly Errors**
+   - Return meaningful error messages
+   - Use appropriate HTTP status codes
+   - Include request IDs for tracking
+
+## Platform Scripts
+
+### Monorepo Commands
+
+```bash
+# Development
+pnpm dev                              # Run all workers in dev mode
+pnpm --filter ./workers/ai dev        # Run specific worker
+
+# Testing
+pnpm test                             # Test all workers
+pnpm test:watch                       # Watch mode
+pnpm --filter ./workers/ai test       # Test specific worker
+
+# Building
+pnpm build                            # Build all workers
+pnpm --filter ./workers/ai build      # Build specific worker
+
+# Deployment
+pnpm deploy                           # Deploy all workers
+pnpm --filter ./workers/ai deploy     # Deploy specific worker
+pnpm deploy:snippet scraper           # Deploy snippet
+
+# Cleanup
+pnpm clean                            # Clean all workers
+```
+
+### Worker-Specific Scripts
+
+Each worker in `workers/*/package.json`:
+
+```json
+{
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "start": "wrangler dev",
+    "test": "vitest",
+    "cf-typegen": "wrangler types"
+  }
+}
+```
+
+## Resources
+
+### Documentation
+
+- [Snippets Documentation](/Snippet.mdx)
+- [MDX Overview](/readme.mdx)
+- [Cloudflare Workers Docs](https://developers.cloudflare.com/workers/)
+
+### Tools
+
+- [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/)
+- [Workers Playground](https://workers.cloudflare.com/playground)
+- [Runtime APIs](https://developers.cloudflare.com/workers/runtime-apis/)
+
+### Platform
+
+- [Repository Structure](../../../ARCHITECTURE.md)
+- [Coding Conventions](../../../CLAUDE.md)
+- [Development Guide](../../../README.md)

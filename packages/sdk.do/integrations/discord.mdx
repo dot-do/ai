@@ -1,0 +1,792 @@
+---
+$id: https://integrations.do/discord
+$type: Integration
+name: Discord
+service: discord
+description: Voice, video, and text communication platform for communities
+category: communication
+sdkBased: true
+sdkPackage: 'discord.js'
+sdkVersion: ^14.0.0
+sdkImport: Client
+
+auth:
+  type: api-key
+  location: header
+  headerName: Authorization
+  scheme: Bot
+
+resources:
+  - name: Message
+    plural: Messages
+    sdkPath: channels.messages
+    description: Send, edit, and delete messages in channels
+    operations:
+      - name: send
+        method: send
+        params:
+          - name: channelId
+            type: string
+            required: true
+            description: Channel ID where message will be sent
+          - name: content
+            type: string
+            required: false
+            description: Message text content
+          - name: embeds
+            type: array
+            required: false
+            description: Rich embed objects for formatted messages
+          - name: components
+            type: array
+            required: false
+            description: Interactive components (buttons, select menus)
+          - name: files
+            type: array
+            required: false
+            description: File attachments
+          - name: reply
+            type: object
+            required: false
+            description: Message reference for replies
+          - name: tts
+            type: boolean
+            required: false
+            description: Text-to-speech enabled
+        returns: Message
+
+      - name: edit
+        method: edit
+        params:
+          - name: messageId
+            type: string
+            required: true
+            description: Message ID to edit
+          - name: content
+            type: string
+            required: false
+            description: New message content
+          - name: embeds
+            type: array
+            required: false
+            description: Updated embeds
+          - name: components
+            type: array
+            required: false
+            description: Updated components
+        returns: Message
+
+      - name: delete
+        method: delete
+        params:
+          - name: messageId
+            type: string
+            required: true
+            description: Message ID to delete
+        returns: boolean
+
+      - name: get
+        method: fetch
+        params:
+          - name: messageId
+            type: string
+            required: true
+            description: Message ID to retrieve
+        returns: Message
+
+  - name: Channel
+    plural: Channels
+    sdkPath: channels
+    description: Manage text, voice, and category channels
+    operations:
+      - name: create
+        method: create
+        params:
+          - name: guildId
+            type: string
+            required: true
+            description: Guild (server) ID
+          - name: name
+            type: string
+            required: true
+            description: Channel name (2-100 characters)
+          - name: type
+            type: number
+            required: false
+            description: Channel type (0=text, 2=voice, 4=category)
+          - name: topic
+            type: string
+            required: false
+            description: Channel topic (text channels only)
+          - name: nsfw
+            type: boolean
+            required: false
+            description: Mark channel as NSFW
+          - name: parentId
+            type: string
+            required: false
+            description: Parent category ID
+        returns: Channel
+
+      - name: get
+        method: fetch
+        params:
+          - name: channelId
+            type: string
+            required: true
+            description: Channel ID
+        returns: Channel
+
+      - name: update
+        method: edit
+        params:
+          - name: channelId
+            type: string
+            required: true
+            description: Channel ID
+          - name: name
+            type: string
+            required: false
+            description: New channel name
+          - name: topic
+            type: string
+            required: false
+            description: New channel topic
+          - name: nsfw
+            type: boolean
+            required: false
+            description: Update NSFW status
+        returns: Channel
+
+      - name: delete
+        method: delete
+        params:
+          - name: channelId
+            type: string
+            required: true
+            description: Channel ID
+        returns: boolean
+
+      - name: list
+        method: fetch
+        params:
+          - name: guildId
+            type: string
+            required: true
+            description: Guild (server) ID
+        returns: Channel[]
+
+  - name: Guild
+    plural: Guilds
+    sdkPath: guilds
+    description: Manage Discord servers (guilds)
+    operations:
+      - name: get
+        method: fetch
+        params:
+          - name: guildId
+            type: string
+            required: true
+            description: Guild ID
+        returns: Guild
+
+      - name: list
+        method: fetch
+        params: []
+        returns: Guild[]
+
+      - name: update
+        method: edit
+        params:
+          - name: guildId
+            type: string
+            required: true
+            description: Guild ID
+          - name: name
+            type: string
+            required: false
+            description: New guild name
+          - name: icon
+            type: string
+            required: false
+            description: Base64 encoded icon image
+          - name: region
+            type: string
+            required: false
+            description: Voice region
+        returns: Guild
+
+  - name: Member
+    plural: Members
+    sdkPath: guilds.members
+    description: Manage guild members
+    operations:
+      - name: get
+        method: fetch
+        params:
+          - name: guildId
+            type: string
+            required: true
+            description: Guild ID
+          - name: userId
+            type: string
+            required: true
+            description: User ID
+        returns: Member
+
+      - name: list
+        method: fetch
+        params:
+          - name: guildId
+            type: string
+            required: true
+            description: Guild ID
+          - name: limit
+            type: number
+            required: false
+            description: Max members to return (1-1000)
+        returns: Member[]
+        pagination:
+          type: cursor
+          cursorField: after
+          limitField: limit
+          defaultLimit: 100
+          maxLimit: 1000
+
+      - name: kick
+        method: kick
+        params:
+          - name: guildId
+            type: string
+            required: true
+            description: Guild ID
+          - name: userId
+            type: string
+            required: true
+            description: User ID to kick
+          - name: reason
+            type: string
+            required: false
+            description: Reason for kick
+        returns: boolean
+
+      - name: ban
+        method: ban
+        params:
+          - name: guildId
+            type: string
+            required: true
+            description: Guild ID
+          - name: userId
+            type: string
+            required: true
+            description: User ID to ban
+          - name: reason
+            type: string
+            required: false
+            description: Reason for ban
+          - name: deleteMessageDays
+            type: number
+            required: false
+            description: Days of message history to delete (0-7)
+        returns: boolean
+
+  - name: Role
+    plural: Roles
+    sdkPath: guilds.roles
+    description: Manage guild roles and permissions
+    operations:
+      - name: create
+        method: create
+        params:
+          - name: guildId
+            type: string
+            required: true
+            description: Guild ID
+          - name: name
+            type: string
+            required: true
+            description: Role name
+          - name: permissions
+            type: string
+            required: false
+            description: Bitwise permission value
+          - name: color
+            type: number
+            required: false
+            description: RGB color value
+          - name: hoist
+            type: boolean
+            required: false
+            description: Display separately in member list
+          - name: mentionable
+            type: boolean
+            required: false
+            description: Allow role to be mentioned
+        returns: Role
+
+      - name: update
+        method: edit
+        params:
+          - name: roleId
+            type: string
+            required: true
+            description: Role ID
+          - name: name
+            type: string
+            required: false
+            description: New role name
+          - name: permissions
+            type: string
+            required: false
+            description: New permissions
+          - name: color
+            type: number
+            required: false
+            description: New color
+        returns: Role
+
+      - name: delete
+        method: delete
+        params:
+          - name: roleId
+            type: string
+            required: true
+            description: Role ID
+        returns: boolean
+
+      - name: list
+        method: fetch
+        params:
+          - name: guildId
+            type: string
+            required: true
+            description: Guild ID
+        returns: Role[]
+
+webhooks:
+  enabled: true
+  signatureHeader: X-Signature-Ed25519
+  signatureAlgorithm: ed25519
+  verificationMethod: signature
+  events:
+    - name: message.create
+      type: MESSAGE_CREATE
+      description: A message was created
+    - name: message.update
+      type: MESSAGE_UPDATE
+      description: A message was updated
+    - name: message.delete
+      type: MESSAGE_DELETE
+      description: A message was deleted
+    - name: channel.create
+      type: CHANNEL_CREATE
+      description: A channel was created
+    - name: channel.update
+      type: CHANNEL_UPDATE
+      description: A channel was updated
+    - name: channel.delete
+      type: CHANNEL_DELETE
+      description: A channel was deleted
+    - name: guild.create
+      type: GUILD_CREATE
+      description: Bot joined a guild
+    - name: guild.update
+      type: GUILD_UPDATE
+      description: Guild was updated
+    - name: guild.delete
+      type: GUILD_DELETE
+      description: Bot left a guild
+    - name: member.add
+      type: GUILD_MEMBER_ADD
+      description: New member joined guild
+    - name: member.remove
+      type: GUILD_MEMBER_REMOVE
+      description: Member left guild
+    - name: member.update
+      type: GUILD_MEMBER_UPDATE
+      description: Member was updated
+    - name: role.create
+      type: GUILD_ROLE_CREATE
+      description: Role was created
+    - name: role.update
+      type: GUILD_ROLE_UPDATE
+      description: Role was updated
+    - name: role.delete
+      type: GUILD_ROLE_DELETE
+      description: Role was deleted
+
+errors:
+  mapping:
+    - code: 10003
+      type: not_found
+      statusCode: 404
+      message: Unknown channel
+      retryable: false
+    - code: 10004
+      type: not_found
+      statusCode: 404
+      message: Unknown guild
+      retryable: false
+    - code: 10008
+      type: not_found
+      statusCode: 404
+      message: Unknown message
+      retryable: false
+    - code: 10013
+      type: not_found
+      statusCode: 404
+      message: Unknown user
+      retryable: false
+    - code: 20001
+      type: validation
+      statusCode: 400
+      message: Bots cannot use this endpoint
+      retryable: false
+    - code: 30001
+      type: rate_limit
+      statusCode: 429
+      message: Maximum number of guilds reached
+      retryable: false
+    - code: 30003
+      type: rate_limit
+      statusCode: 429
+      message: Maximum number of channels reached
+      retryable: false
+    - code: 40001
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 40002
+      type: validation
+      statusCode: 400
+      message: Account verification required
+      retryable: false
+    - code: 50001
+      type: authorization
+      statusCode: 403
+      message: Missing access
+      retryable: false
+    - code: 50013
+      type: authorization
+      statusCode: 403
+      message: Missing permissions
+      retryable: false
+    - code: 160002
+      type: validation
+      statusCode: 400
+      message: Message cannot be edited
+      retryable: false
+  retryable: [RATE_LIMIT, GATEWAY_UNAVAILABLE, SERVER_ERROR]
+  nonRetryable: [10003, 10004, 10008, 10013, 20001, 40001, 40002, 50001, 50013, 160002]
+
+tests:
+  enabled: true
+  cleanup: true
+  scenarios:
+    - name: Message Operations
+      description: Test message CRUD operations
+      steps:
+        - action: custom
+          resource: Message
+        - action: custom
+          resource: Message
+        - action: custom
+          resource: Message
+        - action: custom
+          resource: Message
+
+    - name: Channel Management
+      description: Test channel CRUD operations
+      steps:
+        - action: create
+          resource: Channel
+        - action: retrieve
+          resource: Channel
+        - action: update
+          resource: Channel
+        - action: list
+          resource: Channel
+        - action: delete
+          resource: Channel
+
+    - name: Guild Operations
+      description: Test guild information retrieval
+      steps:
+        - action: retrieve
+          resource: Guild
+        - action: list
+          resource: Guild
+
+    - name: Member Management
+      description: Test member operations
+      steps:
+        - action: retrieve
+          resource: Member
+        - action: list
+          resource: Member
+
+    - name: Role Management
+      description: Test role CRUD operations
+      steps:
+        - action: create
+          resource: Role
+        - action: update
+          resource: Role
+        - action: list
+          resource: Role
+        - action: delete
+          resource: Role
+
+    - name: Webhook Verification
+      description: Test webhook signature verification
+      steps:
+        - action: assert
+          expects:
+            status: 200
+
+docs:
+  homepage: https://discord.com
+  apiDocs: https://discord.com/developers/docs
+  sdkDocs: https://discord.js.org
+  guides:
+    quickstart: https://discord.com/developers/docs/getting-started
+    webhooks: https://discord.com/developers/docs/resources/webhook
+    authentication: https://discord.com/developers/docs/topics/oauth2
+    gateway: https://discord.com/developers/docs/topics/gateway
+    permissions: https://discord.com/developers/docs/topics/permissions
+---
+
+# Discord Integration
+
+Discord is a voice, video, and text communication platform designed for communities, with support for rich embeds, interactive components, and extensive bot capabilities.
+
+## Features
+
+- **Messaging**: Send and manage text messages with embeds and components
+- **Channels**: Create and manage text, voice, and category channels
+- **Guilds**: Manage Discord servers (guilds) and their settings
+- **Members**: Manage guild members and their roles
+- **Roles**: Create and manage roles with custom permissions
+- **Rich Embeds**: Send formatted messages with images, fields, and colors
+- **Interactive Components**: Add buttons and select menus to messages
+- **Webhooks**: Receive real-time events via Discord Gateway
+
+## Quick Start
+
+```typescript
+import { DiscordClient } from '@dotdo/sdk.do/integrations/discord'
+
+const discord = new DiscordClient({
+  apiKey: process.env.DISCORD_BOT_TOKEN,
+})
+
+// Send a message
+const message = await discord.message.send({
+  channelId: '1234567890',
+  content: 'Hello from Discord bot!',
+  embeds: [
+    {
+      title: 'Welcome',
+      description: 'This is a rich embed',
+      color: 0x5865f2,
+    },
+  ],
+})
+
+// Create a channel
+const channel = await discord.channel.create({
+  guildId: '0987654321',
+  name: 'new-channel',
+  type: 0, // Text channel
+})
+```
+
+## Authentication
+
+Discord uses bot tokens for authentication. Create a bot in the Discord Developer Portal and use the bot token:
+
+```bash
+export DISCORD_BOT_TOKEN=your_bot_token_here
+```
+
+**Important**: Keep your bot token secret and never commit it to version control.
+
+## Resources
+
+### Messages
+
+Send, edit, and delete messages in channels:
+
+```typescript
+// Send message
+const message = await discord.message.send({
+  channelId: '1234567890',
+  content: 'Hello!',
+  embeds: [
+    {
+      title: 'Embed Title',
+      description: 'Embed description',
+      color: 0x5865f2,
+      fields: [
+        { name: 'Field 1', value: 'Value 1', inline: true },
+        { name: 'Field 2', value: 'Value 2', inline: true },
+      ],
+    },
+  ],
+})
+
+// Edit message
+await discord.message.edit({
+  messageId: message.id,
+  content: 'Updated message',
+})
+
+// Delete message
+await discord.message.delete({ messageId: message.id })
+```
+
+### Channels
+
+Manage text, voice, and category channels:
+
+```typescript
+// Create channel
+const channel = await discord.channel.create({
+  guildId: 'guild-id',
+  name: 'announcements',
+  type: 0,
+  topic: 'Important announcements',
+})
+
+// List channels
+const channels = await discord.channel.list({ guildId: 'guild-id' })
+
+// Delete channel
+await discord.channel.delete({ channelId: channel.id })
+```
+
+### Guilds
+
+Manage Discord servers:
+
+```typescript
+// Get guild info
+const guild = await discord.guild.get({ guildId: 'guild-id' })
+
+// Update guild
+await discord.guild.update({
+  guildId: 'guild-id',
+  name: 'New Server Name',
+})
+```
+
+### Members
+
+Manage guild members:
+
+```typescript
+// Get member
+const member = await discord.member.get({
+  guildId: 'guild-id',
+  userId: 'user-id',
+})
+
+// List members
+const members = await discord.member.list({
+  guildId: 'guild-id',
+  limit: 100,
+})
+
+// Kick member
+await discord.member.kick({
+  guildId: 'guild-id',
+  userId: 'user-id',
+  reason: 'Violation of rules',
+})
+```
+
+### Roles
+
+Manage roles and permissions:
+
+```typescript
+// Create role
+const role = await discord.role.create({
+  guildId: 'guild-id',
+  name: 'Moderator',
+  color: 0xff0000,
+  hoist: true,
+  mentionable: true,
+})
+
+// List roles
+const roles = await discord.role.list({ guildId: 'guild-id' })
+
+// Delete role
+await discord.role.delete({ roleId: role.id })
+```
+
+## Webhooks
+
+Discord supports webhooks for real-time event notifications:
+
+```typescript
+import { DiscordWebhookHandler, WebhookEventRouter } from '@dotdo/sdk.do/integrations/discord'
+
+const handler = new DiscordWebhookHandler(process.env.DISCORD_PUBLIC_KEY)
+const event = await handler.handleRequest(request)
+
+const router = new WebhookEventRouter()
+router.onMessageCreate(async (event) => {
+  console.log('New message:', event.data)
+})
+
+await router.route(event)
+```
+
+## Error Handling
+
+```typescript
+import { DiscordError } from '@dotdo/sdk.do/integrations/discord'
+
+try {
+  await discord.message.send({
+    /* ... */
+  })
+} catch (error) {
+  if (error instanceof DiscordError) {
+    console.error('Discord Error:', error.code, error.message)
+    if (error.isRetriable()) {
+      // Retry logic
+    }
+  }
+}
+```
+
+## Best Practices
+
+1. **Rate Limits**: Discord enforces rate limits - implement exponential backoff
+2. **Permissions**: Ensure your bot has required permissions in guilds
+3. **Intents**: Enable necessary Gateway intents in Developer Portal
+4. **Message Content**: Message content intent required for reading message content
+5. **Embeds**: Use embeds for rich, formatted messages
+6. **Components**: Add interactivity with buttons and select menus
+7. **Error Handling**: Handle rate limits and permission errors gracefully
+
+## API Reference
+
+Full API documentation: https://discord.com/developers/docs
+
+**Key Resources**:
+
+- Messages: https://discord.com/developers/docs/resources/channel#message-object
+- Channels: https://discord.com/developers/docs/resources/channel
+- Guilds: https://discord.com/developers/docs/resources/guild
+- Members: https://discord.com/developers/docs/resources/guild#guild-member-object
+- Roles: https://discord.com/developers/docs/topics/permissions#role-object
+
+## License
+
+MIT

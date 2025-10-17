@@ -1,0 +1,665 @@
+---
+$id: https://integrations.do/teams
+$type: Integration
+name: Microsoft Teams
+service: teams
+description: Business communication and collaboration platform integrated with Microsoft 365
+category: communication
+sdkBased: true
+sdkPackage: '@microsoft/microsoft-graph-client'
+sdkVersion: ^3.0.0
+sdkImport: Client
+
+auth:
+  type: oauth2
+  authorizationUrl: https://login.microsoftonline.com/common/oauth2/v2.0/authorize
+  tokenUrl: https://login.microsoftonline.com/common/oauth2/v2.0/token
+  scopes:
+    - Team.ReadBasic.All
+    - Channel.ReadBasic.All
+    - ChannelMessage.Send
+    - ChannelMessage.Read.All
+    - ChatMessage.Send
+    - Chat.ReadWrite
+
+resources:
+  - name: Message
+    plural: Messages
+    sdkPath: teams/{teamId}/channels/{channelId}/messages
+    description: Send and manage messages in channels
+    operations:
+      - name: send
+        method: post
+        params:
+          - name: teamId
+            type: string
+            required: true
+            description: Team ID
+          - name: channelId
+            type: string
+            required: true
+            description: Channel ID
+          - name: body
+            type: object
+            required: true
+            description: Message body with content and contentType
+          - name: attachments
+            type: array
+            required: false
+            description: Message attachments
+          - name: mentions
+            type: array
+            required: false
+            description: User mentions
+        returns: Message
+
+      - name: get
+        method: get
+        params:
+          - name: teamId
+            type: string
+            required: true
+            description: Team ID
+          - name: channelId
+            type: string
+            required: true
+            description: Channel ID
+          - name: messageId
+            type: string
+            required: true
+            description: Message ID
+        returns: Message
+
+      - name: list
+        method: get
+        params:
+          - name: teamId
+            type: string
+            required: true
+            description: Team ID
+          - name: channelId
+            type: string
+            required: true
+            description: Channel ID
+          - name: top
+            type: number
+            required: false
+            description: Number of messages to return
+        returns: Message[]
+        pagination:
+          type: cursor
+          cursorField: skipToken
+          limitField: top
+          defaultLimit: 50
+
+      - name: update
+        method: patch
+        params:
+          - name: teamId
+            type: string
+            required: true
+            description: Team ID
+          - name: channelId
+            type: string
+            required: true
+            description: Channel ID
+          - name: messageId
+            type: string
+            required: true
+            description: Message ID
+          - name: body
+            type: object
+            required: true
+            description: Updated message body
+        returns: Message
+
+  - name: Channel
+    plural: Channels
+    sdkPath: teams/{teamId}/channels
+    description: Manage team channels
+    operations:
+      - name: create
+        method: post
+        params:
+          - name: teamId
+            type: string
+            required: true
+            description: Team ID
+          - name: displayName
+            type: string
+            required: true
+            description: Channel display name
+          - name: description
+            type: string
+            required: false
+            description: Channel description
+          - name: membershipType
+            type: string
+            required: false
+            description: Channel type (standard or private)
+        returns: Channel
+
+      - name: get
+        method: get
+        params:
+          - name: teamId
+            type: string
+            required: true
+            description: Team ID
+          - name: channelId
+            type: string
+            required: true
+            description: Channel ID
+        returns: Channel
+
+      - name: list
+        method: get
+        params:
+          - name: teamId
+            type: string
+            required: true
+            description: Team ID
+        returns: Channel[]
+
+      - name: update
+        method: patch
+        params:
+          - name: teamId
+            type: string
+            required: true
+            description: Team ID
+          - name: channelId
+            type: string
+            required: true
+            description: Channel ID
+          - name: displayName
+            type: string
+            required: false
+            description: New display name
+          - name: description
+            type: string
+            required: false
+            description: New description
+        returns: Channel
+
+      - name: delete
+        method: delete
+        params:
+          - name: teamId
+            type: string
+            required: true
+            description: Team ID
+          - name: channelId
+            type: string
+            required: true
+            description: Channel ID
+        returns: boolean
+
+  - name: Team
+    plural: Teams
+    sdkPath: teams
+    description: Manage Microsoft Teams
+    operations:
+      - name: create
+        method: post
+        params:
+          - name: displayName
+            type: string
+            required: true
+            description: Team display name
+          - name: description
+            type: string
+            required: false
+            description: Team description
+          - name: visibility
+            type: string
+            required: false
+            description: Team visibility (public or private)
+        returns: Team
+
+      - name: get
+        method: get
+        params:
+          - name: teamId
+            type: string
+            required: true
+            description: Team ID
+        returns: Team
+
+      - name: list
+        method: get
+        params: []
+        returns: Team[]
+
+      - name: update
+        method: patch
+        params:
+          - name: teamId
+            type: string
+            required: true
+            description: Team ID
+          - name: displayName
+            type: string
+            required: false
+            description: New display name
+          - name: description
+            type: string
+            required: false
+            description: New description
+        returns: Team
+
+  - name: Member
+    plural: Members
+    sdkPath: teams/{teamId}/members
+    description: Manage team members
+    operations:
+      - name: add
+        method: post
+        params:
+          - name: teamId
+            type: string
+            required: true
+            description: Team ID
+          - name: userId
+            type: string
+            required: true
+            description: User ID to add
+          - name: roles
+            type: array
+            required: false
+            description: Member roles
+        returns: Member
+
+      - name: get
+        method: get
+        params:
+          - name: teamId
+            type: string
+            required: true
+            description: Team ID
+          - name: membershipId
+            type: string
+            required: true
+            description: Membership ID
+        returns: Member
+
+      - name: list
+        method: get
+        params:
+          - name: teamId
+            type: string
+            required: true
+            description: Team ID
+        returns: Member[]
+
+      - name: remove
+        method: delete
+        params:
+          - name: teamId
+            type: string
+            required: true
+            description: Team ID
+          - name: membershipId
+            type: string
+            required: true
+            description: Membership ID
+        returns: boolean
+
+webhooks:
+  enabled: true
+  signatureHeader: X-MS-Token
+  signatureAlgorithm: sha256
+  verificationMethod: signature
+  events:
+    - name: message.created
+      type: chatMessage/created
+      description: New message created in channel
+    - name: message.updated
+      type: chatMessage/updated
+      description: Message updated in channel
+    - name: message.deleted
+      type: chatMessage/deleted
+      description: Message deleted from channel
+    - name: channel.created
+      type: channel/created
+      description: New channel created
+    - name: channel.updated
+      type: channel/updated
+      description: Channel updated
+    - name: channel.deleted
+      type: channel/deleted
+      description: Channel deleted
+    - name: team.created
+      type: team/created
+      description: New team created
+    - name: team.updated
+      type: team/updated
+      description: Team updated
+    - name: team.deleted
+      type: team/deleted
+      description: Team deleted
+    - name: member.added
+      type: conversationMember/added
+      description: Member added to team
+    - name: member.removed
+      type: conversationMember/removed
+      description: Member removed from team
+
+errors:
+  mapping:
+    - code: InvalidAuthenticationToken
+      type: authentication
+      statusCode: 401
+      message: Invalid or expired access token
+      retryable: false
+    - code: Unauthorized
+      type: authentication
+      statusCode: 401
+      message: Authentication required
+      retryable: false
+    - code: Forbidden
+      type: authorization
+      statusCode: 403
+      message: Insufficient permissions
+      retryable: false
+    - code: NotFound
+      type: not_found
+      statusCode: 404
+      message: Resource not found
+      retryable: false
+    - code: TooManyRequests
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+    - code: ServiceUnavailable
+      type: server
+      statusCode: 503
+      message: Service temporarily unavailable
+      retryable: true
+    - code: GatewayTimeout
+      type: server
+      statusCode: 504
+      message: Gateway timeout
+      retryable: true
+  retryable: [TooManyRequests, ServiceUnavailable, GatewayTimeout, 429, 503, 504]
+  nonRetryable: [InvalidAuthenticationToken, Unauthorized, Forbidden, NotFound, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: true
+  scenarios:
+    - name: Message Operations
+      description: Test message CRUD operations
+      steps:
+        - action: create
+          resource: Message
+        - action: retrieve
+          resource: Message
+        - action: list
+          resource: Message
+        - action: update
+          resource: Message
+
+    - name: Channel Management
+      description: Test channel CRUD operations
+      steps:
+        - action: create
+          resource: Channel
+        - action: retrieve
+          resource: Channel
+        - action: list
+          resource: Channel
+        - action: update
+          resource: Channel
+        - action: delete
+          resource: Channel
+
+    - name: Team Operations
+      description: Test team management
+      steps:
+        - action: create
+          resource: Team
+        - action: retrieve
+          resource: Team
+        - action: list
+          resource: Team
+        - action: update
+          resource: Team
+
+    - name: Member Management
+      description: Test member operations
+      steps:
+        - action: custom
+          resource: Member
+        - action: retrieve
+          resource: Member
+        - action: list
+          resource: Member
+        - action: custom
+          resource: Member
+
+    - name: Webhook Verification
+      description: Test webhook signature verification
+      steps:
+        - action: assert
+          expects:
+            status: 200
+
+docs:
+  homepage: https://www.microsoft.com/microsoft-teams
+  apiDocs: https://learn.microsoft.com/graph/api/resources/teams-api-overview
+  sdkDocs: https://github.com/microsoftgraph/msgraph-sdk-javascript
+  guides:
+    quickstart: https://learn.microsoft.com/graph/teams-quickstart
+    webhooks: https://learn.microsoft.com/graph/webhooks
+    authentication: https://learn.microsoft.com/graph/auth/
+    permissions: https://learn.microsoft.com/graph/permissions-reference
+---
+
+# Microsoft Teams Integration
+
+Microsoft Teams is a business communication platform that combines workplace chat, video meetings, file storage, and application integration within Microsoft 365.
+
+## Features
+
+- **Messaging**: Send and manage channel messages with rich formatting
+- **Channels**: Create and manage team channels
+- **Teams**: Manage Microsoft Teams and their settings
+- **Members**: Add and manage team members
+- **OAuth 2.0**: Secure authentication via Microsoft identity platform
+- **Webhooks**: Real-time notifications for team events
+- **Graph API**: Full Microsoft Graph API integration
+
+## Quick Start
+
+```typescript
+import { TeamsClient } from '@dotdo/sdk.do/integrations/teams'
+
+const teams = new TeamsClient({
+  clientId: process.env.TEAMS_CLIENT_ID,
+  clientSecret: process.env.TEAMS_CLIENT_SECRET,
+  tenantId: process.env.TEAMS_TENANT_ID,
+})
+
+// Send a message
+const message = await teams.message.send({
+  teamId: 'team-id',
+  channelId: 'channel-id',
+  body: {
+    content: 'Hello from Teams bot!',
+    contentType: 'text',
+  },
+})
+
+// Create a channel
+const channel = await teams.channel.create({
+  teamId: 'team-id',
+  displayName: 'New Channel',
+  description: 'Channel for announcements',
+})
+```
+
+## Authentication
+
+Microsoft Teams uses OAuth 2.0 via Microsoft identity platform. Register your app in Azure AD:
+
+```bash
+export TEAMS_CLIENT_ID=your_client_id
+export TEAMS_CLIENT_SECRET=your_client_secret
+export TEAMS_TENANT_ID=your_tenant_id
+```
+
+## Resources
+
+### Messages
+
+Send and manage channel messages:
+
+```typescript
+// Send message
+const message = await teams.message.send({
+  teamId: 'team-id',
+  channelId: 'channel-id',
+  body: {
+    content: 'Hello Team!',
+    contentType: 'html',
+  },
+})
+
+// List messages
+const messages = await teams.message.list({
+  teamId: 'team-id',
+  channelId: 'channel-id',
+  top: 50,
+})
+
+// Update message
+await teams.message.update({
+  teamId: 'team-id',
+  channelId: 'channel-id',
+  messageId: message.id,
+  body: {
+    content: 'Updated message',
+    contentType: 'text',
+  },
+})
+```
+
+### Channels
+
+Manage team channels:
+
+```typescript
+// Create channel
+const channel = await teams.channel.create({
+  teamId: 'team-id',
+  displayName: 'Engineering',
+  description: 'Engineering team channel',
+  membershipType: 'standard',
+})
+
+// List channels
+const channels = await teams.channel.list({ teamId: 'team-id' })
+
+// Delete channel
+await teams.channel.delete({
+  teamId: 'team-id',
+  channelId: channel.id,
+})
+```
+
+### Teams
+
+Manage Microsoft Teams:
+
+```typescript
+// Create team
+const team = await teams.team.create({
+  displayName: 'Product Team',
+  description: 'Product development team',
+  visibility: 'private',
+})
+
+// Get team
+const teamInfo = await teams.team.get({ teamId: team.id })
+
+// List all teams
+const allTeams = await teams.team.list()
+```
+
+### Members
+
+Manage team members:
+
+```typescript
+// Add member
+const member = await teams.member.add({
+  teamId: 'team-id',
+  userId: 'user-id',
+  roles: ['member'],
+})
+
+// List members
+const members = await teams.member.list({ teamId: 'team-id' })
+
+// Remove member
+await teams.member.remove({
+  teamId: 'team-id',
+  membershipId: member.id,
+})
+```
+
+## Webhooks
+
+Microsoft Teams supports webhooks via Microsoft Graph subscriptions:
+
+```typescript
+import { TeamsWebhookHandler, WebhookEventRouter } from '@dotdo/sdk.do/integrations/teams'
+
+const handler = new TeamsWebhookHandler(process.env.TEAMS_WEBHOOK_SECRET)
+const event = await handler.handleRequest(request)
+
+const router = new WebhookEventRouter()
+router.onMessageCreated(async (event) => {
+  console.log('New message:', event.data)
+})
+
+await router.route(event)
+```
+
+## Error Handling
+
+```typescript
+import { TeamsError } from '@dotdo/sdk.do/integrations/teams'
+
+try {
+  await teams.message.send({
+    /* ... */
+  })
+} catch (error) {
+  if (error instanceof TeamsError) {
+    console.error('Teams Error:', error.code, error.message)
+    if (error.isRetriable()) {
+      // Retry logic
+    }
+  }
+}
+```
+
+## Best Practices
+
+1. **OAuth Tokens**: Refresh tokens before expiration
+2. **Permissions**: Request minimum required scopes
+3. **Rate Limits**: Microsoft Graph enforces throttling
+4. **Tenant Context**: Ensure proper tenant isolation
+5. **Webhooks**: Use change notifications for real-time updates
+6. **Batch Requests**: Use Graph API batching for multiple operations
+
+## API Reference
+
+Full API documentation: https://learn.microsoft.com/graph/api/resources/teams-api-overview
+
+## License
+
+MIT

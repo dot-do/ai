@@ -1,0 +1,764 @@
+---
+$id: https://integrations.do/docs/architecture
+$type: TechArticle
+title: Integration Architecture
+description: Architecture and design patterns for external service integrations
+keywords: [integrations, architecture, patterns, design, semantic]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Integration Architecture
+
+Understanding the architecture and design patterns behind integrations.do.
+
+## Overview
+
+integrations.do provides a unified integration layer that connects Business-as-Code applications with external services through semantic patterns. The architecture is built on three core principles:
+
+1. **Semantic First** - All integrations use `$.Subject.predicate.Object` patterns
+2. **Schema.org Native** - Automatic mapping between Schema.org and service-specific types
+3. **Event-Driven** - Real-time sync using events and webhooks
+
+## Architecture Layers
+
+### 1. Integration Layer
+
+The top-level layer that provides a unified interface for all integrations:
+
+```typescript
+import { $, integrations } from 'sdk.do'
+
+// Unified interface
+const integration = await integrations.use($.ServiceName, config)
+
+// Standard CRUD operations
+await integration.create(type, data)
+await integration.get(type, id)
+await integration.list(type, options)
+await integration.update(id, data)
+await integration.delete(type, id)
+```
+
+### 2. Connector Layer
+
+Service-specific connectors that implement the integration interface:
+
+```typescript
+// Salesforce connector
+class SalesforceConnector implements IntegrationConnector {
+  async create(type: string, data: any) {
+    const mappedData = this.mapToSalesforce(type, data)
+    const result = await this.client.create(mappedData)
+    return this.mapFromSalesforce(type, result)
+  }
+
+  async get(type: string, id: string) {
+    const result = await this.client.get(this.mapType(type), id)
+    return this.mapFromSalesforce(type, result)
+  }
+
+  // ... other methods
+}
+```
+
+### 3. Authentication Layer
+
+Handles authentication flows (OAuth 2.0, API keys, etc.):
+
+```typescript
+// OAuth flow handler
+class OAuthHandler {
+  async initiate(service: string, config: OAuthConfig): Promise<string> {
+    // Generate authorization URL
+    return this.buildAuthUrl(service, config)
+  }
+
+  async callback(service: string, code: string, config: OAuthConfig) {
+    // Exchange code for tokens
+    const tokens = await this.exchangeCode(service, code, config)
+    return this.createIntegration(service, tokens)
+  }
+
+  async refresh(service: string, refreshToken: string, config: OAuthConfig) {
+    // Refresh access token
+    return await this.refreshAccessToken(service, refreshToken, config)
+  }
+}
+```
+
+### 4. Mapping Layer
+
+Maps between Schema.org types and service-specific types:
+
+```typescript
+// Type mapper
+class TypeMapper {
+  // Schema.org → Service
+  mapTo(service: string, schemaType: string, data: any): any {
+    const mapping = this.getMappingFor(service, schemaType)
+    return this.transform(data, mapping.toService)
+  }
+
+  // Service → Schema.org
+  mapFrom(service: string, schemaType: string, data: any): any {
+    const mapping = this.getMappingFor(service, schemaType)
+    return this.transform(data, mapping.fromService)
+  }
+}
+
+// Example mapping
+const salesforceMappings = {
+  [$.Person]: {
+    type: 'Contact',
+    fields: {
+      name: 'Name',
+      email: 'Email',
+      telephone: 'Phone',
+      jobTitle: 'Title',
+    },
+  },
+  [$.Organization]: {
+    type: 'Account',
+    fields: {
+      name: 'Name',
+      url: 'Website',
+      industry: 'Industry',
+    },
+  },
+}
+```
+
+### 5. Event Layer
+
+Handles events and webhooks for real-time sync:
+
+```typescript
+// Event handler
+class EventHandler {
+  async handleWebhook(service: string, event: any) {
+    // Parse webhook event
+    const parsed = this.parseEvent(service, event)
+
+    // Map to semantic event
+    const semanticEvent = this.mapToSemanticEvent(service, parsed)
+
+    // Emit semantic event
+    await emit(semanticEvent.type, semanticEvent.data)
+  }
+
+  async subscribe(service: string, eventTypes: string[]) {
+    // Subscribe to service webhooks
+    await this.createWebhookSubscription(service, eventTypes)
+  }
+}
+```
+
+## Integration Patterns
+
+### 1. Adapter Pattern
+
+Each integration implements a standard adapter interface:
+
+```typescript
+interface IntegrationAdapter {
+  // Initialize with credentials
+  initialize(config: IntegrationConfig): Promise<void>
+
+  // CRUD operations
+  create(type: string, data: any): Promise<any>
+  get(type: string, id: string): Promise<any>
+  list(type: string, options?: ListOptions): Promise<any[]>
+  update(id: string, data: any): Promise<any>
+  delete(type: string, id: string): Promise<void>
+
+  // Query operations
+  query(type: string, query: Query): Promise<any[]>
+
+  // Webhook operations
+  subscribeToWebhook(eventType: string, handler: Function): Promise<void>
+  unsubscribeFromWebhook(eventType: string): Promise<void>
+}
+```
+
+### 2. Factory Pattern
+
+Create integrations using a factory:
+
+```typescript
+class IntegrationFactory {
+  static async create(service: string, config: IntegrationConfig): Promise<IntegrationAdapter> {
+    const Adapter = this.getAdapter(service)
+    const adapter = new Adapter()
+    await adapter.initialize(config)
+    return adapter
+  }
+
+  private static getAdapter(service: string): typeof IntegrationAdapter {
+    switch (service) {
+      case $.Salesforce:
+        return SalesforceAdapter
+      case $.HubSpot:
+        return HubSpotAdapter
+      case $.Stripe:
+        return StripeAdapter
+      default:
+        throw new Error(`Unknown service: ${service}`)
+    }
+  }
+}
+```
+
+### 3. Observer Pattern
+
+Use events for real-time sync:
+
+```typescript
+import { $, on } from 'sdk.do'
+
+// Local events trigger external sync
+on($.Organization.created, async (event) => {
+  await salesforce.create($.Account, event.data)
+})
+
+// External events trigger local sync
+on($.Account.updated, async (event) => {
+  await db.update(getLocalId(event.data.id), event.data)
+})
+```
+
+### 4. Strategy Pattern
+
+Different sync strategies for different scenarios:
+
+```typescript
+interface SyncStrategy {
+  sync(from: DataSource, to: DataSource, type: string): Promise<void>
+}
+
+class OneWaySyncStrategy implements SyncStrategy {
+  async sync(from: DataSource, to: DataSource, type: string) {
+    const records = await from.list(type)
+    for (const record of records) {
+      await to.create(type, record)
+    }
+  }
+}
+
+class TwoWaySyncStrategy implements SyncStrategy {
+  async sync(from: DataSource, to: DataSource, type: string) {
+    // Sync both directions with conflict resolution
+    await this.syncFromTo(from, to, type)
+    await this.syncFromTo(to, from, type)
+  }
+}
+
+class IncrementalSyncStrategy implements SyncStrategy {
+  async sync(from: DataSource, to: DataSource, type: string) {
+    const lastSync = await this.getLastSyncTime(from, to, type)
+    const records = await from.query(type, {
+      where: { updatedAt: { $gt: lastSync } },
+    })
+    for (const record of records) {
+      await to.upsert(type, record)
+    }
+  }
+}
+```
+
+## Data Flow
+
+### Create Flow
+
+```
+Application
+    ↓
+  Schema.org Type ($.Person)
+    ↓
+  Type Mapper (Person → Contact)
+    ↓
+  Field Mapper (name → Name, email → Email)
+    ↓
+  Connector (Salesforce API)
+    ↓
+  External Service (Salesforce)
+    ↓
+  Response (Contact ID)
+    ↓
+  Type Mapper (Contact → Person)
+    ↓
+  Application
+```
+
+### Sync Flow
+
+```
+Database Event (Organization.created)
+    ↓
+  Event Handler
+    ↓
+  Integration Adapter
+    ↓
+  Type Mapper (Organization → Account)
+    ↓
+  External Service (Salesforce)
+    ↓
+  Store External ID
+    ↓
+  Update Database
+```
+
+### Webhook Flow
+
+```
+External Service (Salesforce)
+    ↓
+  Webhook Event (Account.updated)
+    ↓
+  Webhook Handler
+    ↓
+  Event Parser
+    ↓
+  Type Mapper (Account → Organization)
+    ↓
+  Semantic Event (Organization.updated)
+    ↓
+  Event Listeners
+    ↓
+  Update Database
+```
+
+## Type Mapping
+
+### Automatic Mapping
+
+integrations.do provides automatic mapping for common types:
+
+```typescript
+const typeMappings = {
+  // CRM
+  salesforce: {
+    [$.Person]: 'Contact',
+    [$.Organization]: 'Account',
+    [$.Opportunity]: 'Opportunity',
+    [$.Lead]: 'Lead',
+  },
+  hubspot: {
+    [$.Person]: 'Contact',
+    [$.Organization]: 'Company',
+    [$.Opportunity]: 'Deal',
+  },
+
+  // Payments
+  stripe: {
+    [$.Person]: 'Customer',
+    [$.PaymentIntent]: 'PaymentIntent',
+    [$.Subscription]: 'Subscription',
+    [$.Invoice]: 'Invoice',
+  },
+
+  // Communication
+  slack: {
+    [$.Message]: 'Message',
+    [$.Channel]: 'Channel',
+    [$.Person]: 'User',
+  },
+}
+```
+
+### Custom Mapping
+
+Define custom mappings:
+
+```typescript
+import { integrations } from 'sdk.do'
+
+const salesforce = await integrations.use($.Salesforce)
+
+await salesforce.configure({
+  typeMapping: {
+    [$.CustomType]: 'Custom_Object__c',
+  },
+  fieldMapping: {
+    [$.CustomType]: {
+      customField: 'Custom_Field__c',
+      anotherField: 'Another_Field__c',
+    },
+  },
+})
+```
+
+## Authentication Architecture
+
+### OAuth 2.0 Flow
+
+```typescript
+// 1. Authorization Request
+const authUrl = await integrations.oauth($.Salesforce, {
+  clientId: CLIENT_ID,
+  redirectUri: REDIRECT_URI,
+  scope: ['full'],
+  state: generateState(),
+})
+
+// 2. User Authorization (browser redirect)
+
+// 3. Authorization Callback
+const integration = await integrations.callback($.Salesforce, {
+  code: authorizationCode,
+  clientId: CLIENT_ID,
+  clientSecret: CLIENT_SECRET,
+  redirectUri: REDIRECT_URI,
+})
+
+// 4. Store Tokens
+await storeTokens({
+  accessToken: integration.accessToken,
+  refreshToken: integration.refreshToken,
+  expiresAt: Date.now() + integration.expiresIn * 1000,
+})
+
+// 5. Token Refresh (when expired)
+const refreshed = await integrations.refresh($.Salesforce, {
+  refreshToken: storedTokens.refreshToken,
+  clientId: CLIENT_ID,
+  clientSecret: CLIENT_SECRET,
+})
+```
+
+### API Key Authentication
+
+```typescript
+const integration = await integrations.use($.Service, {
+  apiKey: process.env.SERVICE_API_KEY,
+})
+```
+
+### Multi-Tenant Authentication
+
+```typescript
+// Store credentials per tenant
+class TenantAuthManager {
+  async getIntegration(tenantId: string, service: string) {
+    const credentials = await this.getCredentials(tenantId, service)
+    return await integrations.use(service, credentials)
+  }
+
+  async storeCredentials(tenantId: string, service: string, credentials: any) {
+    await db.create($.Credential, {
+      tenant: tenantId,
+      service,
+      credentials: encrypt(credentials),
+    })
+  }
+}
+```
+
+## Error Handling Architecture
+
+### Error Hierarchy
+
+```typescript
+class IntegrationError extends Error {
+  constructor(
+    public code: string,
+    public message: string,
+    public details?: any
+  ) {
+    super(message)
+  }
+}
+
+class AuthenticationError extends IntegrationError {
+  constructor(message: string, details?: any) {
+    super('AUTH_FAILED', message, details)
+  }
+}
+
+class RateLimitError extends IntegrationError {
+  constructor(
+    message: string,
+    public retryAfter: number,
+    details?: any
+  ) {
+    super('RATE_LIMIT_EXCEEDED', message, details)
+  }
+}
+
+class ValidationError extends IntegrationError {
+  constructor(
+    message: string,
+    public fields: string[],
+    details?: any
+  ) {
+    super('VALIDATION_FAILED', message, details)
+  }
+}
+```
+
+### Retry Strategy
+
+```typescript
+class RetryStrategy {
+  async execute<T>(operation: () => Promise<T>, options: RetryOptions): Promise<T> {
+    let lastError: Error
+
+    for (let attempt = 0; attempt < options.maxAttempts; attempt++) {
+      try {
+        return await operation()
+      } catch (error) {
+        lastError = error
+
+        if (!this.shouldRetry(error)) {
+          throw error
+        }
+
+        if (attempt < options.maxAttempts - 1) {
+          const delay = this.calculateDelay(attempt, options)
+          await this.sleep(delay)
+        }
+      }
+    }
+
+    throw lastError
+  }
+
+  private shouldRetry(error: Error): boolean {
+    // Retry on transient errors
+    return error.code === 'RATE_LIMIT_EXCEEDED' || error.code === 'TIMEOUT' || error.code === 'SERVICE_UNAVAILABLE'
+  }
+
+  private calculateDelay(attempt: number, options: RetryOptions): number {
+    if (options.backoff === 'exponential') {
+      return Math.pow(2, attempt) * options.baseDelay
+    }
+    return options.baseDelay
+  }
+}
+```
+
+## Caching Architecture
+
+### Cache Strategy
+
+```typescript
+class CacheStrategy {
+  async get<T>(key: string): Promise<T | null> {
+    const cached = await cache.get(key)
+    if (cached && !this.isExpired(cached)) {
+      return cached.data
+    }
+    return null
+  }
+
+  async set<T>(key: string, data: T, ttl: number): Promise<void> {
+    await cache.set(key, {
+      data,
+      expiresAt: Date.now() + ttl,
+    })
+  }
+
+  private isExpired(cached: CachedData): boolean {
+    return Date.now() > cached.expiresAt
+  }
+}
+
+// Usage
+class CachedIntegration {
+  async get(type: string, id: string) {
+    const cacheKey = `${type}:${id}`
+    const cached = await cache.get(cacheKey)
+    if (cached) return cached
+
+    const result = await this.connector.get(type, id)
+    await cache.set(cacheKey, result, 300000) // 5 minutes
+    return result
+  }
+}
+```
+
+## Webhook Architecture
+
+### Webhook Handler
+
+```typescript
+class WebhookHandler {
+  private handlers = new Map<string, Function[]>()
+
+  async handle(service: string, request: Request) {
+    // Verify webhook signature
+    if (!this.verifySignature(service, request)) {
+      throw new Error('Invalid webhook signature')
+    }
+
+    // Parse event
+    const event = await this.parseEvent(service, request)
+
+    // Map to semantic event
+    const semanticEvent = this.mapEvent(service, event)
+
+    // Trigger handlers
+    await this.triggerHandlers(semanticEvent)
+  }
+
+  on(eventType: string, handler: Function) {
+    if (!this.handlers.has(eventType)) {
+      this.handlers.set(eventType, [])
+    }
+    this.handlers.get(eventType)!.push(handler)
+  }
+
+  private async triggerHandlers(event: SemanticEvent) {
+    const handlers = this.handlers.get(event.type) || []
+    await Promise.all(handlers.map((h) => h(event)))
+  }
+}
+```
+
+## Performance Optimization
+
+### Batch Operations
+
+```typescript
+class BatchProcessor {
+  async batchCreate(type: string, records: any[]) {
+    // Split into batches
+    const batches = this.chunk(records, 200)
+
+    // Process batches in parallel
+    const results = await Promise.all(batches.map((batch) => this.connector.batchCreate(type, batch)))
+
+    return results.flat()
+  }
+
+  private chunk<T>(array: T[], size: number): T[][] {
+    const chunks: T[][] = []
+    for (let i = 0; i < array.length; i += size) {
+      chunks.push(array.slice(i, i + size))
+    }
+    return chunks
+  }
+}
+```
+
+### Connection Pooling
+
+```typescript
+class ConnectionPool {
+  private pool = new Map<string, Connection[]>()
+  private maxConnections = 10
+
+  async getConnection(service: string): Promise<Connection> {
+    if (!this.pool.has(service)) {
+      this.pool.set(service, [])
+    }
+
+    const connections = this.pool.get(service)!
+
+    // Reuse existing connection if available
+    const available = connections.find((c) => !c.inUse)
+    if (available) {
+      available.inUse = true
+      return available
+    }
+
+    // Create new connection if under limit
+    if (connections.length < this.maxConnections) {
+      const connection = await this.createConnection(service)
+      connections.push(connection)
+      return connection
+    }
+
+    // Wait for connection to become available
+    return await this.waitForConnection(service)
+  }
+
+  releaseConnection(connection: Connection) {
+    connection.inUse = false
+  }
+}
+```
+
+## Best Practices
+
+### 1. Use Semantic Types
+
+Always use Schema.org types for consistency:
+
+```typescript
+// Good
+await salesforce.create($.Person, personData)
+
+// Avoid
+await salesforce.create('Contact', personData)
+```
+
+### 2. Handle Errors Gracefully
+
+Implement proper error handling:
+
+```typescript
+try {
+  await integration.create(type, data)
+} catch (error) {
+  if (error.code === 'DUPLICATE_VALUE') {
+    // Handle duplicate
+  } else if (error.code === 'VALIDATION_FAILED') {
+    // Handle validation error
+  } else {
+    // Handle unknown error
+  }
+}
+```
+
+### 3. Implement Retry Logic
+
+Use retry logic for transient failures:
+
+```typescript
+await integration.create(type, data, {
+  retry: {
+    maxAttempts: 3,
+    baseDelay: 1000,
+    backoff: 'exponential',
+  },
+})
+```
+
+### 4. Cache Frequently Accessed Data
+
+Cache data to reduce API calls:
+
+```typescript
+const cached = await cache.get(cacheKey)
+if (cached) return cached
+
+const data = await integration.get(type, id)
+await cache.set(cacheKey, data, 300000) // 5 minutes
+return data
+```
+
+### 5. Use Batch Operations
+
+Process multiple records efficiently:
+
+```typescript
+// Good: Batch operation
+await integration.batchCreate(type, records)
+
+// Avoid: Individual operations
+for (const record of records) {
+  await integration.create(type, record)
+}
+```
+
+## See Also
+
+- [Getting Started](./getting-started) - Quick start guide
+- [Best Practices](./best-practices) - Recommended patterns
+- [Troubleshooting](./troubleshooting) - Common issues and solutions
+
+## License
+
+MIT (Open Source)

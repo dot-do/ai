@@ -1,0 +1,1169 @@
+---
+title: OAuth.do - Authentication & Authorization
+---
+
+# OAuth.do - Authentication & Authorization
+
+The `.do` platform provides a complete OAuth 2.0 and OpenID Connect implementation for secure authentication and authorization.
+
+## Table of Contents
+
+- [Quick Start](#quick-start)
+- [OAuth 2.0 Flows](#oauth-20-flows)
+- [Authorization Code Flow](#authorization-code-flow)
+- [PKCE (Proof Key for Code Exchange)](#pkce-proof-key-for-code-exchange)
+- [Client Credentials Flow](#client-credentials-flow)
+- [Refresh Tokens](#refresh-tokens)
+- [Token Validation](#token-validation)
+- [User Information](#user-information)
+- [API Keys](#api-keys)
+- [OAuth Client Registration](#oauth-client-registration)
+- [Session Management](#session-management)
+- [OpenID Connect](#openid-connect)
+- [Security Best Practices](#security-best-practices)
+- [Real-World Examples](#real-world-examples)
+
+## Quick Start
+
+```bash
+pnpm install sdk.do
+```
+
+```typescript
+import { oauth } from 'sdk.do'
+
+// Authorization Code flow (most common)
+const authUrl = await oauth.authorize({
+  clientId: 'your-client-id',
+  redirectUri: 'https://yourapp.com/callback',
+  scope: ['read', 'write'],
+  state: crypto.randomUUID(),
+})
+
+// Redirect user to authUrl
+// After user authorizes, exchange code for tokens
+const tokens = await oauth.exchangeCode({
+  code: 'authorization-code',
+  clientId: 'your-client-id',
+  clientSecret: 'your-client-secret',
+  redirectUri: 'https://yourapp.com/callback',
+})
+
+// Use access token
+const userInfo = await oauth.getUserInfo(tokens.accessToken)
+```
+
+## OAuth 2.0 Flows
+
+The platform supports all standard OAuth 2.0 flows:
+
+### Flow Comparison
+
+| Flow                      | Use Case              | Client Type  | User Interaction |
+| ------------------------- | --------------------- | ------------ | ---------------- |
+| Authorization Code        | Web apps, mobile apps | Confidential | Required         |
+| Authorization Code + PKCE | Native apps, SPAs     | Public       | Required         |
+| Client Credentials        | Server-to-server      | Confidential | Not required     |
+| Refresh Token             | All flows             | Any          | Not required     |
+
+### Flow Diagram
+
+```
+Authorization Code Flow:
+┌──────────┐                                           ┌───────────┐
+│          │──(1) Authorization Request────────────────▶           │
+│          │                                           │           │
+│          │◀─(2) Authorization Code──────────────────│           │
+│  Client  │                                           │   OAuth   │
+│          │──(3) Exchange Code for Token─────────────▶  Provider │
+│          │                                           │           │
+│          │◀─(4) Access Token + Refresh Token────────│           │
+└──────────┘                                           └───────────┘
+```
+
+## Authorization Code Flow
+
+The most common flow for web and mobile applications.
+
+### Step 1: Initiate Authorization
+
+```typescript
+import { oauth } from 'sdk.do'
+
+// Generate state for CSRF protection
+const state = crypto.randomUUID()
+
+// Build authorization URL
+const authUrl = await oauth.authorize({
+  clientId: 'your-client-id',
+  redirectUri: 'https://yourapp.com/callback',
+  scope: ['read', 'write', 'profile'],
+  state,
+  responseType: 'code',
+  prompt: 'consent', // Force consent screen
+})
+
+// Store state in session
+session.set('oauth_state', state)
+
+// Redirect user to OAuth provider
+return Response.redirect(authUrl)
+```
+
+### Step 2: Handle Callback
+
+```typescript
+// OAuth provider redirects to: https://yourapp.com/callback?code=...&state=...
+
+async function handleOAuthCallback(request: Request) {
+  const url = new URL(request.url)
+  const code = url.searchParams.get('code')
+  const state = url.searchParams.get('state')
+
+  // Verify state (CSRF protection)
+  const savedState = session.get('oauth_state')
+  if (state !== savedState) {
+    throw new Error('Invalid state parameter')
+  }
+
+  // Exchange code for tokens
+  const tokens = await oauth.exchangeCode({
+    code,
+    clientId: 'your-client-id',
+    clientSecret: 'your-client-secret',
+    redirectUri: 'https://yourapp.com/callback',
+  })
+
+  // Store tokens securely
+  session.set('access_token', tokens.accessToken)
+  session.set('refresh_token', tokens.refreshToken)
+  session.set('expires_at', Date.now() + tokens.expiresIn * 1000)
+
+  // Redirect to app
+  return Response.redirect('/dashboard')
+}
+```
+
+### Step 3: Use Access Token
+
+```typescript
+// Make authenticated API requests
+const response = await fetch('https://api.do/user/profile', {
+  headers: {
+    Authorization: `Bearer ${tokens.accessToken}`,
+  },
+})
+```
+
+## PKCE (Proof Key for Code Exchange)
+
+PKCE prevents authorization code interception attacks. Required for public clients (SPAs, native apps).
+
+### Generate Code Verifier and Challenge
+
+```typescript
+import { generateCodeVerifier, generateCodeChallenge } from 'sdk.do'
+
+// Step 1: Generate code verifier (random string)
+const codeVerifier = generateCodeVerifier()
+// Example: "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+
+// Step 2: Generate code challenge (SHA-256 hash)
+const codeChallenge = await generateCodeChallenge(codeVerifier)
+// Example: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
+
+// Store code verifier for later use
+sessionStorage.setItem('code_verifier', codeVerifier)
+```
+
+### Authorization Request with PKCE
+
+```typescript
+const authUrl = await oauth.authorize({
+  clientId: 'your-client-id',
+  redirectUri: 'https://yourapp.com/callback',
+  scope: ['read', 'write'],
+  state: crypto.randomUUID(),
+  codeChallenge,
+  codeChallengeMethod: 'S256', // SHA-256
+})
+
+// Redirect user
+window.location.href = authUrl
+```
+
+### Exchange Code with PKCE
+
+```typescript
+// Retrieve code verifier
+const codeVerifier = sessionStorage.getItem('code_verifier')
+
+// Exchange code for tokens
+const tokens = await oauth.exchangeCode({
+  code: authorizationCode,
+  clientId: 'your-client-id',
+  redirectUri: 'https://yourapp.com/callback',
+  codeVerifier, // Prove you initiated the request
+})
+```
+
+### Complete PKCE Flow Example
+
+```typescript
+// SPA or Native App OAuth Flow with PKCE
+
+import { oauth, generateCodeVerifier, generateCodeChallenge } from 'sdk.do'
+
+class OAuthClient {
+  async login() {
+    // Generate PKCE parameters
+    const codeVerifier = generateCodeVerifier()
+    const codeChallenge = await generateCodeChallenge(codeVerifier)
+    const state = crypto.randomUUID()
+
+    // Store for callback
+    localStorage.setItem('pkce_code_verifier', codeVerifier)
+    localStorage.setItem('oauth_state', state)
+
+    // Build authorization URL
+    const authUrl = await oauth.authorize({
+      clientId: 'your-spa-client-id',
+      redirectUri: window.location.origin + '/callback',
+      scope: ['openid', 'profile', 'email'],
+      state,
+      codeChallenge,
+      codeChallengeMethod: 'S256',
+      prompt: 'select_account',
+    })
+
+    // Redirect
+    window.location.href = authUrl
+  }
+
+  async handleCallback() {
+    const params = new URLSearchParams(window.location.search)
+    const code = params.get('code')
+    const state = params.get('state')
+
+    // Verify state
+    const savedState = localStorage.getItem('oauth_state')
+    if (state !== savedState) {
+      throw new Error('State mismatch - possible CSRF attack')
+    }
+
+    // Get code verifier
+    const codeVerifier = localStorage.getItem('pkce_code_verifier')
+    if (!codeVerifier) {
+      throw new Error('Code verifier not found')
+    }
+
+    // Exchange code for tokens
+    const tokens = await oauth.exchangeCode({
+      code,
+      clientId: 'your-spa-client-id',
+      redirectUri: window.location.origin + '/callback',
+      codeVerifier,
+    })
+
+    // Clear temporary storage
+    localStorage.removeItem('pkce_code_verifier')
+    localStorage.removeItem('oauth_state')
+
+    // Store tokens securely
+    this.storeTokens(tokens)
+
+    return tokens
+  }
+
+  private storeTokens(tokens: OAuthTokens) {
+    // Store in memory or secure storage (not localStorage for sensitive apps)
+    sessionStorage.setItem('access_token', tokens.accessToken)
+    sessionStorage.setItem('refresh_token', tokens.refreshToken)
+    sessionStorage.setItem('expires_at', String(Date.now() + tokens.expiresIn * 1000))
+  }
+}
+```
+
+## Client Credentials Flow
+
+Server-to-server authentication without user interaction.
+
+### Basic Usage
+
+```typescript
+import { oauth } from 'sdk.do'
+
+// Get machine-to-machine access token
+const tokens = await oauth.clientCredentials({
+  clientId: 'your-service-client-id',
+  clientSecret: 'your-service-client-secret',
+  scope: ['api.read', 'api.write'],
+})
+
+// Use token for API calls
+const response = await fetch('https://api.do/resources', {
+  headers: {
+    Authorization: `Bearer ${tokens.accessToken}`,
+  },
+})
+```
+
+### Service-to-Service Authentication
+
+```typescript
+class APIClient {
+  private accessToken?: string
+  private expiresAt?: number
+
+  async getToken(): Promise<string> {
+    // Reuse token if still valid
+    if (this.accessToken && this.expiresAt && Date.now() < this.expiresAt) {
+      return this.accessToken
+    }
+
+    // Get new token
+    const tokens = await oauth.clientCredentials({
+      clientId: process.env.CLIENT_ID!,
+      clientSecret: process.env.CLIENT_SECRET!,
+      scope: ['api.read', 'api.write'],
+    })
+
+    this.accessToken = tokens.accessToken
+    this.expiresAt = Date.now() + tokens.expiresIn * 1000
+
+    return this.accessToken
+  }
+
+  async makeRequest(url: string, options: RequestInit = {}) {
+    const token = await this.getToken()
+
+    return fetch(url, {
+      ...options,
+      headers: {
+        ...options.headers,
+        Authorization: `Bearer ${token}`,
+      },
+    })
+  }
+}
+
+// Usage
+const api = new APIClient()
+const response = await api.makeRequest('https://api.do/users')
+```
+
+## Refresh Tokens
+
+Obtain new access tokens without user interaction.
+
+### Basic Refresh
+
+```typescript
+import { oauth } from 'sdk.do'
+
+// When access token expires, use refresh token
+const newTokens = await oauth.refresh({
+  refreshToken: 'existing-refresh-token',
+  clientId: 'your-client-id',
+  clientSecret: 'your-client-secret',
+})
+
+// Update stored tokens
+session.set('access_token', newTokens.accessToken)
+session.set('refresh_token', newTokens.refreshToken)
+session.set('expires_at', Date.now() + newTokens.expiresIn * 1000)
+```
+
+### Automatic Token Refresh
+
+```typescript
+class TokenManager {
+  private accessToken: string
+  private refreshToken: string
+  private expiresAt: number
+
+  constructor(tokens: OAuthTokens) {
+    this.updateTokens(tokens)
+  }
+
+  private updateTokens(tokens: OAuthTokens) {
+    this.accessToken = tokens.accessToken
+    this.refreshToken = tokens.refreshToken!
+    this.expiresAt = Date.now() + tokens.expiresIn * 1000
+  }
+
+  async getAccessToken(): Promise<string> {
+    // Refresh if expired or expiring soon (5 min buffer)
+    if (Date.now() + 5 * 60 * 1000 >= this.expiresAt) {
+      await this.refreshAccessToken()
+    }
+
+    return this.accessToken
+  }
+
+  private async refreshAccessToken() {
+    try {
+      const newTokens = await oauth.refresh({
+        refreshToken: this.refreshToken,
+        clientId: process.env.CLIENT_ID!,
+        clientSecret: process.env.CLIENT_SECRET,
+      })
+
+      this.updateTokens(newTokens)
+    } catch (error) {
+      console.error('Token refresh failed:', error)
+      // Redirect to login
+      throw new Error('Authentication required')
+    }
+  }
+
+  async makeAuthenticatedRequest(url: string, options: RequestInit = {}) {
+    const token = await this.getAccessToken()
+
+    return fetch(url, {
+      ...options,
+      headers: {
+        ...options.headers,
+        Authorization: `Bearer ${token}`,
+      },
+    })
+  }
+}
+```
+
+## Token Validation
+
+Validate and introspect access tokens.
+
+### Validate Token
+
+```typescript
+import { oauth } from 'sdk.do'
+
+// Validate access token
+const validation = await oauth.validateToken(accessToken)
+
+if (validation.valid && validation.active) {
+  console.log('Token is valid')
+  console.log('User:', validation.username)
+  console.log('Scopes:', validation.scope)
+  console.log('Expires at:', new Date(validation.expiresAt! * 1000))
+} else {
+  console.log('Token is invalid or expired')
+}
+```
+
+### Middleware for Token Validation
+
+```typescript
+import { oauth } from 'sdk.do'
+
+async function authMiddleware(request: Request): Promise<Response | null> {
+  const authHeader = request.headers.get('Authorization')
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return new Response('Missing or invalid authorization header', {
+      status: 401,
+    })
+  }
+
+  const token = authHeader.slice(7)
+
+  // Validate token
+  const validation = await oauth.validateToken(token)
+
+  if (!validation.valid || !validation.active) {
+    return new Response('Invalid or expired token', {
+      status: 401,
+    })
+  }
+
+  // Check required scope
+  const requiredScope = 'api.write'
+  if (!validation.scope?.includes(requiredScope)) {
+    return new Response('Insufficient permissions', {
+      status: 403,
+    })
+  }
+
+  // Token is valid, continue
+  return null
+}
+
+// Usage in worker
+export default {
+  async fetch(request: Request, env: Env) {
+    const authError = await authMiddleware(request)
+    if (authError) return authError
+
+    // Handle authenticated request
+    return new Response('Success')
+  },
+}
+```
+
+## User Information
+
+Retrieve user profile information.
+
+### Get User Info
+
+```typescript
+import { oauth } from 'sdk.do'
+
+// Get user information using access token
+const userInfo = await oauth.getUserInfo(accessToken)
+
+console.log('User ID:', userInfo.sub)
+console.log('Name:', userInfo.name)
+console.log('Email:', userInfo.email)
+console.log('Email verified:', userInfo.emailVerified)
+console.log('Profile picture:', userInfo.picture)
+```
+
+### Complete User Profile
+
+```typescript
+interface UserProfile {
+  id: string
+  name: string
+  email: string
+  emailVerified: boolean
+  picture?: string
+  givenName?: string
+  familyName?: string
+  locale?: string
+  timezone?: string
+}
+
+async function getUserProfile(accessToken: string): Promise<UserProfile> {
+  const userInfo = await oauth.getUserInfo(accessToken)
+
+  return {
+    id: userInfo.sub,
+    name: userInfo.name || '',
+    email: userInfo.email || '',
+    emailVerified: userInfo.emailVerified || false,
+    picture: userInfo.picture,
+    givenName: userInfo.givenName,
+    familyName: userInfo.familyName,
+    locale: userInfo.locale,
+    timezone: userInfo.zoneinfo,
+  }
+}
+```
+
+## API Keys
+
+Manage long-lived API keys for programmatic access.
+
+### Create API Key
+
+```typescript
+import { oauth } from 'sdk.do'
+
+// Create API key for user
+const apiKey = await oauth.createApiKey({
+  userId: 'user-123',
+  name: 'Production API Key',
+  scopes: ['api.read', 'api.write'],
+  expiresIn: 365 * 24 * 60 * 60, // 1 year
+})
+
+console.log('API Key:', apiKey.key)
+console.log('Key ID:', apiKey.id)
+console.log('Created:', apiKey.createdAt)
+console.log('Expires:', apiKey.expiresAt)
+```
+
+### List API Keys
+
+```typescript
+// Get all API keys for user
+const apiKeys = await oauth.listApiKeys('user-123')
+
+for (const key of apiKeys) {
+  console.log(`${key.name}: ${key.id}`)
+  console.log(`  Scopes: ${key.scopes.join(', ')}`)
+  console.log(`  Created: ${key.createdAt}`)
+  console.log(`  Last used: ${key.lastUsedAt || 'Never'}`)
+}
+```
+
+### Revoke API Key
+
+```typescript
+// Revoke API key
+await oauth.revokeApiKey('key-id-123')
+```
+
+### Validate API Key
+
+```typescript
+// Validate API key from request
+const apiKey = request.headers.get('X-API-Key')
+
+const validation = await oauth.validateApiKey(apiKey)
+
+if (!validation.valid) {
+  return new Response('Invalid API key', { status: 401 })
+}
+
+console.log('User:', validation.userId)
+console.log('Scopes:', validation.scopes)
+```
+
+## OAuth Client Registration
+
+Register OAuth clients dynamically.
+
+### Register Client
+
+```typescript
+import { oauth } from 'sdk.do'
+
+// Register new OAuth client
+const client = await oauth.registerClient({
+  name: 'My Application',
+  redirectUris: ['https://myapp.com/callback', 'https://myapp.com/oauth/callback'],
+  grantTypes: ['authorization_code', 'refresh_token'],
+  scopes: ['read', 'write', 'profile'],
+  applicationType: 'web', // or 'native', 'spa'
+  tokenEndpointAuthMethod: 'client_secret_basic',
+  logoUri: 'https://myapp.com/logo.png',
+  policyUri: 'https://myapp.com/privacy',
+  tosUri: 'https://myapp.com/terms',
+})
+
+console.log('Client ID:', client.clientId)
+console.log('Client Secret:', client.clientSecret)
+```
+
+### Get Client Information
+
+```typescript
+// Get OAuth client details
+const client = await oauth.getClient('client-id-123')
+
+console.log('Name:', client.name)
+console.log('Redirect URIs:', client.redirectUris)
+console.log('Grant Types:', client.grantTypes)
+console.log('Scopes:', client.scopes)
+```
+
+### Update Client
+
+```typescript
+// Update OAuth client
+await oauth.updateClient('client-id-123', {
+  name: 'My Updated Application',
+  redirectUris: [
+    'https://myapp.com/callback',
+    'https://myapp.com/auth/callback', // New URI
+  ],
+})
+```
+
+## Session Management
+
+Manage user sessions.
+
+### Create Session
+
+```typescript
+import { oauth } from 'sdk.do'
+
+// Create session after successful authentication
+const session = await oauth.createSession({
+  userId: 'user-123',
+  clientId: 'client-456',
+  accessToken: tokens.accessToken,
+  refreshToken: tokens.refreshToken,
+  expiresIn: tokens.expiresIn,
+  scope: ['read', 'write'],
+  metadata: {
+    userAgent: request.headers.get('User-Agent'),
+    ipAddress: request.headers.get('CF-Connecting-IP'),
+  },
+})
+
+// Store session ID in cookie
+setCookie('session_id', session.id, {
+  httpOnly: true,
+  secure: true,
+  sameSite: 'lax',
+  maxAge: tokens.expiresIn,
+})
+```
+
+### Validate Session
+
+```typescript
+// Validate session from cookie
+const sessionId = getCookie('session_id')
+
+if (!sessionId) {
+  return Response.redirect('/login')
+}
+
+const session = await oauth.getSession(sessionId)
+
+if (!session || session.expiresAt < Date.now()) {
+  // Session expired
+  return Response.redirect('/login')
+}
+
+// Session valid
+const user = await oauth.getUserInfo(session.accessToken)
+```
+
+### Revoke Session
+
+```typescript
+// Logout - revoke session
+await oauth.revokeSession(sessionId)
+
+// Clear cookie
+deleteCookie('session_id')
+
+return Response.redirect('/login')
+```
+
+## OpenID Connect
+
+Enhanced authentication with identity layer.
+
+### OpenID Connect Flow
+
+```typescript
+// Request OpenID Connect scopes
+const authUrl = await oauth.authorize({
+  clientId: 'your-client-id',
+  redirectUri: 'https://yourapp.com/callback',
+  scope: ['openid', 'profile', 'email'], // OpenID scopes
+  state: crypto.randomUUID(),
+  nonce: crypto.randomUUID(), // Prevent replay attacks
+  prompt: 'login',
+})
+```
+
+### ID Token Validation
+
+```typescript
+// Exchange code for tokens (includes ID token)
+const tokens = await oauth.exchangeCode({
+  code: authorizationCode,
+  clientId: 'your-client-id',
+  clientSecret: 'your-client-secret',
+  redirectUri: 'https://yourapp.com/callback',
+})
+
+// ID token contains user claims
+const idToken = tokens.idToken!
+const claims = parseJWT(idToken)
+
+console.log('User ID:', claims.sub)
+console.log('Email:', claims.email)
+console.log('Email verified:', claims.email_verified)
+console.log('Issued at:', new Date(claims.iat * 1000))
+console.log('Expires at:', new Date(claims.exp * 1000))
+
+// Validate nonce
+if (claims.nonce !== storedNonce) {
+  throw new Error('Nonce mismatch')
+}
+```
+
+### UserInfo Endpoint
+
+```typescript
+// Get additional user claims
+const userInfo = await oauth.getUserInfo(tokens.accessToken)
+
+// Merge with ID token claims
+const completeProfile = {
+  ...parseJWT(tokens.idToken),
+  ...userInfo,
+}
+```
+
+## Security Best Practices
+
+### State Parameter
+
+Always use state parameter for CSRF protection:
+
+```typescript
+// Generate cryptographically random state
+const state = crypto.randomUUID()
+
+// Store in session
+session.set('oauth_state', state)
+
+// Include in authorization request
+const authUrl = await oauth.authorize({
+  clientId: 'your-client-id',
+  redirectUri: 'https://yourapp.com/callback',
+  state, // REQUIRED
+})
+
+// Validate on callback
+const returnedState = url.searchParams.get('state')
+if (returnedState !== session.get('oauth_state')) {
+  throw new Error('Invalid state - possible CSRF attack')
+}
+```
+
+### PKCE for Public Clients
+
+Always use PKCE for SPAs and native apps:
+
+```typescript
+// REQUIRED for public clients
+const codeVerifier = generateCodeVerifier()
+const codeChallenge = await generateCodeChallenge(codeVerifier)
+
+// Use in authorization
+const authUrl = await oauth.authorize({
+  clientId: 'your-spa-client-id',
+  redirectUri: 'https://yourapp.com/callback',
+  codeChallenge,
+  codeChallengeMethod: 'S256', // REQUIRED
+})
+```
+
+### Secure Token Storage
+
+Store tokens securely:
+
+```typescript
+// ❌ DON'T: Store in localStorage (vulnerable to XSS)
+localStorage.setItem('access_token', token)
+
+// ✅ DO: Store in httpOnly cookie (server-side)
+setCookie('session', sessionId, {
+  httpOnly: true, // Not accessible to JavaScript
+  secure: true, // Only sent over HTTPS
+  sameSite: 'lax', // CSRF protection
+})
+
+// ✅ DO: Store in memory (SPA)
+class TokenStore {
+  private accessToken?: string
+
+  setToken(token: string) {
+    this.accessToken = token
+  }
+
+  getToken(): string | undefined {
+    return this.accessToken
+  }
+}
+```
+
+### Token Expiration
+
+Always check token expiration:
+
+```typescript
+function isTokenExpired(expiresAt: number): boolean {
+  // Add 60 second buffer
+  return Date.now() + 60000 >= expiresAt
+}
+
+async function getValidToken(): Promise<string> {
+  if (isTokenExpired(session.expiresAt)) {
+    // Refresh token
+    const newTokens = await oauth.refresh({
+      refreshToken: session.refreshToken,
+      clientId: 'your-client-id',
+    })
+
+    updateSession(newTokens)
+  }
+
+  return session.accessToken
+}
+```
+
+### Scope Validation
+
+Validate scopes on protected endpoints:
+
+```typescript
+function hasRequiredScope(tokenScopes: string, required: string): boolean {
+  return tokenScopes.split(' ').includes(required)
+}
+
+// In middleware
+const validation = await oauth.validateToken(accessToken)
+
+if (!hasRequiredScope(validation.scope!, 'api.write')) {
+  return new Response('Insufficient permissions', {
+    status: 403,
+    headers: {
+      'WWW-Authenticate': `Bearer scope="api.write"`,
+    },
+  })
+}
+```
+
+## Real-World Examples
+
+### Complete Web App Authentication
+
+```typescript
+import { oauth } from 'sdk.do'
+import { Hono } from 'hono'
+import { getCookie, setCookie, deleteCookie } from 'hono/cookie'
+
+const app = new Hono()
+
+// Login route
+app.get('/login', async (c) => {
+  const state = crypto.randomUUID()
+
+  c.cookie('oauth_state', state, {
+    httpOnly: true,
+    secure: true,
+    maxAge: 600, // 10 minutes
+  })
+
+  const authUrl = await oauth.authorize({
+    clientId: process.env.CLIENT_ID!,
+    redirectUri: `${c.req.url.origin}/callback`,
+    scope: ['openid', 'profile', 'email'],
+    state,
+  })
+
+  return c.redirect(authUrl)
+})
+
+// OAuth callback
+app.get('/callback', async (c) => {
+  const code = c.req.query('code')
+  const state = c.req.query('state')
+  const savedState = getCookie(c, 'oauth_state')
+
+  if (!code || state !== savedState) {
+    return c.text('Invalid callback', 400)
+  }
+
+  const tokens = await oauth.exchangeCode({
+    code,
+    clientId: process.env.CLIENT_ID!,
+    clientSecret: process.env.CLIENT_SECRET!,
+    redirectUri: `${c.req.url.origin}/callback`,
+  })
+
+  // Create session
+  const session = await oauth.createSession({
+    userId: tokens.sub!,
+    clientId: process.env.CLIENT_ID!,
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
+    expiresIn: tokens.expiresIn,
+  })
+
+  setCookie(c, 'session_id', session.id, {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'lax',
+    maxAge: tokens.expiresIn,
+  })
+
+  deleteCookie(c, 'oauth_state')
+
+  return c.redirect('/dashboard')
+})
+
+// Protected route
+app.get('/dashboard', async (c) => {
+  const sessionId = getCookie(c, 'session_id')
+
+  if (!sessionId) {
+    return c.redirect('/login')
+  }
+
+  const session = await oauth.getSession(sessionId)
+
+  if (!session || Date.now() > session.expiresAt) {
+    return c.redirect('/login')
+  }
+
+  const user = await oauth.getUserInfo(session.accessToken)
+
+  return c.html(`
+    <h1>Welcome, ${user.name}</h1>
+    <p>Email: ${user.email}</p>
+    <a href="/logout">Logout</a>
+  `)
+})
+
+// Logout
+app.get('/logout', async (c) => {
+  const sessionId = getCookie(c, 'session_id')
+
+  if (sessionId) {
+    await oauth.revokeSession(sessionId)
+  }
+
+  deleteCookie(c, 'session_id')
+
+  return c.redirect('/')
+})
+
+export default app
+```
+
+### SPA with PKCE
+
+```typescript
+// React/Vue/Angular SPA Authentication
+
+class AuthService {
+  private oauth = oauth
+
+  async login() {
+    const codeVerifier = generateCodeVerifier()
+    const codeChallenge = await generateCodeChallenge(codeVerifier)
+    const state = crypto.randomUUID()
+
+    sessionStorage.setItem('code_verifier', codeVerifier)
+    sessionStorage.setItem('oauth_state', state)
+
+    const authUrl = await this.oauth.authorize({
+      clientId: process.env.REACT_APP_CLIENT_ID!,
+      redirectUri: window.location.origin + '/callback',
+      scope: ['openid', 'profile', 'email'],
+      state,
+      codeChallenge,
+      codeChallengeMethod: 'S256',
+    })
+
+    window.location.href = authUrl
+  }
+
+  async handleCallback() {
+    const params = new URLSearchParams(window.location.search)
+    const code = params.get('code')!
+    const state = params.get('state')!
+
+    if (state !== sessionStorage.getItem('oauth_state')) {
+      throw new Error('State mismatch')
+    }
+
+    const codeVerifier = sessionStorage.getItem('code_verifier')!
+
+    const tokens = await this.oauth.exchangeCode({
+      code,
+      clientId: process.env.REACT_APP_CLIENT_ID!,
+      redirectUri: window.location.origin + '/callback',
+      codeVerifier,
+    })
+
+    sessionStorage.removeItem('code_verifier')
+    sessionStorage.removeItem('oauth_state')
+
+    this.storeTokens(tokens)
+
+    return tokens
+  }
+
+  private storeTokens(tokens: OAuthTokens) {
+    // In-memory storage (more secure than localStorage)
+    this.tokens = tokens
+  }
+
+  async getAccessToken(): Promise<string> {
+    // Implement token refresh logic
+    return this.tokens.accessToken
+  }
+
+  logout() {
+    this.tokens = null
+    window.location.href = '/login'
+  }
+}
+```
+
+### API with API Keys
+
+```typescript
+import { oauth } from 'sdk.do'
+import { Hono } from 'hono'
+
+const app = new Hono()
+
+// Middleware to validate API key
+app.use('*', async (c, next) => {
+  const apiKey = c.req.header('X-API-Key') || c.req.header('Authorization')?.replace('Bearer ', '')
+
+  if (!apiKey) {
+    return c.json({ error: 'API key required' }, 401)
+  }
+
+  const validation = await oauth.validateApiKey(apiKey)
+
+  if (!validation.valid) {
+    return c.json({ error: 'Invalid API key' }, 401)
+  }
+
+  // Store user context
+  c.set('userId', validation.userId)
+  c.set('scopes', validation.scopes)
+
+  await next()
+})
+
+// Protected endpoint
+app.get('/api/users', async (c) => {
+  const userId = c.get('userId')
+  const scopes = c.get('scopes')
+
+  if (!scopes.includes('users.read')) {
+    return c.json({ error: 'Insufficient permissions' }, 403)
+  }
+
+  // Fetch users
+  const users = await db.list($.Person)
+
+  return c.json({ users })
+})
+
+export default app
+```
+
+## API Reference
+
+Complete API documentation:
+
+- [`oauth.authorize()`](#step-1-initiate-authorization) - Build authorization URL
+- [`oauth.exchangeCode()`](#step-2-handle-callback) - Exchange code for tokens
+- [`oauth.refresh()`](#refresh-tokens) - Refresh access token
+- [`oauth.clientCredentials()`](#client-credentials-flow) - Machine-to-machine auth
+- [`oauth.validateToken()`](#token-validation) - Validate access token
+- [`oauth.getUserInfo()`](#user-information) - Get user profile
+- [`oauth.createApiKey()`](#create-api-key) - Create API key
+- [`oauth.listApiKeys()`](#list-api-keys) - List API keys
+- [`oauth.revokeApiKey()`](#revoke-api-key) - Revoke API key
+- [`oauth.validateApiKey()`](#validate-api-key) - Validate API key
+- [`oauth.registerClient()`](#register-client) - Register OAuth client
+- [`oauth.getClient()`](#get-client-information) - Get client info
+- [`oauth.updateClient()`](#update-client) - Update client
+- [`oauth.createSession()`](#create-session) - Create session
+- [`oauth.getSession()`](#validate-session) - Get session
+- [`oauth.revokeSession()`](#revoke-session) - Revoke session
+- [`generateCodeVerifier()`](#generate-code-verifier-and-challenge) - Generate PKCE verifier
+- [`generateCodeChallenge()`](#generate-code-verifier-and-challenge) - Generate PKCE challenge
+
+## Related
+
+- [SDK.do Documentation](./SDK.mdx) - Main SDK guide
+- [Auth Service](./SDK.mdx#user-user-context) - User context API
+- [API Gateway](./apis.do.mdx) - API integration
+- [Database](./database.do.mdx) - User data storage
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform)

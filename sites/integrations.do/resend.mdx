@@ -1,0 +1,95 @@
+---
+$id: https://integrations.do/resend
+$type: Integration
+name: Resend
+service: resend
+description: The universal API for sending emails.
+category: productivity
+sdkBased: false
+baseUrl: https://api.resend.com
+
+auth:
+  type: api-key
+  location: header
+  headerName: Authorization
+  scheme: Bearer
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Resend actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: false
+  events: []
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://resend.com
+  apiDocs: https://resend.com
+---
+
+# Resend Integration
+
+The universal API for sending emails.
+
+## Quick Start
+
+```typescript
+import { ResendClient } from '@dotdo/sdk.do/integrations/resend'
+
+const resend = new ResendClient({
+  apiKey: process.env.RESEND_API_KEY,
+})
+
+const result = await resend.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Resend provides 18 actions through the Composio API.
+
+## License
+
+MIT

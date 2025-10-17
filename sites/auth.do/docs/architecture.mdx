@@ -1,0 +1,756 @@
+---
+$id: https://auth.do/docs/architecture
+$type: TechArticle
+title: Authentication Architecture
+description: Understanding the authentication architecture and flows in auth.do
+keywords: [auth, architecture, jwt, tokens, flows, security]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Authentication Architecture
+
+Understanding the authentication architecture and flows in auth.do.
+
+## Overview
+
+auth.do implements a comprehensive authentication system built on industry-standard protocols and best practices. The architecture is designed to be secure, scalable, and flexible enough to support multiple authentication methods.
+
+## Core Components
+
+### 1. Token Service
+
+Manages JWT token generation, verification, and refresh:
+
+```typescript
+// Token generation
+const token = await auth.generateToken({
+  userId: 'user_123',
+  email: 'user@example.com',
+  role: 'admin',
+  expiresIn: '15m',
+})
+
+// Token verification
+const payload = await auth.verifyToken(token)
+
+// Token refresh
+const newToken = await auth.refreshToken(refreshToken)
+```
+
+**Token Structure:**
+
+```json
+{
+  "header": {
+    "alg": "HS256",
+    "typ": "JWT"
+  },
+  "payload": {
+    "userId": "user_123",
+    "email": "user@example.com",
+    "role": "admin",
+    "iat": 1728475200,
+    "exp": 1728476100
+  },
+  "signature": "..."
+}
+```
+
+### 2. Password Service
+
+Handles secure password hashing and verification:
+
+```typescript
+// Hash password with bcrypt
+const hashedPassword = await auth.hashPassword('user-password')
+
+// Verify password
+const isValid = await auth.verifyPassword('user-password', hashedPassword)
+```
+
+**Hashing Process:**
+
+1. Generate random salt (default: 12 rounds)
+2. Hash password with bcrypt
+3. Store hashed password (never store plain text)
+4. Verify by hashing input and comparing
+
+### 3. API Key Service
+
+Manages API key generation and validation:
+
+```typescript
+// Generate API key
+const apiKey = await auth.createApiKey({
+  userId: 'user_123',
+  name: 'Production API',
+  scopes: ['read', 'write'],
+})
+
+// Authenticate with API key
+const keyData = await auth.authenticateApiKey(apiKey.key)
+```
+
+**API Key Format:**
+
+```
+sk_live_[32_hex_characters]
+├─ Prefix: sk_live_ (identifies key type)
+└─ Key: 32 random bytes (hex encoded)
+```
+
+### 4. MFA Service
+
+Implements Time-based One-Time Password (TOTP):
+
+```typescript
+// Enable MFA
+const mfaSetup = await auth.enableMFA({
+  method: 'totp',
+  userId: 'user_123',
+})
+
+// Verify MFA code
+const isValid = await auth.verifyMFA({
+  userId: 'user_123',
+  code: '123456',
+})
+```
+
+**TOTP Algorithm:**
+
+```
+TOTP = HMAC-SHA1(secret, counter)
+counter = floor(current_time / 30)
+code = last_6_digits(TOTP)
+```
+
+### 5. Permission Service
+
+Manages role-based and resource-based permissions:
+
+```typescript
+// Check permission
+const canEdit = await auth.authorize('edit', $.Product)
+
+// Define role
+await auth.defineRole({
+  name: 'editor',
+  permissions: ['create:Product', 'read:Product', 'update:Product'],
+})
+
+// Assign role
+await auth.assignRole('user_123', 'editor')
+```
+
+## Authentication Flows
+
+### Email/Password Authentication
+
+**Registration Flow:**
+
+```
+1. User submits email + password
+2. Validate email format
+3. Check if email exists
+4. Hash password with bcrypt
+5. Create user record
+6. Store hashed password
+7. Generate verification token
+8. Send verification email
+9. Return userId
+```
+
+**Login Flow:**
+
+```
+1. User submits email + password
+2. Look up user by email
+3. Get stored password hash
+4. Verify password with bcrypt
+5. Check if MFA is enabled
+   ├─ Yes: Request MFA code
+   └─ No: Continue
+6. Generate JWT access token
+7. Generate refresh token
+8. Return tokens + user info
+```
+
+**Implementation:**
+
+```typescript
+import { $, auth, db } from 'sdk.do'
+
+// Registration
+export async function register(email: string, password: string, name: string) {
+  // Validate email
+  if (!isValidEmail(email)) {
+    throw new Error('Invalid email format')
+  }
+
+  // Check if exists
+  const existing = await db.list($.Person, { where: { email } })
+  if (existing.length > 0) {
+    throw new Error('Email already registered')
+  }
+
+  // Create user
+  const user = await db.create($.Person, {
+    email,
+    name,
+    emailVerified: false,
+  })
+
+  // Hash password
+  const hashedPassword = await auth.hashPassword(password)
+
+  // Store credentials
+  await db.create($.Credentials, {
+    userId: user.$id,
+    passwordHash: hashedPassword,
+  })
+
+  // Generate verification token
+  const verificationToken = await auth.createVerificationToken(user.$id)
+
+  // Send email
+  await sendVerificationEmail(email, verificationToken)
+
+  return { userId: user.$id }
+}
+
+// Login
+export async function login(email: string, password: string, mfaCode?: string) {
+  // Get user
+  const users = await db.list($.Person, { where: { email } })
+  if (users.length === 0) {
+    throw new Error('INVALID_CREDENTIALS')
+  }
+
+  const user = users[0]
+
+  // Get credentials
+  const creds = await db.list($.Credentials, { where: { userId: user.$id } })
+  if (creds.length === 0) {
+    throw new Error('INVALID_CREDENTIALS')
+  }
+
+  // Verify password
+  const isValid = await auth.verifyPassword(password, creds[0].passwordHash)
+  if (!isValid) {
+    throw new Error('INVALID_CREDENTIALS')
+  }
+
+  // Check MFA
+  const mfaEnabled = await db.list($.MFAConfig, { where: { userId: user.$id } })
+  if (mfaEnabled.length > 0) {
+    if (!mfaCode) {
+      throw new Error('MFA_REQUIRED')
+    }
+
+    const mfaValid = await auth.verifyMFA({
+      userId: user.$id,
+      code: mfaCode,
+    })
+
+    if (!mfaValid) {
+      throw new Error('INVALID_MFA_CODE')
+    }
+  }
+
+  // Generate tokens
+  const token = await auth.generateToken({
+    userId: user.$id,
+    email: user.email,
+    role: user.role || 'user',
+  })
+
+  const refreshToken = await auth.generateRefreshToken(user.$id)
+
+  return {
+    token,
+    refreshToken,
+    userId: user.$id,
+    expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+  }
+}
+```
+
+### OAuth 2.0 Authentication
+
+**Authorization Code Flow:**
+
+```
+1. User clicks "Login with Google"
+2. Redirect to OAuth provider
+3. User authenticates with provider
+4. Provider redirects back with code
+5. Exchange code for tokens
+6. Get user info from provider
+7. Create or update user record
+8. Generate JWT token
+9. Return session
+```
+
+**Implementation:**
+
+```typescript
+import { auth, db, $ } from 'sdk.do'
+
+// Start OAuth flow
+export async function initiateOAuth(provider: string) {
+  const authUrl = await auth.oauth({
+    provider,
+    redirectUri: 'https://app.example.com/auth/callback',
+    scopes: ['email', 'profile'],
+    state: generateRandomState(),
+  })
+
+  return { authUrl }
+}
+
+// Handle OAuth callback
+export async function handleOAuthCallback(code: string, state: string) {
+  // Verify state to prevent CSRF
+  if (!verifyState(state)) {
+    throw new Error('Invalid state parameter')
+  }
+
+  // Exchange code for tokens
+  const oauthData = await auth.oauthCallback({ code, state })
+
+  // Get or create user
+  let user = await db
+    .list($.Person, {
+      where: { email: oauthData.email },
+    })
+    .then((users) => users[0])
+
+  if (!user) {
+    user = await db.create($.Person, {
+      email: oauthData.email,
+      name: oauthData.name,
+      image: oauthData.picture,
+      emailVerified: true,
+    })
+  }
+
+  // Generate JWT
+  const token = await auth.generateToken({
+    userId: user.$id,
+    email: user.email,
+    role: user.role || 'user',
+  })
+
+  const refreshToken = await auth.generateRefreshToken(user.$id)
+
+  return {
+    token,
+    refreshToken,
+    userId: user.$id,
+  }
+}
+```
+
+### API Key Authentication
+
+**API Key Flow:**
+
+```
+1. User generates API key
+2. API key stored in database
+3. Client includes key in header
+4. Server validates key
+5. Extract user context
+6. Check permissions
+7. Process request
+```
+
+**Implementation:**
+
+```typescript
+import { auth, db, $ } from 'sdk.do'
+
+// Generate API key
+export async function generateApiKey(userId: string, name: string, scopes: string[]) {
+  // Generate random key
+  const key = `sk_live_${generateRandomHex(32)}`
+
+  // Hash key for storage
+  const hashedKey = await auth.hashApiKey(key)
+
+  // Store in database
+  await db.create($.ApiKey, {
+    userId,
+    name,
+    keyHash: hashedKey,
+    scopes,
+    createdAt: new Date(),
+    lastUsed: null,
+  })
+
+  // Return unhashed key (only time it's visible)
+  return {
+    key,
+    name,
+    scopes,
+    createdAt: new Date().toISOString(),
+  }
+}
+
+// Authenticate with API key
+export async function authenticateWithApiKey(key: string) {
+  // Hash provided key
+  const hashedKey = await auth.hashApiKey(key)
+
+  // Look up key
+  const apiKeys = await db.list($.ApiKey, {
+    where: { keyHash: hashedKey },
+  })
+
+  if (apiKeys.length === 0) {
+    throw new Error('INVALID_API_KEY')
+  }
+
+  const apiKey = apiKeys[0]
+
+  // Update last used
+  await db.update($.ApiKey, apiKey.$id, {
+    lastUsed: new Date(),
+  })
+
+  return {
+    userId: apiKey.userId,
+    scopes: apiKey.scopes,
+  }
+}
+```
+
+### Token Refresh Flow
+
+**Refresh Token Flow:**
+
+```
+1. Access token expires
+2. Client sends refresh token
+3. Verify refresh token
+4. Check if revoked
+5. Generate new access token
+6. Optionally rotate refresh token
+7. Return new tokens
+```
+
+**Implementation:**
+
+```typescript
+import { auth, db, $ } from 'sdk.do'
+
+// Refresh access token
+export async function refreshAccessToken(refreshToken: string) {
+  // Verify refresh token
+  const payload = await auth.verifyRefreshToken(refreshToken)
+
+  // Check if revoked
+  const isRevoked = await db.list($.RevokedToken, {
+    where: { token: refreshToken },
+  })
+
+  if (isRevoked.length > 0) {
+    throw new Error('TOKEN_REVOKED')
+  }
+
+  // Generate new access token
+  const newToken = await auth.generateToken({
+    userId: payload.userId,
+    email: payload.email,
+    role: payload.role,
+  })
+
+  // Optionally rotate refresh token
+  const newRefreshToken = await auth.generateRefreshToken(payload.userId)
+
+  // Revoke old refresh token
+  await db.create($.RevokedToken, {
+    token: refreshToken,
+    revokedAt: new Date(),
+  })
+
+  return {
+    token: newToken,
+    refreshToken: newRefreshToken,
+    expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+  }
+}
+```
+
+## Permission Architecture
+
+### Role-Based Access Control (RBAC)
+
+**Permission Model:**
+
+```typescript
+interface Role {
+  name: string
+  permissions: string[] // ['action:resource', ...]
+}
+
+interface UserRole {
+  userId: string
+  role: string
+}
+
+// Examples
+const roles = {
+  admin: {
+    name: 'admin',
+    permissions: ['*'], // All permissions
+  },
+  editor: {
+    name: 'editor',
+    permissions: ['create:Product', 'read:Product', 'update:Product', 'delete:Product', 'read:Order'],
+  },
+  viewer: {
+    name: 'viewer',
+    permissions: ['read:Product', 'read:Order'],
+  },
+}
+```
+
+**Permission Check Flow:**
+
+```
+1. Extract token from request
+2. Verify token
+3. Get user ID from token
+4. Get user roles
+5. Get role permissions
+6. Check if permission exists
+7. Return true/false
+```
+
+**Implementation:**
+
+```typescript
+import { $, auth, db } from 'sdk.do'
+
+// Check authorization
+export async function authorize(token: string, action: string, resource: string) {
+  // Verify token
+  const payload = await auth.verifyToken(token)
+
+  // Get user roles
+  const userRoles = await db.list($.UserRole, {
+    where: { userId: payload.userId },
+  })
+
+  // Get permissions for all roles
+  const allPermissions = new Set<string>()
+
+  for (const userRole of userRoles) {
+    const role = await db.get($.Role, userRole.role)
+    for (const permission of role.permissions) {
+      allPermissions.add(permission)
+    }
+  }
+
+  // Check permission
+  const requiredPermission = `${action}:${resource}`
+
+  // Check wildcard
+  if (allPermissions.has('*')) {
+    return true
+  }
+
+  // Check exact permission
+  if (allPermissions.has(requiredPermission)) {
+    return true
+  }
+
+  // Check resource wildcard
+  if (allPermissions.has(`${action}:*`)) {
+    return true
+  }
+
+  return false
+}
+```
+
+### Attribute-Based Access Control (ABAC)
+
+**Permission Check with Attributes:**
+
+```typescript
+import { $, auth, db } from 'sdk.do'
+
+// Check with attributes
+export async function authorizeWithAttributes(userId: string, action: string, resource: any) {
+  const user = await db.get($.Person, userId)
+
+  // Owner check
+  if (resource.owner?.$id === userId) {
+    return true
+  }
+
+  // Organization check
+  if (resource.organization?.$id === user.organization?.$id) {
+    // Check role permissions within organization
+    return await authorize(userId, action, resource.$type)
+  }
+
+  return false
+}
+```
+
+## Security Considerations
+
+### Token Security
+
+**Best Practices:**
+
+1. **Short-lived access tokens**: 15 minutes
+2. **Long-lived refresh tokens**: 7 days
+3. **Secure token storage**: HttpOnly cookies or secure storage
+4. **Token rotation**: Rotate refresh tokens on use
+5. **Token revocation**: Implement blacklist for revoked tokens
+
+### Password Security
+
+**Requirements:**
+
+1. **Minimum length**: 8 characters
+2. **Complexity**: Mix of uppercase, lowercase, numbers, symbols
+3. **Hashing**: bcrypt with 12 rounds
+4. **Never log**: Never log passwords
+5. **Rate limiting**: Prevent brute force attacks
+
+### API Key Security
+
+**Best Practices:**
+
+1. **Prefix**: Use prefix to identify key type (sk*live*, sk*test*)
+2. **Entropy**: 256 bits of randomness
+3. **Hashing**: Hash keys before storage
+4. **Scopes**: Limit permissions with scopes
+5. **Rotation**: Regular key rotation
+
+### MFA Security
+
+**Implementation:**
+
+1. **TOTP**: Use standard TOTP algorithm
+2. **Backup codes**: Provide backup codes
+3. **Rate limiting**: Limit verification attempts
+4. **Recovery**: Account recovery process
+
+## Scalability
+
+### Token Validation
+
+**Stateless Validation:**
+
+```typescript
+// No database lookup needed
+const payload = await auth.verifyToken(token)
+// Token signature verified using secret key
+```
+
+**Benefits:**
+
+- Fast validation (cryptographic only)
+- No database queries
+- Horizontally scalable
+
+### Caching
+
+**Permission Caching:**
+
+```typescript
+// Cache user permissions
+const cacheKey = `permissions:${userId}`
+let permissions = await cache.get(cacheKey)
+
+if (!permissions) {
+  permissions = await loadUserPermissions(userId)
+  await cache.set(cacheKey, permissions, 300) // 5 minutes
+}
+```
+
+### Database Design
+
+**Optimized Schema:**
+
+```typescript
+// Indexed fields for fast lookup
+interface Person {
+  $id: string // Primary key
+  email: string // Unique index
+  emailVerified: boolean
+  organization?: { $id: string } // Index
+}
+
+interface Credentials {
+  $id: string
+  userId: string // Index
+  passwordHash: string
+}
+
+interface ApiKey {
+  $id: string
+  userId: string // Index
+  keyHash: string // Unique index
+  scopes: string[]
+}
+```
+
+## Monitoring and Logging
+
+### Audit Logging
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Log authentication events
+export async function logAuthEvent(event: { type: string; userId?: string; success: boolean; ip?: string; userAgent?: string }) {
+  await db.create($.AuditLog, {
+    eventType: event.type,
+    userId: event.userId,
+    success: event.success,
+    ip: event.ip,
+    userAgent: event.userAgent,
+    timestamp: new Date(),
+  })
+}
+
+// Usage
+await logAuthEvent({
+  type: 'login',
+  userId: 'user_123',
+  success: true,
+  ip: request.headers.get('CF-Connecting-IP'),
+  userAgent: request.headers.get('User-Agent'),
+})
+```
+
+### Metrics
+
+**Track Key Metrics:**
+
+1. Login success/failure rate
+2. Token verification latency
+3. API key usage
+4. MFA verification rate
+5. Permission check latency
+
+## Related Documentation
+
+- [Getting Started](./getting-started) - Quick start guide
+- [Best Practices](./best-practices) - Security best practices
+- [Troubleshooting](./troubleshooting) - Common issues
+- [API Reference](../api/) - Complete API documentation
+
+## License
+
+CC-BY-4.0 (Open Source)

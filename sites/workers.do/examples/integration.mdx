@@ -1,0 +1,82 @@
+---
+$id: https://workers.do/examples/integration
+$type: TechArticle
+title: Worker Fleet Integration Examples
+description: Integration examples for worker fleets with other services
+keywords: [workers, integration, monitoring, automation]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Integration Examples
+
+Examples of integrating worker fleets with other services.
+
+## Monitoring Integration
+
+```typescript
+import { $, workers, send } from 'sdk.do'
+
+// Send metrics to monitoring system
+on($.Fleet.metrics_updated, async (event) => {
+  await send($.Metrics.recorded, {
+    fleet: event.fleetId,
+    metrics: event.metrics,
+    timestamp: Date.now(),
+  })
+})
+
+// Alert on anomalies
+on($.Fleet.health_degraded, async (event) => {
+  await send($.Alert.created, {
+    severity: 'warning',
+    message: `Fleet ${event.fleetId} health degraded`,
+    metrics: event.healthMetrics,
+  })
+})
+```
+
+## Task Queue Integration
+
+```typescript
+import { $, workers, on } from 'sdk.do'
+
+// Process tasks from queue
+on($.Task.created, async (event) => {
+  const fleet = getAppropriateFleet(event.task)
+  await fleet.assignWork({ tasks: [event.task] })
+})
+
+// Handle task completion
+on($.Task.completed, async (event) => {
+  await db.update(event.taskId, {
+    status: 'completed',
+    completedBy: event.workerId,
+    completedAt: Date.now(),
+  })
+})
+```
+
+## Autoscaling Integration
+
+```typescript
+import { $, workers, every } from 'sdk.do'
+
+// Periodic scaling review
+every($.Every5Minutes, async () => {
+  for (const fleet of allFleets) {
+    const metrics = await fleet.getMetrics()
+
+    if (metrics.queueDepth > metrics.activeWorkers * 100) {
+      await fleet.scale({ delta: +5 })
+    } else if (metrics.queueDepth < metrics.activeWorkers * 20) {
+      await fleet.scale({ delta: -2 })
+    }
+  }
+})
+```
+
+## License
+
+MIT (Open Source)

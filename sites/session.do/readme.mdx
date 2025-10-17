@@ -1,0 +1,292 @@
+---
+$id: https://session.do
+$type: WebSite
+name: session.do
+description: Session management and state handling for Business-as-Code applications with session tokens, storage, expiration, and refresh mechanisms
+license: CC-BY-4.0
+keywords: [session, session-management, tokens, state, expiration, refresh, storage, business-as-code]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# session.do
+
+**Session management and state handling for Business-as-Code applications**
+
+session.do provides comprehensive session management in the `.do` platform's Business-as-Code SDK. It enables session creation, token management, state storage, expiration handling, and refresh mechanisms using semantic patterns that are both human-readable and AI-understandable.
+
+## Quick Start
+
+```bash
+pnpm add sdk.do
+```
+
+```typescript
+import { session } from 'sdk.do'
+
+// Create session
+const newSession = await session.create({
+  userId: 'user_123',
+  data: { preferences: { theme: 'dark' } },
+  expiresIn: '24h',
+})
+
+console.log(newSession)
+// {
+//   id: "session_abc123",
+//   userId: "user_123",
+//   token: "eyJhbGciOiJIUzI1NiIs...",
+//   createdAt: "2025-10-10T12:00:00Z",
+//   expiresAt: "2025-10-11T12:00:00Z"
+// }
+
+// Get session
+const userSession = await session.get(newSession.id)
+
+// Update session
+await session.update(newSession.id, {
+  data: { lastActivity: new Date() },
+})
+
+// Extend session
+await session.extend(newSession.id, '1h')
+
+// Delete session (logout)
+await session.delete(newSession.id)
+```
+
+## Key Features
+
+### Session Creation
+
+Create sessions with custom data and expiration:
+
+```typescript
+import { session } from 'sdk.do'
+
+// Create session with defaults
+const basicSession = await session.create({
+  userId: 'user_123',
+})
+
+// Create session with custom data
+const customSession = await session.create({
+  userId: 'user_123',
+  data: {
+    preferences: { theme: 'dark', language: 'en' },
+    permissions: ['read', 'write'],
+    metadata: { loginMethod: 'oauth', provider: 'google' },
+  },
+  expiresIn: '7d',
+})
+
+// Create session with absolute expiration
+const timedSession = await session.create({
+  userId: 'user_123',
+  expiresAt: new Date('2025-12-31T23:59:59Z'),
+})
+```
+
+### Session Retrieval
+
+Get session by ID or token:
+
+```typescript
+import { session } from 'sdk.do'
+
+// Get by session ID
+const userSession = await session.get('session_abc123')
+
+// Get by token
+const sessionFromToken = await session.verify(token)
+
+// Get all user sessions
+const userSessions = await session.list('user_123')
+
+// Check if session exists and is valid
+const isValid = await session.isValid('session_abc123')
+```
+
+### Session Updates
+
+Update session data and activity:
+
+```typescript
+import { session } from 'sdk.do'
+
+// Update session data
+await session.update('session_abc123', {
+  data: {
+    lastActivity: new Date(),
+    currentPage: '/dashboard',
+  },
+})
+
+// Merge data (doesn't overwrite existing)
+await session.merge('session_abc123', {
+  newPreference: 'value',
+})
+
+// Touch session (update last activity)
+await session.touch('session_abc123')
+```
+
+### Session Expiration
+
+Manage session expiration and refresh:
+
+```typescript
+import { session } from 'sdk.do'
+
+// Extend session expiration
+await session.extend('session_abc123', '1h')
+
+// Refresh session (issue new token)
+const refreshedSession = await session.refresh('session_abc123')
+
+// Set specific expiration
+await session.setExpiration('session_abc123', new Date('2025-12-31'))
+
+// Check time remaining
+const remaining = await session.timeRemaining('session_abc123')
+console.log(`Session expires in ${remaining}ms`)
+```
+
+### Session Storage
+
+Store and retrieve session data:
+
+```typescript
+import { session } from 'sdk.do'
+
+// Set session data
+await session.set('session_abc123', 'shoppingCart', {
+  items: ['prod_1', 'prod_2'],
+  total: 99.99,
+})
+
+// Get session data
+const cart = await session.get('session_abc123', 'shoppingCart')
+
+// Delete session data
+await session.remove('session_abc123', 'shoppingCart')
+
+// Clear all session data
+await session.clear('session_abc123')
+```
+
+## Features
+
+- **Session Creation**: Create sessions with custom data and expiration
+- **Token Management**: Secure session tokens with JWT
+- **State Storage**: Store arbitrary data in sessions
+- **Expiration Handling**: Automatic expiration and cleanup
+- **Session Refresh**: Extend sessions without re-authentication
+- **Idle Timeout**: Automatic logout after inactivity
+- **Multi-Device**: Manage sessions across devices
+- **Session Events**: Listen to session lifecycle events
+- **Type Safety**: Full TypeScript support
+- **Semantic Patterns**: Use $.Subject.predicate.Object patterns
+- **AI-Native**: Designed for AI agents
+
+## Documentation
+
+- [Getting Started](./docs/getting-started) - Installation and setup
+- [Architecture](./docs/architecture) - Session architecture
+- [Best Practices](./docs/best-practices) - Session best practices
+- [Troubleshooting](./docs/troubleshooting) - Common issues
+- [API Reference](./api/) - Complete API documentation
+
+## Examples
+
+- [Basic Usage](./examples/basic-usage) - Simple session management
+- [Advanced Patterns](./examples/advanced-patterns) - Complex scenarios
+- [Integration](./examples/integration) - Integration examples
+- [Real-World Use Case](./examples/real-world-use-case) - Production setup
+
+## Use Cases
+
+### Shopping Cart Session
+
+```typescript
+import { session } from 'sdk.do'
+
+export async function addToCart(sessionId: string, productId: string) {
+  const cart = (await session.get(sessionId, 'cart')) || { items: [] }
+
+  cart.items.push(productId)
+
+  await session.set(sessionId, 'cart', cart)
+  await session.touch(sessionId) // Update last activity
+
+  return cart
+}
+```
+
+### Multi-Device Sessions
+
+```typescript
+import { session } from 'sdk.do'
+
+export async function listUserSessions(userId: string) {
+  const sessions = await session.list(userId)
+
+  return sessions.map((s) => ({
+    id: s.id,
+    device: s.data?.device || 'Unknown',
+    lastActivity: s.lastActivity,
+    isActive: s.isActive,
+  }))
+}
+
+export async function logoutAllDevices(userId: string) {
+  const sessions = await session.list(userId)
+
+  for (const s of sessions) {
+    await session.delete(s.id)
+  }
+}
+```
+
+## Integration with `.do` Platform
+
+```typescript
+import { $, session, auth, db } from 'sdk.do'
+
+// Create session after login
+export async function login(email: string, password: string) {
+  const user = await auth.login({ email, password })
+
+  const userSession = await session.create({
+    userId: user.userId,
+    data: {
+      loginMethod: 'email',
+      loginTime: new Date(),
+      userAgent: request.headers.get('User-Agent'),
+    },
+    expiresIn: '24h',
+  })
+
+  return {
+    token: userSession.token,
+    sessionId: userSession.id,
+  }
+}
+```
+
+## Related Domains
+
+- **[auth.do](https://auth.do)** - Authentication framework
+- **[user.do](https://user.do)** - User context
+- **[identity.do](https://identity.do)** - Identity management
+- **[oauth.do](https://oauth.do)** - OAuth 2.0 flows
+- **[sdk.do](https://sdk.do)** - Core SDK
+
+## License
+
+CC-BY-4.0 (Open Source)
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

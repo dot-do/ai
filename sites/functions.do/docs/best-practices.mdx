@@ -1,0 +1,990 @@
+---
+$id: https://functions.do/docs/best-practices
+$type: TechArticle
+title: Best Practices and Performance Optimization
+description: Production-ready patterns, performance tips, and security best practices for functions.do
+keywords: [best practices, performance, optimization, security, patterns]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Best Practices and Performance Optimization
+
+Production-ready patterns, performance optimization techniques, and security best practices for building reliable, scalable functions.
+
+> **Note**: Examples in this guide use simplified pseudo-code for clarity. When implementing, use `registerFunction()` from the [API Reference](./api-reference) to register functions in the registry.
+
+## Function Design
+
+### Keep Functions Small and Focused
+
+Each function should do one thing well:
+
+```typescript
+// Good - Single responsibility
+await registerFunction({
+  metadata: {
+    id: 'validate-email',
+    name: 'Validate Email',
+    version: '1.0.0',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  source: {
+    code: `
+      export default function validateEmail(input) {
+        const email = input.params.email
+        const emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/
+        return emailRegex.test(email)
+      }
+    `,
+    language: 'typescript',
+  },
+})
+
+await registerFunction({
+  metadata: {
+    id: 'send-email',
+    name: 'Send Email',
+    version: '1.0.0',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  source: {
+    code: `
+      export default async function sendEmail(input) {
+        const email = input.params.email
+        return await emailService.send(email)
+      }
+    `,
+    language: 'typescript',
+  },
+})
+
+// Bad - Multiple responsibilities (validation + sending + logging + analytics)
+await registerFunction({
+  metadata: {
+    id: 'validate-and-send-email',
+    name: 'Validate and Send Email',
+    version: '1.0.0',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  source: {
+    code: `
+      export default async function handler(input) {
+        const { email, message } = input.params
+
+        // Validation
+        const emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/
+        if (!emailRegex.test(email)) {
+          throw new Error('Invalid email')
+        }
+
+        // Sending
+        await emailService.send({ to: email, body: message })
+
+        // Logging
+        await logEmailSent(email)
+
+        // Analytics
+        await trackEmailMetrics(email)
+      }
+    `,
+    language: 'typescript',
+  },
+})
+```
+
+### Use Descriptive Names
+
+Function names should clearly describe what they do:
+
+```typescript
+// Good - Clear and specific
+// registerFunction({ metadata: { id: 'calculate-order-total-with-tax', ... } })
+// registerFunction({ metadata: { id: 'validate-credit-card-number', ... } })
+// registerFunction({ metadata: { id: 'send-order-confirmation-email', ... } })
+
+// Bad - Vague and unclear
+// registerFunction({ metadata: { id: 'process', ... } })  // Too vague
+// registerFunction({ metadata: { id: 'do-it', ... } })     // Not descriptive
+// registerFunction({ metadata: { id: 'handler', ... } })   // Generic
+```
+
+### Include Type Annotations
+
+Always use TypeScript types for better safety:
+
+```typescript
+// Good - Full type safety with TypeScript
+const typeScriptCode = `
+  interface OrderInput {
+    items: Array<{ id: string; quantity: number }>
+    customerId: string
+    shippingAddress: Address
+  }
+
+  interface OrderResult {
+    orderId: string
+    total: number
+    estimatedDelivery: Date
+  }
+
+  export default async function processOrder(
+    input: { params: OrderInput }
+  ): Promise<OrderResult> {
+    // Implementation with type safety
+    return {
+      orderId: 'order-123',
+      total: 99.99,
+      estimatedDelivery: new Date(),
+    }
+  }
+`
+
+await registerFunction({
+  metadata: {
+    id: 'process-order',
+    name: 'Process Order',
+    version: '1.0.0',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  source: {
+    code: typeScriptCode,
+    language: 'typescript',
+  },
+})
+
+// Bad - No type safety (using 'any')
+const badCode = `
+  export default async function processOrder(input: any) {
+    // No type checking, prone to runtime errors
+  }
+`
+```
+
+## Performance Optimization
+
+### Right-Size Resource Allocation
+
+Allocate appropriate memory and timeout:
+
+```typescript
+// Small, fast function
+await registerFunction({
+  metadata: {
+    id: 'validate-input',
+    memory: 128, // 128MB is enough
+    timeout: 5, // 5 seconds
+    // ...
+  },
+  // ...
+})
+
+// Large, slow function
+await registerFunction({
+  metadata: {
+    id: 'process-video',
+    memory: 2048, // 2GB for video processing
+    timeout: 300, // 5 minutes
+    // ...
+  },
+  // ...
+})
+```
+
+### Use Async Execution for Long Operations
+
+Don't block on long-running tasks:
+
+```typescript
+// Good - Async for long operations
+const processBatch = async (items: any[]) => {
+  const executionId = await executeFunctionAsync('batch-processor', {
+    params: { items },
+  })
+
+  return { message: 'Processing started', executionId }
+}
+
+// Bad - Blocking on long operation
+const processBatch = async (items: any[]) => {
+  const result = await executeFunction('batch-processor', {
+    params: { items },
+  })
+  // User waits for entire batch to complete
+  return result
+}
+```
+
+### Batch Similar Operations
+
+Reduce overhead by batching:
+
+```typescript
+// Good - Batch operations
+const results = await Promise.all([db.get($.User, 'user-1'), db.get($.User, 'user-2'), db.get($.User, 'user-3')])
+
+// Even better - Use batch API if available
+const results = await db.getMany($.User, ['user-1', 'user-2', 'user-3'])
+
+// Bad - Sequential operations
+const user1 = await db.get($.User, 'user-1')
+const user2 = await db.get($.User, 'user-2')
+const user3 = await db.get($.User, 'user-3')
+```
+
+### Cache Frequently Used Data
+
+Avoid redundant computations and fetches:
+
+```typescript
+// Cache expensive calculations (implement in function code)
+const functionCode = `
+  const cache = new Map()
+
+  export default async function calculate(input) {
+    const key = input.params.key
+
+    if (cache.has(key)) {
+      return cache.get(key)
+    }
+
+    const result = await performExpensiveCalculation(key)
+    cache.set(key, result)
+
+    return result
+  }
+`
+
+// Cache with TTL (Time-To-Live)
+const cachedFetchCode = `
+  const cacheWithTTL = new Map()
+
+  export default async function cachedFetch(input) {
+    const url = input.params.url
+    const cached = cacheWithTTL.get(url)
+
+    if (cached && cached.expires > Date.now()) {
+      return cached.value
+    }
+
+    const data = await fetch(url).then((r) => r.json())
+    cacheWithTTL.set(url, {
+      value: data,
+      expires: Date.now() + 5 * 60 * 1000, // 5 minutes
+    })
+
+    return data
+  }
+`
+```
+
+### Minimize Cold Start Impact
+
+Optimize for faster cold starts:
+
+```typescript
+// Good - Lazy initialization
+let dbConnection: any
+
+const getConnection = async () => {
+  if (!dbConnection) {
+    dbConnection = await initializeDatabase()
+  }
+  return dbConnection
+}
+
+// Bad - Initialize on import
+const dbConnection = await initializeDatabase() // Slows cold start
+```
+
+### Use Streaming for Large Data
+
+Stream large responses instead of buffering:
+
+```typescript
+// Good - Stream large files (return stream directly)
+const streamCode = `
+  export default async function streamLargeFile(input) {
+    const fileId = input.params.fileId
+    const stream = await storage.getFileStream(fileId)
+    return stream // Return stream directly
+  }
+`
+
+// Bad - Buffer entire file (loads everything into memory)
+const bufferCode = `
+  export default async function getLargeFile(input) {
+    const fileId = input.params.fileId
+    const data = await storage.getFile(fileId) // Loads all into memory
+    return data
+  }
+`
+```
+
+## Error Handling
+
+### Always Handle Errors
+
+Never let errors propagate unexpectedly:
+
+```typescript
+// Good - Explicit error handling
+const safeFunctionCode = `
+  export default async function safeFunction(input) {
+    try {
+      return await riskyOperation(input.params)
+    } catch (error) {
+      console.error('Operation failed:', error)
+
+      // Return error response
+      return {
+        success: false,
+        error: error.message,
+      }
+    }
+  }
+`
+
+// Bad - No error handling (errors propagate)
+const unsafeFunctionCode = `
+  export default async function unsafeFunction(input) {
+    return await riskyOperation(input.params) // May throw unhandled error
+  }
+`
+```
+
+### Use Structured Errors
+
+Provide meaningful error information:
+
+```typescript
+// Good - Structured errors with detailed information
+const validationCode = `
+  class ValidationError extends Error {
+    constructor(field, message) {
+      super(message)
+      this.name = 'ValidationError'
+      this.field = field
+    }
+  }
+
+  export default function validate(input) {
+    const data = input.params
+
+    if (!data.email) {
+      throw new ValidationError('email', 'Email is required')
+    }
+
+    if (!data.email.includes('@')) {
+      throw new ValidationError('email', 'Invalid email format')
+    }
+
+    return { valid: true }
+  }
+`
+
+// Bad - Generic errors (not helpful for debugging)
+const badValidationCode = `
+  export default function validate(input) {
+    const data = input.params
+    if (!data.email || !data.email.includes('@')) {
+      throw new Error('Invalid') // Not helpful - which field? why?
+    }
+  }
+`
+```
+
+### Implement Retry Logic
+
+Retry transient failures automatically:
+
+```typescript
+// Implement retry logic in your function code
+const retryFunctionCode = `
+  async function withRetry(fn, maxRetries = 3) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await fn()
+      } catch (error) {
+        if (attempt === maxRetries) throw error
+
+        // Exponential backoff: 2s, 4s, 8s
+        await new Promise((resolve) =>
+          setTimeout(resolve, Math.pow(2, attempt) * 1000)
+        )
+      }
+    }
+  }
+
+  export default async function reliableApiCall(input) {
+    const url = input.params.url
+    return await withRetry(() => fetch(url).then((r) => r.json()))
+  }
+`
+```
+
+### Log Errors for Debugging
+
+Always log errors with context:
+
+```typescript
+// Log errors with detailed context for debugging
+const processOrderCode = `
+  export default async function processOrder(input) {
+    const order = input.params.order
+
+    try {
+      return await processOrderLogic(order)
+    } catch (error) {
+      // Log with context for debugging
+      console.error('Order processing failed', {
+        orderId: order.id,
+        userId: order.userId,
+        error: error.message,
+        stack: error.stack,
+        timestamp: new Date().toISOString(),
+      })
+
+      throw error
+    }
+  }
+`
+```
+
+## Security
+
+### Validate All Input
+
+Never trust user input - always validate:
+
+```typescript
+// Use Zod for runtime validation
+const validationCode = `
+  import { z } from 'zod'
+
+  const OrderSchema = z.object({
+    items: z.array(
+      z.object({
+        productId: z.string().uuid(),
+        quantity: z.number().int().positive().max(100),
+      })
+    ),
+    shippingAddress: z.object({
+      street: z.string().min(1).max(200),
+      city: z.string().min(1).max(100),
+      zipCode: z.string().regex(/^\\d{5}$/),
+    }),
+  })
+
+  export default async function processOrder(input) {
+    // Validate input against schema
+    const order = OrderSchema.parse(input.params)
+
+    // Process validated order safely
+    return await process(order)
+  }
+`
+
+// Register with zod dependency
+await registerFunction({
+  metadata: {
+    id: 'process-order',
+    name: 'Process Order',
+    version: '1.0.0',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  source: {
+    code: validationCode,
+    language: 'typescript',
+    dependencies: {
+      zod: '^3.22.0',
+    },
+  },
+})
+```
+
+### Sanitize Output
+
+Prevent injection attacks:
+
+```typescript
+// Sanitize output to prevent injection attacks
+const generateEmailCode = `
+  export default async function generateEmail(input) {
+    const user = input.params.user
+
+    // Sanitize user input before including in email
+    const safeName = sanitizeHtml(user.name)
+    const safeEmail = escapeHtml(user.email)
+
+    return {
+      to: safeEmail,
+      subject: \`Welcome, \${safeName}!\`,
+      body: \`<p>Hello \${safeName},</p>\`,
+    }
+  }
+`
+```
+
+### Use Environment Variables for Secrets
+
+Never hardcode secrets:
+
+```typescript
+// Good - Use environment variables from context
+const goodPaymentCode = `
+  export default async function processPayment(input) {
+    const payment = input.params.payment
+    const stripe = new Stripe(input.context.env.STRIPE_SECRET_KEY)
+    return await stripe.charges.create(payment)
+  }
+`
+
+// Bad - Hardcoded secret (NEVER DO THIS!)
+const badPaymentCode = `
+  export default async function processPayment(input) {
+    const payment = input.params.payment
+    const stripe = new Stripe('sk_live_hardcoded_key') // NEVER DO THIS!
+    return await stripe.charges.create(payment)
+  }
+`
+```
+
+### Implement Rate Limiting
+
+Prevent abuse:
+
+```typescript
+// Implement rate limiting in function code
+const rateLimitedCode = `
+  const rateLimiter = new Map()
+
+  export default async function rateLimited(input) {
+    const userId = input.context.userId
+    const now = Date.now()
+
+    const limit = rateLimiter.get(userId)
+    if (limit && limit.resetAt > now) {
+      if (limit.count >= 100) {
+        throw new Error('Rate limit exceeded')
+      }
+      limit.count++
+    } else {
+      rateLimiter.set(userId, {
+        count: 1,
+        resetAt: now + 60 * 1000, // 1 minute window
+      })
+    }
+
+    return await performAction(input.params)
+  }
+`
+```
+
+### Check Permissions
+
+Enforce authorization:
+
+```typescript
+// Always check permissions before sensitive operations
+const deleteOrderCode = `
+  export default async function deleteOrder(input) {
+    const orderId = input.params.orderId
+    const currentUser = input.context.user
+
+    // Check if user is admin
+    if (!currentUser.roles.includes('admin')) {
+      // Check if user owns the order
+      const order = await db.get('Order', orderId)
+      if (order.userId !== currentUser.id) {
+        throw new Error('Unauthorized: Cannot delete other users\\' orders')
+      }
+    }
+
+    await db.delete('Order', orderId)
+    return { deleted: true }
+  }
+`
+```
+
+## Testing
+
+### Write Unit Tests
+
+Test functions in isolation:
+
+```typescript
+import { describe, it, expect } from 'vitest'
+
+describe('calculateTax', () => {
+  it('should calculate tax correctly', async () => {
+    const result = await executeFunction('calculate-tax', {
+      params: {
+        amount: 100,
+        rate: 0.08,
+      },
+    })
+
+    expect(result.success).toBe(true)
+    expect(result.data).toEqual({
+      tax: 8,
+      total: 108,
+    })
+  })
+
+  it('should handle zero amount', async () => {
+    const result = await executeFunction('calculate-tax', {
+      params: {
+        amount: 0,
+        rate: 0.08,
+      },
+    })
+
+    expect(result.success).toBe(true)
+    expect(result.data.tax).toBe(0)
+  })
+
+  it('should reject negative amounts', async () => {
+    const result = await executeFunction('calculate-tax', {
+      params: {
+        amount: -100,
+        rate: 0.08,
+      },
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.error?.message).toContain('amount must be positive')
+  })
+})
+```
+
+### Test Error Cases
+
+Don't just test happy paths:
+
+```typescript
+describe('processPayment', () => {
+  it('should process valid payment', async () => {
+    const result = await executeFunction('process-payment', validPayment)
+    expect(result.success).toBe(true)
+  })
+
+  it('should reject invalid card', async () => {
+    const result = await executeFunction('process-payment', invalidCardPayment)
+    expect(result.success).toBe(false)
+    expect(result.error?.code).toBe('INVALID_CARD')
+  })
+
+  it('should handle insufficient funds', async () => {
+    const result = await executeFunction('process-payment', insufficientFundsPayment)
+    expect(result.success).toBe(false)
+    expect(result.error?.code).toBe('INSUFFICIENT_FUNDS')
+  })
+
+  it('should handle network errors', async () => {
+    // Mock network failure
+    mockStripeApi.simulateNetworkError()
+
+    const result = await executeFunction('process-payment', validPayment)
+    expect(result.success).toBe(false)
+  })
+})
+```
+
+### Use Integration Tests
+
+Test function interactions:
+
+```typescript
+describe('Order Workflow Integration', () => {
+  it('should complete full order flow', async () => {
+    // 1. Create order
+    const createResult = await executeFunction('create-order', {
+      params: { items: testItems },
+    })
+    expect(createResult.success).toBe(true)
+    const orderId = createResult.data.id
+
+    // 2. Process payment
+    const paymentResult = await executeFunction('process-payment', {
+      params: { orderId, paymentToken: 'tok_test' },
+    })
+    expect(paymentResult.success).toBe(true)
+
+    // 3. Verify order status
+    const order = await db.get($.Order, orderId)
+    expect(order.status).toBe('paid')
+
+    // 4. Verify inventory updated
+    const product = await db.get($.Product, testItems[0].productId)
+    expect(product.inventory).toBeLessThan(originalInventory)
+  })
+})
+```
+
+## Monitoring
+
+### Add Logging
+
+Log important events:
+
+```typescript
+// Add structured logging for debugging and monitoring
+const processOrderCode = `
+  export default async function processOrder(input) {
+    const order = input.params.order
+    console.log('[ProcessOrder] Started', { orderId: order.id })
+
+    try {
+      const result = await process(order)
+      console.log('[ProcessOrder] Completed', { orderId: order.id, result })
+      return result
+    } catch (error) {
+      console.error('[ProcessOrder] Failed', {
+        orderId: order.id,
+        error: error.message,
+      })
+      throw error
+    }
+  }
+`
+```
+
+### Track Metrics
+
+Monitor performance and reliability:
+
+```typescript
+// Track metrics for monitoring and alerting
+const monitoredFunctionCode = `
+  export default async function monitoredFunction(input) {
+    const startTime = Date.now()
+
+    try {
+      const result = await performOperation(input.params)
+
+      // Track success metrics
+      await metrics.increment('function.success')
+      await metrics.histogram('function.duration', Date.now() - startTime)
+
+      return result
+    } catch (error) {
+      // Track failure metrics
+      await metrics.increment('function.failure')
+      await metrics.increment(\`function.error.\${error.code}\`)
+
+      throw error
+    }
+  }
+`
+```
+
+### Set Up Alerts
+
+Be notified of issues:
+
+```typescript
+// Send alerts for critical failures
+const criticalFunctionCode = `
+  export default async function criticalFunction(input) {
+    try {
+      return await performCriticalOperation(input.params)
+    } catch (error) {
+      // Send alert on critical failure
+      await sendAlert({
+        severity: 'critical',
+        title: 'Critical function failed',
+        message: error.message,
+        functionId: 'critical-function',
+      })
+
+      throw error
+    }
+  }
+`
+```
+
+## Documentation
+
+### Document Function Purpose
+
+Add clear descriptions:
+
+```typescript
+await registerFunction({
+  metadata: {
+    id: 'calculate-shipping',
+    name: 'Calculate Shipping Cost',
+    description: 'Calculates shipping cost based on weight, distance, and shipping method. Supports USPS, FedEx, and UPS.',
+    version: '1.0.0',
+    author: 'logistics-team@example.com',
+    tags: ['shipping', 'logistics', 'pricing'],
+    // ...
+  },
+  // ...
+})
+```
+
+### Document Parameters
+
+Explain what inputs are expected:
+
+```typescript
+// Document function parameters with JSDoc comments
+const processOrderCode = `
+  /**
+   * Process an order with payment
+   *
+   * @param input.params.order - Order details including items, customer, and shipping
+   * @param input.params.paymentMethod - Payment method (card, bank, paypal)
+   * @param input.context.env.STRIPE_KEY - Stripe API key for payment processing
+   *
+   * @returns Order confirmation with payment status
+   *
+   * @throws {ValidationError} If order is invalid
+   * @throws {PaymentError} If payment fails
+   */
+  export default async function processOrder(input) {
+    // Implementation
+  }
+`
+```
+
+## Deployment
+
+### Use Semantic Versioning
+
+Version functions properly:
+
+```typescript
+// 1.0.0 - Initial release
+await registerFunction({ metadata: { version: '1.0.0', ...}, ... })
+
+// 1.0.1 - Bug fix (backwards compatible)
+await registerFunction({ metadata: { version: '1.0.1', ...}, ... })
+
+// 1.1.0 - New feature (backwards compatible)
+await registerFunction({ metadata: { version: '1.1.0', ...}, ... })
+
+// 2.0.0 - Breaking change
+await registerFunction({ metadata: { version: '2.0.0', ...}, ... })
+```
+
+### Test Before Deploying
+
+Always test functions before marking as deployed:
+
+```typescript
+// 1. Register
+const func = await registerFunction(definition)
+
+// 2. Test
+const testResult = await executeFunction(func.definition.metadata.id, testInput)
+if (!testResult.success) {
+  throw new Error('Function failed tests')
+}
+
+// 3. Deploy
+await deployFunction(func.definition.metadata.id, endpoint)
+```
+
+### Use CI/CD
+
+Automate deployment:
+
+```yaml
+# .github/workflows/deploy-functions.yml
+name: Deploy Functions
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: pnpm/action-setup@v2
+      - run: pnpm install
+      - run: pnpm test
+      - run: pnpm deploy:functions
+        env:
+          FUNCTIONS_API_KEY: ${{ secrets.FUNCTIONS_API_KEY }}
+```
+
+## Maintenance
+
+### Archive Old Versions
+
+Keep registry clean:
+
+```typescript
+// Archive superseded versions
+const oldVersions = await listFunctions({
+  name: 'process-order',
+  status: 'deployed',
+})
+
+for (const func of oldVersions) {
+  if (func.definition.metadata.version !== latestVersion) {
+    await archiveFunction(func.definition.metadata.id)
+  }
+}
+```
+
+### Monitor Health
+
+Regular health checks:
+
+```typescript
+every($.Every5Minutes, async () => {
+  const critical = ['process-order', 'process-payment', 'send-email']
+
+  for (const funcId of critical) {
+    const func = await getFunction(funcId)
+    if (func?.status !== 'deployed') {
+      await send($.Alert.send, {
+        severity: 'critical',
+        message: `Critical function ${funcId} is not deployed`,
+      })
+    }
+  }
+})
+```
+
+### Clean Up Execution History
+
+Prevent database bloat:
+
+```typescript
+every($.Daily, async () => {
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+
+  // Delete old execution records
+  const old = await db.list($.FunctionExecution, {
+    where: {
+      startedAt: { $lt: thirtyDaysAgo },
+    },
+  })
+
+  for (const execution of old) {
+    await db.delete($.FunctionExecution, execution.id)
+  }
+
+  console.log(`Cleaned up ${old.length} old executions`)
+})
+```
+
+## Next Steps
+
+- [API Reference](./api-reference) - Complete API documentation
+- [Deployment](./deployment) - Deploy functions to production
+- [Monitoring](./monitoring) - Monitor function health
+- [Integration](./integration) - Integrate with SDK features

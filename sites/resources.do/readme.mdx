@@ -1,0 +1,789 @@
+---
+$id: https://resources.do
+$type: WebSite
+name: resources.do
+title: resources.do - Data Records and Entity Instances for Business-as-Code
+description: Comprehensive guide to working with data records and entity instances - the actual data layer of Business-as-Code applications using semantic patterns
+keywords: [resources, instances, data, records, entities, crud, querying, business-as-code]
+author:
+  $type: Organization
+  name: .do Platform
+license: MIT
+---
+
+# resources.do
+
+**Data records and entity instances for Business-as-Code applications**
+
+resources.do focuses on working with actual data records - the concrete instances of entity types. While nouns.do defines **what** things are and verbs.do defines **what** you can do, resources.do is about the **actual data** itself.
+
+## Overview
+
+In Business-as-Code, **resources** are the actual data records - specific instances of entity types:
+
+- **Data Records** - Actual person, organization, product instances
+- **CRUD Operations** - Creating, reading, updating, deleting records
+- **Querying** - Finding and filtering records
+- **Relationships** - Linking records together
+- **Data Management** - Validation, migration, backup, sync
+- **Collections** - Working with sets of records
+
+## Quick Start
+
+Install the SDK:
+
+```bash
+pnpm add sdk.do
+```
+
+Work with data records:
+
+```typescript
+import $, { db } from 'sdk.do'
+
+// Create a resource (instance of Person type)
+const jane = await db.create($.Person, {
+  $type: 'Person',
+  name: 'Jane Smith',
+  email: 'jane@example.com',
+  jobTitle: 'Software Engineer',
+})
+
+// jane is now a resource - a specific person record
+console.log(jane.$id) // 'person-abc123'
+console.log(jane.$type) // 'Person'
+console.log(jane.name) // 'Jane Smith'
+
+// Query resources
+const engineers = await db.list($.Person, {
+  where: { jobTitle: { $contains: 'Engineer' } },
+})
+
+// engineers is an array of person resources
+console.log(`Found ${engineers.length} engineers`)
+
+// Update a resource
+await db.update(jane, {
+  jobTitle: 'Senior Engineer',
+  email: 'jane.smith@company.com',
+})
+
+// Delete a resource
+await db.delete(jane)
+```
+
+## Core Concepts
+
+### What Are Resources?
+
+**Resources** are concrete instances of entity types:
+
+```typescript
+// Type (noun) - what it is
+$.Person // Person type definition
+
+// Resource - specific instance
+const jane = {
+  $id: 'person-123',
+  $type: 'Person',
+  name: 'Jane Smith',
+  email: 'jane@example.com',
+} // Specific person resource
+
+// Multiple resources (instances) of same type
+const people = [
+  { $id: 'person-123', $type: 'Person', name: 'Jane' },
+  { $id: 'person-456', $type: 'Person', name: 'John' },
+  { $id: 'person-789', $type: 'Person', name: 'Alice' },
+]
+```
+
+### Resource Identity
+
+Every resource has a unique identifier:
+
+```typescript
+const person = await db.create($.Person, { name: 'John' })
+
+// Resource identity
+console.log(person.$id) // 'person-abc123' (unique ID)
+console.log(person.$type) // 'Person' (type)
+
+// Use ID to reference
+const retrieved = await db.get($.Person, person.$id)
+console.log(retrieved.name) // 'John'
+```
+
+### Resource Lifecycle
+
+Resources go through a lifecycle:
+
+```typescript
+// 1. Creation
+const person = await db.create($.Person, {
+  $type: 'Person',
+  name: 'Jane',
+  status: 'Active',
+})
+
+// 2. Reading
+const retrieved = await db.get($.Person, person.$id)
+
+// 3. Updating
+await db.update(person, { jobTitle: 'CTO' })
+
+// 4. Archiving (soft delete)
+await db.update(person, { status: 'Archived' })
+
+// 5. Deletion (hard delete)
+await db.delete(person)
+```
+
+### Resource Collections
+
+Work with multiple resources:
+
+```typescript
+// Get all resources of a type
+const allPeople = await db.list($.Person)
+
+// Get filtered resources
+const engineers = await db.list($.Person, {
+  where: { jobTitle: { $contains: 'Engineer' } },
+})
+
+// Get paginated resources
+const page1 = await db.list($.Person, { limit: 10, offset: 0 })
+const page2 = await db.list($.Person, { limit: 10, offset: 10 })
+
+// Count resources
+const personCount = await db.count($.Person)
+console.log(`Total people: ${personCount}`)
+```
+
+## Creating Resources
+
+### Basic Creation
+
+```typescript
+// Create single resource
+const person = await db.create($.Person, {
+  $type: 'Person',
+  name: 'Jane Smith',
+  email: 'jane@example.com',
+  jobTitle: 'Software Engineer',
+})
+
+// Create with nested data
+const organization = await db.create($.Organization, {
+  $type: 'Organization',
+  name: 'Acme Corporation',
+  address: {
+    $type: 'PostalAddress',
+    streetAddress: '123 Main St',
+    addressLocality: 'San Francisco',
+    addressRegion: 'CA',
+    postalCode: '94102',
+  },
+})
+
+// Create with relationships
+const order = await db.create($.Order, {
+  $type: 'Order',
+  orderNumber: 'ORD-001',
+  customer: {
+    $id: person.$id,
+    $type: 'Person',
+  },
+  orderedItem: {
+    $id: product.$id,
+    $type: 'Product',
+  },
+})
+```
+
+### Batch Creation
+
+```typescript
+// Create multiple resources
+const people = await Promise.all([
+  db.create($.Person, { name: 'Alice', email: 'alice@example.com' }),
+  db.create($.Person, { name: 'Bob', email: 'bob@example.com' }),
+  db.create($.Person, { name: 'Carol', email: 'carol@example.com' }),
+])
+
+// Bulk insert
+const peopleData = [
+  { name: 'Alice', email: 'alice@example.com' },
+  { name: 'Bob', email: 'bob@example.com' },
+  { name: 'Carol', email: 'carol@example.com' },
+]
+
+const created = await db.createMany($.Person, peopleData)
+console.log(`Created ${created.length} people`)
+```
+
+### Validation on Creation
+
+```typescript
+import { validate } from 'sdk.do'
+
+async function createValidatedPerson(data: any) {
+  // Validate before creating
+  const validation = validate(data, $.Person)
+
+  if (!validation.valid) {
+    throw new Error(`Invalid person data: ${validation.errors.map((e) => e.message).join(', ')}`)
+  }
+
+  // Create only if valid
+  return await db.create($.Person, data)
+}
+```
+
+## Reading Resources
+
+### Get by ID
+
+```typescript
+// Get single resource by ID
+const person = await db.get($.Person, 'person-123')
+console.log(person.name, person.email)
+
+// Handle not found
+const person = await db.get($.Person, 'invalid-id').catch(() => null)
+if (!person) {
+  console.error('Person not found')
+}
+
+// Check existence
+const exists = await db.exists($.Person, 'person-123')
+if (exists) {
+  const person = await db.get($.Person, 'person-123')
+}
+```
+
+### List Resources
+
+```typescript
+// List all resources of a type
+const people = await db.list($.Person)
+
+// List with limit
+const firstTen = await db.list($.Person, { limit: 10 })
+
+// List with pagination
+const page = await db.list($.Person, {
+  limit: 10,
+  offset: 20, // Page 3 (20 / 10 + 1)
+})
+
+// List with sorting
+const sortedPeople = await db.list($.Person, {
+  orderBy: { name: 'asc' },
+})
+```
+
+### Filtering Resources
+
+```typescript
+// Simple equality filter
+const janes = await db.list($.Person, {
+  where: { name: 'Jane Smith' },
+})
+
+// Contains filter
+const engineers = await db.list($.Person, {
+  where: { jobTitle: { $contains: 'Engineer' } },
+})
+
+// Comparison filters
+const experienced = await db.list($.Person, {
+  where: { yearsExperience: { $gte: 5 } },
+})
+
+// Multiple conditions (AND)
+const seniorEngineers = await db.list($.Person, {
+  where: {
+    jobTitle: { $contains: 'Engineer' },
+    yearsExperience: { $gte: 5 },
+  },
+})
+
+// OR conditions
+const results = await db.list($.Person, {
+  where: {
+    $or: [{ jobTitle: { $contains: 'Engineer' } }, { jobTitle: { $contains: 'Developer' } }],
+  },
+})
+
+// Null checks
+const withoutEmail = await db.list($.Person, {
+  where: { email: null },
+})
+
+const withEmail = await db.list($.Person, {
+  where: { email: { $ne: null } },
+})
+```
+
+### Advanced Queries
+
+```typescript
+// Full-text search
+const results = await db.search($.Person, 'software engineer')
+
+// Fuzzy matching
+const similar = await db.list($.Person, {
+  where: { name: { $like: 'Jan%' } }, // Starts with 'Jan'
+})
+
+// IN clause
+const specific = await db.list($.Person, {
+  where: {
+    $id: { $in: ['person-123', 'person-456', 'person-789'] },
+  },
+})
+
+// Date range
+const recent = await db.list($.Person, {
+  where: {
+    createdAt: {
+      $gte: new Date('2025-01-01'),
+      $lte: new Date('2025-12-31'),
+    },
+  },
+})
+
+// Nested property queries
+const sfPeople = await db.list($.Person, {
+  where: {
+    'address.addressLocality': 'San Francisco',
+  },
+})
+```
+
+## Updating Resources
+
+### Simple Updates
+
+```typescript
+const person = await db.get($.Person, 'person-123')
+
+// Update single property
+await db.update(person, {
+  jobTitle: 'Senior Engineer',
+})
+
+// Update multiple properties
+await db.update(person, {
+  jobTitle: 'Lead Engineer',
+  email: 'jane.smith@newcompany.com',
+  telephone: '+1-555-0199',
+})
+```
+
+### Partial Updates
+
+```typescript
+// Patch (only update specified fields)
+await db.patch(person, {
+  telephone: '+1-555-0199', // Only updates telephone
+})
+
+// Update nested properties
+await db.update(person, {
+  address: {
+    ...person.address,
+    streetAddress: '456 New St', // Update one field in address
+  },
+})
+```
+
+### Batch Updates
+
+```typescript
+// Update multiple resources
+const engineers = await db.list($.Person, {
+  where: { jobTitle: { $contains: 'Engineer' } },
+})
+
+await Promise.all(engineers.map((person) => db.update(person, { department: 'Engineering' })))
+
+// Bulk update with filter
+await db.updateMany($.Person, {
+  where: { department: 'Engineering' },
+  data: { status: 'Active' },
+})
+```
+
+### Conditional Updates
+
+```typescript
+// Update only if condition is met
+async function promoteIfQualified(personId: string) {
+  const person = await db.get($.Person, personId)
+
+  if (person.yearsExperience >= 5 && person.performance === 'Excellent') {
+    await db.update(person, {
+      jobTitle: 'Senior ' + person.jobTitle,
+      salary: person.salary * 1.15,
+    })
+  }
+}
+```
+
+## Deleting Resources
+
+### Single Deletion
+
+```typescript
+const person = await db.get($.Person, 'person-123')
+
+// Delete resource
+await db.delete(person)
+
+// Delete by ID
+await db.delete($.Person, 'person-123')
+
+// Check if deleted
+const exists = await db.exists($.Person, 'person-123')
+console.log(exists) // false
+```
+
+### Batch Deletion
+
+```typescript
+// Delete multiple resources
+const inactive = await db.list($.Person, {
+  where: { status: 'Inactive' },
+})
+
+await Promise.all(inactive.map((person) => db.delete(person)))
+
+// Bulk delete with filter
+await db.deleteMany($.Person, {
+  where: { status: 'Inactive' },
+})
+```
+
+### Soft Delete (Archiving)
+
+```typescript
+// Archive instead of delete
+await db.update(person, {
+  status: 'Archived',
+  archivedAt: new Date(),
+})
+
+// Query only active resources
+const active = await db.list($.Person, {
+  where: { status: { $ne: 'Archived' } },
+})
+```
+
+## Resource Relationships
+
+### Creating Related Resources
+
+```typescript
+// Create entities
+const person = await db.create($.Person, { name: 'John' })
+const organization = await db.create($.Organization, { name: 'Acme' })
+
+// Create relationship
+await db.relate(person, $.worksFor, organization)
+
+// Create with relationship
+const employee = await db.create($.Person, {
+  $type: 'Person',
+  name: 'Jane',
+  worksFor: {
+    $id: organization.$id,
+    $type: 'Organization',
+  },
+})
+```
+
+### Querying Related Resources
+
+```typescript
+// Get related resources
+const employer = await db.related(person, $.worksFor, $.Organization)
+console.log('Works for:', employer.name)
+
+const employees = await db.related(organization, $.employs, $.Person)
+console.log('Employees:', employees.length)
+
+// Get all related resources of any type
+const related = await db.related(person, $.knows)
+```
+
+### Managing Relationships
+
+```typescript
+// Update relationship
+await db.unrelate(person, $.worksFor, oldOrg)
+await db.relate(person, $.worksFor, newOrg)
+
+// Check relationship
+const isRelated = await db.isRelated(person, $.worksFor, organization)
+
+// Get relationship details
+const relationship = await db.getRelationship(person, $.worksFor, organization)
+```
+
+## Data Management
+
+### Validation
+
+```typescript
+import { validate } from 'sdk.do'
+
+// Validate resource
+const person = await db.get($.Person, 'person-123')
+const validation = validate(person, $.Person)
+
+if (!validation.valid) {
+  console.error('Invalid resource:', validation.errors)
+}
+
+// Batch validation
+const people = await db.list($.Person)
+const invalid = people.filter((person) => !validate(person, $.Person).valid)
+console.log(`Found ${invalid.length} invalid records`)
+```
+
+### Migration
+
+```typescript
+// Migrate old format to new format
+async function migratePeople() {
+  const people = await db.list($.Person)
+
+  for (const person of people) {
+    // Old format: single 'name' field
+    // New format: 'givenName' and 'familyName'
+    if (person.name && !person.givenName) {
+      const [givenName, familyName] = person.name.split(' ', 2)
+
+      await db.update(person, {
+        givenName,
+        familyName: familyName || '',
+        // Remove old field
+        name: undefined,
+      })
+    }
+  }
+}
+```
+
+### Backup and Restore
+
+```typescript
+// Export resources
+async function exportPeople() {
+  const people = await db.list($.Person)
+  const json = JSON.stringify(people, null, 2)
+  await fs.writeFile('people-backup.json', json)
+}
+
+// Import resources
+async function importPeople() {
+  const json = await fs.readFile('people-backup.json', 'utf-8')
+  const people = JSON.parse(json)
+
+  for (const person of people) {
+    await db.create($.Person, person)
+  }
+}
+```
+
+### Synchronization
+
+```typescript
+// Sync resources between systems
+async function syncPeople(externalPeople: any[]) {
+  const localPeople = await db.list($.Person)
+  const localById = new Map(localPeople.map((p) => [p.externalId, p]))
+
+  for (const external of externalPeople) {
+    const local = localById.get(external.id)
+
+    if (!local) {
+      // Create new resource
+      await db.create($.Person, {
+        $type: 'Person',
+        externalId: external.id,
+        name: external.name,
+        email: external.email,
+      })
+    } else if (local.updatedAt < external.updatedAt) {
+      // Update existing resource
+      await db.update(local, {
+        name: external.name,
+        email: external.email,
+      })
+    }
+  }
+}
+```
+
+## Performance Optimization
+
+### Caching
+
+```typescript
+// Cache frequently accessed resources
+const cache = new Map<string, any>()
+
+async function getCachedPerson(id: string) {
+  if (cache.has(id)) {
+    return cache.get(id)
+  }
+
+  const person = await db.get($.Person, id)
+  cache.set(id, person)
+  return person
+}
+
+// Cache with TTL
+const cacheWithTTL = new Map<string, { value: any; expires: number }>()
+
+async function getCachedWithTTL(id: string, ttl = 60000) {
+  const cached = cacheWithTTL.get(id)
+
+  if (cached && Date.now() < cached.expires) {
+    return cached.value
+  }
+
+  const person = await db.get($.Person, id)
+  cacheWithTTL.set(id, {
+    value: person,
+    expires: Date.now() + ttl,
+  })
+
+  return person
+}
+```
+
+### Pagination
+
+```typescript
+// Efficient pagination
+async function* paginateResources(type: TypeReference, pageSize = 100) {
+  let offset = 0
+
+  while (true) {
+    const page = await db.list(type, {
+      limit: pageSize,
+      offset,
+    })
+
+    if (page.length === 0) break
+
+    yield* page
+    offset += pageSize
+  }
+}
+
+// Usage
+for await (const person of paginateResources($.Person)) {
+  console.log(person.name)
+}
+```
+
+### Indexing
+
+```typescript
+// Ensure indexes for common queries
+// (Database-level configuration)
+
+// Index on email
+// CREATE INDEX idx_person_email ON entities((data->>'email'))
+//   WHERE type = 'Person'
+
+// Index on jobTitle
+// CREATE INDEX idx_person_jobtitle ON entities((data->>'jobTitle'))
+//   WHERE type = 'Person'
+
+// Composite index
+// CREATE INDEX idx_person_status_created ON entities((data->>'status'), created_at)
+//   WHERE type = 'Person'
+```
+
+## Best Practices
+
+### 1. Always Validate
+
+```typescript
+// ✓ Good - validate before save
+const validation = validate(data, $.Person)
+if (validation.valid) {
+  await db.create($.Person, data)
+}
+
+// ✗ Avoid - no validation
+await db.create($.Person, data)
+```
+
+### 2. Use Transactions
+
+```typescript
+// ✓ Good - atomic operations
+await db.transaction(async (tx) => {
+  const person = await tx.create($.Person, personData)
+  await tx.relate(person, $.worksFor, organization)
+  await tx.create($.Task, { assignee: person.$id })
+})
+```
+
+### 3. Handle Not Found
+
+```typescript
+// ✓ Good - handle errors
+const person = await db.get($.Person, id).catch(() => null)
+if (!person) {
+  console.error('Person not found')
+  return
+}
+
+// ✗ Avoid - unhandled error
+const person = await db.get($.Person, id) // Throws if not found
+```
+
+## Documentation
+
+- [Getting Started](./docs/getting-started) - Setup and basics
+- [Architecture](./docs/architecture) - System design
+- [Best Practices](./docs/best-practices) - Patterns
+- [Troubleshooting](./docs/troubleshooting) - Common issues
+- [API Reference](./api/reference) - Complete API
+
+## Examples
+
+- [Basic Usage](./examples/basic-usage) - Simple operations
+- [Advanced Patterns](./examples/advanced-patterns) - Complex queries
+- [Integration](./examples/integration) - Platform integration
+- [Real-World Use Case](./examples/real-world-use-case) - Complete app
+
+## Related Domains
+
+- [nouns.do](https://nouns.do) - Entity types
+- [verbs.do](https://verbs.do) - Actions and operations
+- [database.do](https://database.do) - Database operations
+- [sdk.do](https://sdk.do) - Core SDK
+
+## License
+
+MIT License - Open Source
+
+resources.do is part of the [.do platform](https://github.com/dot-do/platform) open-source ecosystem.
+
+## Contributing
+
+Contributions welcome! See [CONTRIBUTING.md](https://github.com/dot-do/ai/blob/main/CONTRIBUTING.md).
+
+---
+
+**Part of the `.do` platform Business-as-Code ecosystem**

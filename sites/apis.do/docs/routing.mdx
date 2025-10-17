@@ -1,0 +1,756 @@
+---
+$id: https://apis.do/docs/routing
+$type: TechArticle
+title: API Routing Patterns
+description: Comprehensive guide to routing patterns in the apis.do gateway
+keywords: [routing, api, gateway, semantic, rest, graphql, patterns]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# API Routing Patterns
+
+The apis.do gateway provides multiple routing patterns to access platform services, from traditional REST endpoints to semantic patterns that align with Business-as-Code principles.
+
+## Overview
+
+apis.do supports four routing strategies:
+
+1. **REST API Routing** - Traditional HTTP REST patterns
+2. **Semantic Pattern Routing** - `$.Subject.predicate.Object` patterns
+3. **Domain-Based Routing** - Route by service domain
+4. **GraphQL Routing** - GraphQL queries and mutations
+
+## REST API Routing
+
+### Standard HTTP Methods
+
+The gateway follows REST conventions for CRUD operations:
+
+```typescript
+import { api } from 'sdk.do'
+
+// GET - List resources
+const businesses = await api('/businesses', {
+  method: 'GET',
+})
+
+// GET - Get single resource
+const business = await api('/businesses/business-123', {
+  method: 'GET',
+})
+
+// POST - Create resource
+const newBusiness = await api('/businesses', {
+  method: 'POST',
+  body: {
+    name: 'Acme Corp',
+    industry: 'Technology',
+  },
+})
+
+// PUT - Update entire resource
+const updated = await api('/businesses/business-123', {
+  method: 'PUT',
+  body: {
+    name: 'Acme Corporation',
+    industry: 'Technology',
+    foundingDate: '2025-01-01',
+  },
+})
+
+// PATCH - Partial update
+const patched = await api('/businesses/business-123', {
+  method: 'PATCH',
+  body: {
+    revenue: 1000000, // Only update revenue
+  },
+})
+
+// DELETE - Remove resource
+await api('/businesses/business-123', {
+  method: 'DELETE',
+})
+```
+
+### Query Parameters
+
+Filter and paginate results with query parameters:
+
+```typescript
+// Filtering
+const techBusinesses = await api('/businesses', {
+  query: {
+    industry: 'Technology',
+    status: 'active',
+  },
+})
+// URL: /businesses?industry=Technology&status=active
+
+// Pagination
+const page2 = await api('/businesses', {
+  query: {
+    limit: 20,
+    offset: 20,
+  },
+})
+// URL: /businesses?limit=20&offset=20
+
+// Sorting
+const sorted = await api('/businesses', {
+  query: {
+    sort: 'name',
+    order: 'asc',
+  },
+})
+// URL: /businesses?sort=name&order=asc
+
+// Combined
+const results = await api('/businesses', {
+  query: {
+    industry: 'Technology',
+    status: 'active',
+    limit: 10,
+    offset: 0,
+    sort: 'revenue',
+    order: 'desc',
+  },
+})
+// URL: /businesses?industry=Technology&status=active&limit=10&offset=0&sort=revenue&order=desc
+```
+
+### Nested Resources
+
+Access related resources through nested routes:
+
+```typescript
+// Get business's employees
+const employees = await api('/businesses/business-123/employees')
+
+// Get business's products
+const products = await api('/businesses/business-123/products')
+
+// Get business's orders
+const orders = await api('/businesses/business-123/orders')
+
+// Get person's orders
+const personOrders = await api('/people/person-456/orders')
+
+// Get organization's brands
+const brands = await api('/organizations/org-789/brands')
+```
+
+## Semantic Pattern Routing
+
+### $.Subject.predicate.Object Patterns
+
+Use semantic patterns for type-safe, AI-understandable routing:
+
+```typescript
+import $, { api } from 'sdk.do'
+
+// List entities
+const businesses = await api($.Business.list, {
+  where: { industry: 'Technology' },
+})
+
+// Get single entity
+const business = await api($.Business.get, {
+  id: 'business-123',
+})
+
+// Create entity
+const newBusiness = await api($.Business.create, {
+  name: 'Tech Startup',
+  industry: 'Technology',
+})
+
+// Update entity
+const updated = await api($.Business.update, {
+  id: 'business-123',
+  data: { revenue: 2000000 },
+})
+
+// Delete entity
+await api($.Business.delete, {
+  id: 'business-123',
+})
+```
+
+### Relationship Routing
+
+Access relationships using semantic patterns:
+
+```typescript
+import $, { api } from 'sdk.do'
+
+// Person works for Organization
+const employer = await api($.Person.worksFor.Organization, {
+  personId: 'person-123',
+})
+
+// Organization employs Person
+const employees = await api($.Organization.employs.Person, {
+  organizationId: 'org-456',
+})
+
+// Organization owns Brand
+const brands = await api($.Organization.owns.Brand, {
+  organizationId: 'org-456',
+})
+
+// Business sells Product
+const products = await api($.Business.sells.Product, {
+  businessId: 'business-789',
+})
+
+// Customer purchases Order
+const orders = await api($.Customer.purchases.Order, {
+  customerId: 'customer-123',
+})
+```
+
+### Event Routing
+
+Route events using semantic patterns:
+
+```typescript
+import $, { api } from 'sdk.do'
+
+// Publish event
+await api($.Order.created.send, {
+  orderId: 'order-123',
+  customerId: 'customer-456',
+  total: 99.99,
+})
+
+// Subscribe to events
+const stream = await api($.Order.created.subscribe)
+
+// Get event history
+const events = await api($.Order.created.history, {
+  since: new Date('2025-01-01'),
+  limit: 100,
+})
+```
+
+### Action Routing
+
+Execute actions on entities:
+
+```typescript
+import $, { api } from 'sdk.do'
+
+// Order actions
+await api($.Order.validate, { orderId: 'order-123' })
+await api($.Order.fulfill, { orderId: 'order-123' })
+await api($.Order.ship, { orderId: 'order-123', carrier: 'FedEx' })
+await api($.Order.cancel, { orderId: 'order-123', reason: 'customer request' })
+
+// Payment actions
+await api($.Payment.authorize, { paymentId: 'pay-456' })
+await api($.Payment.capture, { paymentId: 'pay-456' })
+await api($.Payment.refund, { paymentId: 'pay-456', amount: 50.0 })
+
+// User actions
+await api($.User.verify, { userId: 'user-789', code: '123456' })
+await api($.User.resetPassword, { userId: 'user-789' })
+```
+
+## Domain-Based Routing
+
+Route to specific platform services by domain:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Database service (database.do)
+const businesses = await api('/businesses')
+const products = await api('/products')
+const orders = await api('/orders')
+
+// AI service (ai.do)
+const generated = await api('/ai/generate', {
+  method: 'POST',
+  body: {
+    prompt: 'Create a product description',
+    schema: $.Product,
+  },
+})
+
+const embeddings = await api('/ai/embed', {
+  method: 'POST',
+  body: {
+    text: 'Search query text',
+  },
+})
+
+// Event service (events.do)
+await api('/events/send', {
+  method: 'POST',
+  body: {
+    type: 'Order.created',
+    data: { orderId: 'order-123' },
+  },
+})
+
+const eventStream = await api('/events/stream')
+
+// Workflow service (workflows.do)
+const workflow = await api('/workflows/start', {
+  method: 'POST',
+  body: {
+    workflowId: 'order-fulfillment',
+    context: { orderId: 'order-123' },
+  },
+})
+
+const status = await api('/workflows/workflow-456')
+
+// User service (user.do)
+const currentUser = await api('/users/me')
+const userOrders = await api('/users/me/orders')
+```
+
+## GraphQL Routing
+
+Use GraphQL for complex queries and mutations:
+
+### GraphQL Queries
+
+```typescript
+import { api } from 'sdk.do'
+
+// Simple query
+const query = `
+  query {
+    businesses(where: { industry: "Technology" }) {
+      id
+      name
+      industry
+      revenue
+    }
+  }
+`
+
+const result = await api('/graphql', {
+  method: 'POST',
+  body: {
+    query,
+  },
+})
+
+console.log('Businesses:', result.data.businesses)
+```
+
+### GraphQL with Variables
+
+```typescript
+const query = `
+  query GetBusiness($id: ID!) {
+    business(id: $id) {
+      id
+      name
+      industry
+      employees {
+        id
+        name
+        jobTitle
+      }
+      products {
+        id
+        name
+        price
+      }
+    }
+  }
+`
+
+const result = await api('/graphql', {
+  method: 'POST',
+  body: {
+    query,
+    variables: {
+      id: 'business-123',
+    },
+  },
+})
+```
+
+### GraphQL Mutations
+
+```typescript
+const mutation = `
+  mutation CreateBusiness($input: BusinessInput!) {
+    createBusiness(input: $input) {
+      id
+      name
+      industry
+      createdAt
+    }
+  }
+`
+
+const result = await api('/graphql', {
+  method: 'POST',
+  body: {
+    query: mutation,
+    variables: {
+      input: {
+        name: 'Tech Startup',
+        industry: 'Technology',
+        foundingDate: '2025-01-01',
+      },
+    },
+  },
+})
+
+console.log('Created:', result.data.createBusiness)
+```
+
+### GraphQL Relationships
+
+```typescript
+const query = `
+  query BusinessWithRelationships($id: ID!) {
+    business(id: $id) {
+      id
+      name
+      industry
+
+      # Employees relationship
+      employees {
+        id
+        name
+        jobTitle
+        email
+      }
+
+      # Products relationship
+      products {
+        id
+        name
+        price
+        description
+      }
+
+      # Orders relationship
+      orders(where: { status: "pending" }) {
+        id
+        orderNumber
+        total
+        customer {
+          id
+          name
+        }
+      }
+    }
+  }
+`
+
+const result = await api('/graphql', {
+  method: 'POST',
+  body: {
+    query,
+    variables: { id: 'business-123' },
+  },
+})
+```
+
+## Advanced Routing Patterns
+
+### Batch Requests
+
+Execute multiple requests in one call:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Batch REST requests
+const results = await api('/batch', {
+  method: 'POST',
+  body: {
+    requests: [
+      { method: 'GET', url: '/businesses' },
+      { method: 'GET', url: '/products' },
+      { method: 'GET', url: '/orders' },
+    ],
+  },
+})
+
+console.log('Businesses:', results[0].data)
+console.log('Products:', results[1].data)
+console.log('Orders:', results[2].data)
+```
+
+### Parallel Requests
+
+Use Promise.all for parallel requests:
+
+```typescript
+const [businesses, products, orders] = await Promise.all([api('/businesses'), api('/products'), api('/orders')])
+```
+
+### Conditional Routing
+
+Route based on conditions:
+
+```typescript
+import { api } from 'sdk.do'
+
+async function getResource(type: string, id: string) {
+  const routes = {
+    business: `/businesses/${id}`,
+    product: `/products/${id}`,
+    order: `/orders/${id}`,
+    person: `/people/${id}`,
+  }
+
+  const url = routes[type]
+  if (!url) {
+    throw new Error(`Unknown resource type: ${type}`)
+  }
+
+  return await api(url)
+}
+
+const business = await getResource('business', 'business-123')
+```
+
+### Dynamic Route Building
+
+Build routes dynamically:
+
+```typescript
+import { api } from 'sdk.do'
+
+function buildResourceUrl(resource: string, id?: string, nested?: { resource: string; id?: string }) {
+  let url = `/${resource}`
+
+  if (id) {
+    url += `/${id}`
+  }
+
+  if (nested) {
+    url += `/${nested.resource}`
+    if (nested.id) {
+      url += `/${nested.id}`
+    }
+  }
+
+  return url
+}
+
+// /businesses
+const businesses = await api(buildResourceUrl('businesses'))
+
+// /businesses/business-123
+const business = await api(buildResourceUrl('businesses', 'business-123'))
+
+// /businesses/business-123/employees
+const employees = await api(buildResourceUrl('businesses', 'business-123', { resource: 'employees' }))
+
+// /businesses/business-123/employees/emp-456
+const employee = await api(
+  buildResourceUrl('businesses', 'business-123', {
+    resource: 'employees',
+    id: 'emp-456',
+  })
+)
+```
+
+### Route Aliasing
+
+Create route aliases for convenience:
+
+```typescript
+import { api } from 'sdk.do'
+
+const routes = {
+  listBusinesses: () => api('/businesses'),
+  getBusiness: (id: string) => api(`/businesses/${id}`),
+  createBusiness: (data: any) =>
+    api('/businesses', {
+      method: 'POST',
+      body: data,
+    }),
+  updateBusiness: (id: string, data: any) =>
+    api(`/businesses/${id}`, {
+      method: 'PUT',
+      body: data,
+    }),
+  deleteBusiness: (id: string) =>
+    api(`/businesses/${id}`, {
+      method: 'DELETE',
+    }),
+}
+
+// Use aliases
+const businesses = await routes.listBusinesses()
+const business = await routes.getBusiness('business-123')
+await routes.updateBusiness('business-123', { revenue: 2000000 })
+```
+
+## Route Middleware
+
+Apply middleware to routes:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Logging middleware
+function withLogging<T>(request: Promise<T>): Promise<T> {
+  console.log('Request started')
+  return request.then(
+    (result) => {
+      console.log('Request succeeded')
+      return result
+    },
+    (error) => {
+      console.error('Request failed:', error)
+      throw error
+    }
+  )
+}
+
+// Retry middleware
+function withRetry<T>(request: () => Promise<T>, maxRetries = 3): Promise<T> {
+  let attempt = 0
+
+  const tryRequest = async (): Promise<T> => {
+    try {
+      return await request()
+    } catch (error) {
+      attempt++
+      if (attempt < maxRetries) {
+        console.log(`Retry ${attempt}/${maxRetries}`)
+        await new Promise((resolve) => setTimeout(resolve, 1000 * attempt))
+        return tryRequest()
+      }
+      throw error
+    }
+  }
+
+  return tryRequest()
+}
+
+// Use middleware
+const businesses = await withLogging(withRetry(() => api('/businesses')))
+```
+
+## Route Guards
+
+Implement route guards for authorization:
+
+```typescript
+import { api } from 'sdk.do'
+
+async function requireAuth(request: () => Promise<any>) {
+  const token = process.env.APIS_API_KEY
+
+  if (!token) {
+    throw new Error('Authentication required')
+  }
+
+  return request()
+}
+
+async function requirePermission(permission: string, request: () => Promise<any>) {
+  const user = await api('/users/me')
+
+  if (!user.permissions.includes(permission)) {
+    throw new Error(`Permission denied: ${permission}`)
+  }
+
+  return request()
+}
+
+// Use guards
+const businesses = await requireAuth(() => api('/businesses'))
+
+const deleted = await requirePermission('business:delete', () => api('/businesses/business-123', { method: 'DELETE' }))
+```
+
+## Best Practices
+
+### Use Semantic Patterns for Type Safety
+
+```typescript
+// Good - type-safe semantic patterns
+const businesses = await api($.Business.list, {
+  where: { industry: 'Technology' },
+})
+
+// Avoid - string-based routes
+const businesses = await api('/businesses?industry=Technology')
+```
+
+### Leverage Relationship Routing
+
+```typescript
+// Good - semantic relationships
+const employees = await api($.Organization.employs.Person, {
+  organizationId: 'org-123',
+})
+
+// Avoid - nested routes
+const employees = await api('/organizations/org-123/employees')
+```
+
+### Use GraphQL for Complex Queries
+
+```typescript
+// Good - single GraphQL query with relationships
+const result = await api('/graphql', {
+  method: 'POST',
+  body: {
+    query: `
+      query {
+        business(id: "business-123") {
+          name
+          employees { name }
+          products { name }
+        }
+      }
+    `,
+  },
+})
+
+// Avoid - multiple REST requests
+const business = await api('/businesses/business-123')
+const employees = await api('/businesses/business-123/employees')
+const products = await api('/businesses/business-123/products')
+```
+
+### Cache Route Results
+
+```typescript
+const cache = new Map()
+
+async function cachedRoute(url: string, ttl = 60000) {
+  const cached = cache.get(url)
+
+  if (cached && Date.now() - cached.timestamp < ttl) {
+    return cached.data
+  }
+
+  const data = await api(url)
+  cache.set(url, { data, timestamp: Date.now() })
+
+  return data
+}
+
+const businesses = await cachedRoute('/businesses')
+```
+
+## Related Documentation
+
+- [Getting Started](./getting-started) - Basic API usage
+- [Authentication](./authentication) - Authentication methods
+- [API Reference](../api/) - Complete API documentation
+- [Examples](../examples/) - Practical routing examples
+
+---
+
+Continue to [Authentication](./authentication) to learn about securing your API requests.

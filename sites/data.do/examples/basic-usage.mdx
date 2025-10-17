@@ -1,0 +1,514 @@
+---
+$id: https://data.do/examples/basic-usage
+$type: https://schema.org/TechArticle
+name: data.do Basic Usage Examples
+description: 10 essential examples demonstrating CRUD operations, validation, and simple queries
+author:
+  $type: https://schema.org/Organization
+  name: .do
+  url: https://do.inc
+license:
+  documentation: CC-BY-4.0
+  code: MIT
+---
+
+# Basic Usage Examples
+
+This guide provides 10 essential examples demonstrating basic data.do operations.
+
+## Example 1: Create a Record
+
+Create a new record with validation.
+
+```typescript
+import { $, data } from 'sdk.do'
+
+// Create a customer with automatic validation
+const customer = await data.create($.Customer, {
+  name: 'Alice Johnson',
+  email: 'alice@example.com',
+  phone: '+1-555-0123',
+  address: {
+    streetAddress: '123 Main St',
+    addressLocality: 'Springfield',
+    addressRegion: 'IL',
+    postalCode: '62701',
+    addressCountry: 'US',
+  },
+})
+
+console.log('Created customer:', customer)
+// {
+//   $id: 'customer-abc123',
+//   $type: 'https://schema.org/Customer',
+//   name: 'Alice Johnson',
+//   email: 'alice@example.com',
+//   ...
+// }
+```
+
+## Example 2: Read a Record
+
+Retrieve a record by ID.
+
+```typescript
+import { $, data } from 'sdk.do'
+
+// Get customer by ID
+const customer = await data.get($.Customer, 'customer-abc123')
+
+console.log('Customer name:', customer.name)
+console.log('Customer email:', customer.email)
+
+// Get with relationships
+const order = await data.get($.Order, 'order-xyz789', {
+  include: {
+    customer: true,
+    items: true,
+  },
+})
+
+console.log('Order total:', order.total)
+console.log('Customer:', order.customer.name)
+console.log('Items:', order.items.length)
+```
+
+## Example 3: Update a Record
+
+Update an existing record.
+
+```typescript
+import { $, data } from 'sdk.do'
+
+// Simple update
+await data.update('customer-abc123', {
+  phone: '+1-555-9999',
+  lastUpdated: new Date(),
+})
+
+// Update with validation
+await data.update(
+  'customer-abc123',
+  {
+    email: 'alice.johnson@example.com',
+  },
+  {
+    validate: true,
+  }
+)
+
+// Increment/decrement values
+await data.update('product-123', {
+  inventory: { $increment: -1 },
+  soldCount: { $increment: 1 },
+})
+
+console.log('Customer updated successfully')
+```
+
+## Example 4: Delete a Record
+
+Delete a record with various options.
+
+```typescript
+import { $, data } from 'sdk.do'
+
+// Simple delete
+await data.delete('customer-abc123')
+
+// Soft delete (mark as deleted)
+await data.softDelete('customer-abc123', {
+  deletedBy: 'admin-456',
+  deletedAt: new Date(),
+  reason: 'User requested account deletion',
+})
+
+// Cascade delete (delete related records)
+await data.delete('customer-abc123', {
+  cascade: {
+    orders: true,
+    addresses: true,
+    payments: true,
+  },
+})
+
+console.log('Customer deleted')
+```
+
+## Example 5: List Records with Filtering
+
+Query and filter records.
+
+```typescript
+import { $, data } from 'sdk.do'
+
+// List all customers
+const allCustomers = await data.list($.Customer)
+
+// List with filtering
+const activeCustomers = await data.list($.Customer, {
+  where: {
+    status: 'active',
+    role: 'premium',
+  },
+})
+
+// List with complex filters
+const recentHighValueOrders = await data.list($.Order, {
+  where: {
+    status: 'completed',
+    total: { $gte: 1000 },
+    createdAt: { $gte: '2025-01-01' },
+  },
+  orderBy: {
+    total: 'desc',
+  },
+  limit: 20,
+})
+
+console.log(`Found ${recentHighValueOrders.length} high-value orders`)
+```
+
+## Example 6: Validate Data
+
+Validate data against schemas.
+
+```typescript
+import { $, validate } from 'sdk.do/data'
+
+// Simple validation
+const isValid = await validate(customerData, $.Customer)
+
+if (isValid) {
+  console.log('Customer data is valid')
+} else {
+  console.log('Customer data is invalid')
+}
+
+// Detailed validation with error messages
+const result = await validate(
+  {
+    name: 'Alice',
+    email: 'invalid-email',
+    age: 15,
+  },
+  $.Customer,
+  {
+    detailed: true,
+  }
+)
+
+if (!result.valid) {
+  console.log('Validation errors:')
+  result.errors.forEach((error) => {
+    console.log(`- ${error.path}: ${error.message}`)
+  })
+  // - email: Invalid email format
+  // - age: Must be at least 18
+}
+
+// Custom validation rules
+const productRules = {
+  $type: $.Product,
+  rules: {
+    name: { minLength: 3, maxLength: 100, required: true },
+    price: { min: 0, max: 1000000, required: true },
+    sku: { pattern: /^[A-Z]{3}-\d{6}$/, required: true },
+  },
+}
+
+const productValid = await validate(productData, productRules)
+```
+
+## Example 7: Transform Data
+
+Transform and normalize data.
+
+```typescript
+import { $, transform } from 'sdk.do/data'
+
+// Normalize customer data
+const rawData = {
+  Name: '  ALICE JOHNSON  ',
+  Email: 'ALICE@EXAMPLE.COM',
+  Phone: '(555) 123-4567',
+}
+
+const normalized = await transform(rawData, $.Customer.normalize, {
+  lowercase: ['email'],
+  trim: ['name'],
+  parse: {
+    phone: 'e164',
+  },
+})
+
+console.log(normalized)
+// {
+//   name: 'Alice Johnson',
+//   email: 'alice@example.com',
+//   phone: '+15551234567'
+// }
+
+// Convert between formats
+const csvData = await transform(jsonData, {
+  from: 'json',
+  to: 'csv',
+  options: {
+    headers: true,
+    delimiter: ',',
+  },
+})
+
+// Custom transformation
+const enriched = await transform(customer, async (customer) => {
+  const orders = await data.list($.Order, {
+    where: { customerId: customer.$id },
+  })
+
+  return {
+    ...customer,
+    orderCount: orders.length,
+    totalSpent: orders.reduce((sum, order) => sum + order.total, 0),
+  }
+})
+```
+
+## Example 8: Simple Query
+
+Use the query builder for basic queries.
+
+```typescript
+import { $, query } from 'sdk.do/data'
+
+// Simple query
+const activeUsers = await query($.User).where({ status: 'active' }).execute()
+
+// Query with sorting and pagination
+const recentOrders = await query($.Order).where({ status: 'pending' }).orderBy('createdAt', 'desc').limit(10).execute()
+
+// Query with select
+const userEmails = await query($.User).select(['name', 'email']).execute()
+
+// Count records
+const pendingCount = await query($.Order).where({ status: 'pending' }).count()
+
+console.log(`Found ${pendingCount} pending orders`)
+
+// Query with multiple conditions
+const filteredProducts = await query($.Product)
+  .where({
+    category: 'Electronics',
+    price: { $gte: 100, $lte: 500 },
+    inStock: true,
+  })
+  .execute()
+```
+
+## Example 9: Batch Operations
+
+Process multiple records efficiently.
+
+```typescript
+import { $, batch } from 'sdk.do/data'
+
+// Batch create
+const users = [
+  { name: 'Alice', email: 'alice@example.com' },
+  { name: 'Bob', email: 'bob@example.com' },
+  { name: 'Carol', email: 'carol@example.com' },
+]
+
+await batch.create($.User, users, {
+  batchSize: 100,
+  onProgress: (processed, total) => {
+    console.log(`Progress: ${processed}/${total}`)
+  },
+})
+
+// Batch update
+await batch.update($.Product, {
+  where: { category: 'Electronics' },
+  set: { onSale: true, discount: 0.1 },
+})
+
+// Batch transform
+const normalized = await batch.transform(
+  records,
+  async (record) => {
+    return await transform(record, $.Customer.normalize)
+  },
+  {
+    concurrency: 5,
+  }
+)
+
+console.log(`Processed ${normalized.length} records`)
+```
+
+## Example 10: Upsert (Create or Update)
+
+Create a record if it doesn't exist, or update if it does.
+
+```typescript
+import { $, data } from 'sdk.do'
+
+// Upsert by email
+await data.upsert(
+  $.Customer,
+  {
+    email: 'alice@example.com',
+    name: 'Alice Johnson',
+    phone: '+1-555-0123',
+    preferences: {
+      newsletter: true,
+      notifications: true,
+    },
+  },
+  {
+    key: 'email', // Match on email field
+  }
+)
+
+// Upsert by multiple keys
+await data.upsert(
+  $.Product,
+  {
+    sku: 'ELEC-123456',
+    name: 'Laptop',
+    price: 999.99,
+    category: 'Electronics',
+  },
+  {
+    key: ['sku'], // Match on SKU
+  }
+)
+
+// Upsert with validation
+await data.upsert($.Customer, customerData, {
+  key: 'email',
+  validate: true,
+  schema: $.Customer,
+})
+
+console.log('Record upserted successfully')
+```
+
+## Complete Example: User Management
+
+Here's a complete example demonstrating multiple operations:
+
+```typescript
+import { $, data, validate, query } from 'sdk.do/data'
+
+async function createUser(userData: any) {
+  // 1. Validate input
+  const result = await validate(userData, $.User, { detailed: true })
+
+  if (!result.valid) {
+    console.error('Validation failed:', result.errors)
+    return null
+  }
+
+  // 2. Check if user already exists
+  const existing = await query($.User).where({ email: userData.email }).execute()
+
+  if (existing.length > 0) {
+    console.log('User already exists, updating...')
+    return await data.update(existing[0].$id, userData)
+  }
+
+  // 3. Create new user
+  const user = await data.create($.User, {
+    ...userData,
+    status: 'active',
+    createdAt: new Date(),
+  })
+
+  console.log('User created:', user.$id)
+  return user
+}
+
+async function getUserOrders(userId: string) {
+  // Get user with orders
+  const user = await data.get($.User, userId, {
+    include: {
+      orders: query($.Order).orderBy('createdAt', 'desc').limit(10),
+    },
+  })
+
+  return user.orders
+}
+
+async function updateUserStatus(userId: string, status: string) {
+  // Validate status
+  if (!['active', 'inactive', 'suspended'].includes(status)) {
+    throw new Error('Invalid status')
+  }
+
+  // Update user
+  await data.update(userId, {
+    status,
+    lastUpdated: new Date(),
+  })
+
+  console.log(`User ${userId} status updated to ${status}`)
+}
+
+async function deleteInactiveUsers() {
+  // Find inactive users
+  const inactiveUsers = await query($.User)
+    .where({
+      status: 'inactive',
+      lastLogin: { $lt: '2024-01-01' },
+    })
+    .execute()
+
+  console.log(`Found ${inactiveUsers.length} inactive users`)
+
+  // Delete in batch
+  for (const user of inactiveUsers) {
+    await data.softDelete(user.$id, {
+      deletedBy: 'system',
+      reason: 'Inactive for over 1 year',
+    })
+  }
+
+  console.log('Inactive users deleted')
+}
+
+// Usage
+async function main() {
+  // Create user
+  const user = await createUser({
+    name: 'Alice Johnson',
+    email: 'alice@example.com',
+    role: 'user',
+  })
+
+  if (user) {
+    // Get orders
+    const orders = await getUserOrders(user.$id)
+    console.log(`User has ${orders.length} orders`)
+
+    // Update status
+    await updateUserStatus(user.$id, 'active')
+  }
+
+  // Cleanup
+  await deleteInactiveUsers()
+}
+
+main()
+```
+
+## Next Steps
+
+- [Advanced Patterns](./advanced-patterns.mdx) - Learn complex transformations and pipelines
+- [Integration](./integration.mdx) - Integrate with db.do and api.do
+- [Real-world Use Case](./real-world-use-case.mdx) - Complete ETL pipeline example
+- [API Reference](../api/reference.mdx) - Full API documentation
+
+## License
+
+- Documentation: [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/)
+- Code Examples: [MIT](https://opensource.org/licenses/MIT)

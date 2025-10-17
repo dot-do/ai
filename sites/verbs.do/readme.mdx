@@ -1,0 +1,721 @@
+---
+$id: https://verbs.do
+$type: WebSite
+name: verbs.do
+title: verbs.do - Semantic Actions and Operations for Business-as-Code
+description: Comprehensive vocabulary of action verbs, operations, and GraphDL predicates for AI-native Business-as-Code applications - the semantic layer between entities and data
+keywords: [verbs, actions, operations, predicates, graphdl, crud, business-as-code, semantic web]
+author:
+  $type: Organization
+  name: .do Platform
+license: MIT
+---
+
+# verbs.do
+
+**Semantic action verbs and operations for Business-as-Code applications**
+
+verbs.do provides a comprehensive, AI-native vocabulary of action verbs and operations using GraphDL's `$.Subject.predicate.Object` semantic patterns. It enables developers and AI agents to express business operations with clarity and type safety.
+
+## Overview
+
+In Business-as-Code, **verbs** represent actions and operations - what you can **do** with entities. verbs.do provides:
+
+- **CRUD Operations** - create, read, update, delete patterns
+- **Semantic Predicates** - worksFor, owns, manages, produces
+- **Action Types** - Schema.org Action hierarchy (ConsumeAction, TradeAction, etc.)
+- **GraphDL Patterns** - `$.Subject.verb.Object` semantic relationships
+- **Type-Safe Operations** - TypeScript definitions for all verbs
+- **Business Workflows** - Common business operation patterns
+
+## Quick Start
+
+Install the SDK:
+
+```bash
+pnpm add sdk.do
+```
+
+Use semantic verbs in your code:
+
+```typescript
+import $, { db } from 'sdk.do'
+
+// CRUD operations
+const person = await $.create($.Person, { name: 'Jane' })
+const people = await $.list($.Person)
+await $.update(person, { jobTitle: 'CTO' })
+await $.delete(person)
+
+// Semantic predicates
+await $.assign(person, organization)
+await $.notify(person, { message: 'Welcome!' })
+await $.approve(order, person)
+
+// GraphDL relationships
+await db.relate(person, $.worksFor, organization)
+await db.relate(organization, $.owns, brand)
+await db.relate(brand, $.manufactures, product)
+
+// Action types
+const action = await db.create($.SendAction, {
+  $type: 'SendAction',
+  agent: person,
+  recipient: otherPerson,
+  object: message,
+})
+```
+
+## Core Concepts
+
+### What Are Verbs?
+
+In Business-as-Code, **verbs** are operations that express what you can do:
+
+- **CRUD Verbs**: create, read, update, delete, list, count
+- **Relationship Verbs**: assign, relate, link, connect, associate
+- **Business Verbs**: approve, reject, process, fulfill, cancel
+- **Communication Verbs**: send, notify, message, email, call
+- **State Verbs**: activate, deactivate, enable, disable, archive
+- **GraphDL Predicates**: worksFor, owns, manages, produces, sells
+
+### The $.Subject.verb.Object Pattern
+
+verbs.do uses semantic triple patterns:
+
+```typescript
+// Pattern: $.Subject.verb.Object
+$.Person.worksFor.Organization
+$.Organization.owns.Brand
+$.Brand.manufactures.Product
+$.Person.manages.Team
+
+// Usage in relationships
+await db.relate(person, $.worksFor, organization)
+const employer = await db.related(person, $.worksFor, $.Organization)
+
+// Usage in queries
+const employees = await db.related(organization, $.employs, $.Person)
+const products = await db.related(brand, $.manufactures, $.Product)
+```
+
+### Verb Categories
+
+**CRUD Operations**:
+
+```typescript
+// Create
+await $.create($.Person, { name: 'Jane' })
+
+// Read
+await $.get($.Person, 'person-123')
+await $.list($.Person)
+
+// Update
+await $.update(person, { jobTitle: 'CTO' })
+
+// Delete
+await $.delete(person)
+```
+
+**Semantic Relationships**:
+
+```typescript
+// Employment
+await db.relate(person, $.worksFor, organization)
+await db.relate(organization, $.employs, person)
+
+// Ownership
+await db.relate(organization, $.owns, brand)
+await db.relate(person, $.owns, vehicle)
+
+// Management
+await db.relate(manager, $.manages, team)
+await db.relate(person, $.reportsTo, manager)
+
+// Production
+await db.relate(brand, $.manufactures, product)
+await db.relate(organization, $.produces, service)
+```
+
+**Business Operations**:
+
+```typescript
+// Order processing
+await $.process(order)
+await $.approve(order, approver)
+await $.fulfill(order)
+await $.ship(order, carrier)
+await $.deliver(order)
+
+// Customer management
+await $.qualify(lead)
+await $.convert(lead, account)
+await $.onboard(customer)
+
+// Financial operations
+await $.invoice(customer, amount)
+await $.pay(invoice, paymentMethod)
+await $.refund(payment, reason)
+```
+
+**Communication**:
+
+```typescript
+// Messaging
+await $.send(message, recipient)
+await $.notify(user, notification)
+await $.email(person, { subject, body })
+
+// Collaboration
+await $.share(document, users)
+await $.mention(person, comment)
+await $.invite(person, event)
+```
+
+## CRUD Operations
+
+### Create
+
+Create new entities:
+
+```typescript
+// Simple create
+const person = await $.create($.Person, {
+  $type: 'Person',
+  name: 'Jane Smith',
+  email: 'jane@example.com',
+})
+
+// Create with relationships
+const order = await $.create($.Order, {
+  $type: 'Order',
+  orderNumber: 'ORD-001',
+  customer: { $id: person.$id, $type: 'Person' },
+  orderStatus: 'Pending',
+})
+
+// Batch create
+const people = await $.createMany($.Person, [{ name: 'Alice' }, { name: 'Bob' }, { name: 'Carol' }])
+```
+
+### Read
+
+Read and query entities:
+
+```typescript
+// Get by ID
+const person = await $.get($.Person, 'person-123')
+
+// List all
+const people = await $.list($.Person)
+
+// List with filters
+const engineers = await $.list($.Person, {
+  where: { jobTitle: { $contains: 'Engineer' } },
+  limit: 10,
+})
+
+// Count
+const personCount = await $.count($.Person)
+
+// Exists check
+const exists = await $.exists($.Person, 'person-123')
+```
+
+### Update
+
+Update entity properties:
+
+```typescript
+// Update single property
+await $.update(person, { jobTitle: 'Senior Engineer' })
+
+// Update multiple properties
+await $.update(person, {
+  jobTitle: 'Lead Engineer',
+  email: 'jane.smith@newcompany.com',
+})
+
+// Partial update
+await $.patch(person, { telephone: '+1-555-0199' })
+
+// Batch update
+await $.updateMany($.Person, {
+  where: { department: 'Engineering' },
+  data: { status: 'Active' },
+})
+```
+
+### Delete
+
+Remove entities:
+
+```typescript
+// Delete single
+await $.delete(person)
+
+// Delete by ID
+await $.delete($.Person, 'person-123')
+
+// Batch delete
+await $.deleteMany($.Person, {
+  where: { status: 'Inactive' },
+})
+
+// Soft delete (archive)
+await $.archive(person)
+```
+
+## GraphDL Predicates
+
+### Employment Relationships
+
+```typescript
+// Person works for Organization
+await db.relate(person, $.worksFor, organization)
+const employer = await db.related(person, $.worksFor, $.Organization)
+
+// Organization employs Person
+await db.relate(organization, $.employs, person)
+const employees = await db.related(organization, $.employs, $.Person)
+
+// Person reports to Person
+await db.relate(person, $.reportsTo, manager)
+const manager = await db.related(person, $.reportsTo, $.Person)
+
+// Manager manages Team
+await db.relate(manager, $.manages, team)
+const reports = await db.related(manager, $.manages, $.Person)
+```
+
+### Ownership Relationships
+
+```typescript
+// Organization owns Brand
+await db.relate(organization, $.owns, brand)
+const brands = await db.related(organization, $.owns, $.Brand)
+
+// Person owns Vehicle
+await db.relate(person, $.owns, vehicle)
+const vehicles = await db.related(person, $.owns, $.Vehicle)
+
+// Organization owns Organization (subsidiaries)
+await db.relate(parent, $.owns, subsidiary)
+const subsidiaries = await db.related(parent, $.owns, $.Organization)
+```
+
+### Production Relationships
+
+```typescript
+// Brand manufactures Product
+await db.relate(brand, $.manufactures, product)
+const products = await db.related(brand, $.manufactures, $.Product)
+
+// Organization produces Service
+await db.relate(organization, $.produces, service)
+const services = await db.related(organization, $.produces, $.Service)
+
+// Business sells Product
+await db.relate(business, $.sells, product)
+const offerings = await db.related(business, $.sells, $.Product)
+```
+
+### Social Relationships
+
+```typescript
+// Person knows Person
+await db.relate(person1, $.knows, person2)
+const connections = await db.related(person1, $.knows, $.Person)
+
+// Person follows Person
+await db.relate(follower, $.follows, followed)
+const following = await db.related(follower, $.follows, $.Person)
+
+// Person member of Organization
+await db.relate(person, $.memberOf, organization)
+const members = await db.related(organization, $.hasMember, $.Person)
+```
+
+## Schema.org Actions
+
+### Trade Actions
+
+```typescript
+// Buy action
+const buyAction = await db.create($.BuyAction, {
+  $type: 'BuyAction',
+  agent: customer,
+  object: product,
+  price: 299.99,
+  priceCurrency: 'USD',
+  seller: business,
+})
+
+// Sell action
+const sellAction = await db.create($.SellAction, {
+  $type: 'SellAction',
+  agent: business,
+  buyer: customer,
+  object: product,
+})
+
+// Order action
+const orderAction = await db.create($.OrderAction, {
+  $type: 'OrderAction',
+  agent: customer,
+  object: product,
+  deliveryMethod: 'Shipping',
+})
+```
+
+### Communication Actions
+
+```typescript
+// Send action
+const sendAction = await db.create($.SendAction, {
+  $type: 'SendAction',
+  agent: sender,
+  recipient: recipient,
+  object: message,
+})
+
+// Email message
+await $.email(person, {
+  subject: 'Welcome',
+  body: 'Welcome to our platform!',
+  from: 'noreply@example.com',
+})
+
+// Notify
+await $.notify(user, {
+  title: 'New Message',
+  message: 'You have a new message',
+  priority: 'high',
+})
+```
+
+### Assess Actions
+
+```typescript
+// Review action
+const review = await db.create($.ReviewAction, {
+  $type: 'ReviewAction',
+  agent: reviewer,
+  object: product,
+  resultReview: {
+    $type: 'Review',
+    reviewRating: 5,
+    reviewBody: 'Excellent product!',
+  },
+})
+
+// Rate action
+await $.rate(product, {
+  rating: 5,
+  reviewer: person,
+})
+```
+
+### Organize Actions
+
+```typescript
+// Allocate action
+const allocation = await db.create($.AllocateAction, {
+  $type: 'AllocateAction',
+  agent: manager,
+  object: resource,
+  recipient: project,
+})
+
+// Assign action
+await $.assign(task, {
+  assignee: person,
+  dueDate: '2025-12-31',
+})
+
+// Plan action
+const plan = await db.create($.PlanAction, {
+  $type: 'PlanAction',
+  agent: planner,
+  result: project,
+})
+```
+
+## Business Workflows
+
+### Order Processing
+
+```typescript
+async function processOrder(orderId: string) {
+  const order = await $.get($.Order, orderId)
+
+  // Validate order
+  await $.validate(order)
+
+  // Process payment
+  const payment = await $.processPayment(order)
+
+  // Fulfill order
+  await $.fulfill(order)
+
+  // Ship order
+  await $.ship(order, {
+    carrier: 'UPS',
+    trackingNumber: 'TRACK123',
+  })
+
+  // Update status
+  await $.update(order, {
+    orderStatus: 'Shipped',
+    trackingNumber: 'TRACK123',
+  })
+
+  // Notify customer
+  await $.notify(order.customer, {
+    message: `Order ${order.orderNumber} has been shipped`,
+  })
+}
+```
+
+### Lead Qualification
+
+```typescript
+async function qualifyLead(leadId: string) {
+  const lead = await $.get($.Lead, leadId)
+
+  // Score lead
+  const score = await $.score(lead)
+
+  if (score > 70) {
+    // Qualify lead
+    await $.qualify(lead)
+
+    // Assign to sales rep
+    await $.assign(lead, {
+      assignedTo: salesRep.$id,
+    })
+
+    // Notify sales rep
+    await $.notify(salesRep, {
+      message: `New qualified lead: ${lead.name}`,
+    })
+
+    // Convert to account
+    if (lead.readyToConvert) {
+      const account = await $.convert(lead)
+      return account
+    }
+  }
+
+  return lead
+}
+```
+
+### Employee Onboarding
+
+```typescript
+async function onboardEmployee(employeeId: string) {
+  const employee = await $.get($.Person, employeeId)
+
+  // Create user account
+  await $.createAccount(employee)
+
+  // Assign to department
+  const department = await $.get($.Organization, employee.department)
+  await db.relate(employee, $.worksFor, department)
+
+  // Assign equipment
+  await $.assignEquipment(employee, ['laptop', 'phone'])
+
+  // Create onboarding tasks
+  const tasks = await $.createTasks([
+    { title: 'Complete HR forms', assignee: employee.$id },
+    { title: 'Setup workstation', assignee: employee.$id },
+    { title: 'Meet with manager', assignee: employee.$id },
+  ])
+
+  // Send welcome email
+  await $.email(employee, {
+    template: 'onboarding-welcome',
+    data: { name: employee.name },
+  })
+
+  // Schedule orientation
+  await $.schedule($.Event, {
+    name: 'New Employee Orientation',
+    attendee: employee,
+    startDate: addDays(new Date(), 7),
+  })
+}
+```
+
+## Advanced Patterns
+
+### Custom Verb Registration
+
+```typescript
+import { registry } from 'verbs.do/core'
+
+// Register custom verb
+registry.registerVerb({
+  name: 'approve',
+  description: 'Approve an entity for processing',
+  params: {
+    entity: 'Thing',
+    approver: 'Person',
+    comments: 'string',
+  },
+  returns: 'ApprovalResult',
+})
+
+// Use custom verb
+await $.approve(order, {
+  approver: manager,
+  comments: 'Approved for processing',
+})
+```
+
+### Verb Composition
+
+```typescript
+// Compose multiple verbs into workflow
+async function processAndShipOrder(orderId: string) {
+  const order = await $.get($.Order, orderId)
+
+  // Compose operations
+  await $.compose([() => $.validate(order), () => $.processPayment(order), () => $.fulfill(order), () => $.ship(order), () => $.notify(order.customer)])
+}
+```
+
+### Conditional Verbs
+
+```typescript
+// Execute verb based on condition
+await $.when(order.total > 1000, () => {
+  return $.requireApproval(order, manager)
+})
+
+// Switch on verb
+await $.switch(order.status, {
+  Pending: () => $.process(order),
+  Processing: () => $.fulfill(order),
+  Fulfilled: () => $.ship(order),
+  Shipped: () => $.complete(order),
+})
+```
+
+## Integration with Platform
+
+### With nouns.do
+
+```typescript
+// Nouns define entities
+const person = await $.get($.Person, 'person-123')
+const organization = await $.get($.Organization, 'org-456')
+
+// Verbs operate on entities
+await $.assign(person, organization)
+await $.notify(person, { message: 'Assigned!' })
+```
+
+### With resources.do
+
+```typescript
+// Verbs create and manage resources
+const person = await $.create($.Person, { name: 'Jane' }) // Creates resource
+await $.update(person, { jobTitle: 'CTO' }) // Updates resource
+await $.delete(person) // Deletes resource
+```
+
+### With events.do
+
+```typescript
+import { on, send } from 'sdk.do'
+
+// Listen for verb events
+on($.Order.created, async (order) => {
+  await $.process(order)
+})
+
+// Trigger verb events
+await $.create($.Order, orderData) // Triggers $.Order.created
+```
+
+## Best Practices
+
+### 1. Use Semantic Verbs
+
+```typescript
+// ✓ Good - semantic verb
+await $.assign(person, organization)
+
+// ✗ Avoid - string-based
+await performAction('assign', person, organization)
+```
+
+### 2. Compose Operations
+
+```typescript
+// ✓ Good - composed workflow
+async function processOrder(order) {
+  await $.validate(order)
+  await $.processPayment(order)
+  await $.fulfill(order)
+  await $.notify(order.customer)
+}
+
+// ✗ Avoid - monolithic
+async function processOrder(order) {
+  // All logic in one function
+}
+```
+
+### 3. Handle Errors
+
+```typescript
+// ✓ Good - error handling
+try {
+  await $.processPayment(order)
+} catch (error) {
+  await $.refund(order)
+  await $.notify(customer, { message: 'Payment failed' })
+}
+```
+
+## Documentation
+
+- [Getting Started](./docs/getting-started) - Setup and basic usage
+- [Architecture](./docs/architecture) - System design
+- [Best Practices](./docs/best-practices) - Recommended patterns
+- [Troubleshooting](./docs/troubleshooting) - Common issues
+- [API Reference](./api/reference) - Complete API
+
+## Examples
+
+- [Basic Usage](./examples/basic-usage) - Simple operations
+- [Advanced Patterns](./examples/advanced-patterns) - Complex workflows
+- [Integration](./examples/integration) - Platform integration
+- [Real-World Use Case](./examples/real-world-use-case) - Complete application
+
+## Related Domains
+
+- [nouns.do](https://nouns.do) - Entity types (people, places, things)
+- [resources.do](https://resources.do) - Data records and instances
+- [graphdl.do](https://graphdl.do) - Semantic graph patterns
+- [actions.org.ai](https://actions.org.ai) - Action ontology
+- [sdk.do](https://sdk.do) - Core Business-as-Code SDK
+
+## License
+
+MIT License - Open Source
+
+verbs.do is part of the [.do platform](https://github.com/dot-do/platform) open-source ecosystem.
+
+## Contributing
+
+Contributions welcome! See [CONTRIBUTING.md](https://github.com/dot-do/ai/blob/main/CONTRIBUTING.md) for guidelines.
+
+---
+
+**Part of the `.do` platform Business-as-Code ecosystem**

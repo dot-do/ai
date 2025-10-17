@@ -1,0 +1,569 @@
+---
+$id: https://workflows.do
+$type: WebSite
+name: workflows.do
+description: Declarative workflow orchestration for Business-as-Code with AI-native patterns
+license: CC-BY-4.0
+---
+
+# workflows.do
+
+**Declarative workflow orchestration for Business-as-Code with AI-native patterns**
+
+workflows.do provides a semantic, declarative approach to defining and orchestrating business workflows. Build complex, multi-step processes using `$.Subject.predicate.Object` patterns that AI agents can understand, execute, and optimize.
+
+## Key Features
+
+### 🎯 Declarative Workflow Definition
+
+Define workflows with rich semantic metadata that describes intent, not just implementation:
+
+```typescript
+{
+  "$type": "Workflow",
+  "$id": "https://workflows.do/OrderFulfillment",
+  "name": "OrderFulfillment",
+  "description": "Process and fulfill customer orders",
+  "trigger": {
+    "$type": "Trigger",
+    "event": "$.Order.created"
+  },
+  "steps": [
+    {
+      "$type": "WorkflowStep",
+      "name": "ValidateOrder",
+      "action": "$.Order.validate",
+      "onSuccess": "ProcessPayment",
+      "onFailure": "NotifyCustomer"
+    },
+    {
+      "$type": "WorkflowStep",
+      "name": "ProcessPayment",
+      "action": "$.Payment.process",
+      "onSuccess": "FulfillOrder",
+      "onFailure": "CancelOrder"
+    },
+    {
+      "$type": "WorkflowStep",
+      "name": "FulfillOrder",
+      "action": "$.Order.fulfill",
+      "onSuccess": "SendConfirmation"
+    }
+  ]
+}
+```
+
+### ⚡ Semantic Orchestration Patterns
+
+Use semantic patterns that express business logic naturally:
+
+```typescript
+import { $, workflow } from 'sdk.do'
+
+// Define workflow using semantic patterns
+const orderWorkflow = workflow({
+  name: 'OrderProcessing',
+  trigger: $.Order.created,
+  steps: [$.Order.validate, $.Payment.process, $.Inventory.reserve, $.Shipment.create, $.Customer.notify],
+})
+
+// Execute workflow
+await orderWorkflow.execute({ orderId: '12345' })
+```
+
+### 🔀 Advanced Control Flow
+
+Support complex orchestration patterns:
+
+- **Sequential Execution**: Steps run in order
+- **Parallel Execution**: Multiple steps run concurrently
+- **Conditional Branching**: Dynamic path selection based on conditions
+- **Error Handling**: Automatic retry, fallback, and compensation
+- **Human-in-the-Loop**: Approval gates and manual interventions
+- **Event-Driven**: Reactive workflows triggered by events
+
+### 🔗 Integration with `.do` Ecosystem
+
+workflows.do integrates seamlessly with the broader `.do` platform:
+
+- **[actions.org.ai](https://actions.org.ai)**: Actions and triggers for workflow steps
+- **[agents.org.ai](https://agents.org.ai)**: AI agents as workflow participants
+- **[database.do](https://database.do)**: Persistent workflow state
+- **[events.do](https://events.do)**: Event-driven workflow triggers
+- **[functions.do](https://functions.do)**: Serverless workflow execution
+
+## Core Concepts
+
+### Workflows
+
+A workflow is a declarative definition of a business process:
+
+```typescript
+interface Workflow {
+  $id: string
+  $type: 'Workflow'
+  name: string
+  description: string
+  trigger: Trigger | Trigger[]
+  steps: WorkflowStep[]
+  errorHandling?: ErrorHandlingStrategy
+  timeout?: number
+  retryPolicy?: RetryPolicy
+}
+```
+
+### Workflow Steps
+
+Steps represent individual units of work within a workflow:
+
+```typescript
+interface WorkflowStep {
+  $type: 'WorkflowStep'
+  name: string
+  action: string | Function
+  input?: any
+  output?: string
+  condition?: string | Function
+  onSuccess?: string
+  onFailure?: string
+  timeout?: number
+  retryPolicy?: RetryPolicy
+}
+```
+
+### Triggers
+
+Triggers define when workflows should execute:
+
+- **Event Triggers**: `$.Order.created`, `$.Payment.received`
+- **Schedule Triggers**: `$.Daily`, `$.Hourly`, cron expressions
+- **Manual Triggers**: Explicit invocation via API
+- **Condition Triggers**: Execute when conditions are met
+
+### Orchestration Patterns
+
+#### Sequential Workflow
+
+```typescript
+const workflow = {
+  $type: 'Workflow',
+  name: 'SequentialProcess',
+  steps: [
+    { name: 'Step1', action: $.Action1 },
+    { name: 'Step2', action: $.Action2 },
+    { name: 'Step3', action: $.Action3 },
+  ],
+}
+```
+
+#### Parallel Workflow
+
+```typescript
+const workflow = {
+  $type: 'Workflow',
+  name: 'ParallelProcess',
+  steps: [
+    {
+      $type: 'ParallelStep',
+      name: 'ProcessInParallel',
+      branches: [
+        { name: 'Branch1', action: $.Action1 },
+        { name: 'Branch2', action: $.Action2 },
+        { name: 'Branch3', action: $.Action3 },
+      ],
+    },
+  ],
+}
+```
+
+#### Conditional Workflow
+
+```typescript
+const workflow = {
+  $type: 'Workflow',
+  name: 'ConditionalProcess',
+  steps: [
+    {
+      name: 'CheckCondition',
+      action: $.Condition.evaluate,
+      onSuccess: 'PathA',
+      onFailure: 'PathB',
+    },
+    {
+      name: 'PathA',
+      condition: 'result === true',
+      action: $.ActionA,
+    },
+    {
+      name: 'PathB',
+      condition: 'result === false',
+      action: $.ActionB,
+    },
+  ],
+}
+```
+
+## Use Cases
+
+### E-Commerce Order Processing
+
+```typescript
+import { $, workflow } from 'sdk.do'
+
+const orderWorkflow = workflow({
+  name: 'OrderProcessing',
+  trigger: $.Order.created,
+  steps: [$.Order.validate, $.Payment.authorize, $.Inventory.check, $.Shipment.schedule, $.Notification.send],
+  errorHandling: {
+    strategy: 'compensate',
+    compensationSteps: [$.Payment.refund, $.Order.cancel],
+  },
+})
+```
+
+### Approval Workflows
+
+```typescript
+const approvalWorkflow = workflow({
+  name: 'ExpenseApproval',
+  trigger: $.Expense.submitted,
+  steps: [
+    $.Expense.validate,
+    {
+      $type: 'ApprovalStep',
+      name: 'ManagerApproval',
+      approver: $.Manager,
+      timeout: '24h',
+      onApprove: 'ProcessExpense',
+      onReject: 'NotifyEmployee',
+    },
+    {
+      name: 'ProcessExpense',
+      action: $.Expense.process,
+      condition: 'approved === true',
+    },
+  ],
+})
+```
+
+### Data Pipeline Orchestration
+
+```typescript
+const dataPipeline = workflow({
+  name: 'DataProcessingPipeline',
+  trigger: $.Data.arrived,
+  steps: [
+    {
+      $type: 'ParallelStep',
+      name: 'ProcessData',
+      branches: [$.Data.clean, $.Data.validate, $.Data.enrich],
+    },
+    $.Data.transform,
+    $.Data.load,
+    $.Analytics.update,
+  ],
+  retryPolicy: {
+    maxAttempts: 3,
+    backoff: 'exponential',
+  },
+})
+```
+
+## Quick Start
+
+### Installation
+
+```bash
+pnpm add sdk.do
+```
+
+### Basic Workflow
+
+```typescript
+import { $, workflow } from 'sdk.do'
+
+// Define a simple workflow
+const myWorkflow = workflow({
+  name: 'MyFirstWorkflow',
+  trigger: $.Event.triggered,
+  steps: [$.Step1.execute, $.Step2.execute, $.Step3.execute],
+})
+
+// Execute workflow
+const result = await myWorkflow.execute({
+  input: 'data',
+})
+```
+
+### With Error Handling
+
+```typescript
+const resilientWorkflow = workflow({
+  name: 'ResilientWorkflow',
+  steps: [
+    {
+      name: 'Step1',
+      action: $.Action.execute,
+      retryPolicy: {
+        maxAttempts: 3,
+        backoff: 'exponential',
+        maxDelay: 60000,
+      },
+      onFailure: 'HandleError',
+    },
+  ],
+  errorHandling: {
+    strategy: 'retry-then-compensate',
+    fallbackWorkflow: $.Fallback.workflow,
+  },
+})
+```
+
+## API Reference
+
+See [API Documentation](./api/) for complete reference:
+
+- [Workflow API](./api/index.mdx)
+- [Step Definitions](./api/index.mdx#steps)
+- [Trigger Types](./api/index.mdx#triggers)
+- [Error Handling](./api/index.mdx#error-handling)
+- [Orchestration Patterns](./api/index.mdx#patterns)
+
+## Documentation
+
+- [Getting Started](./docs/getting-started.mdx) - Install and create your first workflow
+- [Workflow Patterns](./docs/workflow-patterns.mdx) - Common workflow patterns and anti-patterns
+- [Orchestration](./docs/orchestration.mdx) - Advanced orchestration strategies
+
+## Examples
+
+- [Basic Workflow](./examples/basic-workflow.mdx) - Simple sequential workflow
+- [Order Fulfillment](./examples/order-fulfillment.mdx) - E-commerce order processing
+- [Approval Workflow](./examples/approval-workflow.mdx) - Human-in-the-loop approvals
+
+## Semantic Patterns
+
+workflows.do uses `$.Subject.predicate.Object` patterns throughout:
+
+```typescript
+// Workflow definition
+$.Workflow.define('OrderProcessing')
+
+// Trigger workflows
+$.Order.created → workflow.execute()
+
+// Step actions
+$.Order.validate → $.Payment.process → $.Order.fulfill
+
+// Workflow control
+$.Workflow.execute({ input })
+$.Workflow.pause()
+$.Workflow.resume()
+$.Workflow.cancel()
+
+// Workflow queries
+$.Workflow.status
+$.Workflow.history
+$.Workflow.metrics
+```
+
+## Integration with AI Agents
+
+workflows.do is designed to work seamlessly with AI agents:
+
+```typescript
+import { $, workflow, agent } from 'sdk.do'
+
+// Define workflow with AI agent steps
+const aiWorkflow = workflow({
+  name: 'AIAssistedWorkflow',
+  steps: [
+    $.Data.collect,
+    {
+      $type: 'AgentStep',
+      name: 'AnalyzeData',
+      agent: $.Agent.DataAnalyst,
+      task: 'Analyze customer data and identify trends',
+    },
+    {
+      $type: 'AgentStep',
+      name: 'GenerateReport',
+      agent: $.Agent.ReportWriter,
+      task: 'Generate executive summary report',
+    },
+    $.Report.distribute,
+  ],
+})
+```
+
+## Workflow State Management
+
+workflows.do provides built-in state management:
+
+```typescript
+// Query workflow state
+const state = await workflow.getState()
+
+// Update workflow state
+await workflow.setState({ key: 'value' })
+
+// Subscribe to state changes
+workflow.onStateChange((newState) => {
+  console.log('Workflow state updated:', newState)
+})
+
+// Persist state to database
+await workflow.persist()
+```
+
+## Monitoring and Observability
+
+Track workflow execution in real-time:
+
+```typescript
+// Get workflow metrics
+const metrics = await workflow.getMetrics()
+
+// Get execution history
+const history = await workflow.getHistory()
+
+// Monitor workflow execution
+workflow.on('step.started', (step) => {
+  console.log(`Step ${step.name} started`)
+})
+
+workflow.on('step.completed', (step, result) => {
+  console.log(`Step ${step.name} completed with result:`, result)
+})
+
+workflow.on('error', (error) => {
+  console.error('Workflow error:', error)
+})
+```
+
+## Error Handling Strategies
+
+### Retry Strategy
+
+```typescript
+const retryWorkflow = workflow({
+  steps: [
+    {
+      name: 'Step1',
+      action: $.Action,
+      retryPolicy: {
+        maxAttempts: 3,
+        backoff: 'exponential',
+        maxDelay: 60000,
+        retryableErrors: ['TimeoutError', 'NetworkError'],
+      },
+    },
+  ],
+})
+```
+
+### Compensation Strategy
+
+```typescript
+const compensatingWorkflow = workflow({
+  steps: [$.Payment.charge, $.Inventory.reserve, $.Shipment.create],
+  errorHandling: {
+    strategy: 'compensate',
+    compensationSteps: [$.Shipment.cancel, $.Inventory.release, $.Payment.refund],
+  },
+})
+```
+
+### Fallback Strategy
+
+```typescript
+const fallbackWorkflow = workflow({
+  steps: [$.PrimaryAction],
+  errorHandling: {
+    strategy: 'fallback',
+    fallbackSteps: [$.AlternativeAction],
+  },
+})
+```
+
+## Best Practices
+
+1. **Keep workflows declarative**: Define what should happen, not how
+2. **Use semantic patterns**: Leverage `$.Subject.predicate.Object` for clarity
+3. **Handle errors explicitly**: Define retry and compensation strategies
+4. **Make workflows idempotent**: Steps should be safe to retry
+5. **Use meaningful names**: Step names should describe business intent
+6. **Implement timeouts**: Prevent workflows from hanging indefinitely
+7. **Monitor execution**: Track metrics and observe workflow behavior
+8. **Version workflows**: Use semantic versioning for workflow definitions
+9. **Test workflows**: Write tests for workflows and individual steps
+10. **Document workflows**: Include descriptions and examples
+
+## Workflow Composition
+
+Compose workflows from smaller, reusable workflows:
+
+```typescript
+const subWorkflow1 = workflow({
+  name: 'ValidateAndProcess',
+  steps: [$.Validate, $.Process],
+})
+
+const subWorkflow2 = workflow({
+  name: 'NotifyAndLog',
+  steps: [$.Notify, $.Log],
+})
+
+const composedWorkflow = workflow({
+  name: 'MainWorkflow',
+  steps: [subWorkflow1, $.Transform, subWorkflow2],
+})
+```
+
+## License
+
+workflows.do is released under the [Creative Commons Attribution 4.0 International License (CC-BY-4.0)](https://creativecommons.org/licenses/by/4.0/).
+
+This means you are free to:
+
+- **Share**: Copy and redistribute the material in any medium or format
+- **Adapt**: Remix, transform, and build upon the material for any purpose, even commercially
+
+Under the following terms:
+
+- **Attribution**: You must give appropriate credit, provide a link to the license, and indicate if changes were made
+
+## Resources
+
+- [actions.org.ai](https://actions.org.ai) - Actions and triggers
+- [agents.org.ai](https://agents.org.ai) - AI agents
+- [database.do](https://database.do) - Database operations
+- [events.do](https://events.do) - Event system
+- [functions.do](https://functions.do) - Function execution
+- [sdk.do](https://sdk.do) - Core SDK
+- [schema.org.ai](https://schema.org.ai) - Schema.org types
+
+## Contributing
+
+workflows.do is part of the [`.do` platform](https://do) ecosystem. Contributions are welcome!
+
+The workflow orchestration system is designed to be extensible and community-driven. You can contribute new workflow patterns, orchestration strategies, or integration examples.
+
+## Related Projects
+
+- **sdk.do**: TypeScript SDK for Business-as-Code
+- **cli.do**: CLI for executing workflows
+- **mcp.do**: MCP server for secure workflow execution
+- **agents**: AI agents for workflow steps
+- **graphdl**: Semantic graph patterns
+
+## Acknowledgments
+
+workflows.do builds upon workflow orchestration patterns and is inspired by:
+
+- [AWS Step Functions](https://aws.amazon.com/step-functions/)
+- [Temporal](https://temporal.io)
+- [Apache Airflow](https://airflow.apache.org)
+- [Netflix Conductor](https://netflix.github.io/conductor/)
+- Business Process Model and Notation (BPMN)
+- Workflow Patterns Initiative

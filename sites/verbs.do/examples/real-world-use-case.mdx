@@ -1,0 +1,210 @@
+---
+$id: https://verbs.do/examples/real-world-use-case
+$type: HowTo
+title: Real-World Use Case - Order Processing System
+description: Complete order processing system using semantic verbs
+keywords: [order processing, workflow, real-world, complete example]
+---
+
+# Real-World Use Case: Order Processing System
+
+Complete order processing system using semantic verbs.
+
+## Order Workflow
+
+```typescript
+async function processOrder(orderId: string) {
+  const order = await $.get($.Order, orderId)
+
+  // Step 1: Validate
+  await $.validate(order)
+
+  // Step 2: Process payment
+  const payment = await $.processPayment(order)
+  if (!payment.success) {
+    await $.cancel(order)
+    await $.notify(order.customer, {
+      message: 'Payment failed',
+    })
+    return
+  }
+
+  // Step 3: Fulfill order
+  await $.fulfill(order)
+
+  // Step 4: Ship order
+  await $.ship(order, {
+    carrier: 'UPS',
+    trackingNumber: generateTrackingNumber(),
+  })
+
+  // Step 5: Notify customer
+  await $.notify(order.customer, {
+    message: `Order ${order.orderNumber} shipped`,
+    trackingNumber: order.trackingNumber,
+  })
+
+  // Step 6: Update relationships
+  await db.relate(order, $.fulfilledBy, warehouse)
+  await db.relate(order, $.shippedBy, carrier)
+}
+```
+
+## Payment Processing
+
+```typescript
+async function processPayment(order: Order) {
+  try {
+    const payment = await $.charge(order.customer, {
+      amount: order.total,
+      currency: 'USD',
+      method: order.paymentMethod,
+    })
+
+    await $.record(payment)
+    await db.relate(order, $.paidWith, payment)
+
+    return { success: true, payment }
+  } catch (error) {
+    await $.log(error)
+    return { success: false, error }
+  }
+}
+```
+
+## Fulfillment
+
+```typescript
+async function fulfillOrder(order: Order) {
+  // Check inventory
+  const available = await $.checkInventory(order.items)
+  if (!available) {
+    await $.backorder(order)
+    return
+  }
+
+  // Allocate inventory
+  await $.allocate(order.items, order)
+
+  // Pick items
+  await $.pick(order.items, warehouse)
+
+  // Pack order
+  await $.pack(order, {
+    warehouse,
+    packingDate: new Date(),
+  })
+
+  // Update status
+  await $.update(order, {
+    orderStatus: 'Fulfilled',
+    fulfilledDate: new Date(),
+  })
+}
+```
+
+## Shipping
+
+```typescript
+async function shipOrder(order: Order) {
+  // Create shipping label
+  const label = await $.createShippingLabel(order, {
+    carrier: 'UPS',
+    service: 'Ground',
+  })
+
+  // Schedule pickup
+  await $.schedulePickup(label, warehouse)
+
+  // Update order
+  await $.update(order, {
+    orderStatus: 'Shipped',
+    trackingNumber: label.trackingNumber,
+    shippedDate: new Date(),
+  })
+
+  // Create relationship
+  await db.relate(order, $.shippedBy, carrier)
+}
+```
+
+## Event Handlers
+
+```typescript
+import { on } from 'sdk.do'
+
+on($.Order.created, async (order) => {
+  await processOrder(order.$id)
+})
+
+on($.Payment.successful, async (payment) => {
+  const order = await db.related(payment, $.paidFor, $.Order)
+  await $.fulfill(order)
+})
+
+on($.Order.shipped, async (order) => {
+  await $.notify(order.customer, {
+    message: 'Your order has shipped!',
+    trackingNumber: order.trackingNumber,
+  })
+})
+```
+
+## Complete Example
+
+```typescript
+async function main() {
+  // Create customer
+  const customer = await $.create($.Person, {
+    $type: 'Person',
+    name: 'John Doe',
+    email: 'john@example.com',
+  })
+
+  // Create order
+  const order = await $.create($.Order, {
+    $type: 'Order',
+    orderNumber: 'ORD-001',
+    customer: { $id: customer.$id, $type: 'Person' },
+    items: [{ product: 'Widget', quantity: 2, price: 99.99 }],
+    total: 199.98,
+    orderStatus: 'Pending',
+  })
+
+  // Process order
+  await processOrder(order.$id)
+
+  console.log('Order processed successfully')
+}
+
+main()
+```
+
+## Summary
+
+This example demonstrates:
+
+- Multi-step order workflow
+- Payment processing with error handling
+- Inventory management
+- Shipping integration
+- Event-driven architecture
+- Relationship tracking
+- Customer notifications
+
+The semantic verbs provide:
+
+- Clear operation intent
+- Composable workflows
+- Error recovery
+- Event integration
+- Self-documenting code
+
+---
+
+**Next Steps**:
+
+- Add returns/refunds workflow
+- Integrate with external shipping APIs
+- Add real-time order tracking
+- Build customer portal

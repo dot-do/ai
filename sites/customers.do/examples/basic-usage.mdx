@@ -1,0 +1,50 @@
+---
+$id: https://customers.do/examples/basic-usage
+$type: HowTo
+title: Basic Customer Management Usage
+description: Learn basic customer management patterns.
+keywords: [examples, basic usage, customer management]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Basic Customer Management Usage
+
+## Create Customer
+
+```typescript
+import $, { db } from 'sdk.do'
+
+const customer = await db.create($.Person, {
+  $type: 'Person',
+  name: 'Jane Smith',
+  email: 'jane@example.com',
+  totalOrders: 0,
+  totalSpent: 0,
+  customerSince: new Date().toISOString(),
+})
+```
+
+## Track Purchase
+
+```typescript
+import { on } from 'sdk.do'
+
+await on($.Order.created, async (order) => {
+  const customer = await db.get($.Person, order.customer.$id)
+
+  await db.update(customer, {
+    totalOrders: customer.totalOrders + 1,
+    lastOrderDate: order.orderDate,
+  })
+})
+```
+
+## License
+
+MIT (Open Source)
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

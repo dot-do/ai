@@ -1,0 +1,108 @@
+---
+$id: https://sdr.do/examples/real-world-use-case
+$type: TechArticle
+title: SDR Real-World Use Case
+description: Real-world use case for SDR agents
+keywords: [SDR, real-world, use case, production]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Real-World Use Case
+
+Production implementation of SDR agents for a B2B SaaS company.
+
+## Scenario
+
+A B2B SaaS company needs to qualify 100 leads and book 50 meetings per month to support a $10M ARR growth target.
+
+## Implementation
+
+### 1. Create SDR Team
+
+```typescript
+import { $, sdr } from 'sdk.do'
+
+const sdrTeam = await Promise.all([
+  sdr.create({
+    name: 'Sarah Chen',
+    territory: { industries: ['Technology'], companySize: { min: 500 } },
+    quota: { leadsQualified: 50, meetingsBooked: 25 },
+    model: 'claude-sonnet-4.5',
+  }),
+  sdr.create({
+    name: 'Mike Johnson',
+    territory: { industries: ['FinTech'], companySize: { min: 100, max: 499 } },
+    quota: { leadsQualified: 50, meetingsBooked: 25 },
+    model: 'gpt-5',
+  }),
+])
+```
+
+### 2. Automated Lead Routing
+
+```typescript
+import { $, sdr, on } from 'sdk.do'
+
+on($.Lead.created, async (event) => {
+  const lead = event.lead
+  const agent = sdrTeam.find(
+    (a) =>
+      a.territory.industries.includes(lead.industry) &&
+      lead.companySize >= a.territory.companySize.min &&
+      lead.companySize <= (a.territory.companySize.max || Infinity)
+  )
+
+  if (agent) {
+    await agent.assignLeads({ leads: [lead], priority: lead.score > 75 ? 'high' : 'normal' })
+  }
+})
+```
+
+### 3. Automated Outreach
+
+```typescript
+import { $, sdr, every } from 'sdk.do'
+
+// Daily lead processing
+every($.Daily, async () => {
+  for (const agent of sdrTeam) {
+    const leads = await agent.getAssignedLeads({ status: 'new' })
+
+    for (const lead of leads) {
+      await agent.research({ lead })
+      await agent.createOutreachSequence({ lead })
+    }
+  }
+})
+```
+
+### 4. Performance Tracking
+
+```typescript
+// Weekly performance review
+every($.Weekly, async () => {
+  for (const agent of sdrTeam) {
+    const performance = await agent.getPerformance({ period: 'last_7_days' })
+
+    if (performance.meetingsBooked < agent.quota.meetingsBooked / 4) {
+      await send($.Alert.created, {
+        message: `${agent.name} below quota`,
+        action: 'review_strategy',
+      })
+    }
+  }
+})
+```
+
+## Results
+
+- **120 leads qualified** per month (20% over quota)
+- **60 meetings booked** per month (20% over quota)
+- **75% show rate** on booked meetings
+- **$600K pipeline** generated per month
+
+## License
+
+MIT (Open Source)

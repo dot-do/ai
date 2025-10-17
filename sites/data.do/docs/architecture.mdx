@@ -1,0 +1,1099 @@
+---
+$id: https://data.do/docs/architecture
+$type: https://schema.org/TechArticle
+name: data.do Architecture
+description: Deep dive into data.do architecture, data flow, transformation pipelines, and query optimization
+author:
+  $type: https://schema.org/Organization
+  name: .do
+  url: https://do.inc
+license:
+  documentation: CC-BY-4.0
+  code: MIT
+---
+
+# data.do Architecture
+
+This document provides a comprehensive overview of data.do's architecture, including data flow, core components, transformation pipelines, validation engine, and query optimization strategies.
+
+## System Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         Application Layer                        │
+│                    (Your Business Logic)                         │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             v
+┌─────────────────────────────────────────────────────────────────┐
+│                       data.do API Layer                          │
+│  ┌──────────┬──────────┬──────────┬──────────┬──────────┐      │
+│  │  CRUD    │  Query   │Transform │ Validate │  Batch   │      │
+│  │  Engine  │ Builder  │  Engine  │  Engine  │Processor │      │
+│  └──────────┴──────────┴──────────┴──────────┴──────────┘      │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             v
+┌─────────────────────────────────────────────────────────────────┐
+│                      Core Services Layer                         │
+│  ┌──────────┬──────────┬──────────┬──────────┬──────────┐      │
+│  │  Cache   │  Events  │  Schema  │  Index   │  Queue   │      │
+│  │  Manager │  System  │ Registry │  Manager │  Manager │      │
+│  └──────────┴──────────┴──────────┴──────────┴──────────┘      │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             v
+┌─────────────────────────────────────────────────────────────────┐
+│                      Storage Adapters                            │
+│  ┌──────────┬──────────┬──────────┬──────────┬──────────┐      │
+│  │ Database │   API    │   File   │ Stream   │  Memory  │      │
+│  │ Adapter  │ Adapter  │ Adapter  │ Adapter  │ Adapter  │      │
+│  └──────────┴──────────┴──────────┴──────────┴──────────┘      │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+                             v
+┌─────────────────────────────────────────────────────────────────┐
+│                        Data Sources                              │
+│       (Databases, APIs, Files, Streams, etc.)                    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Core Components
+
+### 1. CRUD Engine
+
+The CRUD Engine provides universal create, read, update, and delete operations with a consistent API across all data sources.
+
+#### Architecture
+
+```typescript
+┌──────────────────────────────────────────┐
+│          CRUD Engine                     │
+│                                          │
+│  ┌────────────────────────────────────┐ │
+│  │  Operation Router                  │ │
+│  │  - Route to correct adapter        │ │
+│  └─────────────┬──────────────────────┘ │
+│                │                         │
+│  ┌─────────────v──────────────────────┐ │
+│  │  Validation Layer                  │ │
+│  │  - Schema validation               │ │
+│  │  - Type checking                   │ │
+│  └─────────────┬──────────────────────┘ │
+│                │                         │
+│  ┌─────────────v──────────────────────┐ │
+│  │  Transform Layer                   │ │
+│  │  - Normalize data                  │ │
+│  │  - Format conversion               │ │
+│  └─────────────┬──────────────────────┘ │
+│                │                         │
+│  ┌─────────────v──────────────────────┐ │
+│  │  Adapter Layer                     │ │
+│  │  - Execute storage operation       │ │
+│  └────────────────────────────────────┘ │
+└──────────────────────────────────────────┘
+```
+
+#### Implementation
+
+```typescript
+class CRUDEngine {
+  private adapters: Map<string, StorageAdapter>
+  private validators: Map<string, Validator>
+  private transformers: Map<string, Transformer>
+  private cache: CacheManager
+
+  async create<T>(type: SemanticType, data: T, options?: CreateOptions): Promise<T> {
+    // 1. Resolve adapter
+    const adapter = this.resolveAdapter(type)
+
+    // 2. Validate data
+    if (options?.validate) {
+      const isValid = await this.validators.get(type)?.validate(data)
+      if (!isValid) throw new ValidationError()
+    }
+
+    // 3. Transform data
+    const transformed = await this.transformers.get(type)?.normalize(data)
+
+    // 4. Execute create
+    const result = await adapter.create(transformed)
+
+    // 5. Cache result
+    if (options?.cache) {
+      await this.cache.set(result.$id, result)
+    }
+
+    // 6. Emit event
+    await this.events.emit(`${type}.created`, result)
+
+    return result
+  }
+
+  async get<T>(type: SemanticType, id: string, options?: GetOptions): Promise<T> {
+    // 1. Check cache
+    if (options?.cache !== false) {
+      const cached = await this.cache.get(id)
+      if (cached) return cached
+    }
+
+    // 2. Resolve adapter
+    const adapter = this.resolveAdapter(type)
+
+    // 3. Execute get
+    const result = await adapter.get(id)
+
+    // 4. Include relationships
+    if (options?.include) {
+      await this.includeRelationships(result, options.include)
+    }
+
+    // 5. Cache result
+    await this.cache.set(id, result)
+
+    return result
+  }
+
+  async update<T>(id: string, changes: Partial<T>, options?: UpdateOptions): Promise<T> {
+    // 1. Get current data
+    const current = await this.get(id, { cache: false })
+
+    // 2. Merge changes
+    const updated = { ...current, ...changes }
+
+    // 3. Validate
+    if (options?.validate) {
+      const isValid = await this.validators.get(current.$type)?.validate(updated)
+      if (!isValid) throw new ValidationError()
+    }
+
+    // 4. Execute update
+    const adapter = this.resolveAdapter(current.$type)
+    const result = await adapter.update(id, changes)
+
+    // 5. Invalidate cache
+    await this.cache.invalidate(id)
+
+    // 6. Emit event
+    await this.events.emit(`${current.$type}.updated`, { old: current, new: result })
+
+    return result
+  }
+
+  async delete(id: string, options?: DeleteOptions): Promise<void> {
+    // 1. Get current data
+    const current = await this.get(id, { cache: false })
+
+    // 2. Check cascade
+    if (options?.cascade) {
+      await this.deleteCascade(current, options.cascade)
+    }
+
+    // 3. Execute delete
+    const adapter = this.resolveAdapter(current.$type)
+    await adapter.delete(id)
+
+    // 4. Invalidate cache
+    await this.cache.invalidate(id)
+
+    // 5. Emit event
+    await this.events.emit(`${current.$type}.deleted`, current)
+  }
+}
+```
+
+### 2. Query Builder
+
+The Query Builder provides a type-safe, composable API for constructing complex queries.
+
+#### Architecture
+
+```typescript
+┌──────────────────────────────────────────┐
+│          Query Builder                   │
+│                                          │
+│  ┌────────────────────────────────────┐ │
+│  │  Query Parser                      │ │
+│  │  - Parse query DSL                 │ │
+│  │  - Validate syntax                 │ │
+│  └─────────────┬──────────────────────┘ │
+│                │                         │
+│  ┌─────────────v──────────────────────┐ │
+│  │  Query Optimizer                   │ │
+│  │  - Index selection                 │ │
+│  │  - Join optimization               │ │
+│  │  - Predicate pushdown              │ │
+│  └─────────────┬──────────────────────┘ │
+│                │                         │
+│  ┌─────────────v──────────────────────┐ │
+│  │  Query Executor                    │ │
+│  │  - Execute query plan              │ │
+│  │  - Handle pagination               │ │
+│  └─────────────┬──────────────────────┘ │
+│                │                         │
+│  ┌─────────────v──────────────────────┐ │
+│  │  Result Processor                  │ │
+│  │  - Map results                     │ │
+│  │  - Include relationships           │ │
+│  └────────────────────────────────────┘ │
+└──────────────────────────────────────────┘
+```
+
+#### Implementation
+
+```typescript
+class QueryBuilder<T> {
+  private type: SemanticType
+  private conditions: Condition[] = []
+  private includes: Include[] = []
+  private sorting: Sort[] = []
+  private pagination: Pagination = {}
+  private aggregations: Aggregation[] = []
+
+  where(conditions: Conditions): this {
+    this.conditions.push(this.parseConditions(conditions))
+    return this
+  }
+
+  include(relations: Relations): this {
+    this.includes.push(this.parseIncludes(relations))
+    return this
+  }
+
+  orderBy(field: string, direction: 'asc' | 'desc'): this {
+    this.sorting.push({ field, direction })
+    return this
+  }
+
+  limit(count: number): this {
+    this.pagination.limit = count
+    return this
+  }
+
+  offset(count: number): this {
+    this.pagination.offset = count
+    return this
+  }
+
+  async execute(): Promise<T[]> {
+    // 1. Build query plan
+    const plan = this.buildQueryPlan()
+
+    // 2. Optimize query
+    const optimized = await this.optimizer.optimize(plan)
+
+    // 3. Execute query
+    const results = await this.executor.execute(optimized)
+
+    // 4. Process results
+    return await this.processResults(results)
+  }
+
+  private buildQueryPlan(): QueryPlan {
+    return {
+      type: this.type,
+      conditions: this.conditions,
+      includes: this.includes,
+      sorting: this.sorting,
+      pagination: this.pagination,
+      aggregations: this.aggregations,
+    }
+  }
+}
+```
+
+#### Query Optimization
+
+```typescript
+class QueryOptimizer {
+  async optimize(plan: QueryPlan): Promise<OptimizedPlan> {
+    // 1. Index selection
+    const indexes = await this.selectIndexes(plan.conditions)
+
+    // 2. Predicate pushdown
+    const pushedDown = this.pushDownPredicates(plan.conditions)
+
+    // 3. Join optimization
+    const joinOrder = this.optimizeJoins(plan.includes)
+
+    // 4. Projection optimization
+    const projection = this.optimizeProjection(plan)
+
+    return {
+      ...plan,
+      indexes,
+      conditions: pushedDown,
+      joinOrder,
+      projection,
+    }
+  }
+
+  private selectIndexes(conditions: Condition[]): Index[] {
+    // Select best indexes based on:
+    // - Selectivity (how many rows filtered)
+    // - Index type (hash, btree, etc.)
+    // - Composite index usage
+    return this.indexSelector.select(conditions)
+  }
+
+  private pushDownPredicates(conditions: Condition[]): Condition[] {
+    // Push predicates to lowest level possible
+    // to reduce data movement
+    return this.predicatePusher.push(conditions)
+  }
+
+  private optimizeJoins(includes: Include[]): JoinOrder {
+    // Determine optimal join order based on:
+    // - Table sizes
+    // - Join selectivity
+    // - Index availability
+    return this.joinOptimizer.optimize(includes)
+  }
+}
+```
+
+### 3. Transform Engine
+
+The Transform Engine handles data transformations, normalization, and enrichment.
+
+#### Architecture
+
+```typescript
+┌──────────────────────────────────────────┐
+│        Transform Engine                  │
+│                                          │
+│  ┌────────────────────────────────────┐ │
+│  │  Transform Pipeline                │ │
+│  │  - Chain transformations           │ │
+│  │  - Handle async transforms         │ │
+│  └─────────────┬──────────────────────┘ │
+│                │                         │
+│  ┌─────────────v──────────────────────┐ │
+│  │  Built-in Transforms               │ │
+│  │  - Normalize                       │ │
+│  │  - Format conversion               │ │
+│  │  - Enrichment                      │ │
+│  └─────────────┬──────────────────────┘ │
+│                │                         │
+│  ┌─────────────v──────────────────────┐ │
+│  │  Custom Transforms                 │ │
+│  │  - User-defined functions          │ │
+│  │  - Plugin system                   │ │
+│  └────────────────────────────────────┘ │
+└──────────────────────────────────────────┘
+```
+
+#### Implementation
+
+```typescript
+class TransformEngine {
+  private transforms: Map<string, Transform>
+
+  async transform<T>(data: T, transform: Transform | string, options?: TransformOptions): Promise<T> {
+    // 1. Resolve transform
+    const fn = typeof transform === 'string' ? this.transforms.get(transform) : transform
+
+    // 2. Execute transform
+    const result = await fn(data, options)
+
+    // 3. Validate result
+    if (options?.validate) {
+      await this.validate(result)
+    }
+
+    return result
+  }
+
+  async pipeline<T>(data: T): TransformPipeline<T> {
+    return new TransformPipeline(data, this)
+  }
+
+  register(name: string, transform: Transform): void {
+    this.transforms.set(name, transform)
+  }
+}
+
+class TransformPipeline<T> {
+  private data: T
+  private transforms: Transform[] = []
+  private engine: TransformEngine
+
+  constructor(data: T, engine: TransformEngine) {
+    this.data = data
+    this.engine = engine
+  }
+
+  normalize(type?: SemanticType): this {
+    this.transforms.push(async (data) => {
+      return await this.engine.transform(data, 'normalize', { type })
+    })
+    return this
+  }
+
+  validate(schema: Schema): this {
+    this.transforms.push(async (data) => {
+      const valid = await this.engine.validate(data, schema)
+      if (!valid) throw new ValidationError()
+      return data
+    })
+    return this
+  }
+
+  enrich(sources: string[]): this {
+    this.transforms.push(async (data) => {
+      return await this.engine.transform(data, 'enrich', { sources })
+    })
+    return this
+  }
+
+  map<U>(fn: (data: T) => U): this {
+    this.transforms.push(fn)
+    return this
+  }
+
+  async execute(): Promise<T> {
+    let result = this.data
+    for (const transform of this.transforms) {
+      result = await transform(result)
+    }
+    return result
+  }
+}
+```
+
+### 4. Validation Engine
+
+The Validation Engine provides comprehensive data validation against schemas.
+
+#### Architecture
+
+```typescript
+┌──────────────────────────────────────────┐
+│        Validation Engine                 │
+│                                          │
+│  ┌────────────────────────────────────┐ │
+│  │  Schema Registry                   │ │
+│  │  - Schema.org types                │ │
+│  │  - GS1 types                       │ │
+│  │  - Custom schemas                  │ │
+│  └─────────────┬──────────────────────┘ │
+│                │                         │
+│  ┌─────────────v──────────────────────┐ │
+│  │  Validation Rules                  │ │
+│  │  - Type checking                   │ │
+│  │  - Constraints                     │ │
+│  │  - Custom validators               │ │
+│  └─────────────┬──────────────────────┘ │
+│                │                         │
+│  ┌─────────────v──────────────────────┐ │
+│  │  Error Reporting                   │ │
+│  │  - Detailed errors                 │ │
+│  │  - Error paths                     │ │
+│  └────────────────────────────────────┘ │
+└──────────────────────────────────────────┘
+```
+
+#### Implementation
+
+```typescript
+class ValidationEngine {
+  private schemas: SchemaRegistry
+  private validators: Map<string, Validator>
+
+  async validate<T>(data: T, schema: Schema, options?: ValidationOptions): Promise<ValidationResult> {
+    const errors: ValidationError[] = []
+
+    // 1. Type validation
+    if (!this.validateType(data, schema.$type)) {
+      errors.push({
+        path: '$type',
+        message: `Expected type ${schema.$type}, got ${typeof data}`,
+      })
+    }
+
+    // 2. Required fields
+    for (const field of schema.required || []) {
+      if (!(field in data)) {
+        errors.push({
+          path: field,
+          message: `Required field ${field} is missing`,
+        })
+      }
+    }
+
+    // 3. Field validation
+    for (const [field, rules] of Object.entries(schema.rules || {})) {
+      const value = data[field]
+      const fieldErrors = await this.validateField(value, rules, field)
+      errors.push(...fieldErrors)
+    }
+
+    // 4. Custom validators
+    if (schema.validators) {
+      for (const validator of schema.validators) {
+        const result = await validator(data)
+        if (!result.valid) {
+          errors.push(...result.errors)
+        }
+      }
+    }
+
+    return {
+      valid: errors.length === 0,
+      errors: options?.detailed ? errors : undefined,
+    }
+  }
+
+  private async validateField(value: any, rules: ValidationRules, path: string): Promise<ValidationError[]> {
+    const errors: ValidationError[] = []
+
+    if (rules.required && value === undefined) {
+      errors.push({ path, message: 'Required field is missing' })
+    }
+
+    if (rules.type && typeof value !== rules.type) {
+      errors.push({ path, message: `Expected type ${rules.type}, got ${typeof value}` })
+    }
+
+    if (rules.min !== undefined && value < rules.min) {
+      errors.push({ path, message: `Value must be at least ${rules.min}` })
+    }
+
+    if (rules.max !== undefined && value > rules.max) {
+      errors.push({ path, message: `Value must be at most ${rules.max}` })
+    }
+
+    if (rules.minLength !== undefined && value.length < rules.minLength) {
+      errors.push({ path, message: `Length must be at least ${rules.minLength}` })
+    }
+
+    if (rules.maxLength !== undefined && value.length > rules.maxLength) {
+      errors.push({ path, message: `Length must be at most ${rules.maxLength}` })
+    }
+
+    if (rules.pattern && !rules.pattern.test(value)) {
+      errors.push({ path, message: `Value does not match pattern ${rules.pattern}` })
+    }
+
+    if (rules.enum && !rules.enum.includes(value)) {
+      errors.push({ path, message: `Value must be one of: ${rules.enum.join(', ')}` })
+    }
+
+    if (rules.validate) {
+      const result = await rules.validate(value)
+      if (!result) {
+        errors.push({ path, message: 'Custom validation failed' })
+      }
+    }
+
+    return errors
+  }
+}
+```
+
+### 5. Batch Processor
+
+The Batch Processor handles efficient bulk operations.
+
+#### Architecture
+
+```typescript
+┌──────────────────────────────────────────┐
+│        Batch Processor                   │
+│                                          │
+│  ┌────────────────────────────────────┐ │
+│  │  Batch Splitter                    │ │
+│  │  - Split into batches              │ │
+│  │  - Size optimization               │ │
+│  └─────────────┬──────────────────────┘ │
+│                │                         │
+│  ┌─────────────v──────────────────────┐ │
+│  │  Parallel Executor                 │ │
+│  │  - Worker pool                     │ │
+│  │  - Concurrency control             │ │
+│  └─────────────┬──────────────────────┘ │
+│                │                         │
+│  ┌─────────────v──────────────────────┐ │
+│  │  Progress Tracker                  │ │
+│  │  - Track completion                │ │
+│  │  - Error handling                  │ │
+│  └────────────────────────────────────┘ │
+└──────────────────────────────────────────┘
+```
+
+#### Implementation
+
+```typescript
+class BatchProcessor {
+  private workerPool: WorkerPool
+  private queue: Queue
+
+  async process<T>(items: T[], processor: (item: T) => Promise<any>, options?: BatchOptions): Promise<void> {
+    // 1. Split into batches
+    const batches = this.splitIntoBatches(items, options?.batchSize || 100)
+
+    // 2. Create progress tracker
+    const progress = new ProgressTracker(items.length)
+
+    // 3. Process batches in parallel
+    await Promise.all(
+      batches.map(async (batch, index) => {
+        // Create worker
+        const worker = await this.workerPool.acquire()
+
+        try {
+          // Process batch
+          await worker.process(batch, processor, {
+            onProgress: (processed) => {
+              progress.update(processed)
+              options?.onProgress?.(progress.processed, progress.total)
+            },
+            onError: (error, item) => {
+              progress.recordError(error, item)
+              options?.onError?.(error, item)
+            },
+          })
+        } finally {
+          // Release worker
+          await this.workerPool.release(worker)
+        }
+      })
+    )
+
+    // 4. Report final status
+    return progress.getReport()
+  }
+
+  private splitIntoBatches<T>(items: T[], batchSize: number): T[][] {
+    const batches: T[][] = []
+    for (let i = 0; i < items.length; i += batchSize) {
+      batches.push(items.slice(i, i + batchSize))
+    }
+    return batches
+  }
+}
+
+class WorkerPool {
+  private workers: Worker[] = []
+  private available: Worker[] = []
+  private waiting: Array<(worker: Worker) => void> = []
+
+  constructor(private maxWorkers: number) {
+    for (let i = 0; i < maxWorkers; i++) {
+      const worker = new Worker()
+      this.workers.push(worker)
+      this.available.push(worker)
+    }
+  }
+
+  async acquire(): Promise<Worker> {
+    if (this.available.length > 0) {
+      return this.available.pop()!
+    }
+
+    return new Promise((resolve) => {
+      this.waiting.push(resolve)
+    })
+  }
+
+  async release(worker: Worker): Promise<void> {
+    if (this.waiting.length > 0) {
+      const resolve = this.waiting.shift()!
+      resolve(worker)
+    } else {
+      this.available.push(worker)
+    }
+  }
+}
+```
+
+## Data Flow
+
+### 1. Create Flow
+
+```
+User Request
+     │
+     v
+┌─────────────────┐
+│  CRUD Engine    │
+│  .create()      │
+└────────┬────────┘
+         │
+         v
+┌─────────────────┐
+│  Validation     │
+│  Engine         │
+└────────┬────────┘
+         │
+         v
+┌─────────────────┐
+│  Transform      │
+│  Engine         │
+└────────┬────────┘
+         │
+         v
+┌─────────────────┐
+│  Storage        │
+│  Adapter        │
+└────────┬────────┘
+         │
+         v
+┌─────────────────┐
+│  Cache          │
+│  Manager        │
+└────────┬────────┘
+         │
+         v
+┌─────────────────┐
+│  Event          │
+│  System         │
+└────────┬────────┘
+         │
+         v
+    Response
+```
+
+### 2. Query Flow
+
+```
+User Request
+     │
+     v
+┌─────────────────┐
+│  Query Builder  │
+│  .execute()     │
+└────────┬────────┘
+         │
+         v
+┌─────────────────┐
+│  Query          │
+│  Optimizer      │
+└────────┬────────┘
+         │
+         v
+┌─────────────────┐
+│  Cache Check    │
+└────────┬────────┘
+         │
+    Cache Hit?
+    │         │
+   Yes        No
+    │         │
+    │         v
+    │  ┌─────────────────┐
+    │  │  Storage        │
+    │  │  Adapter        │
+    │  └────────┬────────┘
+    │           │
+    │           v
+    │  ┌─────────────────┐
+    │  │  Result         │
+    │  │  Processor      │
+    │  └────────┬────────┘
+    │           │
+    v           v
+┌─────────────────┐
+│  Include        │
+│  Relationships  │
+└────────┬────────┘
+         │
+         v
+┌─────────────────┐
+│  Cache          │
+│  Update         │
+└────────┬────────┘
+         │
+         v
+    Response
+```
+
+### 3. ETL Pipeline Flow
+
+```
+Extract Stage
+     │
+     v
+┌─────────────────┐
+│  Data Sources   │
+│  (API, DB, etc) │
+└────────┬────────┘
+         │
+         v
+┌─────────────────┐
+│  Connectors     │
+└────────┬────────┘
+         │
+         v
+Transform Stage
+     │
+     v
+┌─────────────────┐
+│  Normalize      │
+└────────┬────────┘
+         │
+         v
+┌─────────────────┐
+│  Validate       │
+└────────┬────────┘
+         │
+         v
+┌─────────────────┐
+│  Enrich         │
+└────────┬────────┘
+         │
+         v
+┌─────────────────┐
+│  Transform      │
+└────────┬────────┘
+         │
+         v
+Load Stage
+     │
+     v
+┌─────────────────┐
+│  Batch          │
+│  Processor      │
+└────────┬────────┘
+         │
+         v
+┌─────────────────┐
+│  Destinations   │
+│  (DB, API, etc) │
+└────────┬────────┘
+         │
+         v
+┌─────────────────┐
+│  Event          │
+│  Notification   │
+└─────────────────┘
+```
+
+## Performance Optimization
+
+### 1. Caching Strategy
+
+```typescript
+class CacheManager {
+  private cache: Map<string, CacheEntry>
+  private ttl: number
+
+  async get(key: string): Promise<any> {
+    const entry = this.cache.get(key)
+
+    if (!entry) return null
+
+    // Check TTL
+    if (Date.now() - entry.timestamp > this.ttl) {
+      this.cache.delete(key)
+      return null
+    }
+
+    return entry.value
+  }
+
+  async set(key: string, value: any, ttl?: number): Promise<void> {
+    this.cache.set(key, {
+      value,
+      timestamp: Date.now(),
+      ttl: ttl || this.ttl,
+    })
+  }
+
+  async invalidate(pattern: string): Promise<void> {
+    const regex = new RegExp(pattern)
+    for (const [key] of this.cache) {
+      if (regex.test(key)) {
+        this.cache.delete(key)
+      }
+    }
+  }
+}
+```
+
+### 2. Index Management
+
+```typescript
+class IndexManager {
+  private indexes: Map<string, Index>
+
+  async createIndex(type: SemanticType, fields: string[], options?: IndexOptions): Promise<void> {
+    const indexName = this.generateIndexName(type, fields)
+
+    const index = {
+      name: indexName,
+      type: options?.type || 'btree',
+      fields,
+      unique: options?.unique || false,
+      sparse: options?.sparse || false,
+    }
+
+    await this.adapter.createIndex(index)
+    this.indexes.set(indexName, index)
+  }
+
+  selectBestIndex(conditions: Condition[]): Index | null {
+    // Select index with highest selectivity
+    let bestIndex: Index | null = null
+    let bestSelectivity = 0
+
+    for (const index of this.indexes.values()) {
+      const selectivity = this.calculateSelectivity(index, conditions)
+      if (selectivity > bestSelectivity) {
+        bestSelectivity = selectivity
+        bestIndex = index
+      }
+    }
+
+    return bestIndex
+  }
+
+  private calculateSelectivity(index: Index, conditions: Condition[]): number {
+    // Higher selectivity = better index
+    // Factors:
+    // - Number of fields matched
+    // - Index type
+    // - Uniqueness
+    let selectivity = 0
+
+    for (const field of index.fields) {
+      if (conditions.some((c) => c.field === field)) {
+        selectivity += 1
+      }
+    }
+
+    if (index.unique) selectivity *= 2
+    if (index.type === 'hash') selectivity *= 1.5
+
+    return selectivity
+  }
+}
+```
+
+### 3. Connection Pooling
+
+```typescript
+class ConnectionPool {
+  private connections: Connection[] = []
+  private available: Connection[] = []
+  private maxConnections: number
+
+  async acquire(): Promise<Connection> {
+    // Check for available connection
+    if (this.available.length > 0) {
+      return this.available.pop()!
+    }
+
+    // Create new connection if under limit
+    if (this.connections.length < this.maxConnections) {
+      const connection = await this.createConnection()
+      this.connections.push(connection)
+      return connection
+    }
+
+    // Wait for connection to become available
+    return await this.waitForConnection()
+  }
+
+  async release(connection: Connection): Promise<void> {
+    this.available.push(connection)
+  }
+
+  private async createConnection(): Promise<Connection> {
+    // Create and initialize connection
+    const connection = await this.adapter.connect()
+    await connection.initialize()
+    return connection
+  }
+
+  private async waitForConnection(): Promise<Connection> {
+    return new Promise((resolve) => {
+      const checkInterval = setInterval(() => {
+        if (this.available.length > 0) {
+          clearInterval(checkInterval)
+          resolve(this.available.pop()!)
+        }
+      }, 100)
+    })
+  }
+}
+```
+
+## Event System
+
+### Event Architecture
+
+```typescript
+class EventSystem {
+  private listeners: Map<string, EventListener[]>
+  private queue: EventQueue
+
+  on(event: string, listener: EventListener): void {
+    if (!this.listeners.has(event)) {
+      this.listeners.set(event, [])
+    }
+    this.listeners.get(event)!.push(listener)
+  }
+
+  async emit(event: string, data: any): Promise<void> {
+    // Queue event for async processing
+    await this.queue.enqueue({
+      event,
+      data,
+      timestamp: Date.now(),
+    })
+
+    // Process event
+    await this.processEvent(event, data)
+  }
+
+  private async processEvent(event: string, data: any): Promise<void> {
+    const listeners = this.listeners.get(event) || []
+
+    // Execute listeners in parallel
+    await Promise.all(
+      listeners.map(async (listener) => {
+        try {
+          await listener(data)
+        } catch (error) {
+          console.error(`Error in event listener for ${event}:`, error)
+        }
+      })
+    )
+  }
+}
+```
+
+## Storage Adapters
+
+### Adapter Interface
+
+```typescript
+interface StorageAdapter {
+  connect(): Promise<void>
+  disconnect(): Promise<void>
+  create<T>(data: T): Promise<T>
+  get<T>(id: string): Promise<T>
+  list<T>(options: ListOptions): Promise<T[]>
+  update<T>(id: string, changes: Partial<T>): Promise<T>
+  delete(id: string): Promise<void>
+  query<T>(query: Query): Promise<T[]>
+}
+
+class DatabaseAdapter implements StorageAdapter {
+  // Database-specific implementation
+}
+
+class APIAdapter implements StorageAdapter {
+  // API-specific implementation
+}
+
+class FileAdapter implements StorageAdapter {
+  // File system-specific implementation
+}
+```
+
+## License
+
+- Documentation: [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/)
+- Code Examples: [MIT](https://opensource.org/licenses/MIT)

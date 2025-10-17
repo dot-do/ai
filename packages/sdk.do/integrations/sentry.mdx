@@ -1,0 +1,646 @@
+---
+$id: https://integrations.do/sentry
+$type: Integration
+name: Sentry
+service: sentry
+description: Error tracking and performance monitoring platform
+category: developer-tools
+sdkBased: true
+sdkPackage: '@sentry/node'
+sdkVersion: ^8.0.0
+sdkImport: Sentry
+
+auth:
+  type: api-key
+  location: header
+  headerName: Authorization
+  scheme: Bearer
+
+resources:
+  - name: Event
+    plural: Events
+    description: Error and exception events
+    operations:
+      - name: get
+        method: GET
+        path: /api/0/organizations/{organization_slug}/events/{event_id}/
+        params:
+          - name: organization_slug
+            type: string
+            required: true
+            description: Organization slug
+          - name: event_id
+            type: string
+            required: true
+            description: Event ID
+        returns: Event
+
+      - name: list
+        method: GET
+        path: /api/0/organizations/{organization_slug}/events/
+        params:
+          - name: organization_slug
+            type: string
+            required: true
+            description: Organization slug
+          - name: query
+            type: string
+            required: false
+            description: Search query
+        returns: Event[]
+        pagination:
+          type: cursor
+          cursorField: cursor
+          defaultLimit: 50
+          maxLimit: 100
+
+  - name: Issue
+    plural: Issues
+    description: Grouped error events
+    operations:
+      - name: get
+        method: GET
+        path: /api/0/organizations/{organization_slug}/issues/{issue_id}/
+        params:
+          - name: organization_slug
+            type: string
+            required: true
+            description: Organization slug
+          - name: issue_id
+            type: string
+            required: true
+            description: Issue ID
+        returns: Issue
+
+      - name: update
+        method: PUT
+        path: /api/0/organizations/{organization_slug}/issues/{issue_id}/
+        params:
+          - name: organization_slug
+            type: string
+            required: true
+            description: Organization slug
+          - name: issue_id
+            type: string
+            required: true
+            description: Issue ID
+          - name: status
+            type: string
+            required: false
+            description: Issue status (resolved, ignored, unresolved)
+        returns: Issue
+
+      - name: delete
+        method: DELETE
+        path: /api/0/organizations/{organization_slug}/issues/{issue_id}/
+        params:
+          - name: organization_slug
+            type: string
+            required: true
+            description: Organization slug
+          - name: issue_id
+            type: string
+            required: true
+            description: Issue ID
+        returns: boolean
+
+      - name: list
+        method: GET
+        path: /api/0/organizations/{organization_slug}/issues/
+        params:
+          - name: organization_slug
+            type: string
+            required: true
+            description: Organization slug
+          - name: query
+            type: string
+            required: false
+            description: Search query
+        returns: Issue[]
+        pagination:
+          type: cursor
+          cursorField: cursor
+          defaultLimit: 25
+          maxLimit: 100
+
+  - name: Project
+    plural: Projects
+    description: Sentry projects
+    operations:
+      - name: create
+        method: POST
+        path: /api/0/teams/{organization_slug}/{team_slug}/projects/
+        params:
+          - name: organization_slug
+            type: string
+            required: true
+            description: Organization slug
+          - name: team_slug
+            type: string
+            required: true
+            description: Team slug
+          - name: name
+            type: string
+            required: true
+            description: Project name
+          - name: platform
+            type: string
+            required: false
+            description: Project platform (javascript, python, etc.)
+        returns: Project
+
+      - name: get
+        method: GET
+        path: /api/0/projects/{organization_slug}/{project_slug}/
+        params:
+          - name: organization_slug
+            type: string
+            required: true
+            description: Organization slug
+          - name: project_slug
+            type: string
+            required: true
+            description: Project slug
+        returns: Project
+
+      - name: update
+        method: PUT
+        path: /api/0/projects/{organization_slug}/{project_slug}/
+        params:
+          - name: organization_slug
+            type: string
+            required: true
+            description: Organization slug
+          - name: project_slug
+            type: string
+            required: true
+            description: Project slug
+          - name: name
+            type: string
+            required: false
+            description: Updated name
+        returns: Project
+
+      - name: delete
+        method: DELETE
+        path: /api/0/projects/{organization_slug}/{project_slug}/
+        params:
+          - name: organization_slug
+            type: string
+            required: true
+            description: Organization slug
+          - name: project_slug
+            type: string
+            required: true
+            description: Project slug
+        returns: boolean
+
+      - name: list
+        method: GET
+        path: /api/0/organizations/{organization_slug}/projects/
+        params:
+          - name: organization_slug
+            type: string
+            required: true
+            description: Organization slug
+        returns: Project[]
+
+  - name: Release
+    plural: Releases
+    description: Release tracking and deploys
+    operations:
+      - name: create
+        method: POST
+        path: /api/0/organizations/{organization_slug}/releases/
+        params:
+          - name: organization_slug
+            type: string
+            required: true
+            description: Organization slug
+          - name: version
+            type: string
+            required: true
+            description: Release version
+          - name: projects
+            type: array
+            required: true
+            description: Project slugs
+        returns: Release
+
+      - name: get
+        method: GET
+        path: /api/0/organizations/{organization_slug}/releases/{version}/
+        params:
+          - name: organization_slug
+            type: string
+            required: true
+            description: Organization slug
+          - name: version
+            type: string
+            required: true
+            description: Release version
+        returns: Release
+
+      - name: update
+        method: PUT
+        path: /api/0/organizations/{organization_slug}/releases/{version}/
+        params:
+          - name: organization_slug
+            type: string
+            required: true
+            description: Organization slug
+          - name: version
+            type: string
+            required: true
+            description: Release version
+          - name: dateReleased
+            type: string
+            required: false
+            description: Release date (ISO 8601)
+        returns: Release
+
+      - name: delete
+        method: DELETE
+        path: /api/0/organizations/{organization_slug}/releases/{version}/
+        params:
+          - name: organization_slug
+            type: string
+            required: true
+            description: Organization slug
+          - name: version
+            type: string
+            required: true
+            description: Release version
+        returns: boolean
+
+      - name: list
+        method: GET
+        path: /api/0/organizations/{organization_slug}/releases/
+        params:
+          - name: organization_slug
+            type: string
+            required: true
+            description: Organization slug
+        returns: Release[]
+        pagination:
+          type: cursor
+          cursorField: cursor
+          defaultLimit: 20
+          maxLimit: 100
+
+webhooks:
+  enabled: true
+  signatureHeader: Sentry-Hook-Signature
+  signatureAlgorithm: sha256
+  verificationMethod: signature
+  events:
+    - name: error.created
+      type: error.created
+      description: New error event
+    - name: issue.created
+      type: issue.created
+      description: New issue created
+    - name: issue.resolved
+      type: issue.resolved
+      description: Issue resolved
+    - name: issue.ignored
+      type: issue.ignored
+      description: Issue ignored
+    - name: issue.assigned
+      type: issue.assigned
+      description: Issue assigned
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 403
+      type: authorization
+      statusCode: 403
+      message: Forbidden
+      retryable: false
+    - code: 404
+      type: not_found
+      statusCode: 404
+      message: Resource not found
+      retryable: false
+    - code: 400
+      type: validation
+      statusCode: 400
+      message: Bad request
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+    - code: 500
+      type: server
+      statusCode: 500
+      message: Internal server error
+      retryable: true
+  retryable: [429, 500, 502, 503]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: true
+  scenarios:
+    - name: Event Retrieval
+      description: Test event operations
+      steps:
+        - action: retrieve
+          resource: Event
+        - action: list
+          resource: Event
+
+    - name: Issue Management
+      description: Test issue CRUD operations
+      steps:
+        - action: retrieve
+          resource: Issue
+        - action: update
+          resource: Issue
+        - action: list
+          resource: Issue
+        - action: delete
+          resource: Issue
+
+    - name: Project Management
+      description: Test project CRUD operations
+      steps:
+        - action: create
+          resource: Project
+        - action: retrieve
+          resource: Project
+        - action: update
+          resource: Project
+        - action: list
+          resource: Project
+        - action: delete
+          resource: Project
+
+    - name: Release Tracking
+      description: Test release operations
+      steps:
+        - action: create
+          resource: Release
+        - action: retrieve
+          resource: Release
+        - action: update
+          resource: Release
+        - action: list
+          resource: Release
+        - action: delete
+          resource: Release
+
+    - name: Webhook Verification
+      description: Test webhook signature verification
+      steps:
+        - action: assert
+          expects:
+            status: 200
+
+docs:
+  homepage: https://sentry.io
+  apiDocs: https://docs.sentry.io/api/
+  sdkDocs: https://docs.sentry.io/platforms/node/
+  guides:
+    quickstart: https://docs.sentry.io/platforms/node/
+    webhooks: https://docs.sentry.io/product/integrations/integration-platform/webhooks/
+    authentication: https://docs.sentry.io/api/auth/
+---
+
+# Sentry Integration
+
+Sentry is an error tracking and performance monitoring platform for developers.
+
+## Features
+
+- **Events**: Error and exception tracking
+- **Issues**: Grouped error events
+- **Projects**: Project organization
+- **Releases**: Release tracking and deploys
+- **Performance**: APM and transaction monitoring
+- **Webhooks**: Real-time event notifications
+
+## Quick Start
+
+```typescript
+import { SentryClient } from '@dotdo/sdk.do/integrations/sentry'
+
+const sentry = new SentryClient({
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  organizationSlug: 'my-org',
+})
+
+// Get an issue
+const issue = await sentry.issue.get({
+  organization_slug: 'my-org',
+  issue_id: '123456',
+})
+
+// Create a release
+const release = await sentry.release.create({
+  organization_slug: 'my-org',
+  version: 'v2.0.0',
+  projects: ['frontend', 'backend'],
+})
+```
+
+## Authentication
+
+Sentry uses API token authentication:
+
+```bash
+export SENTRY_AUTH_TOKEN=your_auth_token
+export SENTRY_ORG_SLUG=your_organization_slug
+```
+
+## Resources
+
+### Events
+
+Retrieve error events:
+
+```typescript
+// Get event
+const event = await sentry.event.get({
+  organization_slug: 'my-org',
+  event_id: 'abc123def456',
+})
+
+// List events
+const events = await sentry.event.list({
+  organization_slug: 'my-org',
+  query: 'is:unresolved',
+})
+```
+
+### Issues
+
+Manage grouped errors:
+
+```typescript
+// Get issue
+const issue = await sentry.issue.get({
+  organization_slug: 'my-org',
+  issue_id: '789',
+})
+
+// Update issue (resolve)
+await sentry.issue.update({
+  organization_slug: 'my-org',
+  issue_id: '789',
+  status: 'resolved',
+})
+
+// List issues
+const issues = await sentry.issue.list({
+  organization_slug: 'my-org',
+  query: 'is:unresolved level:error',
+})
+
+// Delete issue
+await sentry.issue.delete({
+  organization_slug: 'my-org',
+  issue_id: '789',
+})
+```
+
+### Projects
+
+Manage Sentry projects:
+
+```typescript
+// Create project
+const project = await sentry.project.create({
+  organization_slug: 'my-org',
+  team_slug: 'my-team',
+  name: 'New Service',
+  platform: 'node',
+})
+
+// Get project
+const project = await sentry.project.get({
+  organization_slug: 'my-org',
+  project_slug: 'new-service',
+})
+
+// Update project
+await sentry.project.update({
+  organization_slug: 'my-org',
+  project_slug: 'new-service',
+  name: 'Updated Service Name',
+})
+
+// List projects
+const projects = await sentry.project.list({
+  organization_slug: 'my-org',
+})
+
+// Delete project
+await sentry.project.delete({
+  organization_slug: 'my-org',
+  project_slug: 'new-service',
+})
+```
+
+### Releases
+
+Track releases and deploys:
+
+```typescript
+// Create release
+const release = await sentry.release.create({
+  organization_slug: 'my-org',
+  version: 'v1.5.0',
+  projects: ['frontend', 'backend'],
+})
+
+// Get release
+const release = await sentry.release.get({
+  organization_slug: 'my-org',
+  version: 'v1.5.0',
+})
+
+// Update release
+await sentry.release.update({
+  organization_slug: 'my-org',
+  version: 'v1.5.0',
+  dateReleased: '2025-10-12T10:00:00Z',
+})
+
+// List releases
+const releases = await sentry.release.list({
+  organization_slug: 'my-org',
+})
+
+// Delete release
+await sentry.release.delete({
+  organization_slug: 'my-org',
+  version: 'v1.5.0',
+})
+```
+
+## Webhooks
+
+Sentry supports webhooks with HMAC-SHA256 signature verification:
+
+```typescript
+import { SentryWebhookHandler, WebhookEventRouter } from '@dotdo/sdk.do/integrations/sentry'
+
+const handler = new SentryWebhookHandler(process.env.SENTRY_WEBHOOK_SECRET)
+const event = await handler.handleRequest(request)
+
+const router = new WebhookEventRouter()
+router.onErrorCreated(async (event) => {
+  console.log('New error:', event.data)
+})
+
+router.onIssueResolved(async (event) => {
+  console.log('Issue resolved:', event.data)
+})
+
+await router.route(event)
+```
+
+## Error Handling
+
+```typescript
+import { SentryError } from '@dotdo/sdk.do/integrations/sentry'
+
+try {
+  await sentry.issue.update({
+    /* ... */
+  })
+} catch (error) {
+  if (error instanceof SentryError) {
+    console.error('Sentry Error:', error.code, error.message)
+    if (error.isRetriable()) {
+      // Retry logic
+    }
+  }
+}
+```
+
+## Best Practices
+
+1. **Organization Slug**: All operations scoped to organization
+2. **Issue Management**: Use status updates to manage workflow
+3. **Release Tracking**: Associate commits with releases
+4. **Performance**: Use performance monitoring for transaction tracking
+5. **Webhooks**: Verify signatures for security
+6. **Rate Limits**: Respect API rate limits
+7. **Search Queries**: Use Sentry search syntax for filtering
+
+## API Reference
+
+Full API documentation: https://docs.sentry.io/api/
+
+## License
+
+MIT

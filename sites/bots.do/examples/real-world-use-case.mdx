@@ -1,0 +1,595 @@
+---
+$id: https://bots.do/examples/real-world-use-case
+$type: HowTo
+title: Real-World Bot Use Case
+description: Complete production-ready example of building an e-commerce order processing bot system.
+keywords: [real world, production, e-commerce, order processing, use case]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Real-World Use Case: E-Commerce Order Processing
+
+A complete production-ready bot system for processing e-commerce orders.
+
+## System Overview
+
+This example demonstrates a multi-bot system that processes orders from creation to fulfillment:
+
+1. **Order Validation Bot** - Validates order data
+2. **Inventory Bot** - Checks and reserves inventory
+3. **Payment Bot** - Processes payments
+4. **Fulfillment Bot** - Creates shipping orders
+5. **Notification Bot** - Sends customer notifications
+
+## Complete Implementation
+
+```typescript
+import $, { bot, db, on, send, every } from 'sdk.do'
+
+// 1. ORDER VALIDATION BOT
+const orderValidationBot = await bot.create({
+  $type: 'Bot',
+  name: 'Order Validation Bot',
+  task: 'Validate order data and customer information',
+  capabilities: ['data_validation', 'fraud_detection'],
+  validation: {
+    schema: {
+      type: 'object',
+      required: ['customer', 'items', 'payment', 'shipping'],
+      properties: {
+        customer: {
+          type: 'object',
+          required: ['email', 'name'],
+        },
+        items: {
+          type: 'array',
+          minItems: 1,
+        },
+        payment: {
+          type: 'object',
+          required: ['method', 'amount'],
+        },
+      },
+    },
+  },
+  handler: async (order) => {
+    // Validate order schema
+    if (!order.customer?.email) {
+      throw new Error('Customer email is required')
+    }
+
+    // Validate items
+    if (order.items.length === 0) {
+      throw new Error('Order must contain at least one item')
+    }
+
+    // Check for fraud signals
+    const fraudScore = await checkFraudScore(order)
+    if (fraudScore > 0.8) {
+      throw new Error('Order flagged for fraud review')
+    }
+
+    // Validate payment amount matches order total
+    const calculatedTotal = order.items.reduce((sum, item) => sum + item.price * item.quantity, 0)
+
+    if (Math.abs(calculatedTotal - order.payment.amount) > 0.01) {
+      throw new Error('Payment amount does not match order total')
+    }
+
+    return {
+      valid: true,
+      validatedAt: new Date(),
+      fraudScore,
+    }
+  },
+})
+
+// 2. INVENTORY BOT
+const inventoryBot = await bot.create({
+  $type: 'Bot',
+  name: 'Inventory Bot',
+  task: 'Check and reserve inventory',
+  capabilities: ['inventory_management'],
+  handler: async (order) => {
+    const reservations = []
+
+    for (const item of order.items) {
+      // Check availability
+      const product = await db.get($.Product, item.sku)
+
+      if (!product) {
+        throw new Error(`Product not found: ${item.sku}`)
+      }
+
+      if (product.stockQuantity < item.quantity) {
+        throw new Error(`Insufficient stock for ${item.sku}. Available: ${product.stockQuantity}, Requested: ${item.quantity}`)
+      }
+
+      // Reserve inventory
+      const reserved = await db.update($.Product, item.sku, {
+        stockQuantity: product.stockQuantity - item.quantity,
+        reservedQuantity: (product.reservedQuantity || 0) + item.quantity,
+      })
+
+      reservations.push({
+        sku: item.sku,
+        quantity: item.quantity,
+        reservedAt: new Date(),
+      })
+    }
+
+    return {
+      reserved: true,
+      reservations,
+    }
+  },
+})
+
+// 3. PAYMENT BOT
+const paymentBot = await bot.create({
+  $type: 'Bot',
+  name: 'Payment Bot',
+  task: 'Process payments via Stripe',
+  capabilities: ['payment_processing'],
+  errorHandling: {
+    retry: {
+      attempts: 3,
+      retryOn: ['NETWORK_ERROR', 'TIMEOUT'],
+    },
+  },
+  handler: async (order) => {
+    // Create or retrieve Stripe customer
+    let stripeCustomer
+    const existing = await db.get($.Customer, order.customer.id)
+
+    if (existing?.stripeCustomerId) {
+      stripeCustomer = existing.stripeCustomerId
+    } else {
+      stripeCustomer = await createStripeCustomer({
+        email: order.customer.email,
+        name: order.customer.name,
+      })
+
+      await db.update($.Customer, order.customer.id, {
+        stripeCustomerId: stripeCustomer,
+      })
+    }
+
+    // Process payment
+    const charge = await processStripePayment({
+      amount: Math.round(order.payment.amount * 100), // Convert to cents
+      currency: 'usd',
+      customer: stripeCustomer,
+      description: `Order ${order.id}`,
+      metadata: {
+        orderId: order.id,
+        customerEmail: order.customer.email,
+      },
+    })
+
+    return {
+      charged: true,
+      transactionId: charge.id,
+      amount: charge.amount / 100,
+      chargedAt: new Date(),
+    }
+  },
+})
+
+// 4. FULFILLMENT BOT
+const fulfillmentBot = await bot.create({
+  $type: 'Bot',
+  name: 'Fulfillment Bot',
+  task: 'Create shipment and shipping label',
+  capabilities: ['fulfillment', 'shipping'],
+  handler: async (order) => {
+    // Create shipment via ShipStation API
+    const shipment = await createShipment({
+      orderNumber: order.id,
+      orderDate: order.createdAt,
+      orderStatus: 'awaiting_shipment',
+      customerEmail: order.customer.email,
+      shipTo: {
+        name: order.shipping.name,
+        street1: order.shipping.address.street,
+        city: order.shipping.address.city,
+        state: order.shipping.address.state,
+        postalCode: order.shipping.address.postalCode,
+        country: order.shipping.address.country,
+      },
+      items: order.items.map((item) => ({
+        sku: item.sku,
+        name: item.name,
+        quantity: item.quantity,
+        unitPrice: item.price,
+      })),
+    })
+
+    // Create shipping label
+    const label = await createShippingLabel({
+      shipmentId: shipment.id,
+      carrier: 'usps',
+      service: 'usps_priority',
+    })
+
+    return {
+      fulfilled: true,
+      shipmentId: shipment.id,
+      trackingNumber: label.trackingNumber,
+      labelUrl: label.labelUrl,
+      fulfilledAt: new Date(),
+    }
+  },
+})
+
+// 5. NOTIFICATION BOT
+const notificationBot = await bot.create({
+  $type: 'Bot',
+  name: 'Notification Bot',
+  task: 'Send customer notifications',
+  capabilities: ['email_sending', 'sms_sending'],
+  handler: async (event) => {
+    const { type, order } = event
+
+    switch (type) {
+      case 'order_confirmed':
+        await sendEmail({
+          to: order.customer.email,
+          subject: `Order ${order.id} Confirmed`,
+          template: 'order_confirmation',
+          data: {
+            orderNumber: order.id,
+            customerName: order.customer.name,
+            items: order.items,
+            total: order.payment.amount,
+            shippingAddress: order.shipping.address,
+          },
+        })
+        break
+
+      case 'order_shipped':
+        await sendEmail({
+          to: order.customer.email,
+          subject: `Order ${order.id} Shipped`,
+          template: 'order_shipped',
+          data: {
+            orderNumber: order.id,
+            trackingNumber: order.trackingNumber,
+            trackingUrl: `https://tools.usps.com/go/TrackConfirmAction?tLabels=${order.trackingNumber}`,
+            estimatedDelivery: order.estimatedDelivery,
+          },
+        })
+
+        // Send SMS if phone provided
+        if (order.customer.phone) {
+          await sendSMS({
+            to: order.customer.phone,
+            message: `Your order ${order.id} has shipped! Track it here: https://track.example.com/${order.id}`,
+          })
+        }
+        break
+
+      case 'order_delivered':
+        await sendEmail({
+          to: order.customer.email,
+          subject: `Order ${order.id} Delivered`,
+          template: 'order_delivered',
+          data: {
+            orderNumber: order.id,
+            deliveredAt: order.deliveredAt,
+          },
+        })
+        break
+    }
+
+    return { sent: true, type }
+  },
+})
+
+// ORCHESTRATION: Coordinate all bots
+const orderProcessingTeam = await bot.createTeam({
+  name: 'Order Processing Team',
+  bots: [
+    { id: 'validation', bot: orderValidationBot },
+    { id: 'inventory', bot: inventoryBot },
+    { id: 'payment', bot: paymentBot },
+    { id: 'fulfillment', bot: fulfillmentBot },
+    { id: 'notification', bot: notificationBot },
+  ],
+  workflow: {
+    type: 'sequential',
+    stages: [
+      {
+        bot: 'validation',
+        continueOnSuccess: true,
+        onFailure: 'abort',
+      },
+      {
+        bot: 'inventory',
+        continueOnSuccess: true,
+        onFailure: 'abort',
+      },
+      {
+        bot: 'payment',
+        continueOnSuccess: true,
+        onFailure: 'rollback',
+        rollback: async (order) => {
+          // Release inventory on payment failure
+          await releaseInventory(order)
+        },
+      },
+      {
+        bot: 'fulfillment',
+        continueOnSuccess: true,
+        onFailure: 'alert',
+        alert: async (order, error) => {
+          // Alert team but don't refund
+          await send($.Order.fulfillmentFailed, { order, error })
+        },
+      },
+      {
+        bot: 'notification',
+        continueOnSuccess: true,
+        onFailure: 'log', // Log but continue
+      },
+    ],
+  },
+})
+
+// EVENT HANDLERS: Process orders as they arrive
+await on($.Order.created, async (order) => {
+  try {
+    // Process through bot team
+    const result = await orderProcessingTeam.process(order)
+
+    // Update order status
+    await db.update($.Order, order.id, {
+      status: 'processing',
+      validation: result.validation,
+      inventory: result.inventory,
+      payment: result.payment,
+      fulfillment: result.fulfillment,
+      processedAt: new Date(),
+    })
+
+    // Send confirmation notification
+    await notificationBot.execute({
+      type: 'order_confirmed',
+      order: {
+        ...order,
+        ...result,
+      },
+    })
+
+    // Publish success event
+    await send($.Order.processed, {
+      orderId: order.id,
+      result,
+    })
+  } catch (error) {
+    // Update order with error
+    await db.update($.Order, order.id, {
+      status: 'failed',
+      error: error.message,
+      failedAt: new Date(),
+    })
+
+    // Publish failure event
+    await send($.Order.failed, {
+      orderId: order.id,
+      error: error.message,
+    })
+  }
+})
+
+// MONITORING: Track shipments
+const shipmentTrackerBot = await bot.create({
+  name: 'Shipment Tracker Bot',
+  task: 'Track shipment status',
+  schedule: '*/30 * * * *', // Every 30 minutes
+})
+
+await every('*/30 * * * *', async () => {
+  // Get all shipped orders
+  const shipped = await db.list($.Order, {
+    where: { status: 'shipped', delivered: false },
+  })
+
+  for (const order of shipped) {
+    // Check tracking status
+    const status = await checkTrackingStatus(order.trackingNumber)
+
+    if (status.delivered) {
+      // Update order
+      await db.update($.Order, order.id, {
+        status: 'delivered',
+        deliveredAt: status.deliveredAt,
+      })
+
+      // Send notification
+      await notificationBot.execute({
+        type: 'order_delivered',
+        order: {
+          ...order,
+          deliveredAt: status.deliveredAt,
+        },
+      })
+    }
+  }
+})
+
+// HELPER FUNCTIONS
+async function checkFraudScore(order) {
+  // Implement fraud detection logic
+  // Check velocity, billing/shipping mismatch, etc.
+  return 0.1 // Low risk
+}
+
+async function releaseInventory(order) {
+  for (const item of order.items) {
+    const product = await db.get($.Product, item.sku)
+    await db.update($.Product, item.sku, {
+      stockQuantity: product.stockQuantity + item.quantity,
+      reservedQuantity: product.reservedQuantity - item.quantity,
+    })
+  }
+}
+
+async function createStripeCustomer(data) {
+  // Call Stripe API
+  return 'cus_abc123'
+}
+
+async function processStripePayment(data) {
+  // Call Stripe API
+  return { id: 'ch_abc123', amount: data.amount }
+}
+
+async function createShipment(data) {
+  // Call ShipStation API
+  return { id: 'ship_abc123' }
+}
+
+async function createShippingLabel(data) {
+  // Call ShipStation API
+  return {
+    trackingNumber: '1234567890',
+    labelUrl: 'https://example.com/label.pdf',
+  }
+}
+
+async function sendEmail(data) {
+  // Call SendGrid API
+  console.log('Email sent:', data.subject)
+}
+
+async function sendSMS(data) {
+  // Call Twilio API
+  console.log('SMS sent:', data.to)
+}
+
+async function checkTrackingStatus(trackingNumber) {
+  // Call USPS API
+  return {
+    delivered: false,
+    status: 'in_transit',
+  }
+}
+
+// METRICS & MONITORING
+setInterval(async () => {
+  const metrics = {
+    validation: await orderValidationBot.getMetrics(),
+    inventory: await inventoryBot.getMetrics(),
+    payment: await paymentBot.getMetrics(),
+    fulfillment: await fulfillmentBot.getMetrics(),
+    notification: await notificationBot.getMetrics(),
+  }
+
+  console.log('Bot Metrics:', metrics)
+
+  // Alert if error rate is high
+  for (const [name, metric] of Object.entries(metrics)) {
+    if (metric.errorRate > 0.05) {
+      await send($.Bot.highErrorRate, {
+        bot: name,
+        errorRate: metric.errorRate,
+      })
+    }
+  }
+}, 60000) // Every minute
+```
+
+## Testing the System
+
+```typescript
+// Create a test order
+const testOrder = {
+  $type: 'Order',
+  id: 'order-test-123',
+  customer: {
+    id: 'cust-123',
+    email: 'john@example.com',
+    name: 'John Doe',
+    phone: '+1234567890',
+  },
+  items: [
+    {
+      sku: 'PROD-001',
+      name: 'Widget',
+      price: 29.99,
+      quantity: 2,
+    },
+    {
+      sku: 'PROD-002',
+      name: 'Gadget',
+      price: 49.99,
+      quantity: 1,
+    },
+  ],
+  payment: {
+    method: 'card',
+    amount: 109.97,
+  },
+  shipping: {
+    name: 'John Doe',
+    address: {
+      street: '123 Main St',
+      city: 'San Francisco',
+      state: 'CA',
+      postalCode: '94105',
+      country: 'US',
+    },
+  },
+  createdAt: new Date(),
+}
+
+// Trigger order processing
+await send($.Order.created, testOrder)
+
+// Monitor progress
+console.log('Order submitted for processing')
+```
+
+## Production Deployment
+
+```typescript
+// Deploy all bots to production
+await Promise.all([
+  orderValidationBot.deploy({ environment: 'production' }),
+  inventoryBot.deploy({ environment: 'production' }),
+  paymentBot.deploy({ environment: 'production' }),
+  fulfillmentBot.deploy({ environment: 'production' }),
+  notificationBot.deploy({ environment: 'production' }),
+  shipmentTrackerBot.deploy({ environment: 'production' }),
+])
+
+console.log('All bots deployed to production')
+```
+
+## Monitoring Dashboard
+
+```typescript
+// Get overall system health
+const systemHealth = {
+  bots: {
+    validation: await orderValidationBot.getHealth(),
+    inventory: await inventoryBot.getHealth(),
+    payment: await paymentBot.getHealth(),
+    fulfillment: await fulfillmentBot.getHealth(),
+    notification: await notificationBot.getHealth(),
+  },
+  metrics: {
+    ordersProcessed: await getOrderCount('processed'),
+    ordersFailed: await getOrderCount('failed'),
+    averageProcessingTime: await getAverageProcessingTime(),
+    successRate: await getSuccessRate(),
+  },
+}
+
+console.log('System Health:', systemHealth)
+```
+
+This production-ready example demonstrates a complete bot system handling real-world e-commerce order processing with proper error handling, monitoring, and coordination.

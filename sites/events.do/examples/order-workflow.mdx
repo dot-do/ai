@@ -1,0 +1,767 @@
+---
+$id: https://events.do/examples/order-workflow
+$type: HowTo
+title: Order Processing Workflow
+description: Complete e-commerce order workflow using event chains
+keywords: [example, order, workflow, e-commerce, event-chain]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Order Processing Workflow
+
+A complete e-commerce order processing workflow demonstrating event-driven architecture with the `Object.Action` naming pattern.
+
+## Workflow Overview
+
+This example demonstrates a multi-step order process:
+
+1. **Order.created** - Customer submits order
+2. **Order.validated** - System validates order details
+3. **Inventory.reserved** - Inventory is reserved
+4. **Payment.requested** - Payment processing initiated
+5. **Payment.completed** - Payment successfully processed
+6. **Order.confirmed** - Order confirmed to customer
+7. **Order.shipped** - Order shipped from warehouse
+8. **Order.delivered** - Order delivered to customer
+9. **Order.completed** - Order process completed
+
+## Complete Implementation
+
+```typescript
+import { on, send, db, $ } from 'sdk.do'
+
+// ============================================================================
+// Step 1: Order Creation
+// ============================================================================
+
+async function createOrder(orderData: any) {
+  // Create order in database
+  const order = await db.create($.Order, {
+    customer: orderData.customer,
+    items: orderData.items,
+    subtotal: calculateSubtotal(orderData.items),
+    tax: calculateTax(orderData.items),
+    total: calculateTotal(orderData.items),
+    status: 'pending',
+    createdAt: new Date(),
+  })
+
+  // Publish order created event
+  await send('Order.created', order, {
+    source: 'order-service',
+    userId: orderData.userId,
+    correlationId: orderData.sessionId,
+  })
+
+  return order
+}
+
+// ============================================================================
+// Step 2: Order Validation
+// ============================================================================
+
+on('Order.created', async (event) => {
+  const order = event.data
+
+  console.log(`Validating order ${order.id}...`)
+
+  try {
+    // Validate customer
+    const customer = await db.get($.Customer, order.customer.id)
+    if (!customer) {
+      throw new Error('Customer not found')
+    }
+
+    // Validate items
+    for (const item of order.items) {
+      const product = await db.get($.Product, item.product)
+      if (!product) {
+        throw new Error(`Product ${item.product} not found`)
+      }
+      if (!product.available) {
+        throw new Error(`Product ${item.product} not available`)
+      }
+    }
+
+    // Validate addresses
+    if (!order.shippingAddress || !order.billingAddress) {
+      throw new Error('Missing shipping or billing address')
+    }
+
+    // Order is valid
+    await send('Order.validated', order, {
+      correlationId: event.metadata.correlationId,
+    })
+
+    console.log(`Order ${order.id} validated successfully`)
+  } catch (error) {
+    // Validation failed
+    await send(
+      'Order.validationFailed',
+      {
+        orderId: order.id,
+        reason: error.message,
+        failedAt: new Date(),
+      },
+      {
+        correlationId: event.metadata.correlationId,
+      }
+    )
+
+    console.error(`Order ${order.id} validation failed:`, error.message)
+  }
+})
+
+// Handle validation failures
+on('Order.validationFailed', async (event) => {
+  const { orderId, reason } = event.data
+
+  // Update order status
+  await db.update($.Order, orderId, {
+    status: 'validation-failed',
+    statusReason: reason,
+  })
+
+  // Notify customer
+  await send('Notification.requested', {
+    type: 'email',
+    recipient: event.data.customer?.email,
+    template: 'order-validation-failed',
+    data: { orderId, reason },
+  })
+})
+
+// ============================================================================
+// Step 3: Inventory Reservation
+// ============================================================================
+
+on('Order.validated', async (event) => {
+  const order = event.data
+
+  console.log(`Reserving inventory for order ${order.id}...`)
+
+  try {
+    const reservations = []
+
+    for (const item of order.items) {
+      const available = await checkInventory(item.product, item.quantity)
+
+      if (!available) {
+        // Release any previous reservations
+        for (const reservation of reservations) {
+          await releaseInventory(reservation)
+        }
+
+        throw new Error(`Insufficient inventory for ${item.product}`)
+      }
+
+      const reservation = await reserveInventory(item.product, item.quantity)
+      reservations.push(reservation)
+    }
+
+    await send(
+      'Inventory.reserved',
+      {
+        orderId: order.id,
+        reservations,
+        reservedAt: new Date(),
+      },
+      {
+        correlationId: event.metadata.correlationId,
+      }
+    )
+
+    console.log(`Inventory reserved for order ${order.id}`)
+  } catch (error) {
+    await send(
+      'Inventory.reservationFailed',
+      {
+        orderId: order.id,
+        reason: error.message,
+      },
+      {
+        correlationId: event.metadata.correlationId,
+      }
+    )
+
+    console.error(`Inventory reservation failed for order ${order.id}:`, error.message)
+  }
+})
+
+// ============================================================================
+// Step 4: Payment Processing
+// ============================================================================
+
+on('Inventory.reserved', async (event) => {
+  const { orderId } = event.data
+  const order = await db.get($.Order, orderId)
+
+  console.log(`Requesting payment for order ${orderId}...`)
+
+  await send(
+    'Payment.requested',
+    {
+      orderId,
+      amount: order.total,
+      currency: order.currency || 'USD',
+      customer: order.customer,
+      paymentMethod: order.paymentMethod,
+      requestedAt: new Date(),
+    },
+    {
+      correlationId: event.metadata.correlationId,
+    }
+  )
+})
+
+on('Payment.requested', async (event) => {
+  const { orderId, amount, paymentMethod } = event.data
+
+  console.log(`Processing payment for order ${orderId}...`)
+
+  try {
+    // Process payment via payment gateway
+    const result = await processPayment({
+      amount,
+      paymentMethod,
+      orderId,
+    })
+
+    if (result.success) {
+      await send(
+        'Payment.completed',
+        {
+          orderId,
+          amount,
+          transactionId: result.transactionId,
+          completedAt: new Date(),
+        },
+        {
+          correlationId: event.metadata.correlationId,
+        }
+      )
+
+      console.log(`Payment completed for order ${orderId}`)
+    } else {
+      await send(
+        'Payment.failed',
+        {
+          orderId,
+          reason: result.reason,
+          failedAt: new Date(),
+        },
+        {
+          correlationId: event.metadata.correlationId,
+        }
+      )
+
+      console.error(`Payment failed for order ${orderId}:`, result.reason)
+    }
+  } catch (error) {
+    await send(
+      'Payment.error',
+      {
+        orderId,
+        error: error.message,
+        errorAt: new Date(),
+      },
+      {
+        correlationId: event.metadata.correlationId,
+      }
+    )
+
+    console.error(`Payment error for order ${orderId}:`, error.message)
+  }
+})
+
+// Handle payment failures
+on(['Payment.failed', 'Payment.error'], async (event) => {
+  const { orderId } = event.data
+
+  // Release inventory
+  await send('Inventory.releaseRequested', {
+    orderId,
+    reason: 'payment-failed',
+  })
+
+  // Update order status
+  await db.update($.Order, orderId, {
+    status: 'payment-failed',
+  })
+
+  // Notify customer
+  const order = await db.get($.Order, orderId)
+  await send('Notification.requested', {
+    type: 'email',
+    recipient: order.customer.email,
+    template: 'payment-failed',
+    data: { orderId, reason: event.data.reason || event.data.error },
+  })
+})
+
+// ============================================================================
+// Step 5: Order Confirmation
+// ============================================================================
+
+on('Payment.completed', async (event) => {
+  const { orderId, transactionId } = event.data
+
+  console.log(`Confirming order ${orderId}...`)
+
+  // Update order with payment info
+  await db.update($.Order, orderId, {
+    status: 'confirmed',
+    paymentTransactionId: transactionId,
+    confirmedAt: new Date(),
+  })
+
+  const order = await db.get($.Order, orderId)
+
+  await send(
+    'Order.confirmed',
+    {
+      ...order,
+      transactionId,
+    },
+    {
+      correlationId: event.metadata.correlationId,
+    }
+  )
+
+  console.log(`Order ${orderId} confirmed`)
+})
+
+on('Order.confirmed', async (event) => {
+  const order = event.data
+
+  // Send confirmation email
+  await send('Notification.requested', {
+    type: 'email',
+    recipient: order.customer.email,
+    template: 'order-confirmed',
+    data: {
+      orderId: order.id,
+      items: order.items,
+      total: order.total,
+      estimatedDelivery: calculateDeliveryDate(order),
+    },
+  })
+
+  // Notify warehouse to prepare shipment
+  await send('Warehouse.shipmentRequested', {
+    orderId: order.id,
+    items: order.items,
+    shippingAddress: order.shippingAddress,
+    priority: order.priority || 'standard',
+  })
+})
+
+// ============================================================================
+// Step 6: Warehouse & Shipping
+// ============================================================================
+
+on('Warehouse.shipmentRequested', async (event) => {
+  const { orderId, items, shippingAddress } = event.data
+
+  console.log(`Preparing shipment for order ${orderId}...`)
+
+  // Simulate warehouse processing
+  await delay(2000)
+
+  // Generate tracking number
+  const trackingNumber = generateTrackingNumber()
+  const carrier = selectCarrier(shippingAddress)
+
+  await send('Order.shipped', {
+    orderId,
+    trackingNumber,
+    carrier,
+    estimatedDelivery: calculateDeliveryDate({ shippingAddress }),
+    shippedAt: new Date(),
+  })
+
+  console.log(`Order ${orderId} shipped with tracking ${trackingNumber}`)
+})
+
+on('Order.shipped', async (event) => {
+  const { orderId, trackingNumber, carrier } = event.data
+
+  // Update order status
+  await db.update($.Order, orderId, {
+    status: 'shipped',
+    trackingNumber,
+    carrier,
+    shippedAt: new Date(),
+  })
+
+  // Notify customer
+  const order = await db.get($.Order, orderId)
+  await send('Notification.requested', {
+    type: 'email',
+    recipient: order.customer.email,
+    template: 'order-shipped',
+    data: {
+      orderId,
+      trackingNumber,
+      carrier,
+      trackingUrl: `https://${carrier}.com/track/${trackingNumber}`,
+    },
+  })
+})
+
+// ============================================================================
+// Step 7: Delivery
+// ============================================================================
+
+// Webhook from shipping carrier
+on('Carrier.deliveryConfirmed', async (event) => {
+  const { trackingNumber } = event.data
+
+  // Find order by tracking number
+  const order = await db.list($.Order, {
+    where: { trackingNumber },
+    limit: 1,
+  })
+
+  if (order.length > 0) {
+    await send('Order.delivered', {
+      orderId: order[0].id,
+      deliveredAt: event.data.deliveredAt,
+      signature: event.data.signature,
+    })
+  }
+})
+
+on('Order.delivered', async (event) => {
+  const { orderId, deliveredAt } = event.data
+
+  console.log(`Order ${orderId} delivered`)
+
+  // Update order status
+  await db.update($.Order, orderId, {
+    status: 'delivered',
+    deliveredAt,
+  })
+
+  // Notify customer
+  const order = await db.get($.Order, orderId)
+  await send('Notification.requested', {
+    type: 'email',
+    recipient: order.customer.email,
+    template: 'order-delivered',
+    data: {
+      orderId,
+      deliveredAt,
+    },
+  })
+
+  // Request feedback after 1 day
+  setTimeout(
+    () => {
+      send('Feedback.requested', {
+        orderId,
+        customerId: order.customer.id,
+      })
+    },
+    24 * 60 * 60 * 1000
+  )
+
+  // Complete the order
+  await send('Order.completed', {
+    orderId,
+    completedAt: new Date(),
+  })
+})
+
+// ============================================================================
+// Step 8: Order Completion
+// ============================================================================
+
+on('Order.completed', async (event) => {
+  const { orderId } = event.data
+
+  console.log(`Order ${orderId} completed`)
+
+  // Update order status
+  await db.update($.Order, orderId, {
+    status: 'completed',
+    completedAt: new Date(),
+  })
+
+  // Update customer lifetime value
+  const order = await db.get($.Order, orderId)
+  await updateCustomerLTV(order.customer.id, order.total)
+
+  // Track completion metrics
+  await send('Metrics.orderCompleted', {
+    orderId,
+    total: order.total,
+    duration: calculateOrderDuration(order),
+    completedAt: new Date(),
+  })
+})
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+function calculateSubtotal(items: any[]) {
+  return items.reduce((sum, item) => sum + item.price * item.quantity, 0)
+}
+
+function calculateTax(items: any[]) {
+  return calculateSubtotal(items) * 0.1 // 10% tax
+}
+
+function calculateTotal(items: any[]) {
+  return calculateSubtotal(items) + calculateTax(items)
+}
+
+async function checkInventory(productId: string, quantity: number) {
+  const product = await db.get($.Product, productId)
+  return product.stock >= quantity
+}
+
+async function reserveInventory(productId: string, quantity: number) {
+  await db.update($.Product, productId, {
+    stock: db.decrement(quantity),
+    reserved: db.increment(quantity),
+  })
+
+  return { productId, quantity, reservedAt: new Date() }
+}
+
+async function releaseInventory(reservation: any) {
+  await db.update($.Product, reservation.productId, {
+    stock: db.increment(reservation.quantity),
+    reserved: db.decrement(reservation.quantity),
+  })
+}
+
+async function processPayment(paymentData: any) {
+  // Simulate payment gateway integration
+  return {
+    success: true,
+    transactionId: `txn_${Date.now()}`,
+  }
+}
+
+function generateTrackingNumber() {
+  return `TRACK${Date.now()}`
+}
+
+function selectCarrier(address: any) {
+  return 'FedEx' // Simplified carrier selection
+}
+
+function calculateDeliveryDate(order: any) {
+  const days = order.priority === 'express' ? 1 : 5
+  const date = new Date()
+  date.setDate(date.getDate() + days)
+  return date
+}
+
+function calculateOrderDuration(order: any) {
+  const start = new Date(order.createdAt)
+  const end = new Date(order.completedAt)
+  return end.getTime() - start.getTime()
+}
+
+async function updateCustomerLTV(customerId: string, orderTotal: number) {
+  await db.update($.Customer, customerId, {
+    lifetimeValue: db.increment(orderTotal),
+    orderCount: db.increment(1),
+  })
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+// ============================================================================
+// Usage Example
+// ============================================================================
+
+async function main() {
+  // Create an order
+  const order = await createOrder({
+    customer: {
+      id: 'cust-123',
+      name: 'John Doe',
+      email: 'john@example.com',
+    },
+    items: [
+      {
+        product: 'prod-widget',
+        quantity: 2,
+        price: 99.99,
+      },
+      {
+        product: 'prod-gadget',
+        quantity: 1,
+        price: 149.99,
+      },
+    ],
+    shippingAddress: {
+      street: '123 Main St',
+      city: 'San Francisco',
+      state: 'CA',
+      zip: '94105',
+      country: 'US',
+    },
+    billingAddress: {
+      street: '123 Main St',
+      city: 'San Francisco',
+      state: 'CA',
+      zip: '94105',
+      country: 'US',
+    },
+    paymentMethod: {
+      type: 'credit_card',
+      last4: '4242',
+    },
+    userId: 'user-456',
+    sessionId: 'session-789',
+  })
+
+  console.log('Order created:', order.id)
+  console.log('Events will flow through the system...')
+}
+
+// Run example
+main().catch(console.error)
+```
+
+## Event Flow Diagram
+
+```
+Order.created
+    ↓
+Order.validated
+    ↓
+Inventory.reserved
+    ↓
+Payment.requested
+    ↓
+Payment.completed
+    ↓
+Order.confirmed
+    ↓
+Warehouse.shipmentRequested
+    ↓
+Order.shipped
+    ↓
+Order.delivered
+    ↓
+Order.completed
+```
+
+## Error Handling Flow
+
+```
+Order.created
+    ↓
+Order.validationFailed ────→ Notification.requested
+    ↓
+Inventory.reservationFailed ────→ Order cancelled
+    ↓
+Payment.failed ────→ Inventory.releaseRequested
+    ↓
+Order.validationFailed ────→ Customer notified
+```
+
+## Key Patterns
+
+### 1. Event Chaining
+
+Each event triggers the next step in the workflow:
+
+```typescript
+on('Order.created', async (event) => {
+  // Validate and publish next event
+  await send('Order.validated', event.data)
+})
+```
+
+### 2. Compensation Logic
+
+Handle failures by reversing previous actions:
+
+```typescript
+on('Payment.failed', async (event) => {
+  // Compensate by releasing inventory
+  await send('Inventory.releaseRequested', {
+    orderId: event.data.orderId,
+  })
+})
+```
+
+### 3. Correlation Tracking
+
+Track related events using correlation IDs:
+
+```typescript
+await send('Order.created', orderData, {
+  correlationId: sessionId,
+})
+
+// Pass through the chain
+await send('Payment.requested', paymentData, {
+  correlationId: event.metadata.correlationId,
+})
+```
+
+### 4. State Management
+
+Update database state at each step:
+
+```typescript
+on('Order.confirmed', async (event) => {
+  await db.update($.Order, event.data.orderId, {
+    status: 'confirmed',
+    confirmedAt: new Date(),
+  })
+})
+```
+
+## Testing the Workflow
+
+```typescript
+import { test, expect } from 'vitest'
+
+test('complete order workflow', async () => {
+  const events = []
+
+  // Capture all order events
+  on('Order.*', async (event) => {
+    events.push(event.type)
+  })
+
+  // Create order
+  await createOrder(testOrderData)
+
+  // Wait for workflow to complete
+  await waitForEvent('Order.completed')
+
+  // Verify event sequence
+  expect(events).toEqual(['Order.created', 'Order.validated', 'Order.confirmed', 'Order.shipped', 'Order.delivered', 'Order.completed'])
+})
+```
+
+## Production Considerations
+
+1. **Idempotency**: Handlers should be idempotent
+2. **Retry Logic**: Implement retry for transient failures
+3. **Dead Letter Queue**: Store events that fail repeatedly
+4. **Monitoring**: Track event flow and failures
+5. **Timeouts**: Set timeouts for each step
+6. **Circuit Breakers**: Prevent cascade failures
+
+## See Also
+
+- [Event Chains Example](./event-chains)
+- [Basic Events Example](./basic-events)
+- [Event Listeners](../docs/listeners)
+- [Event Publishers](../docs/publishers)

@@ -1,0 +1,512 @@
+---
+$id: https://embeddings.do/docs/troubleshooting
+$type: TechArticle
+title: Troubleshooting embeddings.do
+description: Common issues and solutions for vector embeddings and semantic search
+keywords: [embeddings, troubleshooting, errors, debugging, solutions]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Troubleshooting
+
+Common issues and solutions for vector embeddings and semantic search.
+
+## API Errors
+
+### "Invalid API Key"
+
+**Problem**: OpenAI API key is missing or invalid.
+
+**Solution**:
+
+```bash
+# Set API key
+export OPENAI_API_KEY=sk-...
+
+# Verify key
+echo $OPENAI_API_KEY
+```
+
+### "Rate Limit Exceeded"
+
+**Problem**: Too many requests to OpenAI API.
+
+**Solution**:
+
+```typescript
+async function embedWithRetry(text: string, maxRetries = 3): Promise<number[]> {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await ai.embed(text)
+    } catch (error) {
+      if (error.code === 'RATE_LIMIT_EXCEEDED' && i < maxRetries - 1) {
+        const delay = Math.pow(2, i) * 1000 // Exponential backoff
+        await new Promise((r) => setTimeout(r, delay))
+        continue
+      }
+      throw error
+    }
+  }
+  throw new Error('Max retries exceeded')
+}
+```
+
+### "Text Too Long"
+
+**Problem**: Input text exceeds token limit.
+
+**Solution**:
+
+```typescript
+function truncateText(text: string, maxTokens = 8000): string {
+  const maxChars = maxTokens * 4 // Rough estimate
+  if (text.length <= maxChars) return text
+
+  return text.slice(0, maxChars)
+}
+
+const embedding = await ai.embed(truncateText(longText))
+```
+
+## Search Quality
+
+### Low Similarity Scores
+
+**Problem**: All similarity scores are low (< 0.3).
+
+**Causes**:
+
+1. Text preprocessing inconsistencies
+2. Different embedding models
+3. Poor quality input text
+4. Insufficient context
+
+**Solutions**:
+
+```typescript
+// 1. Consistent preprocessing
+function prepareText(text: string): string {
+  return text.toLowerCase().trim().replace(/\s+/g, ' ')
+}
+
+// 2. Use same model
+const embed1 = await ai.embed(text1, { model: 'text-embedding-3-large' })
+const embed2 = await ai.embed(text2, { model: 'text-embedding-3-large' })
+
+// 3. Include more context
+const text = `${product.name} ${product.description} ${product.category}`
+```
+
+### Irrelevant Search Results
+
+**Problem**: Search returns unrelated items.
+
+**Solutions**:
+
+```typescript
+// 1. Pre-filter by category
+const candidates = await db.list($.Product, {
+  where: { category: queryCategory },
+})
+
+// 2. Set minimum similarity threshold
+const results = candidates.filter((p) => cosineSimilarity(queryEmbed, p.embedding) > 0.7)
+
+// 3. Combine with keyword search
+const semantic = await semanticSearch(query)
+const keyword = await keywordSearch(query)
+const combined = mergeResults(semantic, keyword)
+```
+
+### Inconsistent Results
+
+**Problem**: Same query returns different results.
+
+**Causes**:
+
+1. Model updates
+2. Cache issues
+3. Data changes
+
+**Solutions**:
+
+```typescript
+// Version embeddings
+interface Embedding {
+  vector: number[]
+  model: string
+  modelVersion: string
+  createdAt: string
+}
+
+// Invalidate cache when model changes
+if (embedding.model !== currentModel) {
+  await regenerateEmbedding(item)
+}
+```
+
+## Performance Issues
+
+### Slow Embedding Generation
+
+**Problem**: Embeddings take too long to generate.
+
+**Solutions**:
+
+```typescript
+// 1. Use batch API
+const embeddings = await ai.embed(texts) // Batch
+// vs
+for (const text of texts) {
+  await ai.embed(text) // Slow!
+}
+
+// 2. Parallel processing (with limits)
+import pLimit from 'p-limit'
+const limit = pLimit(10)
+
+const embeddings = await Promise.all(texts.map((text) => limit(() => ai.embed(text))))
+
+// 3. Cache embeddings
+const cached = await getFromCache(text)
+if (cached) return cached
+
+const embedding = await ai.embed(text)
+await storeInCache(text, embedding)
+```
+
+### Slow Similarity Search
+
+**Problem**: Search is too slow for large datasets.
+
+**Solutions**:
+
+```typescript
+// 1. Use vector database
+await pinecone.query({
+  vector: queryEmbedding,
+  topK: 10,
+}) // Much faster
+
+// 2. Pre-filter
+const candidates = products.filter((p) => p.category === targetCategory)
+// Then compute similarity only for candidates
+
+// 3. Dimensionality reduction
+const reduced = reduceDimensions(embeddings, 256) // 6x faster
+
+// 4. Approximate nearest neighbors
+const ann = new HNSW(embeddings)
+const similar = ann.search(queryEmbedding, 10)
+```
+
+### High Memory Usage
+
+**Problem**: Storing embeddings uses too much memory.
+
+**Solutions**:
+
+```typescript
+// 1. Quantization (75% reduction)
+function quantize(embedding: number[]): Int8Array {
+  const min = Math.min(...embedding)
+  const max = Math.max(...embedding)
+  const scale = (max - min) / 255
+
+  return new Int8Array(embedding.map((v) => Math.round((v - min) / scale)))
+}
+
+// 2. Compression
+import { compress } from 'lz4'
+const compressed = compress(Buffer.from(new Float32Array(embedding).buffer))
+
+// 3. Stream from storage
+async function* getEmbeddings() {
+  const cursor = db.cursor($.Embedding)
+  for await (const record of cursor) {
+    yield record.vector
+  }
+}
+```
+
+## Data Quality
+
+### Missing Embeddings
+
+**Problem**: Some items don't have embeddings.
+
+**Solutions**:
+
+```typescript
+// 1. Find items without embeddings
+const missing = await db.list($.Product, {
+  where: { embedding: null },
+})
+
+// 2. Generate missing embeddings
+for (const item of missing) {
+  const text = prepareText(item)
+  const embedding = await ai.embed(text)
+  await db.update(item.$id, { embedding })
+}
+
+// 3. Auto-generate on create
+on($.Product.created, async (event) => {
+  const product = event.data
+  const embedding = await ai.embed(prepareText(product))
+  await db.update(product.$id, { embedding })
+})
+```
+
+### Stale Embeddings
+
+**Problem**: Embeddings don't reflect updated content.
+
+**Solutions**:
+
+```typescript
+// 1. Regenerate on update
+on($.Product.updated, async (event) => {
+  const product = event.data
+  const embedding = await ai.embed(prepareText(product))
+  await db.update(product.$id, { embedding })
+})
+
+// 2. Track version
+interface Product {
+  content: string
+  contentVersion: number
+  embedding: number[]
+  embeddingVersion: number
+}
+
+// Regenerate if versions don't match
+if (product.contentVersion !== product.embeddingVersion) {
+  await regenerateEmbedding(product)
+}
+```
+
+### Duplicate Detection Failures
+
+**Problem**: Duplicates not being detected.
+
+**Solutions**:
+
+```typescript
+// 1. Lower threshold
+const duplicates = findSimilar(item, 0.9) // Try 0.85 or 0.8
+
+// 2. Normalize text more aggressively
+function aggressiveNormalize(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^\w\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+// 3. Use semantic deduplication
+async function semanticDedupe(items: any[], threshold = 0.9) {
+  const unique = [items[0]]
+
+  for (const item of items.slice(1)) {
+    const isDupe = unique.some((u) => cosineSimilarity(item.embedding, u.embedding) > threshold)
+
+    if (!isDupe) {
+      unique.push(item)
+    }
+  }
+
+  return unique
+}
+```
+
+## Integration Issues
+
+### Vector Database Connection
+
+**Problem**: Cannot connect to Pinecone/Weaviate.
+
+**Solutions**:
+
+```typescript
+// 1. Verify credentials
+const pinecone = new Pinecone({
+  apiKey: process.env.PINECONE_API_KEY,
+  environment: process.env.PINECONE_ENV,
+})
+
+// 2. Test connection
+try {
+  await pinecone.listIndexes()
+  console.log('Connected!')
+} catch (error) {
+  console.error('Connection failed:', error)
+}
+
+// 3. Handle timeouts
+const index = pinecone.index('products', {
+  timeout: 30000,
+})
+```
+
+### Dimension Mismatch
+
+**Problem**: Vector dimensions don't match index.
+
+**Solutions**:
+
+```typescript
+// Always use same model
+const MODEL = 'text-embedding-3-large' // 1536 dims
+
+const embedding = await ai.embed(text, { model: MODEL })
+
+// Verify dimensions
+if (embedding.length !== 1536) {
+  throw new Error(`Expected 1536 dimensions, got ${embedding.length}`)
+}
+
+// Create index with correct dimensions
+await pinecone.createIndex({
+  name: 'products',
+  dimension: 1536,
+  metric: 'cosine',
+})
+```
+
+## Debugging
+
+### Enable Logging
+
+Add detailed logging:
+
+```typescript
+class EmbeddingService {
+  private logger = createLogger('embeddings')
+
+  async embed(text: string): Promise<number[]> {
+    const start = Date.now()
+    this.logger.debug('Embedding text', { length: text.length })
+
+    try {
+      const embedding = await ai.embed(text)
+      const duration = Date.now() - start
+
+      this.logger.info('Embedding generated', {
+        dimensions: embedding.length,
+        duration,
+      })
+
+      return embedding
+    } catch (error) {
+      this.logger.error('Embedding failed', { error })
+      throw error
+    }
+  }
+}
+```
+
+### Inspect Embeddings
+
+Visualize embeddings for debugging:
+
+```typescript
+import { TSNE } from 'tsne-js'
+
+// Reduce to 2D for visualization
+function visualizeEmbeddings(embeddings: number[][]) {
+  const tsne = new TSNE({ dim: 2 })
+  const coords = tsne.fit(embeddings)
+
+  // Plot coords[i] for each embedding
+  return coords
+}
+```
+
+### Test Similarity
+
+Verify similarity calculations:
+
+```typescript
+function testSimilarity() {
+  // Test identical texts
+  const embed1 = await ai.embed('test')
+  const embed2 = await ai.embed('test')
+  console.log('Identical:', cosineSimilarity(embed1, embed2)) // Should be ~1.0
+
+  // Test similar texts
+  const embed3 = await ai.embed('machine learning')
+  const embed4 = await ai.embed('artificial intelligence')
+  console.log('Similar:', cosineSimilarity(embed3, embed4)) // Should be ~0.7-0.9
+
+  // Test different texts
+  const embed5 = await ai.embed('machine learning')
+  const embed6 = await ai.embed('cooking recipes')
+  console.log('Different:', cosineSimilarity(embed5, embed6)) // Should be ~0.1-0.3
+}
+```
+
+## Common Error Messages
+
+### "Model not found"
+
+**Cause**: Invalid model name.
+
+**Solution**:
+
+```typescript
+// Use correct model name
+const embedding = await ai.embed(text, {
+  model: 'text-embedding-3-large', // Correct
+  // model: 'text-embedding-large' // Wrong!
+})
+```
+
+### "Quota exceeded"
+
+**Cause**: Exceeded API quota.
+
+**Solutions**:
+
+1. Upgrade API plan
+2. Implement caching
+3. Batch requests
+4. Use smaller model
+
+### "Connection timeout"
+
+**Cause**: Network issues or slow response.
+
+**Solution**:
+
+```typescript
+const embedding = await ai.embed(text, {
+  timeout: 30000, // 30 seconds
+})
+```
+
+## Getting Help
+
+Still having issues?
+
+1. **Check logs**: Review error messages and stack traces
+2. **Verify configuration**: Ensure API keys and models are correct
+3. **Test with simple example**: Isolate the problem
+4. **Check documentation**: Review [API Reference](../api/reference)
+5. **Search issues**: Look for similar problems on GitHub
+6. **Ask community**: Join Discord for help
+7. **Report bugs**: Open GitHub issue with reproduction
+
+## Support Resources
+
+- [API Reference](../api/reference) - Complete API documentation
+- [Examples](../examples/) - Working code examples
+- [GitHub Issues](https://github.com/dot-do/ai/issues) - Report bugs
+- [Discord Community](https://discord.gg/dotdo) - Get help
+
+## License
+
+CC-BY-4.0 (Open Source)

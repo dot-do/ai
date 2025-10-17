@@ -1,0 +1,700 @@
+---
+$id: https://mcp.do/docs/installation
+$type: TechArticle
+title: Installing mcp.do
+description: Complete installation guide for mcp.do with configuration options
+keywords: [mcp, installation, setup, configuration, deployment]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Installing mcp.do
+
+Complete guide to installing and configuring mcp.do for different environments.
+
+## Installation Methods
+
+### npx (Recommended for Most Users)
+
+Use npx to run mcp.do without installing:
+
+```json
+{
+  "mcpServers": {
+    "do": {
+      "command": "npx",
+      "args": ["-y", "mcp.do"]
+    }
+  }
+}
+```
+
+**Pros**:
+
+- No installation required
+- Always uses latest version
+- No maintenance needed
+
+**Cons**:
+
+- Slightly slower first run
+- Requires internet connection
+
+### Global Installation
+
+Install once, use everywhere:
+
+```bash
+npm install -g mcp.do
+```
+
+Or with pnpm:
+
+```bash
+pnpm add -g mcp.do
+```
+
+Configuration:
+
+```json
+{
+  "mcpServers": {
+    "do": {
+      "command": "mcp.do"
+    }
+  }
+}
+```
+
+**Pros**:
+
+- Faster startup
+- Works offline
+- Consistent versioning
+
+**Cons**:
+
+- Need to manually update
+- Requires installation step
+
+### Local Project Installation
+
+For project-specific usage:
+
+```bash
+npm install mcp.do
+```
+
+Or with pnpm:
+
+```bash
+pnpm add mcp.do
+```
+
+Configuration with absolute path:
+
+```json
+{
+  "mcpServers": {
+    "do": {
+      "command": "node",
+      "args": ["/absolute/path/to/node_modules/.bin/mcp.do"]
+    }
+  }
+}
+```
+
+**Pros**:
+
+- Project-specific version
+- Tracked in package.json
+- Easy version control
+
+**Cons**:
+
+- Need path configuration
+- Separate per project
+
+### Docker
+
+Run mcp.do in Docker:
+
+```bash
+docker pull do/mcp.do
+```
+
+Configuration:
+
+```json
+{
+  "mcpServers": {
+    "do": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "do/mcp.do"]
+    }
+  }
+}
+```
+
+**Pros**:
+
+- Isolated environment
+- Consistent across systems
+- Easy deployment
+
+**Cons**:
+
+- Requires Docker
+- Slower startup
+- More complex setup
+
+## Configuration File Locations
+
+### Claude Desktop
+
+**macOS**:
+
+```bash
+~/.config/claude/config.json
+```
+
+**Windows**:
+
+```
+%APPDATA%\Claude\config.json
+```
+
+**Linux**:
+
+```bash
+~/.config/claude/config.json
+```
+
+### Other MCP Clients
+
+Configuration location varies by client. Check your client's documentation.
+
+## Basic Configuration
+
+Minimal configuration:
+
+```json
+{
+  "mcpServers": {
+    "do": {
+      "command": "npx",
+      "args": ["-y", "mcp.do"]
+    }
+  }
+}
+```
+
+## Advanced Configuration
+
+### With Environment Variables
+
+```json
+{
+  "mcpServers": {
+    "do": {
+      "command": "npx",
+      "args": ["-y", "mcp.do"],
+      "env": {
+        "DO_API_KEY": "sk_your_api_key",
+        "DO_BASE_URL": "https://apis.do",
+        "DO_LOG_LEVEL": "info",
+        "DO_MAX_EXECUTION_TIME": "30000",
+        "DO_ENABLE_CACHE": "true"
+      }
+    }
+  }
+}
+```
+
+### With Custom Configuration File
+
+```json
+{
+  "mcpServers": {
+    "do": {
+      "command": "npx",
+      "args": ["-y", "mcp.do", "--config", "/path/to/config.json"]
+    }
+  }
+}
+```
+
+Create `config.json`:
+
+```json
+{
+  "apiKey": "sk_your_api_key",
+  "baseUrl": "https://apis.do",
+  "logLevel": "info",
+  "maxExecutionTime": 30000,
+  "enableCache": true,
+  "permissions": {
+    "db": ["read", "write"],
+    "ai": ["generate", "embed"],
+    "api": ["fetch"],
+    "events": ["listen", "send"]
+  },
+  "rateLimit": {
+    "maxRequestsPerMinute": 60,
+    "maxExecutionTime": 30000
+  }
+}
+```
+
+## Environment Variables
+
+### Required
+
+**`DO_API_KEY`**
+
+- Your `.do` platform API key
+- Required for authenticated requests
+- Get from: [platform.do/settings/api-keys](https://platform.do/settings/api-keys)
+
+```bash
+export DO_API_KEY=sk_your_api_key
+```
+
+### Optional
+
+**`DO_BASE_URL`**
+
+- Base URL for `.do` platform APIs
+- Default: `https://apis.do`
+- Use for custom deployments
+
+```bash
+export DO_BASE_URL=https://your-custom-domain.do
+```
+
+**`DO_LOG_LEVEL`**
+
+- Logging verbosity
+- Options: `debug`, `info`, `warn`, `error`
+- Default: `info`
+
+```bash
+export DO_LOG_LEVEL=debug
+```
+
+**`DO_MAX_EXECUTION_TIME`**
+
+- Maximum time for code execution (ms)
+- Default: `30000` (30 seconds)
+- Max: `300000` (5 minutes)
+
+```bash
+export DO_MAX_EXECUTION_TIME=60000
+```
+
+**`DO_ENABLE_CACHE`**
+
+- Enable result caching
+- Options: `true`, `false`
+- Default: `true`
+
+```bash
+export DO_ENABLE_CACHE=true
+```
+
+**`DO_CACHE_TTL`**
+
+- Cache time-to-live (seconds)
+- Default: `3600` (1 hour)
+
+```bash
+export DO_CACHE_TTL=7200
+```
+
+**`DO_MAX_MEMORY`**
+
+- Maximum memory per execution (MB)
+- Default: `128`
+- Max: `512`
+
+```bash
+export DO_MAX_MEMORY=256
+```
+
+## Security Configuration
+
+### Permission System
+
+Control what code can access:
+
+```json
+{
+  "permissions": {
+    "db": ["read", "write"],
+    "ai": ["generate", "embed"],
+    "api": ["fetch"],
+    "events": ["listen", "send"],
+    "scheduled": ["create", "delete"]
+  }
+}
+```
+
+**Permission levels**:
+
+- **read**: Read-only access
+- **write**: Create/update/delete access
+- **execute**: Execute operations
+- **admin**: Full administrative access
+
+### Rate Limiting
+
+Prevent abuse:
+
+```json
+{
+  "rateLimit": {
+    "maxRequestsPerMinute": 60,
+    "maxRequestsPerHour": 1000,
+    "maxExecutionTime": 30000,
+    "maxConcurrentExecutions": 5
+  }
+}
+```
+
+### Network Access
+
+Control network access:
+
+```json
+{
+  "network": {
+    "allowedDomains": ["apis.do", "api.openai.com", "api.anthropic.com"],
+    "blockedDomains": [],
+    "allowLocalhost": false
+  }
+}
+```
+
+## Multi-Environment Setup
+
+### Development
+
+```json
+{
+  "mcpServers": {
+    "do-dev": {
+      "command": "npx",
+      "args": ["-y", "mcp.do"],
+      "env": {
+        "DO_API_KEY": "sk_dev_key",
+        "DO_BASE_URL": "https://dev.apis.do",
+        "DO_LOG_LEVEL": "debug"
+      }
+    }
+  }
+}
+```
+
+### Staging
+
+```json
+{
+  "mcpServers": {
+    "do-staging": {
+      "command": "npx",
+      "args": ["-y", "mcp.do"],
+      "env": {
+        "DO_API_KEY": "sk_staging_key",
+        "DO_BASE_URL": "https://staging.apis.do",
+        "DO_LOG_LEVEL": "info"
+      }
+    }
+  }
+}
+```
+
+### Production
+
+```json
+{
+  "mcpServers": {
+    "do": {
+      "command": "npx",
+      "args": ["-y", "mcp.do"],
+      "env": {
+        "DO_API_KEY": "sk_prod_key",
+        "DO_BASE_URL": "https://apis.do",
+        "DO_LOG_LEVEL": "warn",
+        "DO_MAX_EXECUTION_TIME": "30000",
+        "DO_ENABLE_CACHE": "true"
+      }
+    }
+  }
+}
+```
+
+## Platform-Specific Setup
+
+### macOS
+
+1. Install Node.js:
+
+```bash
+brew install node
+```
+
+2. Create config directory:
+
+```bash
+mkdir -p ~/.config/claude
+```
+
+3. Edit config:
+
+```bash
+nano ~/.config/claude/config.json
+```
+
+4. Set environment variables in `~/.zshrc` or `~/.bash_profile`:
+
+```bash
+export DO_API_KEY=sk_your_api_key
+```
+
+### Windows
+
+1. Install Node.js from [nodejs.org](https://nodejs.org/)
+
+2. Create config directory:
+
+```powershell
+mkdir $env:APPDATA\Claude
+```
+
+3. Edit config:
+
+```powershell
+notepad $env:APPDATA\Claude\config.json
+```
+
+4. Set environment variables:
+
+```powershell
+setx DO_API_KEY "sk_your_api_key"
+```
+
+### Linux
+
+1. Install Node.js:
+
+```bash
+# Ubuntu/Debian
+sudo apt install nodejs npm
+
+# Fedora
+sudo dnf install nodejs
+
+# Arch
+sudo pacman -S nodejs npm
+```
+
+2. Create config directory:
+
+```bash
+mkdir -p ~/.config/claude
+```
+
+3. Edit config:
+
+```bash
+nano ~/.config/claude/config.json
+```
+
+4. Set environment variables in `~/.bashrc`:
+
+```bash
+export DO_API_KEY=sk_your_api_key
+```
+
+## Docker Setup
+
+### Dockerfile
+
+Create `Dockerfile`:
+
+```dockerfile
+FROM node:20-alpine
+
+WORKDIR /app
+
+RUN npm install -g mcp.do
+
+ENTRYPOINT ["mcp.do"]
+```
+
+### Build Image
+
+```bash
+docker build -t mcp.do .
+```
+
+### Run Container
+
+```bash
+docker run -i --rm \
+  -e DO_API_KEY=sk_your_api_key \
+  -e DO_BASE_URL=https://apis.do \
+  mcp.do
+```
+
+### Docker Compose
+
+Create `docker-compose.yml`:
+
+```yaml
+version: '3.8'
+
+services:
+  mcp:
+    image: do/mcp.do
+    environment:
+      - DO_API_KEY=${DO_API_KEY}
+      - DO_BASE_URL=https://apis.do
+      - DO_LOG_LEVEL=info
+    stdin_open: true
+    tty: true
+```
+
+Run:
+
+```bash
+docker-compose up
+```
+
+## Verifying Installation
+
+### Check Version
+
+```bash
+npx mcp.do --version
+```
+
+### Test Connection
+
+```bash
+npx mcp.do --test
+```
+
+### View Logs
+
+```bash
+npx mcp.do --log-level debug
+```
+
+## Troubleshooting
+
+### Command Not Found
+
+**Problem**: `mcp.do: command not found`
+
+**Solution**:
+
+```bash
+# Ensure Node.js bin is in PATH
+echo $PATH | grep node
+
+# Or use full path
+/path/to/node_modules/.bin/mcp.do
+```
+
+### Permission Denied
+
+**Problem**: Permission errors when executing
+
+**Solution**:
+
+```bash
+# macOS/Linux: Make executable
+chmod +x $(which mcp.do)
+
+# Or use npx
+npx mcp.do
+```
+
+### Module Not Found
+
+**Problem**: Cannot find module errors
+
+**Solution**:
+
+```bash
+# Clear npm cache
+npm cache clean --force
+
+# Reinstall
+npm install -g mcp.do
+```
+
+### Port Already in Use
+
+**Problem**: Port conflict errors
+
+**Solution**:
+
+```bash
+# Use different port
+npx mcp.do --port 3001
+
+# Or kill existing process
+lsof -ti:3000 | xargs kill
+```
+
+## Updating
+
+### Update Global Installation
+
+```bash
+npm update -g mcp.do
+```
+
+### Update with npx
+
+npx automatically uses the latest version. No update needed.
+
+### Check for Updates
+
+```bash
+npm outdated -g mcp.do
+```
+
+## Uninstalling
+
+### Remove Global Installation
+
+```bash
+npm uninstall -g mcp.do
+```
+
+### Remove Configuration
+
+```bash
+# macOS/Linux
+rm -rf ~/.config/claude
+
+# Windows
+rmdir /s %APPDATA%\Claude
+```
+
+## Next Steps
+
+- [Getting Started](./getting-started) - Quick start guide
+- [Claude Integration](./claude-integration) - Configure Claude Desktop
+- [API Reference](../api/) - Complete tool reference
+- [Examples](../examples/) - Code examples
+
+## Getting Help
+
+- **Documentation**: [mcp.do](https://mcp.do)
+- **Issues**: [GitHub Issues](https://github.com/dot-do/platform/issues)
+- **Community**: [Discord](https://discord.gg/dotdo)

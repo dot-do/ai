@@ -1,0 +1,628 @@
+---
+$id: https://sdk.do/api/functions
+$type: APIReference
+title: Function Reference
+description: Complete reference for all sdk.do functions
+keywords: [functions, api, reference, documentation]
+---
+
+# Function Reference
+
+Complete reference for all sdk.do functions.
+
+## $ (Dollar Proxy) {#dollar-proxy}
+
+The semantic proxy for accessing Schema.org types.
+
+### Usage
+
+```typescript
+import $ from 'sdk.do'
+
+// Access types
+$.Business
+$.Person
+$.Product
+$.Order
+$.Organization
+
+// Access predicates
+$.worksFor
+$.owns
+$.employs
+$.sells
+```
+
+### Available Types
+
+The `$` proxy provides access to 800+ Schema.org types including:
+
+**Common Business Types**:
+
+- `$.Business` - Local business
+- `$.Organization` - Organization
+- `$.Corporation` - Corporation
+- `$.LocalBusiness` - Local business
+- `$.Brand` - Brand
+
+**People Types**:
+
+- `$.Person` - Person
+- `$.Customer` - Customer
+- `$.Employee` - Employee
+
+**Product Types**:
+
+- `$.Product` - Product
+- `$.Service` - Service
+- `$.Offer` - Offer
+
+**Transaction Types**:
+
+- `$.Order` - Order
+- `$.Invoice` - Invoice
+- `$.Payment` - Payment
+
+**Event Types**:
+
+- `$.Event` - Event
+- `$.Action` - Action
+- `$.Task` - Task
+
+See [schema.org.ai](https://schema.org.ai) for complete type reference.
+
+---
+
+## db {#db}
+
+Database operations for CRUD and relationships.
+
+### db.list() {#db-list}
+
+List entities with optional filters.
+
+**Signature**:
+
+```typescript
+function list<T>(
+  type: Type<T>,
+  options?: {
+    where?: WhereClause
+    limit?: number
+    offset?: number
+    orderBy?: OrderBy
+  }
+): Promise<T[]>
+```
+
+**Example**:
+
+```typescript
+// Basic list
+const businesses = await db.list($.Business)
+
+// With filters
+const techBiz = await db.list($.Business, {
+  where: { industry: 'Technology' },
+  limit: 10,
+  orderBy: { name: 'asc' },
+})
+
+// Range query
+const products = await db.list($.Product, {
+  where: {
+    price: { $gte: 50, $lte: 150 },
+  },
+})
+
+// Pattern matching
+const users = await db.list($.Person, {
+  where: {
+    email: { $like: '%@company.com' },
+  },
+})
+```
+
+### db.get() {#db-get}
+
+Get entity by ID.
+
+**Signature**:
+
+```typescript
+function get<T>(type: Type<T>, id: string): Promise<T | null>
+```
+
+**Example**:
+
+```typescript
+const business = await db.get($.Business, 'business-123')
+
+if (business) {
+  console.log('Found:', business.name)
+}
+```
+
+### db.create() {#db-create}
+
+Create new entity.
+
+**Signature**:
+
+```typescript
+function create<T>(type: Type<T>, data: Partial<T>): Promise<T>
+```
+
+**Example**:
+
+```typescript
+const business = await db.create($.Business, {
+  name: 'Acme Corp',
+  industry: 'Technology',
+  foundingDate: '2025-01-01',
+})
+
+console.log('Created:', business.$id)
+```
+
+### db.update() {#db-update}
+
+Update existing entity.
+
+**Signature**:
+
+```typescript
+function update<T>(entity: T & { $id: string }, data: Partial<T>): Promise<T>
+```
+
+**Example**:
+
+```typescript
+const business = await db.get($.Business, 'id')
+
+await db.update(business, {
+  revenue: 1000000,
+  employees: 50,
+})
+```
+
+### db.delete() {#db-delete}
+
+Delete entity.
+
+**Signature**:
+
+```typescript
+function delete<T>(
+  entity: T & { $id: string }
+): Promise<void>
+```
+
+**Example**:
+
+```typescript
+const business = await db.get($.Business, 'id')
+await db.delete(business)
+```
+
+### db.relate() {#db-relate}
+
+Create relationship between entities.
+
+**Signature**:
+
+```typescript
+function relate<S, O>(subject: S & { $id: string }, predicate: Predicate, object: O & { $id: string }): Promise<void>
+```
+
+**Example**:
+
+```typescript
+const person = await db.get($.Person, 'person-id')
+const org = await db.get($.Organization, 'org-id')
+
+await db.relate(person, $.worksFor, org)
+await db.relate(org, $.owns, brand)
+await db.relate(business, $.sells, product)
+```
+
+### db.related() {#db-related}
+
+Query related entities.
+
+**Signature**:
+
+```typescript
+function related<S, O>(subject: S & { $id: string }, predicate: Predicate, objectType: Type<O>): Promise<O[]>
+```
+
+**Example**:
+
+```typescript
+// Find employees
+const employees = await db.related(organization, $.employs, $.Person)
+
+// Find products
+const products = await db.related(business, $.sells, $.Product)
+```
+
+---
+
+## ai {#ai}
+
+AI services for generation, embeddings, and batch processing.
+
+### ai.generate() {#ai-generate}
+
+Generate content with AI.
+
+**Signature**:
+
+```typescript
+function generate(
+  prompt: string,
+  options?: {
+    schema?: Schema
+    model?: string
+    temperature?: number
+    maxTokens?: number
+  }
+): Promise<any>
+```
+
+**Example**:
+
+```typescript
+// Text generation
+const text = await ai.generate('Write a description')
+
+// Structured generation
+const product = await ai.generate('Create a tech product', { schema: $.Product })
+
+// Custom schema
+const analysis = await ai.generate('Analyze data', {
+  schema: {
+    summary: 'string',
+    insights: 'array',
+    score: 'number',
+  },
+})
+
+// Control parameters
+const creative = await ai.generate('Write a story', { temperature: 0.9, maxTokens: 2000 })
+```
+
+### ai.embed() {#ai-embed}
+
+Create embeddings for semantic search.
+
+**Signature**:
+
+```typescript
+function embed(
+  text: string,
+  options?: {
+    model?: string
+  }
+): Promise<number[]>
+```
+
+**Example**:
+
+```typescript
+const embedding = await ai.embed('Search query text')
+
+// Use in semantic search
+const results = await db.list($.Product, {
+  where: {
+    $semantic: {
+      embedding,
+      threshold: 0.8,
+    },
+  },
+})
+```
+
+### ai.batch() {#ai-batch}
+
+Batch process AI requests (50% cost savings).
+
+**Signature**:
+
+```typescript
+function batch(
+  requests: Array<{
+    prompt: string
+    schema?: Schema
+  }>,
+  options?: {
+    model?: string
+    temperature?: number
+  }
+): Promise<any[]>
+```
+
+**Example**:
+
+```typescript
+const results = await ai.batch([{ prompt: 'Analyze text 1' }, { prompt: 'Analyze text 2' }, { prompt: 'Analyze text 3' }])
+
+// With schemas
+const products = await ai.batch(
+  items.map((item) => ({
+    prompt: `Describe: ${item.name}`,
+    schema: { description: 'string' },
+  }))
+)
+```
+
+---
+
+## api {#api}
+
+External API integration.
+
+### api() {#api-call}
+
+Call external APIs.
+
+**Signature**:
+
+```typescript
+function api(
+  url: string,
+  options?: {
+    method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
+    headers?: Record<string, string>
+    body?: any
+    schema?: Schema
+    transform?: (data: any) => any
+  }
+): Promise<any>
+```
+
+**Example**:
+
+```typescript
+// GET request
+const data = await api('https://api.example.com/products')
+
+// POST request
+const result = await api('https://api.example.com/products', {
+  method: 'POST',
+  body: { name: 'New Product' },
+})
+
+// With authentication
+const data = await api('https://api.example.com/data', {
+  headers: {
+    Authorization: `Bearer ${token}`,
+  },
+})
+
+// With schema and transform
+const products = await api('https://api.example.com/products', {
+  schema: $.Product,
+  transform: (data) => data.items,
+})
+```
+
+---
+
+## on {#on}
+
+Event listeners for semantic events.
+
+### on() {#on-event}
+
+Register event listener.
+
+**Signature**:
+
+```typescript
+function on(event: EventPattern, handler: (data: any) => Promise<void> | void): void
+```
+
+**Example**:
+
+```typescript
+// Listen for events
+on($.Order.created, async (order) => {
+  console.log('Order created:', order.$id)
+  await processOrder(order)
+})
+
+on($.Customer.upgraded, async (customer) => {
+  await sendUpgradeEmail(customer)
+})
+
+// With error handling
+on($.Order.created, async (order) => {
+  try {
+    await processOrder(order)
+  } catch (error) {
+    console.error('Failed:', error)
+    send($.Order.failed, { orderId: order.$id, error })
+  }
+})
+```
+
+---
+
+## send {#send}
+
+Event publishing for semantic events.
+
+### send() {#send-event}
+
+Publish an event.
+
+**Signature**:
+
+```typescript
+function send(event: EventPattern, data: any): void
+```
+
+**Example**:
+
+```typescript
+// Publish events
+send($.Order.created, {
+  $type: 'Order',
+  $id: 'order-123',
+  total: 99.99,
+})
+
+send($.Email.send, {
+  to: 'user@example.com',
+  subject: 'Welcome',
+  body: 'Welcome message',
+})
+
+send($.Task.created, {
+  title: 'Follow up',
+  assignee: 'user-id',
+  dueDate: new Date().toISOString(),
+})
+```
+
+---
+
+## every {#every}
+
+Scheduled workflow execution.
+
+### every() {#every-schedule}
+
+Schedule recurring function execution.
+
+**Signature**:
+
+```typescript
+function every(schedule: SchedulePattern | string, handler: () => Promise<void> | void): void
+```
+
+**Schedule Patterns**:
+
+- `$.Minutely` - Every minute
+- `$.Hourly` - Every hour
+- `$.Daily` - Every day at midnight
+- `$.Weekly` - Every week on Sunday
+- `$.Monthly` - Every month on the 1st
+- `$.Yearly` - Every year on Jan 1
+- Cron expression (e.g., `'0 */6 * * *'`)
+
+**Example**:
+
+```typescript
+// Daily
+every($.Daily, async () => {
+  await generateDailyReport()
+})
+
+// Hourly
+every($.Hourly, async () => {
+  await syncData()
+})
+
+// Custom cron (every 6 hours)
+every('0 */6 * * *', async () => {
+  await performMaintenance()
+})
+
+// Weekly
+every($.Weekly, async () => {
+  await generateWeeklyReport()
+})
+```
+
+---
+
+## user {#user}
+
+User context and permissions.
+
+### user.current() {#user-current}
+
+Get current user.
+
+**Signature**:
+
+```typescript
+function current(): Promise<User>
+```
+
+**Example**:
+
+```typescript
+const currentUser = await user.current()
+console.log('User:', currentUser.email)
+```
+
+### user.can() {#user-can}
+
+Check user permissions.
+
+**Signature**:
+
+```typescript
+function can(permission: string): Promise<boolean>
+```
+
+**Example**:
+
+```typescript
+if (await user.can('admin')) {
+  // Admin operations
+}
+
+if (await user.can('edit:products')) {
+  // Edit products
+}
+```
+
+### user.get() {#user-get}
+
+Get user property.
+
+**Signature**:
+
+```typescript
+function get(key: string): Promise<any>
+```
+
+**Example**:
+
+```typescript
+const email = await user.get('email')
+const role = await user.get('role')
+const preferences = await user.get('preferences')
+```
+
+---
+
+## Query Operators
+
+For use with `db.list()` where clauses:
+
+| Operator    | Description           | Example                                        |
+| ----------- | --------------------- | ---------------------------------------------- |
+| `$eq`       | Equal                 | `{ status: { $eq: 'active' } }`                |
+| `$ne`       | Not equal             | `{ status: { $ne: 'deleted' } }`               |
+| `$gt`       | Greater than          | `{ price: { $gt: 100 } }`                      |
+| `$gte`      | Greater than or equal | `{ price: { $gte: 100 } }`                     |
+| `$lt`       | Less than             | `{ price: { $lt: 100 } }`                      |
+| `$lte`      | Less than or equal    | `{ price: { $lte: 100 } }`                     |
+| `$in`       | In array              | `{ role: { $in: ['admin', 'user'] } }`         |
+| `$nin`      | Not in array          | `{ status: { $nin: ['deleted'] } }`            |
+| `$like`     | Pattern match         | `{ email: { $like: '%@company.com' } }`        |
+| `$semantic` | Semantic similarity   | `{ $semantic: { embedding, threshold: 0.8 } }` |
+
+---
+
+## See Also
+
+- [Type Reference](./types) - Type definitions
+- [API Overview](./index) - API overview
+- [Examples](../examples/) - Code examples
+- [Getting Started](../docs/getting-started) - Setup guide

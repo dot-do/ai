@@ -1,0 +1,486 @@
+---
+$id: https://sdk.do/examples/database
+$type: HowTo
+title: Database Operations Example
+description: Advanced database operations including relationships, queries, and semantic patterns
+keywords: [database, crud, relationships, queries, semantic]
+---
+
+# Database Operations Example
+
+Advanced database operations with semantic relationships and complex queries.
+
+## Overview
+
+This example demonstrates:
+
+- CRUD operations with semantic types
+- Creating and querying relationships
+- Complex filtering and search
+- Pagination and ordering
+- Transaction patterns
+
+## Complete Example
+
+```typescript
+import $, { db } from 'sdk.do'
+
+async function databaseExample() {
+  console.log('=== Database Operations Example ===\n')
+
+  // ==========================================
+  // 1. Create Entities
+  // ==========================================
+
+  console.log('1. Creating entities...')
+
+  // Create organization
+  const organization = await db.create($.Organization, {
+    name: 'Acme Corporation',
+    industry: 'Technology',
+    foundingDate: '2020-01-01',
+    numberOfEmployees: 100,
+  })
+
+  console.log('✓ Created organization:', organization.name)
+
+  // Create people
+  const alice = await db.create($.Person, {
+    name: 'Alice Johnson',
+    email: 'alice@acme.com',
+    jobTitle: 'CEO',
+  })
+
+  const bob = await db.create($.Person, {
+    name: 'Bob Smith',
+    email: 'bob@acme.com',
+    jobTitle: 'CTO',
+  })
+
+  const carol = await db.create($.Person, {
+    name: 'Carol Williams',
+    email: 'carol@acme.com',
+    jobTitle: 'Engineer',
+  })
+
+  console.log('✓ Created 3 people')
+
+  // Create products
+  const product1 = await db.create($.Product, {
+    name: 'Cloud Platform',
+    description: 'Enterprise cloud platform',
+    price: 99.99,
+    availability: 'InStock',
+  })
+
+  const product2 = await db.create($.Product, {
+    name: 'Analytics Suite',
+    description: 'Advanced analytics tools',
+    price: 149.99,
+    availability: 'InStock',
+  })
+
+  console.log('✓ Created 2 products')
+  console.log()
+
+  // ==========================================
+  // 2. Create Relationships
+  // ==========================================
+
+  console.log('2. Creating relationships...')
+
+  // People work for organization
+  await db.relate(alice, $.worksFor, organization)
+  await db.relate(bob, $.worksFor, organization)
+  await db.relate(carol, $.worksFor, organization)
+
+  console.log('✓ Linked employees to organization')
+
+  // Organization sells products
+  await db.relate(organization, $.sells, product1)
+  await db.relate(organization, $.sells, product2)
+
+  console.log('✓ Linked products to organization')
+  console.log()
+
+  // ==========================================
+  // 3. Query Relationships
+  // ==========================================
+
+  console.log('3. Querying relationships...')
+
+  // Find all employees
+  const employees = await db.related(organization, $.employs, $.Person)
+
+  console.log(`✓ Found ${employees.length} employees:`)
+  employees.forEach((e) => {
+    console.log(`  - ${e.name} (${e.jobTitle})`)
+  })
+
+  // Find products sold by organization
+  const products = await db.related(organization, $.sells, $.Product)
+
+  console.log(`✓ Organization sells ${products.length} products:`)
+  products.forEach((p) => {
+    console.log(`  - ${p.name} ($${p.price})`)
+  })
+
+  // Find where a person works
+  const employer = await db.related(alice, $.worksFor, $.Organization)
+
+  console.log(`✓ ${alice.name} works for:`, employer[0]?.name)
+  console.log()
+
+  // ==========================================
+  // 4. Complex Queries
+  // ==========================================
+
+  console.log('4. Complex queries...')
+
+  // Filter by multiple conditions
+  const engineers = await db.list($.Person, {
+    where: {
+      jobTitle: 'Engineer',
+    },
+  })
+
+  console.log(`✓ Found ${engineers.length} engineers`)
+
+  // Price range query
+  const affordableProducts = await db.list($.Product, {
+    where: {
+      price: { $lt: 150 },
+      availability: 'InStock',
+    },
+  })
+
+  console.log(`✓ Found ${affordableProducts.length} products under $150`)
+
+  // Date range query
+  const recentOrgs = await db.list($.Organization, {
+    where: {
+      foundingDate: {
+        $gte: '2020-01-01',
+      },
+    },
+  })
+
+  console.log(`✓ Found ${recentOrgs.length} organizations founded since 2020`)
+  console.log()
+
+  // ==========================================
+  // 5. Pagination and Ordering
+  // ==========================================
+
+  console.log('5. Pagination and ordering...')
+
+  // Order by name
+  const sortedPeople = await db.list($.Person, {
+    orderBy: { name: 'asc' },
+    limit: 10,
+  })
+
+  console.log('✓ People (sorted by name):')
+  sortedPeople.forEach((p) => {
+    console.log(`  - ${p.name}`)
+  })
+
+  // Pagination
+  const page1 = await db.list($.Person, {
+    limit: 2,
+    offset: 0,
+  })
+
+  const page2 = await db.list($.Person, {
+    limit: 2,
+    offset: 2,
+  })
+
+  console.log(`✓ Page 1: ${page1.length} results`)
+  console.log(`✓ Page 2: ${page2.length} results`)
+  console.log()
+
+  // ==========================================
+  // 6. Batch Operations
+  // ==========================================
+
+  console.log('6. Batch operations...')
+
+  // Create multiple entities
+  const newProducts = await Promise.all([
+    db.create($.Product, {
+      name: 'API Gateway',
+      price: 79.99,
+    }),
+    db.create($.Product, {
+      name: 'CDN Service',
+      price: 59.99,
+    }),
+    db.create($.Product, {
+      name: 'Database Service',
+      price: 89.99,
+    }),
+  ])
+
+  console.log(`✓ Created ${newProducts.length} products in batch`)
+
+  // Update multiple entities
+  await Promise.all(newProducts.map((p) => db.update(p, { availability: 'InStock' })))
+
+  console.log('✓ Updated all products')
+  console.log()
+
+  // ==========================================
+  // 7. Search Patterns
+  // ==========================================
+
+  console.log('7. Search patterns...')
+
+  // Search by email domain
+  const acmeEmployees = await db.list($.Person, {
+    where: {
+      email: { $like: '%@acme.com' },
+    },
+  })
+
+  console.log(`✓ Found ${acmeEmployees.length} @acme.com emails`)
+
+  // Search by name pattern
+  const namesWithA = await db.list($.Person, {
+    where: {
+      name: { $like: 'A%' },
+    },
+  })
+
+  console.log(`✓ Found ${namesWithA.length} names starting with 'A'`)
+  console.log()
+
+  // ==========================================
+  // 8. Advanced Filters
+  // ==========================================
+
+  console.log('8. Advanced filters...')
+
+  // IN query
+  const specificRoles = await db.list($.Person, {
+    where: {
+      jobTitle: { $in: ['CEO', 'CTO', 'CFO'] },
+    },
+  })
+
+  console.log(`✓ Found ${specificRoles.length} executives`)
+
+  // NOT IN query
+  const nonEngineers = await db.list($.Person, {
+    where: {
+      jobTitle: { $nin: ['Engineer', 'Developer'] },
+    },
+  })
+
+  console.log(`✓ Found ${nonEngineers.length} non-engineers`)
+
+  // Multiple conditions
+  const seniorTech = await db.list($.Person, {
+    where: {
+      jobTitle: { $in: ['CEO', 'CTO'] },
+      email: { $like: '%@acme.com' },
+    },
+  })
+
+  console.log(`✓ Found ${seniorTech.length} senior tech leaders at Acme`)
+  console.log()
+
+  // ==========================================
+  // 9. Cleanup
+  // ==========================================
+
+  console.log('9. Cleanup...')
+
+  await db.delete(organization)
+  await db.delete(alice)
+  await db.delete(bob)
+  await db.delete(carol)
+  await db.delete(product1)
+  await db.delete(product2)
+
+  for (const product of newProducts) {
+    await db.delete(product)
+  }
+
+  console.log('✓ Deleted all test data')
+  console.log()
+
+  console.log('=== Example Complete ===')
+}
+
+// Run the example
+databaseExample().catch(console.error)
+```
+
+## Key Patterns
+
+### Creating Relationships
+
+```typescript
+// Subject works for Object
+await db.relate(person, $.worksFor, organization)
+
+// Organization owns Brand
+await db.relate(organization, $.owns, brand)
+
+// Business sells Product
+await db.relate(business, $.sells, product)
+```
+
+### Querying Relationships
+
+```typescript
+// Find employees (inverse relationship)
+const employees = await db.related(organization, $.employs, $.Person)
+
+// Find employer
+const employer = await db.related(person, $.worksFor, $.Organization)
+
+// Find products
+const products = await db.related(business, $.sells, $.Product)
+```
+
+### Complex Filters
+
+```typescript
+// Range queries
+const results = await db.list($.Product, {
+  where: {
+    price: { $gte: 50, $lte: 150 },
+    stock: { $gt: 0 },
+  },
+})
+
+// Pattern matching
+const results = await db.list($.Person, {
+  where: {
+    email: { $like: '%@company.com' },
+  },
+})
+
+// IN queries
+const results = await db.list($.Person, {
+  where: {
+    role: { $in: ['admin', 'manager'] },
+  },
+})
+```
+
+### Pagination
+
+```typescript
+// Page 1
+const page1 = await db.list($.Product, {
+  limit: 20,
+  offset: 0,
+})
+
+// Page 2
+const page2 = await db.list($.Product, {
+  limit: 20,
+  offset: 20,
+})
+
+// Page 3
+const page3 = await db.list($.Product, {
+  limit: 20,
+  offset: 40,
+})
+```
+
+### Ordering
+
+```typescript
+// Single field
+const sorted = await db.list($.Product, {
+  orderBy: { name: 'asc' },
+})
+
+// Multiple fields
+const sorted = await db.list($.Product, {
+  orderBy: {
+    price: 'desc',
+    name: 'asc',
+  },
+})
+```
+
+## Query Operators
+
+| Operator | Description           | Example                                 |
+| -------- | --------------------- | --------------------------------------- |
+| `$eq`    | Equal                 | `{ status: { $eq: 'active' } }`         |
+| `$ne`    | Not equal             | `{ status: { $ne: 'deleted' } }`        |
+| `$gt`    | Greater than          | `{ price: { $gt: 100 } }`               |
+| `$gte`   | Greater than or equal | `{ price: { $gte: 100 } }`              |
+| `$lt`    | Less than             | `{ price: { $lt: 100 } }`               |
+| `$lte`   | Less than or equal    | `{ price: { $lte: 100 } }`              |
+| `$in`    | In array              | `{ role: { $in: ['admin', 'user'] } }`  |
+| `$nin`   | Not in array          | `{ status: { $nin: ['deleted'] } }`     |
+| `$like`  | Pattern match         | `{ email: { $like: '%@company.com' } }` |
+
+## Best Practices
+
+### 1. Use Semantic Relationships
+
+```typescript
+// Good - semantic relationships
+await db.relate(person, $.worksFor, organization)
+const employees = await db.related(org, $.employs, $.Person)
+
+// Avoid - manual foreign keys
+await db.update(person, { organizationId: org.$id })
+const employees = await db.list($.Person, {
+  where: { organizationId: org.$id },
+})
+```
+
+### 2. Batch Operations
+
+```typescript
+// Good - parallel operations
+await Promise.all(items.map((item) => db.create($.Product, item)))
+
+// Avoid - sequential operations
+for (const item of items) {
+  await db.create($.Product, item)
+}
+```
+
+### 3. Type Safety
+
+```typescript
+// Good - typed operations
+import type { Business } from 'schema.org.ai'
+
+const business: Business = await db.get($.Business, 'id')
+
+// Avoid - untyped
+const business = await db.get($.Business, 'id')
+```
+
+### 4. Error Handling
+
+```typescript
+// Good - handle errors
+try {
+  const business = await db.create($.Business, data)
+} catch (error) {
+  console.error('Failed:', error)
+}
+
+// Avoid - no error handling
+const business = await db.create($.Business, data)
+```
+
+## See Also
+
+- [Basic Example](./basic) - Basic operations
+- [Events Example](./events) - Event-driven patterns
+- [API Reference](../docs/api-reference) - Database API docs
+- [database.do](https://database.do) - Database guide

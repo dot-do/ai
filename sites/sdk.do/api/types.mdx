@@ -1,0 +1,616 @@
+---
+$id: https://sdk.do/api/types
+$type: APIReference
+title: Type Reference
+description: TypeScript type definitions for sdk.do
+keywords: [types, typescript, interfaces, schemas]
+---
+
+# Type Reference
+
+TypeScript type definitions for sdk.do.
+
+## Core Types
+
+### Type<T>
+
+Base type for semantic entities.
+
+```typescript
+type Type<T = any> = {
+  $type: string
+  [key: string]: any
+}
+```
+
+**Usage**:
+
+```typescript
+import $ from 'sdk.do'
+
+const businessType: Type = $.Business
+```
+
+### WhereClause
+
+Filter conditions for database queries.
+
+```typescript
+type WhereClause = {
+  [key: string]:
+    | any
+    | {
+        $eq?: any
+        $ne?: any
+        $gt?: any
+        $gte?: any
+        $lt?: any
+        $lte?: any
+        $in?: any[]
+        $nin?: any[]
+        $like?: string
+        $semantic?: {
+          embedding: number[]
+          threshold: number
+        }
+      }
+}
+```
+
+**Usage**:
+
+```typescript
+const where: WhereClause = {
+  industry: 'Technology',
+  revenue: { $gte: 1000000 },
+  email: { $like: '%@company.com' },
+}
+```
+
+### OrderBy
+
+Sort order for queries.
+
+```typescript
+type OrderBy = {
+  [key: string]: 'asc' | 'desc'
+}
+```
+
+**Usage**:
+
+```typescript
+const orderBy: OrderBy = {
+  name: 'asc',
+  createdAt: 'desc',
+}
+```
+
+### ListOptions
+
+Options for `db.list()`.
+
+```typescript
+interface ListOptions {
+  where?: WhereClause
+  limit?: number
+  offset?: number
+  orderBy?: OrderBy
+}
+```
+
+**Usage**:
+
+```typescript
+const options: ListOptions = {
+  where: { industry: 'Technology' },
+  limit: 10,
+  offset: 0,
+  orderBy: { name: 'asc' },
+}
+```
+
+## AI Types
+
+### Schema
+
+Schema definition for AI generation.
+
+```typescript
+type Schema =
+  | Type
+  | {
+      [key: string]: string | Schema
+    }
+```
+
+**Usage**:
+
+```typescript
+// Schema.org type
+const schema: Schema = $.Product
+
+// Custom schema
+const schema: Schema = {
+  name: 'string',
+  description: 'string',
+  price: 'number',
+  features: 'array',
+  metadata: {
+    category: 'string',
+    tags: 'array',
+  },
+}
+```
+
+### GenerateOptions
+
+Options for `ai.generate()`.
+
+```typescript
+interface GenerateOptions {
+  schema?: Schema
+  model?: string
+  temperature?: number
+  maxTokens?: number
+}
+```
+
+**Usage**:
+
+```typescript
+const options: GenerateOptions = {
+  schema: $.Product,
+  model: 'gpt-5',
+  temperature: 0.7,
+  maxTokens: 2000,
+}
+```
+
+### BatchRequest
+
+Request object for `ai.batch()`.
+
+```typescript
+interface BatchRequest {
+  prompt: string
+  schema?: Schema
+}
+```
+
+**Usage**:
+
+```typescript
+const requests: BatchRequest[] = [
+  { prompt: 'Analyze text 1' },
+  { prompt: 'Create product', schema: $.Product },
+  { prompt: 'Classify data', schema: { category: 'string' } },
+]
+```
+
+### EmbedOptions
+
+Options for `ai.embed()`.
+
+```typescript
+interface EmbedOptions {
+  model?: string
+}
+```
+
+**Usage**:
+
+```typescript
+const options: EmbedOptions = {
+  model: 'text-embedding-3-small',
+}
+```
+
+## API Types
+
+### ApiOptions
+
+Options for `api()` calls.
+
+```typescript
+interface ApiOptions {
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
+  headers?: Record<string, string>
+  body?: any
+  schema?: Schema
+  transform?: (data: any) => any
+}
+```
+
+**Usage**:
+
+```typescript
+const options: ApiOptions = {
+  method: 'POST',
+  headers: {
+    Authorization: 'Bearer token',
+    'Content-Type': 'application/json',
+  },
+  body: { name: 'Test' },
+  schema: $.Product,
+  transform: (data) => data.items,
+}
+```
+
+## Event Types
+
+### EventPattern
+
+Semantic event pattern.
+
+```typescript
+type EventPattern =
+  | string
+  | {
+      subject: Type
+      predicate: string
+      object?: Type
+    }
+```
+
+**Usage**:
+
+```typescript
+// String pattern
+const event: EventPattern = '$.Order.created'
+
+// Object pattern
+const event: EventPattern = {
+  subject: $.Order,
+  predicate: 'created',
+}
+```
+
+### EventHandler
+
+Handler function for events.
+
+```typescript
+type EventHandler<T = any> = (data: T) => Promise<void> | void
+```
+
+**Usage**:
+
+```typescript
+const handler: EventHandler<Order> = async (order) => {
+  console.log('Order:', order.$id)
+  await processOrder(order)
+}
+
+on($.Order.created, handler)
+```
+
+## Workflow Types
+
+### SchedulePattern
+
+Schedule pattern for workflows.
+
+```typescript
+type SchedulePattern = '$.Minutely' | '$.Hourly' | '$.Daily' | '$.Weekly' | '$.Monthly' | '$.Yearly' | string // Cron expression
+```
+
+**Usage**:
+
+```typescript
+const schedule: SchedulePattern = $.Daily
+const cronSchedule: SchedulePattern = '0 */6 * * *'
+```
+
+### WorkflowHandler
+
+Handler function for workflows.
+
+```typescript
+type WorkflowHandler = () => Promise<void> | void
+```
+
+**Usage**:
+
+```typescript
+const handler: WorkflowHandler = async () => {
+  await generateReport()
+}
+
+every($.Daily, handler)
+```
+
+## User Types
+
+### User
+
+User object returned by `user.current()`.
+
+```typescript
+interface User {
+  $id: string
+  $type: 'Person'
+  email: string
+  name?: string
+  role?: string
+  permissions?: string[]
+  [key: string]: any
+}
+```
+
+**Usage**:
+
+```typescript
+const currentUser: User = await user.current()
+console.log(currentUser.email)
+```
+
+## Schema.org Types
+
+sdk.do includes types from [schema.org.ai](https://schema.org.ai). Import them for type-safe operations:
+
+```typescript
+import type { Business, Person, Product, Order, Organization, Customer, Brand, Offer, Invoice } from 'schema.org.ai'
+```
+
+### Business
+
+```typescript
+interface Business {
+  $id?: string
+  $type: 'Business' | 'LocalBusiness' | 'Organization'
+  name: string
+  description?: string
+  industry?: string
+  foundingDate?: string
+  numberOfEmployees?: number
+  revenue?: number
+  address?: PostalAddress
+  telephone?: string
+  email?: string
+  url?: string
+}
+```
+
+### Person
+
+```typescript
+interface Person {
+  $id?: string
+  $type: 'Person'
+  name: string
+  givenName?: string
+  familyName?: string
+  email?: string
+  telephone?: string
+  jobTitle?: string
+  worksFor?: Organization
+  address?: PostalAddress
+}
+```
+
+### Product
+
+```typescript
+interface Product {
+  $id?: string
+  $type: 'Product'
+  name: string
+  description?: string
+  brand?: Brand
+  manufacturer?: Organization
+  price?: number
+  priceCurrency?: string
+  availability?: string
+  sku?: string
+  gtin?: string
+  image?: string
+  category?: string
+}
+```
+
+### Order
+
+```typescript
+interface Order {
+  $id?: string
+  $type: 'Order'
+  orderNumber?: string
+  orderDate: string
+  orderStatus: string
+  customer?: Customer | Person
+  orderDelivery?: ParcelDelivery
+  orderedItem?: OrderItem[]
+  acceptedOffer?: Offer[]
+  totalPrice?: number
+  priceCurrency?: string
+  paymentMethod?: string
+}
+```
+
+### Organization
+
+```typescript
+interface Organization {
+  $id?: string
+  $type: 'Organization' | 'Corporation' | 'Company'
+  name: string
+  description?: string
+  foundingDate?: string
+  numberOfEmployees?: number
+  address?: PostalAddress
+  telephone?: string
+  email?: string
+  url?: string
+  logo?: string
+  parentOrganization?: Organization
+  subOrganization?: Organization[]
+}
+```
+
+## Relationship Predicates
+
+Common predicates for `db.relate()`:
+
+```typescript
+// Employment relationships
+$.worksFor // Person → Organization
+$.employs // Organization → Person
+
+// Ownership relationships
+$.owns // Organization → Brand/Product
+$.ownedBy // Brand/Product → Organization
+
+// Business relationships
+$.sells // Business → Product
+$.offers // Business → Offer
+$.provides // Organization → Service
+
+// Membership relationships
+$.memberOf // Person → Organization
+$.hasMember // Organization → Person
+
+// Location relationships
+$.located // Entity → Place
+$.hasLocation // Entity → Place
+```
+
+## Type Guards
+
+Utility type guards for runtime type checking:
+
+```typescript
+function isBusiness(entity: any): entity is Business {
+  return entity.$type === 'Business' || entity.$type === 'LocalBusiness'
+}
+
+function isPerson(entity: any): entity is Person {
+  return entity.$type === 'Person'
+}
+
+function isProduct(entity: any): entity is Product {
+  return entity.$type === 'Product'
+}
+
+function isOrder(entity: any): entity is Order {
+  return entity.$type === 'Order'
+}
+```
+
+**Usage**:
+
+```typescript
+const entity = await db.get($.Business, 'id')
+
+if (isBusiness(entity)) {
+  console.log('Industry:', entity.industry)
+}
+```
+
+## Utility Types
+
+### Partial Types
+
+Create partial versions of types:
+
+```typescript
+type PartialBusiness = Partial<Business>
+type PartialPerson = Partial<Person>
+```
+
+### Required Types
+
+Make all properties required:
+
+```typescript
+type RequiredBusiness = Required<Business>
+type RequiredPerson = Required<Person>
+```
+
+### Pick Types
+
+Select specific properties:
+
+```typescript
+type BusinessName = Pick<Business, 'name' | 'industry'>
+type PersonContact = Pick<Person, 'name' | 'email' | 'telephone'>
+```
+
+### Omit Types
+
+Exclude specific properties:
+
+```typescript
+type BusinessWithoutId = Omit<Business, '$id'>
+type PersonWithoutContact = Omit<Person, 'email' | 'telephone'>
+```
+
+## Generic Types
+
+### Entity<T>
+
+Generic entity with `$id` and `$type`:
+
+```typescript
+type Entity<T> = T & {
+  $id: string
+  $type: string
+}
+```
+
+**Usage**:
+
+```typescript
+function processEntity<T>(entity: Entity<T>) {
+  console.log('Processing:', entity.$id)
+}
+```
+
+### SemanticTriple<S, P, O>
+
+Type-safe semantic triple:
+
+```typescript
+type SemanticTriple<S, P, O> = {
+  subject: Entity<S>
+  predicate: P
+  object: Entity<O>
+}
+```
+
+**Usage**:
+
+```typescript
+type Employment = SemanticTriple<Person, '$.worksFor', Organization>
+
+const triple: Employment = {
+  subject: person,
+  predicate: '$.worksFor',
+  object: organization,
+}
+```
+
+## Type Inference
+
+sdk.do provides type inference for common operations:
+
+```typescript
+// Inferred as Business
+const business = await db.create($.Business, {
+  name: 'Acme',
+  industry: 'Technology',
+})
+
+// Inferred as Business[]
+const businesses = await db.list($.Business)
+
+// Inferred as Person[]
+const employees = await db.related(organization, $.employs, $.Person)
+```
+
+## See Also
+
+- [Function Reference](./functions) - Function documentation
+- [API Overview](./index) - API overview
+- [schema.org.ai](https://schema.org.ai) - Complete Schema.org types
+- [Examples](../examples/) - Code examples

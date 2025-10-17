@@ -1,0 +1,301 @@
+---
+$id: https://llm.do/examples/integration
+$type: HowTo
+title: LLM Gateway Integration Examples
+description: Integrate llm.do with other .do platform services
+keywords: [llm, integration, sdk, db, events, workflows]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Integration Examples
+
+Integrate llm.do with other `.do` platform services for powerful AI workflows.
+
+## Integration with db.do
+
+Enrich database records with AI-generated content:
+
+```typescript
+import { $, llm, db } from 'sdk.do'
+
+// Automatic content generation on create
+async function createProductWithAI(productData: Partial<Product>) {
+  // Create product
+  const product = await db.create({
+    $type: 'Product',
+    ...productData,
+  })
+
+  // Generate missing content
+  if (!product.description) {
+    const description = await llm.generate(`Generate SEO-optimized description for ${product.name}`, {
+      schema: $.Product,
+      context: product,
+      routing: { optimize: 'cost' },
+    })
+
+    await db.update(product.$id, { description })
+  }
+
+  // Generate embeddings for search
+  const embedding = await llm.embed(`${product.name} ${product.description}`)
+
+  await db.update(product.$id, { embedding })
+
+  return product
+}
+```
+
+## Integration with on.do and send.do
+
+Create event-driven AI workflows:
+
+```typescript
+import { $, llm, db, on, send } from 'sdk.do'
+
+// Generate content when product is created
+on($.Product.created, async (event) => {
+  const product = event.data
+
+  // Generate description
+  const enriched = await llm.generate(`Generate comprehensive product description`, {
+    schema: $.Product,
+    context: product,
+    structured: true,
+  })
+
+  // Update product
+  await db.update(product.$id, enriched)
+
+  // Send enriched event
+  await send($.Product.enriched, { product: enriched })
+})
+
+// Generate marketing content when product is enriched
+on($.Product.enriched, async (event) => {
+  const product = event.data
+
+  const [headline, metadata] = await Promise.all([
+    llm.generate(`Create attention-grabbing headline for ${product.name}`, {
+      provider: 'anthropic',
+      model: 'claude-sonnet-4.5',
+    }),
+    llm.generate(`Generate SEO metadata`, {
+      context: product,
+      structured: true,
+    }),
+  ])
+
+  await db.update(product.$id, { headline, metadata })
+  await send($.Product.marketingReady, { product })
+})
+```
+
+## Integration with api.do
+
+Use LLMs to process external API data:
+
+```typescript
+import { llm, api } from 'sdk.do'
+
+// Fetch and analyze data from external API
+async function analyzeCompetitorData(competitorUrl: string) {
+  // Fetch competitor data
+  const data = await api.get(competitorUrl)
+
+  // Analyze with LLM
+  const analysis = await llm.generate('Analyze this competitor data and provide insights', {
+    context: { data },
+    maxTokens: 1000,
+    routing: { optimize: 'quality' },
+  })
+
+  return analysis
+}
+
+// Transform API responses with LLM
+async function transformAPIResponse(response: any) {
+  return await llm.generate('Transform this API response to match our schema', {
+    schema: $.Product,
+    structured: true,
+    context: { response },
+  })
+}
+```
+
+## Integration with every.do
+
+Schedule periodic AI tasks:
+
+```typescript
+import { $, llm, db, every } from 'sdk.do'
+
+// Generate daily market insights
+every($.Daily, async () => {
+  const products = await db.list($.Product, { limit: 100 })
+
+  const insights = await llm.generate('Generate daily market insights from this product data', {
+    context: { products },
+    maxTokens: 500,
+  })
+
+  await db.create({
+    $type: 'MarketInsight',
+    date: new Date(),
+    insights,
+    products: products.map((p) => p.$id),
+  })
+})
+
+// Weekly batch enrichment
+every($.Weekly, async () => {
+  const products = await db.list($.Product, {
+    where: { description: null },
+  })
+
+  const requests = products.map((product) => ({
+    custom_id: product.$id,
+    prompt: `Generate description for ${product.name}`,
+    schema: $.Product,
+    context: product,
+  }))
+
+  const batch = await llm.batch.create(requests, {
+    model: 'gpt-5-mini',
+  })
+
+  console.log(`Created batch ${batch.id} for ${products.length} products`)
+})
+```
+
+## Integration with user.do
+
+Personalize AI responses for users:
+
+```typescript
+import { llm, user } from 'sdk.do'
+
+async function generatePersonalizedContent(prompt: string) {
+  const currentUser = await user.current()
+
+  return await llm.generate(prompt, {
+    context: {
+      user: {
+        preferences: currentUser.preferences,
+        language: currentUser.language,
+        previousInteractions: await user.getHistory(),
+      },
+    },
+  })
+}
+
+// User-specific content generation
+async function generateForUser(userId: string, contentType: string) {
+  const userData = await user.get(userId)
+
+  const content = await llm.generate(`Generate ${contentType} for user`, {
+    context: { user: userData },
+    provider: 'anthropic', // Claude is great for personalized content
+    model: 'claude-sonnet-4.5',
+  })
+
+  // Track user interaction
+  await user.trackInteraction(userId, {
+    type: 'ai_generation',
+    contentType,
+    timestamp: new Date(),
+  })
+
+  return content
+}
+```
+
+## Complete E-Commerce Example
+
+Full integration example for e-commerce:
+
+```typescript
+import { $, llm, db, on, send, api } from 'sdk.do'
+
+// Product creation workflow
+on($.Product.created, async (event) => {
+  const product = event.data
+
+  // 1. Generate comprehensive description
+  const description = await llm.generate(`Generate SEO-optimized product description for ${product.name}`, {
+    schema: $.Product,
+    context: product,
+    model: 'gpt-5-mini',
+  })
+
+  // 2. Generate marketing headlines
+  const headlines = await llm.generate(`Create 5 attention-grabbing headlines for ${product.name}`, {
+    provider: 'anthropic',
+    model: 'claude-sonnet-4.5',
+    temperature: 0.9,
+  })
+
+  // 3. Generate embeddings for search
+  const embedding = await llm.embed(`${product.name} ${description}`)
+
+  // 4. Update product
+  await db.update(product.$id, {
+    description,
+    headlines: headlines.split('\n'),
+    embedding,
+  })
+
+  // 5. Notify downstream systems
+  await send($.Product.enriched, { product: product.$id })
+})
+
+// Search integration
+on($.SearchAction.performed, async (event) => {
+  const { query } = event.data
+
+  // Generate search embedding
+  const queryEmbedding = await llm.embed(query)
+
+  // Semantic search
+  const results = await db.similaritySearch(queryEmbedding, {
+    type: $.Product,
+    limit: 20,
+    threshold: 0.7,
+  })
+
+  // Re-rank with LLM
+  const reranked = await llm.generate(`Rank these products by relevance to "${query}": ${results.map((r) => r.name).join(', ')}`, {
+    model: 'gpt-5-nano',
+    maxTokens: 100,
+  })
+
+  return results
+})
+
+// Customer support integration
+on($.SupportTicket.created, async (event) => {
+  const ticket = event.data
+
+  // Generate suggested response
+  const suggestion = await llm.generate(`Generate professional customer support response`, {
+    context: { ticket },
+    provider: 'anthropic',
+    model: 'claude-sonnet-4.5',
+  })
+
+  // Classify urgency
+  const urgency = await llm.generate(`Classify urgency (low/medium/high): ${ticket.message}`, {
+    model: 'gpt-5-nano',
+    maxTokens: 10,
+  })
+
+  await db.update(ticket.$id, { suggestion, urgency })
+  await send($.SupportTicket.classified, { ticket: ticket.$id })
+})
+```
+
+## License
+
+MIT (Open Source)

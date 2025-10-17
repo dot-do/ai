@@ -1,0 +1,883 @@
+---
+$id: https://data.do
+$type: https://schema.org/SoftwareApplication
+name: data.do
+description: Universal data operations platform for CRUD, transformations, validation, and ETL workflows
+version: 1.0.0
+author:
+  $type: https://schema.org/Organization
+  name: .do
+  url: https://do.inc
+license:
+  documentation: CC-BY-4.0
+  code: MIT
+applicationCategory: Data Processing
+operatingSystem: Cross-platform
+softwareVersion: 1.0.0
+---
+
+# data.do
+
+**Universal data operations platform for CRUD, transformations, validation, and ETL workflows.**
+
+`data.do` provides a comprehensive suite of data operations that work seamlessly with any data source. From simple CRUD operations to complex ETL pipelines, data validation, and schema management, data.do offers a unified, type-safe API for all your data processing needs.
+
+## Quick Start
+
+```typescript
+import { $, data } from 'sdk.do'
+
+// Create data with validation
+const user = await data.create($.User, {
+  name: 'Alice Johnson',
+  email: 'alice@example.com',
+  role: 'admin',
+})
+
+// Transform data
+const normalized = await data.transform(user, $.User.normalize)
+
+// Validate against schema
+const valid = await data.validate(normalized, $.User)
+
+// Update with type safety
+await data.update(user.$id, {
+  lastLogin: new Date(),
+})
+```
+
+## Core Features
+
+### 1. Universal CRUD Operations
+
+Perform create, read, update, and delete operations with a consistent API across all data sources:
+
+```typescript
+// Create
+const product = await data.create($.Product, {
+  name: 'Laptop',
+  price: 999.99,
+  category: 'Electronics',
+})
+
+// Read
+const products = await data.list($.Product, {
+  where: { category: 'Electronics' },
+  orderBy: { price: 'desc' },
+})
+
+// Update
+await data.update(product.$id, {
+  price: 899.99,
+  onSale: true,
+})
+
+// Delete
+await data.delete(product.$id)
+```
+
+### 2. Schema Validation
+
+Validate data against Schema.org, GS1, and custom schemas:
+
+```typescript
+import { validate } from 'sdk.do/data'
+
+// Validate against Schema.org types
+const isValid = await validate(order, $.Order)
+
+// Custom validation rules
+const validated = await validate(product, {
+  $type: $.Product,
+  rules: {
+    price: { min: 0, max: 10000 },
+    name: { minLength: 3, maxLength: 100 },
+    sku: { pattern: /^[A-Z]{3}-\d{6}$/ },
+  },
+})
+
+// Validation with error details
+const result = await validate(data, $.Customer, {
+  detailed: true,
+})
+
+if (!result.valid) {
+  console.log(result.errors)
+  // [{ path: 'email', message: 'Invalid email format' }]
+}
+```
+
+### 3. Data Transformations
+
+Transform data between formats, normalize structures, and enrich content:
+
+```typescript
+// Transform between formats
+const csv = await data.transform(jsonData, {
+  from: 'json',
+  to: 'csv',
+  options: { headers: true },
+})
+
+// Normalize data structure
+const normalized = await data.transform(rawData, $.Customer.normalize, {
+  lowercase: ['email'],
+  trim: ['name', 'address'],
+  parse: ['phoneNumber'],
+})
+
+// Enrich with additional data
+const enriched = await data.transform(customer, $.Customer.enrich, {
+  sources: ['geocode', 'creditScore', 'preferences'],
+})
+
+// Chain transformations
+const processed = await data.transform(input).normalize().validate($.Order).enrich(['pricing', 'inventory']).execute()
+```
+
+### 4. Query Builder
+
+Build complex queries with type-safe, composable patterns:
+
+```typescript
+import { query } from 'sdk.do/data'
+
+// Simple query
+const activeUsers = await query($.User).where({ status: 'active' }).orderBy('lastLogin', 'desc').limit(10).execute()
+
+// Complex query with joins
+const ordersWithCustomers = await query($.Order)
+  .where({ status: 'pending' })
+  .include({
+    customer: query($.Customer).select(['name', 'email']),
+    items: query($.OrderItem).include('product'),
+  })
+  .having({ total: { $gt: 100 } })
+  .execute()
+
+// Aggregations
+const stats = await query($.Order)
+  .where({ createdAt: { $gte: '2025-01-01' } })
+  .aggregate({
+    total: { $sum: 'amount' },
+    average: { $avg: 'amount' },
+    count: { $count: '*' },
+  })
+  .groupBy('status')
+  .execute()
+
+// Full-text search
+const results = await query($.Product)
+  .search('laptop gaming', {
+    fields: ['name', 'description'],
+    fuzzy: true,
+    boost: { name: 2 },
+  })
+  .execute()
+```
+
+### 5. ETL Pipelines
+
+Build extract, transform, load pipelines for data processing:
+
+```typescript
+import { pipeline } from 'sdk.do/data'
+
+// Simple ETL pipeline
+await pipeline()
+  .extract({
+    source: 'api',
+    url: 'https://api.example.com/users',
+    format: 'json',
+  })
+  .transform([data.normalize($.User), data.validate($.User), data.enrich(['preferences', 'history'])])
+  .load({
+    destination: 'database',
+    table: 'users',
+    mode: 'upsert',
+  })
+  .execute()
+
+// Multi-source pipeline
+await pipeline()
+  .extract([
+    { source: 'csv', path: './data/customers.csv' },
+    { source: 'json', path: './data/orders.json' },
+    { source: 'api', url: 'https://api.example.com/products' },
+  ])
+  .transform({
+    customers: [data.normalize($.Customer), data.validate($.Customer)],
+    orders: [data.normalize($.Order), data.validate($.Order)],
+    products: [data.normalize($.Product), data.validate($.Product)],
+  })
+  .join({
+    orders: { customer: 'customers.id' },
+    orderItems: { product: 'products.id' },
+  })
+  .load({
+    destination: 'database',
+    schema: 'analytics',
+  })
+  .execute()
+
+// Real-time streaming pipeline
+await pipeline()
+  .stream({
+    source: 'kafka',
+    topic: 'events',
+    deserializer: 'json',
+  })
+  .transform([data.filter({ eventType: 'purchase' }), data.normalize($.Order), data.enrich(['customer', 'inventory'])])
+  .branch({
+    highValue: {
+      condition: (order) => order.total > 1000,
+      actions: [data.notify($.Sales), data.log('high-value-orders')],
+    },
+    standard: {
+      actions: [data.log('standard-orders')],
+    },
+  })
+  .load({
+    destination: 'database',
+    table: 'orders',
+  })
+  .run()
+```
+
+### 6. Data Migrations
+
+Manage schema changes and data migrations:
+
+```typescript
+import { migration } from 'sdk.do/data'
+
+// Create migration
+await migration.create('add-customer-tier', {
+  up: async (data) => {
+    await data.addColumn($.Customer, 'tier', {
+      type: 'string',
+      default: 'standard',
+      enum: ['standard', 'premium', 'enterprise'],
+    })
+
+    // Backfill existing customers
+    await data.update($.Customer, {
+      where: { totalPurchases: { $gte: 10000 } },
+      set: { tier: 'enterprise' },
+    })
+  },
+  down: async (data) => {
+    await data.removeColumn($.Customer, 'tier')
+  },
+})
+
+// Run migrations
+await migration.up() // Apply all pending
+await migration.up('add-customer-tier') // Apply specific
+await migration.down() // Rollback last
+await migration.reset() // Rollback all
+
+// Migration status
+const status = await migration.status()
+console.log(status)
+// [
+//   { name: 'initial-schema', status: 'applied', date: '...' },
+//   { name: 'add-customer-tier', status: 'applied', date: '...' },
+//   { name: 'add-order-tracking', status: 'pending' }
+// ]
+```
+
+### 7. Batch Operations
+
+Process large datasets efficiently with batch operations:
+
+```typescript
+import { batch } from 'sdk.do/data'
+
+// Batch create
+await batch.create($.User, users, {
+  batchSize: 100,
+  parallel: 4,
+  onProgress: (processed, total) => {
+    console.log(`Processed ${processed}/${total}`)
+  },
+})
+
+// Batch update
+await batch.update($.Product, {
+  where: { category: 'Electronics' },
+  set: { taxRate: 0.08 },
+  batchSize: 500,
+})
+
+// Batch transform
+const transformed = await batch.transform(
+  records,
+  async (record) => {
+    const normalized = await data.normalize(record, $.Order)
+    const validated = await data.validate(normalized, $.Order)
+    return validated
+  },
+  {
+    concurrency: 10,
+    errorHandling: 'continue', // or 'stop', 'skip'
+  }
+)
+
+// Batch delete
+await batch.delete($.Order, {
+  where: { status: 'cancelled', createdAt: { $lt: '2024-01-01' } },
+  batchSize: 1000,
+  dryRun: true, // Preview before deleting
+})
+```
+
+### 8. Real-time Subscriptions
+
+Subscribe to data changes and react in real-time:
+
+```typescript
+import { subscribe } from 'sdk.do/data'
+
+// Subscribe to changes
+const subscription = await subscribe($.Order, {
+  where: { status: 'pending' },
+  events: ['created', 'updated'],
+})
+
+subscription.on('created', async (order) => {
+  console.log('New order:', order)
+  await processOrder(order)
+})
+
+subscription.on('updated', async (order, changes) => {
+  console.log('Order updated:', changes)
+  if (changes.status === 'paid') {
+    await fulfillOrder(order)
+  }
+})
+
+// Unsubscribe
+await subscription.unsubscribe()
+
+// Subscribe to aggregations
+const statsSubscription = await subscribe($.Order, {
+  aggregate: {
+    total: { $sum: 'amount' },
+    count: { $count: '*' },
+  },
+  groupBy: 'status',
+  interval: '1m', // Update every minute
+})
+
+statsSubscription.on('update', (stats) => {
+  console.log('Current stats:', stats)
+})
+```
+
+### 9. Data Versioning
+
+Track changes and maintain version history:
+
+```typescript
+import { version } from 'sdk.do/data'
+
+// Enable versioning
+await version.enable($.Customer, {
+  strategy: 'snapshot', // or 'delta'
+  retention: '90d',
+  track: ['name', 'email', 'address'],
+})
+
+// Create with versioning
+const customer = await data.create($.Customer, {
+  name: 'Bob Smith',
+  email: 'bob@example.com',
+})
+
+// Update (creates new version)
+await data.update(customer.$id, {
+  email: 'robert@example.com',
+})
+
+// View history
+const history = await version.history(customer.$id)
+console.log(history)
+// [
+//   { version: 1, email: 'bob@example.com', updatedAt: '...', updatedBy: '...' },
+//   { version: 2, email: 'robert@example.com', updatedAt: '...', updatedBy: '...' }
+// ]
+
+// Restore previous version
+await version.restore(customer.$id, 1)
+
+// Compare versions
+const diff = await version.diff(customer.$id, 1, 2)
+console.log(diff)
+// { email: { from: 'bob@example.com', to: 'robert@example.com' } }
+```
+
+### 10. Data Quality
+
+Monitor and improve data quality:
+
+```typescript
+import { quality } from 'sdk.do/data'
+
+// Define quality rules
+await quality.define($.Customer, {
+  completeness: {
+    required: ['name', 'email', 'phone'],
+    threshold: 0.95 // 95% completeness required
+  },
+  accuracy: {
+    email: { format: 'email' },
+    phone: { format: 'e164' },
+    zipCode: { format: 'postal' }
+  },
+  consistency: {
+    state: { values: ['AL', 'AK', ...] },
+    country: { default: 'US' }
+  },
+  timeliness: {
+    lastUpdated: { maxAge: '30d' }
+  }
+})
+
+// Check quality
+const report = await quality.check($.Customer)
+console.log(report)
+// {
+//   score: 0.87,
+//   completeness: 0.92,
+//   accuracy: 0.85,
+//   consistency: 0.98,
+//   timeliness: 0.73,
+//   issues: [
+//     { id: 'cust-123', field: 'email', issue: 'Invalid format' },
+//     { id: 'cust-456', field: 'lastUpdated', issue: 'Outdated (45 days)' }
+//   ]
+// }
+
+// Auto-fix issues
+await quality.fix($.Customer, {
+  strategies: ['normalize', 'validate', 'enrich'],
+  dryRun: false
+})
+
+// Monitor quality over time
+const subscription = await quality.monitor($.Customer, {
+  interval: '1h',
+  alert: {
+    threshold: 0.8,
+    channels: ['email', 'slack']
+  }
+})
+```
+
+## Key Use Cases
+
+### 1. E-commerce Data Management
+
+```typescript
+// Product catalog management
+const catalog = await data
+  .pipeline()
+  .extract({ source: 'csv', path: './products.csv' })
+  .transform([data.normalize($.Product), data.validate($.Product), data.enrich(['pricing', 'inventory', 'images'])])
+  .load({ destination: 'database', table: 'products' })
+  .execute()
+
+// Order processing
+await subscribe($.Order, { events: ['created'] }).on('created', async (order) => {
+  // Validate order
+  const valid = await data.validate(order, $.Order)
+  if (!valid) return
+
+  // Enrich with customer data
+  const enriched = await data.transform(order, $.Order.enrich, {
+    sources: ['customer', 'shipping'],
+  })
+
+  // Process payment
+  await processPayment(enriched)
+
+  // Update inventory
+  await batch.update($.Product, {
+    where: { $id: { $in: order.items.map((i) => i.productId) } },
+    decrement: { inventory: 1 },
+  })
+})
+```
+
+### 2. Customer Data Platform
+
+```typescript
+// Unified customer view
+const customer360 = await query($.Customer)
+  .where({ id: customerId })
+  .include({
+    orders: query($.Order).orderBy('createdAt', 'desc'),
+    interactions: query($.Interaction),
+    preferences: query($.Preference),
+    segments: query($.Segment),
+  })
+  .execute()
+
+// Customer segmentation
+await pipeline()
+  .extract({ source: 'database', table: 'customers' })
+  .transform([data.normalize($.Customer), data.enrich(['purchaseHistory', 'behavior', 'demographics'])])
+  .aggregate({
+    segments: {
+      highValue: { filter: { ltv: { $gte: 5000 } } },
+      atRisk: { filter: { daysSinceLastPurchase: { $gte: 90 } } },
+      newCustomers: { filter: { createdAt: { $gte: '30d' } } },
+    },
+  })
+  .load({ destination: 'database', table: 'segments' })
+  .execute()
+```
+
+### 3. Analytics and Reporting
+
+```typescript
+// Sales analytics pipeline
+await pipeline()
+  .extract([
+    { source: 'database', query: query($.Order).where({ status: 'completed' }) },
+    { source: 'database', query: query($.Customer) },
+    { source: 'database', query: query($.Product) },
+  ])
+  .join({
+    orders: { customer: 'customers.id' },
+    orderItems: { product: 'products.id' },
+  })
+  .aggregate({
+    revenue: { $sum: 'orders.total' },
+    orders: { $count: 'orders.id' },
+    avgOrderValue: { $avg: 'orders.total' },
+    topProducts: {
+      $groupBy: 'products.name',
+      $sum: 'orderItems.quantity',
+      $limit: 10,
+    },
+  })
+  .load({ destination: 'analytics', table: 'daily_sales' })
+  .schedule('0 0 * * *') // Run daily at midnight
+```
+
+### 4. Data Integration
+
+```typescript
+// Multi-source integration
+await pipeline()
+  .extract([
+    { source: 'salesforce', object: 'Account' },
+    { source: 'hubspot', object: 'Company' },
+    { source: 'stripe', object: 'Customer' },
+  ])
+  .transform([
+    data.normalize($.Organization),
+    data.deduplicate({ keys: ['email', 'domain'] }),
+    data.merge({ strategy: 'latest', conflictResolution: 'manual' }),
+  ])
+  .validate($.Organization)
+  .load({ destination: 'database', table: 'organizations', mode: 'upsert' })
+  .execute()
+
+// Real-time sync
+await subscribe('salesforce', { object: 'Account' }).on('change', async (account) => {
+  const normalized = await data.normalize(account, $.Organization)
+  await data.upsert($.Organization, normalized, { key: 'externalId' })
+})
+```
+
+### 5. Data Quality Management
+
+```typescript
+// Quality monitoring and improvement
+await quality.define($.Product, {
+  completeness: {
+    required: ['name', 'sku', 'price', 'description'],
+    threshold: 0.98,
+  },
+  accuracy: {
+    price: { min: 0, max: 100000 },
+    sku: { pattern: /^[A-Z]{3}-\d{6}$/ },
+  },
+})
+
+// Regular quality checks
+await every('1h', async () => {
+  const report = await quality.check($.Product)
+
+  if (report.score < 0.95) {
+    // Auto-fix common issues
+    await quality.fix($.Product, {
+      strategies: ['normalize', 'validate'],
+    })
+
+    // Alert team
+    await send($.Alert, {
+      type: 'data-quality',
+      subject: 'Product data quality below threshold',
+      details: report,
+    })
+  }
+})
+```
+
+## Architecture
+
+### Data Flow
+
+```
+┌──────────────┐
+│   Sources    │
+│ (API, DB,    │
+│  Files, etc) │
+└──────┬───────┘
+       │
+       v
+┌──────────────┐
+│   Extract    │
+│  (Connectors)│
+└──────┬───────┘
+       │
+       v
+┌──────────────┐
+│  Transform   │
+│ (Normalize,  │
+│  Validate,   │
+│  Enrich)     │
+└──────┬───────┘
+       │
+       v
+┌──────────────┐
+│   Load       │
+│ (Database,   │
+│  API, Files) │
+└──────┬───────┘
+       │
+       v
+┌──────────────┐
+│ Destinations │
+└──────────────┘
+```
+
+### Core Components
+
+1. **CRUD Engine**: Universal create, read, update, delete operations
+2. **Validation Engine**: Schema validation with detailed error reporting
+3. **Transform Engine**: Data transformation and normalization
+4. **Query Builder**: Type-safe, composable query construction
+5. **Pipeline Engine**: ETL pipeline orchestration
+6. **Batch Processor**: Efficient bulk operations
+7. **Subscription Manager**: Real-time data change notifications
+8. **Version Manager**: Data versioning and history tracking
+9. **Quality Monitor**: Data quality assessment and improvement
+10. **Migration Manager**: Schema and data migration handling
+
+## Integration with SDK
+
+`data.do` integrates seamlessly with other SDK components:
+
+```typescript
+import { $, data, db, api, on, send } from 'sdk.do'
+
+// Integrate with db.do
+const customer = await db.get($.Customer, customerId)
+const validated = await data.validate(customer, $.Customer)
+
+// Integrate with api.do
+const externalData = await api.fetch('https://api.example.com/data')
+const normalized = await data.transform(externalData, $.Product.normalize)
+
+// Integrate with events
+on($.Order.created, async (event) => {
+  const validated = await data.validate(event.data, $.Order)
+  if (validated) {
+    await processOrder(event.data)
+  }
+})
+
+// Chain operations
+await data
+  .create($.Order, orderData)
+  .validate($.Order)
+  .transform($.Order.normalize)
+  .enrich(['customer', 'inventory'])
+  .then((order) => send($.Order.created, order))
+```
+
+## Performance
+
+### Batch Processing
+
+```typescript
+// Process 1 million records efficiently
+await batch.transform(records, transformer, {
+  batchSize: 1000, // Process 1000 at a time
+  concurrency: 10, // 10 parallel workers
+  onProgress: (processed, total) => {
+    console.log(`${((processed / total) * 100).toFixed(2)}% complete`)
+  },
+})
+```
+
+### Query Optimization
+
+```typescript
+// Optimized query with indexes
+const orders = await query($.Order)
+  .where({ status: 'pending' }) // Indexed field
+  .include({
+    customer: query($.Customer).select(['name', 'email']), // Only needed fields
+  })
+  .limit(100) // Pagination
+  .hint('idx_order_status') // Use specific index
+  .explain() // Show query plan
+  .execute()
+```
+
+### Caching
+
+```typescript
+// Cache query results
+const products = await query($.Product)
+  .where({ category: 'Electronics' })
+  .cache({
+    ttl: '5m',
+    key: 'products-electronics',
+  })
+  .execute()
+
+// Invalidate cache on updates
+on($.Product.updated, async (event) => {
+  await data.cache.invalidate('products-*')
+})
+```
+
+## Error Handling
+
+```typescript
+import { data, DataError } from 'sdk.do/data'
+
+try {
+  await data.create($.Customer, customerData)
+} catch (error) {
+  if (error instanceof DataError) {
+    switch (error.code) {
+      case 'VALIDATION_ERROR':
+        console.log('Validation failed:', error.details)
+        break
+      case 'DUPLICATE_KEY':
+        console.log('Record already exists')
+        break
+      case 'CONSTRAINT_VIOLATION':
+        console.log('Constraint violated:', error.constraint)
+        break
+      default:
+        console.log('Data error:', error.message)
+    }
+  }
+}
+```
+
+## Getting Started
+
+### Installation
+
+```bash
+npm install sdk.do
+```
+
+### Basic Setup
+
+```typescript
+import { $, data } from 'sdk.do'
+
+// Create data
+const user = await data.create($.User, {
+  name: 'Alice',
+  email: 'alice@example.com',
+})
+
+// Read data
+const users = await data.list($.User)
+
+// Update data
+await data.update(user.$id, { lastLogin: new Date() })
+
+// Delete data
+await data.delete(user.$id)
+```
+
+### Configuration
+
+```typescript
+import { configure } from 'sdk.do/data'
+
+configure({
+  // Validation
+  validation: {
+    strict: true,
+    throwOnError: true,
+  },
+
+  // Transformations
+  transforms: {
+    autoNormalize: true,
+    autoTrim: true,
+  },
+
+  // Performance
+  batch: {
+    defaultSize: 100,
+    maxConcurrency: 10,
+  },
+
+  // Caching
+  cache: {
+    enabled: true,
+    ttl: '5m',
+  },
+})
+```
+
+## Examples
+
+See the [examples](./examples) directory for comprehensive examples:
+
+- [Basic Usage](./examples/basic-usage.mdx) - CRUD operations and validation
+- [Advanced Patterns](./examples/advanced-patterns.mdx) - Complex transformations and pipelines
+- [Integration](./examples/integration.mdx) - Integration with other SDK components
+- [Real-world Use Case](./examples/real-world-use-case.mdx) - Complete ETL pipeline
+
+## API Reference
+
+See the [API Reference](./api/reference.mdx) for complete documentation of all functions and types.
+
+## Best Practices
+
+See [Best Practices](./docs/best-practices.mdx) for recommendations on:
+
+- Data modeling
+- Schema design
+- Performance optimization
+- Error handling
+- Testing strategies
+
+## Troubleshooting
+
+See [Troubleshooting](./docs/troubleshooting.mdx) for solutions to common issues.
+
+## License
+
+- Documentation: [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/)
+- Code Examples: [MIT](https://opensource.org/licenses/MIT)
+
+---
+
+Built with [sdk.do](https://sdk.do) | Part of the [.do platform](https://do.inc)

@@ -1,0 +1,73 @@
+---
+$id: https://gateway.do/examples/integration
+$type: HowTo
+title: API Gateway Integration Examples
+description: Integrate gateway.do with other services
+keywords: [gateway, integration, sdk, db, events]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Integration Examples
+
+## Integration with db.do
+
+```typescript
+import { gateway, db } from 'sdk.do'
+
+// Fetch and store external data
+async function syncProducts() {
+  const products = await gateway.get('https://api.supplier.com/products', {
+    auth: { type: 'apiKey', key: 'X-API-Key', value: process.env.SUPPLIER_KEY },
+    cache: { ttl: 3600 },
+  })
+
+  for (const product of products) {
+    await db.upsert({
+      $id: `product:${product.id}`,
+      $type: 'Product',
+      ...product,
+      syncedAt: new Date(),
+    })
+  }
+}
+```
+
+## Integration with on.do and send.do
+
+```typescript
+import { gateway, on, send } from 'sdk.do'
+
+// Fetch data on event
+on($.DataSync.requested, async (event) => {
+  const { endpoint, auth } = event.data
+
+  const data = await gateway.get(endpoint, { auth })
+
+  await send($.DataSync.completed, { data })
+})
+```
+
+## Integration with llm.do
+
+```typescript
+import { gateway, llm } from 'sdk.do'
+
+// Fetch and analyze external data
+async function analyzeCompetitor(url: string) {
+  const data = await gateway.get(url, {
+    cache: { ttl: 3600 },
+  })
+
+  const analysis = await llm.generate('Analyze this competitor data', {
+    context: { data },
+  })
+
+  return analysis
+}
+```
+
+## License
+
+MIT (Open Source)

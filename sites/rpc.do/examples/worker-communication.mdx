@@ -1,0 +1,651 @@
+---
+$id: https://rpc.do/examples/worker-communication
+$type: HowTo
+title: Worker Communication Example
+description: Multi-worker orchestration and communication patterns
+keywords: [rpc, multi-worker, orchestration, fan-out, service-mesh, distributed]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Worker Communication Example
+
+Learn how to orchestrate multiple workers using rpc.do for complex distributed operations.
+
+## Overview
+
+This example demonstrates:
+
+- Orchestrating multiple workers
+- Parallel RPC calls (fan-out pattern)
+- Sequential workflows
+- Error handling across services
+- Service mesh patterns
+
+## Architecture
+
+```
+┌─────────────────┐
+│  API Gateway    │
+│    Worker       │
+└────────┬────────┘
+         │
+    ┌────┴────┬────────┬─────────┐
+    │         │        │         │
+┌───▼───┐ ┌──▼───┐ ┌──▼───┐ ┌──▼────┐
+│ Auth  │ │ User │ │ AI   │ │ Email │
+│Worker │ │Worker│ │Worker│ │Worker │
+└───────┘ └──────┘ └──────┘ └───────┘
+```
+
+## Service Workers
+
+### Auth Worker
+
+```typescript
+// workers/auth-worker/src/rpc-types.ts
+export namespace AuthWorkerRPC {
+  export interface VerifyTokenParams {
+    token: string
+  }
+
+  export interface VerifyTokenResponse {
+    valid: boolean
+    userId?: string
+    email?: string
+    role?: string
+  }
+
+  export type Methods = {
+    verifyToken: {
+      params: VerifyTokenParams
+      response: VerifyTokenResponse
+    }
+  }
+}
+
+// workers/auth-worker/src/index.ts
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const url = new URL(request.url)
+
+    if (url.pathname === '/rpc/verifyToken') {
+      const body = await request.json()
+      const { token } = body.params
+
+      // Verify JWT token (simplified)
+      if (token.startsWith('valid-')) {
+        return Response.json({
+          success: true,
+          data: {
+            valid: true,
+            userId: 'user-123',
+            email: 'user@example.com',
+            role: 'admin',
+          },
+        })
+      }
+
+      return Response.json({
+        success: true,
+        data: { valid: false },
+      })
+    }
+
+    return Response.json({ error: 'Method not found' }, { status: 404 })
+  },
+}
+```
+
+### User Worker
+
+```typescript
+// workers/user-worker/src/rpc-types.ts
+export namespace UserWorkerRPC {
+  export interface GetUserParams {
+    id: string
+  }
+
+  export interface GetUserResponse {
+    id: string
+    name: string
+    email: string
+    role: string
+    preferences: {
+      language: string
+      timezone: string
+    }
+  }
+
+  export interface UpdatePreferencesParams {
+    userId: string
+    preferences: {
+      language?: string
+      timezone?: string
+    }
+  }
+
+  export interface UpdatePreferencesResponse {
+    success: boolean
+    preferences: {
+      language: string
+      timezone: string
+    }
+  }
+
+  export type Methods = {
+    getUser: {
+      params: GetUserParams
+      response: GetUserResponse
+    }
+    updatePreferences: {
+      params: UpdatePreferencesParams
+      response: UpdatePreferencesResponse
+    }
+  }
+}
+
+// workers/user-worker/src/index.ts
+const users = new Map([
+  [
+    'user-123',
+    {
+      id: 'user-123',
+      name: 'John Doe',
+      email: 'john@example.com',
+      role: 'admin',
+      preferences: { language: 'en', timezone: 'UTC' },
+    },
+  ],
+])
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const url = new URL(request.url)
+
+    if (url.pathname === '/rpc/getUser') {
+      const body = await request.json()
+      const user = users.get(body.params.id)
+
+      if (!user) {
+        return Response.json({ success: false, error: 'User not found' }, { status: 404 })
+      }
+
+      return Response.json({ success: true, data: user })
+    }
+
+    if (url.pathname === '/rpc/updatePreferences') {
+      const body = await request.json()
+      const user = users.get(body.params.userId)
+
+      if (!user) {
+        return Response.json({ success: false, error: 'User not found' }, { status: 404 })
+      }
+
+      user.preferences = {
+        ...user.preferences,
+        ...body.params.preferences,
+      }
+
+      return Response.json({
+        success: true,
+        data: {
+          success: true,
+          preferences: user.preferences,
+        },
+      })
+    }
+
+    return Response.json({ error: 'Method not found' }, { status: 404 })
+  },
+}
+```
+
+### AI Worker
+
+```typescript
+// workers/ai-worker/src/rpc-types.ts
+export namespace AIWorkerRPC {
+  export interface GenerateTextParams {
+    prompt: string
+    model?: string
+    temperature?: number
+  }
+
+  export interface GenerateTextResponse {
+    text: string
+    usage: {
+      promptTokens: number
+      completionTokens: number
+      totalTokens: number
+    }
+  }
+
+  export type Methods = {
+    generateText: {
+      params: GenerateTextParams
+      response: GenerateTextResponse
+    }
+  }
+}
+
+// workers/ai-worker/src/index.ts
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const url = new URL(request.url)
+
+    if (url.pathname === '/rpc/generateText') {
+      const body = await request.json()
+      const { prompt, model = 'gpt-5' } = body.params
+
+      // Simulate AI generation
+      return Response.json({
+        success: true,
+        data: {
+          text: `Generated response for: ${prompt}`,
+          usage: {
+            promptTokens: 10,
+            completionTokens: 20,
+            totalTokens: 30,
+          },
+        },
+      })
+    }
+
+    return Response.json({ error: 'Method not found' }, { status: 404 })
+  },
+}
+```
+
+### Email Worker
+
+```typescript
+// workers/email-worker/src/rpc-types.ts
+export namespace EmailWorkerRPC {
+  export interface SendEmailParams {
+    to: string
+    subject: string
+    body: string
+    from?: string
+  }
+
+  export interface SendEmailResponse {
+    messageId: string
+    sent: boolean
+  }
+
+  export type Methods = {
+    sendEmail: {
+      params: SendEmailParams
+      response: SendEmailResponse
+    }
+  }
+}
+
+// workers/email-worker/src/index.ts
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const url = new URL(request.url)
+
+    if (url.pathname === '/rpc/sendEmail') {
+      const body = await request.json()
+      const { to, subject, body: emailBody } = body.params
+
+      // Simulate email sending
+      const messageId = `msg-${Date.now()}`
+
+      console.log(`Sending email to ${to}: ${subject}`)
+
+      return Response.json({
+        success: true,
+        data: {
+          messageId,
+          sent: true,
+        },
+      })
+    }
+
+    return Response.json({ error: 'Method not found' }, { status: 404 })
+  },
+}
+```
+
+## Orchestrator Worker
+
+### Setup Worker Clients
+
+```typescript
+// workers/api-gateway/src/index.ts
+import { createRpcClient, createWorkerClients } from '../../rpc-types'
+import type { WorkerServiceBindings } from '../../rpc-types'
+import type { AuthWorkerRPC } from '../../auth-worker/src/rpc-types'
+import type { UserWorkerRPC } from '../../user-worker/src/rpc-types'
+import type { AIWorkerRPC } from '../../ai-worker/src/rpc-types'
+import type { EmailWorkerRPC } from '../../email-worker/src/rpc-types'
+
+interface Env extends WorkerServiceBindings {
+  AUTH_SERVICE: Fetcher
+  USER_SERVICE: Fetcher
+  AI_SERVICE: Fetcher
+  EMAIL_SERVICE: Fetcher
+}
+
+// Create typed clients
+type Clients = {
+  auth: TypedRpcClient<AuthWorkerRPC.Methods>
+  user: TypedRpcClient<UserWorkerRPC.Methods>
+  ai: TypedRpcClient<AIWorkerRPC.Methods>
+  email: TypedRpcClient<EmailWorkerRPC.Methods>
+}
+
+function createClients(env: Env): Clients {
+  return {
+    auth: createRpcClient<AuthWorkerRPC.Methods>(env.AUTH_SERVICE),
+    user: createRpcClient<UserWorkerRPC.Methods>(env.USER_SERVICE),
+    ai: createRpcClient<AIWorkerRPC.Methods>(env.AI_SERVICE),
+    email: createRpcClient<EmailWorkerRPC.Methods>(env.EMAIL_SERVICE),
+  }
+}
+```
+
+### Pattern 1: Sequential Workflow
+
+```typescript
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const url = new URL(request.url)
+
+    if (url.pathname === '/api/profile/ai-summary') {
+      return handleAISummary(request, env)
+    }
+
+    return Response.json({ error: 'Not found' }, { status: 404 })
+  },
+}
+
+async function handleAISummary(request: Request, env: Env): Promise<Response> {
+  const clients = createClients(env)
+
+  try {
+    // Step 1: Verify authentication
+    const token = request.headers.get('Authorization')?.replace('Bearer ', '')
+
+    if (!token) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const authResult = await clients.auth.call('verifyToken', { token })
+
+    if (!authResult.valid) {
+      return Response.json({ error: 'Invalid token' }, { status: 401 })
+    }
+
+    // Step 2: Get user data
+    const user = await clients.user.call('getUser', {
+      id: authResult.userId!,
+    })
+
+    // Step 3: Generate AI summary
+    const summary = await clients.ai.call('generateText', {
+      prompt: `Summarize this user profile: ${user.name}, ${user.email}, ${user.role}`,
+      model: 'gpt-5',
+    })
+
+    // Step 4: Send email notification
+    await clients.email.call('sendEmail', {
+      to: user.email,
+      subject: 'Your AI Profile Summary',
+      body: summary.text,
+    })
+
+    return Response.json({
+      user: {
+        id: user.id,
+        name: user.name,
+      },
+      summary: summary.text,
+      emailSent: true,
+    })
+  } catch (error) {
+    console.error('Workflow failed:', error)
+    return Response.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+```
+
+### Pattern 2: Parallel Fan-Out
+
+```typescript
+async function handleDashboard(request: Request, env: Env): Promise<Response> {
+  const clients = createClients(env)
+
+  try {
+    // Step 1: Verify authentication
+    const token = request.headers.get('Authorization')?.replace('Bearer ', '')
+
+    if (!token) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const authResult = await clients.auth.call('verifyToken', { token })
+
+    if (!authResult.valid) {
+      return Response.json({ error: 'Invalid token' }, { status: 401 })
+    }
+
+    // Step 2: Fetch data from multiple services in parallel
+    const [user, aiInsight] = await Promise.all([
+      clients.user.call('getUser', { id: authResult.userId! }),
+      clients.ai.call('generateText', {
+        prompt: `Generate personalized insight for user ${authResult.userId}`,
+      }),
+    ])
+
+    return Response.json({
+      user,
+      insight: aiInsight.text,
+      timestamp: new Date().toISOString(),
+    })
+  } catch (error) {
+    console.error('Dashboard failed:', error)
+    return Response.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+```
+
+### Pattern 3: Partial Success
+
+```typescript
+async function handleEnrichedProfile(request: Request, env: Env): Promise<Response> {
+  const clients = createClients(env)
+
+  try {
+    const token = request.headers.get('Authorization')?.replace('Bearer ', '')
+
+    if (!token) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const authResult = await clients.auth.call('verifyToken', { token })
+
+    if (!authResult.valid) {
+      return Response.json({ error: 'Invalid token' }, { status: 401 })
+    }
+
+    // Fetch data with graceful degradation
+    const results = await Promise.allSettled([
+      clients.user.call('getUser', { id: authResult.userId! }),
+      clients.ai.call('generateText', {
+        prompt: `Generate bio for user ${authResult.userId}`,
+      }),
+    ])
+
+    const response: any = {
+      user: results[0].status === 'fulfilled' ? results[0].value : null,
+      aiBio: results[1].status === 'fulfilled' ? results[1].value.text : null,
+      errors: [],
+    }
+
+    // Track failures
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        response.errors.push({
+          service: ['user', 'ai'][index],
+          error: result.reason,
+        })
+      }
+    })
+
+    return Response.json(response)
+  } catch (error) {
+    console.error('Enriched profile failed:', error)
+    return Response.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+```
+
+### Pattern 4: Saga with Compensation
+
+```typescript
+async function handleUpdateWithNotification(request: Request, env: Env): Promise<Response> {
+  const clients = createClients(env)
+  const compensations: Array<() => Promise<void>> = []
+
+  try {
+    const token = request.headers.get('Authorization')?.replace('Bearer ', '')
+    const body = await request.json()
+
+    if (!token) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const authResult = await clients.auth.call('verifyToken', { token })
+
+    if (!authResult.valid) {
+      return Response.json({ error: 'Invalid token' }, { status: 401 })
+    }
+
+    // Step 1: Update user preferences
+    const updateResult = await clients.user.call('updatePreferences', {
+      userId: authResult.userId!,
+      preferences: body.preferences,
+    })
+
+    // Add compensation: revert preferences
+    const oldPreferences = updateResult.preferences
+    compensations.push(async () => {
+      await clients.user.call('updatePreferences', {
+        userId: authResult.userId!,
+        preferences: oldPreferences,
+      })
+    })
+
+    // Step 2: Generate AI notification
+    const notification = await clients.ai.call('generateText', {
+      prompt: `Notification for preference update: ${JSON.stringify(body.preferences)}`,
+    })
+
+    // Step 3: Send email
+    const emailResult = await clients.email.call('sendEmail', {
+      to: authResult.email!,
+      subject: 'Preferences Updated',
+      body: notification.text,
+    })
+
+    return Response.json({
+      success: true,
+      preferences: updateResult.preferences,
+      emailSent: emailResult.sent,
+    })
+  } catch (error) {
+    console.error('Update failed, rolling back:', error)
+
+    // Execute compensations
+    for (const compensate of compensations.reverse()) {
+      try {
+        await compensate()
+      } catch (rollbackError) {
+        console.error('Compensation failed:', rollbackError)
+      }
+    }
+
+    return Response.json({ error: 'Update failed and rolled back' }, { status: 500 })
+  }
+}
+```
+
+## Configure wrangler.jsonc
+
+```jsonc
+// workers/api-gateway/wrangler.jsonc
+{
+  "name": "api-gateway",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-03-07",
+  "compatibility_flags": ["nodejs_compat"],
+  "services": [
+    {
+      "binding": "AUTH_SERVICE",
+      "service": "auth-worker",
+    },
+    {
+      "binding": "USER_SERVICE",
+      "service": "user-worker",
+    },
+    {
+      "binding": "AI_SERVICE",
+      "service": "ai-worker",
+    },
+    {
+      "binding": "EMAIL_SERVICE",
+      "service": "email-worker",
+    },
+  ],
+}
+```
+
+## Testing Multi-Worker Communication
+
+```bash
+# Test sequential workflow
+curl -H "Authorization: Bearer valid-token-123" \
+  https://api-gateway.example.com/api/profile/ai-summary
+
+# Test parallel fan-out
+curl -H "Authorization: Bearer valid-token-123" \
+  https://api-gateway.example.com/api/dashboard
+
+# Test partial success
+curl -H "Authorization: Bearer valid-token-123" \
+  https://api-gateway.example.com/api/profile/enriched
+
+# Test saga pattern
+curl -X POST -H "Authorization: Bearer valid-token-123" \
+  -H "Content-Type: application/json" \
+  -d '{"preferences":{"language":"es","timezone":"America/New_York"}}' \
+  https://api-gateway.example.com/api/preferences/update
+```
+
+## Key Takeaways
+
+1. **Service Composition**: Orchestrate multiple services easily
+2. **Parallel Execution**: Use Promise.all for independent operations
+3. **Error Handling**: Implement graceful degradation with Promise.allSettled
+4. **Compensation**: Use saga pattern for distributed transactions
+5. **Type Safety**: All RPC calls are fully typed
+
+## Performance Tips
+
+1. **Parallel Calls**: Use Promise.all when operations are independent
+2. **Circuit Breakers**: Implement circuit breakers for failing services
+3. **Caching**: Cache frequently accessed data
+4. **Timeouts**: Set timeouts for all RPC calls
+5. **Monitoring**: Track latency and success rates
+
+## See Also
+
+- [Basic RPC](./basic-rpc) - Simple RPC setup
+- [RPC Patterns](../docs/rpc-patterns) - Advanced communication patterns
+- [Service Objects](../docs/service-objects) - Stateful RPC with Durable Objects
+- [API Reference](../api/) - Complete API documentation

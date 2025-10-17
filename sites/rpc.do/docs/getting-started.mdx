@@ -1,0 +1,372 @@
+---
+$id: https://rpc.do/docs/getting-started
+$type: TechArticle
+title: Getting Started with rpc.do
+description: Install and configure rpc.do for worker-to-worker RPC communication
+keywords: [rpc, getting-started, installation, configuration, cloudflare-workers]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Getting Started
+
+This guide will help you set up rpc.do for type-safe RPC communication between Cloudflare Workers.
+
+## Installation
+
+rpc.do is included in the sdk.do package:
+
+```bash
+pnpm add sdk.do
+```
+
+## Project Setup
+
+### 1. Create RPC Types File
+
+Create a shared `rpc-types.ts` file in your workers directory:
+
+```typescript
+// workers/rpc-types.ts
+export interface RpcRequest<TMethod extends string = string, TParams = unknown> {
+  method: TMethod
+  params: TParams
+}
+
+export interface RpcResponse<TData = unknown> {
+  success: boolean
+  data?: TData
+  error?: string
+}
+
+export interface TypedRpcClient<TMethods extends Record<string, { params: any; response: any }>> {
+  call<TMethod extends keyof TMethods>(method: TMethod, params: TMethods[TMethod]['params']): Promise<TMethods[TMethod]['response']>
+}
+
+export function createRpcClient<TMethods extends Record<string, { params: any; response: any }>>(service: Fetcher): TypedRpcClient<TMethods> {
+  return {
+    async call<TMethod extends keyof TMethods>(method: TMethod, params: TMethods[TMethod]['params']): Promise<TMethods[TMethod]['response']> {
+      const response = await service.fetch(`http://service/rpc/${String(method)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ method, params }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`RPC call to ${String(method)} failed: ${response.statusText}`)
+      }
+
+      const result = (await response.json()) as RpcResponse<TMethods[TMethod]['response']>
+
+      if (!result.success) {
+        throw new Error(result.error || `RPC call to ${String(method)} failed`)
+      }
+
+      return result.data as TMethods[TMethod]['response']
+    },
+  }
+}
+```
+
+### 2. Define Service Bindings Interface
+
+Add service bindings to your RPC types:
+
+```typescript
+// workers/rpc-types.ts
+export interface WorkerServiceBindings {
+  // AI Worker
+  AI?: Fetcher
+  AI_SERVICE?: Fetcher
+
+  // OAuth Worker
+  OAUTH?: Fetcher
+  OAUTH_SERVICE?: Fetcher
+
+  // Add more service bindings as needed
+}
+```
+
+### 3. Configure wrangler.jsonc
+
+Add service bindings to your worker configuration:
+
+```jsonc
+// workers/my-worker/wrangler.jsonc
+{
+  "name": "my-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-03-07",
+  "compatibility_flags": ["nodejs_compat"],
+  "services": [
+    {
+      "binding": "AI_SERVICE",
+      "service": "ai-worker",
+      "environment": "production",
+    },
+    {
+      "binding": "OAUTH_SERVICE",
+      "service": "oauth-worker",
+      "environment": "production",
+    },
+  ],
+}
+```
+
+## Create Your First RPC Server
+
+### 1. Define RPC Methods
+
+```typescript
+// workers/my-worker/src/rpc-types.ts
+export namespace MyWorkerRPC {
+  export interface GetDataParams {
+    id: string
+  }
+
+  export interface GetDataResponse {
+    id: string
+    name: string
+    value: number
+  }
+
+  export type Methods = {
+    getData: {
+      params: GetDataParams
+      response: GetDataResponse
+    }
+  }
+}
+```
+
+### 2. Implement RPC Handler
+
+```typescript
+// workers/my-worker/src/index.ts
+import type { RpcRequest, RpcResponse } from '../../rpc-types'
+import type { MyWorkerRPC } from './rpc-types'
+
+interface Env {
+  MY_KV: KVNamespace
+}
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const url = new URL(request.url)
+
+    // Handle RPC endpoints
+    if (url.pathname.startsWith('/rpc/')) {
+      const method = url.pathname.replace('/rpc/', '')
+      const body = (await request.json()) as RpcRequest
+
+      if (method === 'getData') {
+        const params = body.params as MyWorkerRPC.GetDataParams
+        const data = await env.MY_KV.get(params.id, 'json')
+
+        return Response.json({
+          success: true,
+          data: data || { id: params.id, name: 'Unknown', value: 0 },
+        } as RpcResponse<MyWorkerRPC.GetDataResponse>)
+      }
+
+      return Response.json({ success: false, error: 'Method not found' }, { status: 404 })
+    }
+
+    return Response.json({ message: 'My Worker' })
+  },
+}
+```
+
+## Create Your First RPC Client
+
+### 1. Import RPC Types
+
+```typescript
+// workers/client-worker/src/index.ts
+import { createRpcClient } from '../../rpc-types'
+import type { WorkerServiceBindings } from '../../rpc-types'
+import type { MyWorkerRPC } from '../../my-worker/src/rpc-types'
+
+interface Env extends WorkerServiceBindings {
+  MY_WORKER_SERVICE: Fetcher
+}
+```
+
+### 2. Create Typed Client
+
+```typescript
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    // Create typed RPC client
+    const client = createRpcClient<MyWorkerRPC.Methods>(env.MY_WORKER_SERVICE)
+
+    try {
+      // Make type-safe RPC call
+      const result = await client.call('getData', { id: '123' })
+
+      return Response.json({
+        success: true,
+        data: result,
+      })
+    } catch (error) {
+      return Response.json(
+        {
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        { status: 500 }
+      )
+    }
+  },
+}
+```
+
+## Using Multiple Services
+
+### 1. Create Worker Clients Helper
+
+```typescript
+// workers/rpc-types.ts
+export type WorkerClients = {
+  myWorker: TypedRpcClient<MyWorkerRPC.Methods>
+  ai: TypedRpcClient<AIWorkerRPC.Methods>
+  oauth: TypedRpcClient<OAuthWorkerRPC.Methods>
+}
+
+export function createWorkerClients(env: WorkerServiceBindings): Partial<WorkerClients> {
+  const clients: Partial<WorkerClients> = {}
+
+  if (env.MY_WORKER_SERVICE) {
+    clients.myWorker = createRpcClient<MyWorkerRPC.Methods>(env.MY_WORKER_SERVICE)
+  }
+
+  if (env.AI_SERVICE || env.AI) {
+    clients.ai = createRpcClient<AIWorkerRPC.Methods>(env.AI_SERVICE || env.AI!)
+  }
+
+  if (env.OAUTH_SERVICE || env.OAUTH) {
+    clients.oauth = createRpcClient<OAuthWorkerRPC.Methods>(env.OAUTH_SERVICE || env.OAUTH!)
+  }
+
+  return clients
+}
+```
+
+### 2. Use Multiple Clients
+
+```typescript
+import { createWorkerClients } from '../../rpc-types'
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const clients = createWorkerClients(env)
+
+    // Check if required services are available
+    if (!clients.myWorker || !clients.ai) {
+      return Response.json({ error: 'Required services not available' }, { status: 503 })
+    }
+
+    try {
+      // Call multiple services in parallel
+      const [data, aiResult] = await Promise.all([
+        clients.myWorker.call('getData', { id: '123' }),
+        clients.ai.call('generateText', {
+          prompt: 'Analyze this data',
+          model: 'gpt-5',
+        }),
+      ])
+
+      return Response.json({
+        data,
+        analysis: aiResult.text,
+      })
+    } catch (error) {
+      return Response.json({ error: String(error) }, { status: 500 })
+    }
+  },
+}
+```
+
+## Testing Your RPC Setup
+
+### 1. Test RPC Server
+
+```bash
+# Deploy your RPC server
+cd workers/my-worker
+pnpm run deploy
+
+# Test the endpoint
+curl https://my-worker.example.com/rpc/getData \
+  -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"method":"getData","params":{"id":"123"}}'
+```
+
+### 2. Test RPC Client
+
+```bash
+# Deploy your RPC client
+cd workers/client-worker
+pnpm run deploy
+
+# Test the client endpoint
+curl https://client-worker.example.com/
+```
+
+## Next Steps
+
+Now that you have rpc.do set up, explore:
+
+- [RPC Patterns](./rpc-patterns) - Learn common communication patterns
+- [Service Objects](./service-objects) - Use Durable Objects for stateful RPC
+- [API Reference](../api/) - Complete API documentation
+- [Examples](../examples/) - Real-world RPC examples
+
+## Common Issues
+
+### Service Binding Not Found
+
+**Error**: `env.MY_SERVICE is undefined`
+
+**Solution**: Add the service binding to your `wrangler.jsonc`:
+
+```jsonc
+{
+  "services": [
+    {
+      "binding": "MY_SERVICE",
+      "service": "my-worker",
+    },
+  ],
+}
+```
+
+### Type Errors
+
+**Error**: `Property 'call' does not exist on type 'TypedRpcClient<...>'`
+
+**Solution**: Ensure you're importing from the correct `rpc-types.ts` file and that your types are properly defined.
+
+### RPC Call Fails
+
+**Error**: `RPC call to getData failed: 500 Internal Server Error`
+
+**Solution**: Check your RPC server logs for detailed error messages:
+
+```bash
+npx wrangler tail my-worker
+```
+
+## Best Practices
+
+1. **Centralize RPC Types**: Keep all RPC type definitions in a shared location
+2. **Version Your APIs**: Use namespaces for API versions
+3. **Handle Errors**: Always wrap RPC calls in try-catch blocks
+4. **Check Service Availability**: Verify services exist before calling them
+5. **Use TypeScript**: Leverage full type safety for compile-time checks
+
+---
+
+Ready to learn more? Continue with [RPC Patterns](./rpc-patterns) to explore advanced communication patterns.

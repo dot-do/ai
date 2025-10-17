@@ -1,0 +1,697 @@
+---
+$id: https://events.do/api
+$type: APIReference
+title: Events API Reference
+description: Complete API documentation for event listeners and publishers
+keywords: [api, reference, documentation, on, send, events]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Events API Reference
+
+Complete API documentation for the events.do event system.
+
+## Core Functions
+
+### on()
+
+Subscribe to events and execute a handler when they occur.
+
+**Signature**:
+
+```typescript
+function on(pattern: string | string[], handler: EventHandler, options?: ListenerOptions): UnsubscribeFunction
+
+type EventHandler<T = any> = (event: Event<T>) => Promise<void> | void
+type UnsubscribeFunction = () => void
+```
+
+**Parameters**:
+
+- `pattern` - Event name, array of names, or wildcard pattern
+  - Single event: `'Order.created'`
+  - Multiple events: `['Order.created', 'Order.updated']`
+  - Wildcard: `'Order.*'` or `'*.created'` or `'*'`
+- `handler` - Function to execute when event occurs
+- `options` - Optional listener configuration
+
+**Returns**: Function to unsubscribe the listener
+
+**Examples**:
+
+```typescript
+// Single event
+on('Order.created', async (event) => {
+  console.log('Order:', event.data)
+})
+
+// Multiple events
+on(['Order.created', 'Order.updated'], async (event) => {
+  await syncToDatabase(event)
+})
+
+// Wildcard pattern
+on('Order.*', async (event) => {
+  await auditLog(event)
+})
+
+// With options
+const unsubscribe = on('Order.created', handler, {
+  priority: 10,
+  filter: (event) => event.data.total > 1000,
+})
+
+// Unsubscribe later
+unsubscribe()
+```
+
+---
+
+### send()
+
+Publish an event to notify all subscribers.
+
+**Signature**:
+
+```typescript
+function send<T = any>(eventType: string, data: T, metadata?: EventMetadata): Promise<void>
+```
+
+**Parameters**:
+
+- `eventType` - Event name following `Object.Action` pattern
+- `data` - Event payload (any JSON-serializable data)
+- `metadata` - Optional event metadata
+
+**Returns**: Promise that resolves when event is published
+
+**Examples**:
+
+```typescript
+// Simple event
+await send('Order.created', {
+  id: '12345',
+  total: 100,
+})
+
+// With metadata
+await send('Order.created', orderData, {
+  timestamp: new Date(),
+  source: 'checkout-service',
+  correlationId: sessionId,
+  userId: currentUser.id,
+})
+
+// Fire and forget (don't await)
+send('Metrics.updated', metricsData)
+```
+
+---
+
+### sendBatch()
+
+Publish multiple events efficiently in a single batch.
+
+**Signature**:
+
+```typescript
+function sendBatch(
+  events: Array<{
+    type: string
+    data: any
+    metadata?: EventMetadata
+  }>
+): Promise<void>
+```
+
+**Parameters**:
+
+- `events` - Array of events to publish
+
+**Returns**: Promise that resolves when all events are published
+
+**Example**:
+
+```typescript
+await sendBatch([
+  { type: 'Order.created', data: order1 },
+  { type: 'Order.created', data: order2 },
+  { type: 'Order.created', data: order3 },
+])
+```
+
+---
+
+### once()
+
+Subscribe to an event for a single execution, then automatically unsubscribe.
+
+**Signature**:
+
+```typescript
+function once(pattern: string, handler: EventHandler, options?: ListenerOptions): UnsubscribeFunction
+```
+
+**Parameters**:
+
+- `pattern` - Event name or wildcard pattern
+- `handler` - Function to execute once
+- `options` - Optional listener configuration
+
+**Returns**: Function to cancel the subscription
+
+**Example**:
+
+```typescript
+once('Order.completed', async (event) => {
+  console.log('First order completed!', event.data)
+})
+```
+
+---
+
+### waitFor()
+
+Wait for a specific event to occur.
+
+**Signature**:
+
+```typescript
+function waitFor<T = any>(
+  eventType: string,
+  options?: {
+    timeout?: number
+    filter?: (event: Event<T>) => boolean
+  }
+): Promise<Event<T>>
+```
+
+**Parameters**:
+
+- `eventType` - Event name to wait for
+- `options.timeout` - Maximum time to wait in milliseconds (default: 30000)
+- `options.filter` - Optional filter function
+
+**Returns**: Promise that resolves with the event
+
+**Examples**:
+
+```typescript
+// Wait for event
+const event = await waitFor('Order.completed')
+console.log('Order completed:', event.data)
+
+// With timeout
+try {
+  const event = await waitFor('Order.completed', { timeout: 5000 })
+} catch (error) {
+  console.log('Timeout waiting for event')
+}
+
+// With filter
+const event = await waitFor('Order.completed', {
+  filter: (event) => event.data.id === orderId,
+})
+```
+
+---
+
+### replay()
+
+Replay historical events.
+
+**Signature**:
+
+```typescript
+function replay(options: { pattern?: string; since?: Date; until?: Date; filter?: (event: Event) => boolean }): Promise<void>
+```
+
+**Parameters**:
+
+- `options.pattern` - Event pattern to replay (default: all)
+- `options.since` - Start date for replay
+- `options.until` - End date for replay
+- `options.filter` - Filter function for events
+
+**Returns**: Promise that resolves when replay is complete
+
+**Example**:
+
+```typescript
+// Replay all Order events from last hour
+await replay({
+  pattern: 'Order.*',
+  since: new Date(Date.now() - 3600000),
+})
+
+// Replay specific events
+await replay({
+  pattern: 'Order.created',
+  since: new Date('2024-01-01'),
+  until: new Date('2024-01-31'),
+  filter: (event) => event.data.total > 1000,
+})
+```
+
+---
+
+### configureEvents()
+
+Configure the event bus.
+
+**Signature**:
+
+```typescript
+function configureEvents(config: EventBusConfig): void
+
+interface EventBusConfig {
+  maxRetries?: number
+  retryDelay?: number
+  persist?: boolean
+  storage?: 'memory' | 'redis' | 'postgres'
+  replay?: boolean
+  debug?: boolean
+}
+```
+
+**Parameters**:
+
+- `config.maxRetries` - Maximum retries for failed handlers (default: 3)
+- `config.retryDelay` - Delay between retries in ms (default: 1000)
+- `config.persist` - Enable event persistence (default: false)
+- `config.storage` - Storage backend (default: 'memory')
+- `config.replay` - Enable event replay (default: false)
+- `config.debug` - Enable debug logging (default: false)
+
+**Example**:
+
+```typescript
+configureEvents({
+  maxRetries: 5,
+  retryDelay: 2000,
+  persist: true,
+  storage: 'redis',
+  debug: true,
+})
+```
+
+---
+
+### onError()
+
+Register global error handler for event processing errors.
+
+**Signature**:
+
+```typescript
+function onError(handler: (error: Error, event: Event, listener: EventHandler) => void | Promise<void>): void
+```
+
+**Parameters**:
+
+- `handler` - Error handler function
+
+**Example**:
+
+```typescript
+onError(async (error, event, handler) => {
+  console.error('Event processing error:', {
+    error: error.message,
+    eventType: event.type,
+    eventData: event.data,
+  })
+
+  // Report to error tracking
+  await reportError(error, { event, handler })
+})
+```
+
+## Types
+
+### Event
+
+The event object passed to handlers.
+
+```typescript
+interface Event<T = any> {
+  type: string // Event name (e.g., 'Order.created')
+  data: T // Event payload
+  metadata?: EventMetadata
+}
+```
+
+**Properties**:
+
+- `type` - Event name following `Object.Action` pattern
+- `data` - Event payload (any type)
+- `metadata` - Optional event metadata
+
+---
+
+### EventMetadata
+
+Metadata attached to events for tracing and debugging.
+
+```typescript
+interface EventMetadata {
+  timestamp?: Date // When event occurred
+  source?: string // Source service/component
+  correlationId?: string // ID linking related events
+  causationId?: string // ID of event that caused this event
+  userId?: string // User who triggered event
+  version?: number // Event schema version
+  [key: string]: any // Additional custom metadata
+}
+```
+
+**Properties**:
+
+- `timestamp` - When the event occurred
+- `source` - Source service or component that published the event
+- `correlationId` - Unique ID to correlate related events across services
+- `causationId` - ID of the event that caused this event (for event chains)
+- `userId` - ID of the user who triggered the event
+- `version` - Schema version of the event data
+- Custom properties can be added as needed
+
+---
+
+### EventHandler
+
+Function signature for event handlers.
+
+```typescript
+type EventHandler<T = any> = (event: Event<T>) => Promise<void> | void
+```
+
+Handlers can be async or sync, but async is recommended for most use cases.
+
+---
+
+### ListenerOptions
+
+Options for configuring event listeners.
+
+```typescript
+interface ListenerOptions {
+  priority?: number // Execution priority (higher runs first, default: 0)
+  filter?: (event: Event) => boolean // Filter events before handling
+  retry?: RetryOptions // Retry configuration
+}
+```
+
+**Properties**:
+
+- `priority` - Execution priority (default: 0). Higher priority handlers run first.
+- `filter` - Filter function to determine if handler should execute
+- `retry` - Retry configuration for failed handlers
+
+---
+
+### RetryOptions
+
+Configuration for retrying failed handlers.
+
+```typescript
+interface RetryOptions {
+  maxAttempts?: number // Maximum retry attempts (default: 3)
+  delayMs?: number // Delay between retries (default: 1000)
+  backoff?: 'constant' | 'linear' | 'exponential' // Backoff strategy
+}
+```
+
+**Properties**:
+
+- `maxAttempts` - Maximum number of retry attempts
+- `delayMs` - Base delay between retries in milliseconds
+- `backoff` - Backoff strategy:
+  - `constant` - Same delay each time
+  - `linear` - Delay increases linearly
+  - `exponential` - Delay doubles each time
+
+---
+
+### UnsubscribeFunction
+
+Function returned by `on()` to unsubscribe the listener.
+
+```typescript
+type UnsubscribeFunction = () => void
+```
+
+Call this function to stop listening for events:
+
+```typescript
+const unsubscribe = on('Order.created', handler)
+
+// Later...
+unsubscribe()
+```
+
+## Semantic Integration
+
+### Using with $ Proxy
+
+The `$` proxy provides semantic context for event names:
+
+```typescript
+import $, { on, send } from 'sdk.do'
+
+// Semantic event patterns
+on($.Order.created, handler)
+on($.Payment.completed, handler)
+on($.User.registered, handler)
+
+// Publishing semantic events
+await send($.Order.created, orderData)
+await send($.Payment.completed, paymentData)
+```
+
+### Type-Safe Events
+
+Define custom event types for type safety:
+
+```typescript
+import type { Event } from 'sdk.do'
+
+interface OrderCreatedEvent
+  extends Event<{
+    id: string
+    customer: { id: string; name: string }
+    items: Array<{ product: string; quantity: number; price: number }>
+    total: number
+  }> {
+  type: 'Order.created'
+}
+
+on('Order.created', async (event: OrderCreatedEvent) => {
+  // TypeScript knows event.data structure
+  console.log(`Order ${event.data.id} for ${event.data.customer.name}`)
+})
+```
+
+## Event Naming Patterns
+
+### Standard Format
+
+Events follow the `Object.Action` pattern:
+
+- **Object**: Business entity (Order, Payment, User, Product)
+- **Action**: Past-tense verb (created, updated, deleted, shipped)
+
+**Examples**:
+
+```typescript
+// Lifecycle events
+'Order.created'
+'Order.updated'
+'Order.deleted'
+
+// State changes
+'Order.validated'
+'Order.shipped'
+'Order.delivered'
+'Order.completed'
+'Order.cancelled'
+
+// Business actions
+'Payment.requested'
+'Payment.completed'
+'Payment.refunded'
+
+'User.registered'
+'User.verified'
+'User.loggedIn'
+
+'Product.outOfStock'
+'Product.restocked'
+```
+
+### Wildcard Patterns
+
+Use wildcards to match multiple events:
+
+```typescript
+// All Order events
+on('Order.*', handler)
+
+// All creation events
+on('*.created', handler)
+
+// All events
+on('*', handler)
+```
+
+## Error Handling
+
+### Handler Errors
+
+Errors thrown in handlers are caught and can be retried:
+
+```typescript
+on(
+  'Order.created',
+  async (event) => {
+    try {
+      await processOrder(event.data)
+    } catch (error) {
+      console.error('Processing failed:', error)
+      throw error // Will trigger retry
+    }
+  },
+  {
+    retry: {
+      maxAttempts: 3,
+      delayMs: 1000,
+      backoff: 'exponential',
+    },
+  }
+)
+```
+
+### Global Error Handler
+
+Set up a global error handler:
+
+```typescript
+onError(async (error, event, handler) => {
+  console.error('Event error:', {
+    error: error.message,
+    event: event.type,
+  })
+
+  // Report to monitoring
+  await reportError(error, event)
+})
+```
+
+## Performance
+
+### Async Publishing
+
+Don't block on event publishing:
+
+```typescript
+// ✅ Good - non-blocking
+send('Order.created', orderData)
+return response
+
+// ❌ Bad - blocks
+await send('Order.created', orderData)
+return response
+```
+
+### Batch Publishing
+
+Publish multiple events efficiently:
+
+```typescript
+// ✅ Good - batch
+await sendBatch([
+  { type: 'Order.created', data: order1 },
+  { type: 'Order.created', data: order2 },
+  { type: 'Order.created', data: order3 },
+])
+
+// ❌ Bad - individual
+await send('Order.created', order1)
+await send('Order.created', order2)
+await send('Order.created', order3)
+```
+
+### Event Size
+
+Keep event payloads reasonable:
+
+```typescript
+// ✅ Good - essential data
+await send('Order.created', {
+  id: order.id,
+  customerId: order.customerId,
+  total: order.total,
+})
+
+// ❌ Bad - huge payload
+await send('Order.created', {
+  ...order,
+  ...customer,
+  ...allProducts,
+  ...everythingElse,
+})
+```
+
+## Testing
+
+### Unit Testing
+
+```typescript
+import { on, send } from 'sdk.do'
+import { vi } from 'vitest'
+
+test('handles order creation', async () => {
+  const handler = vi.fn()
+
+  on('Order.created', handler)
+
+  await send('Order.created', { id: '12345' })
+
+  expect(handler).toHaveBeenCalledWith(
+    expect.objectContaining({
+      type: 'Order.created',
+      data: { id: '12345' },
+    })
+  )
+})
+```
+
+### Integration Testing
+
+```typescript
+import { on, send } from 'sdk.do'
+import { expect, test } from 'vitest'
+
+test('event flow', async () => {
+  const events = []
+
+  on('Order.*', async (event) => {
+    events.push(event.type)
+  })
+
+  await send('Order.created', { id: '12345' })
+  await send('Order.validated', { id: '12345' })
+
+  await new Promise((resolve) => setTimeout(resolve, 100))
+
+  expect(events).toEqual(['Order.created', 'Order.validated'])
+})
+```
+
+## See Also
+
+- [Getting Started](../docs/getting-started)
+- [Event Listeners](../docs/listeners)
+- [Event Publishers](../docs/publishers)
+- [Examples](../examples/)
+- [sdk.do](https://sdk.do)

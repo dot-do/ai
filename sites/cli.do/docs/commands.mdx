@@ -1,0 +1,1070 @@
+---
+$id: https://cli.do/docs/commands
+$type: TechArticle
+title: Commands Reference - cli.do
+description: Complete reference guide for all cli.do commands and options
+keywords: [commands, reference, api, cli, documentation]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Commands Reference
+
+Complete reference for all cli.do commands, options, and usage patterns.
+
+## Command Structure
+
+```bash
+do [command] [subcommand] [arguments] [options]
+```
+
+Examples:
+
+```bash
+do db list Business
+do ai generate "text" --model claude-sonnet-4.5
+do send Order.created '{"id": "123"}' --format json
+```
+
+## Global Options
+
+Options that work with all commands:
+
+```bash
+--help, -h         Show help for command
+--version, -v      Show version information
+--config, -c       Specify config file path
+--env, -e          Specify environment (production, staging, development)
+--format, -f       Output format (json, yaml, table, pretty, raw)
+--verbose          Enable verbose output
+--quiet, -q        Suppress all output except errors
+--no-color         Disable colored output
+--debug            Enable debug mode with detailed logging
+--timeout          Set command timeout in milliseconds (default: 30000)
+```
+
+Examples:
+
+```bash
+do db list Business --format table
+do ai generate "text" --verbose
+do send Order.created '{}' --env production
+```
+
+## Database Commands
+
+### `do db list`
+
+List entities by semantic type.
+
+**Usage:**
+
+```bash
+do db list <Type> [options]
+```
+
+**Arguments:**
+
+- `<Type>` - Semantic type (e.g., Business, Person, Product)
+
+**Options:**
+
+```bash
+--where, -w        Filter condition as JSON
+--limit, -l        Maximum number of results (default: 100)
+--offset, -o       Number of results to skip (default: 0)
+--sort, -s         Sort field and order (e.g., "name:asc", "date:desc")
+--fields           Comma-separated fields to include
+--format, -f       Output format (json, yaml, table, pretty)
+```
+
+**Examples:**
+
+```bash
+# List all businesses
+do db list Business
+
+# List with filter
+do db list Person --where '{"jobTitle": "Engineer"}'
+
+# List with pagination
+do db list Product --limit 10 --offset 20
+
+# List with sorting
+do db list Business --sort "name:asc"
+
+# List specific fields
+do db list Person --fields "name,email,jobTitle"
+
+# List with table output
+do db list Business --format table
+```
+
+### `do db get`
+
+Get entity by semantic type and ID.
+
+**Usage:**
+
+```bash
+do db get <Type> <id> [options]
+```
+
+**Arguments:**
+
+- `<Type>` - Semantic type (e.g., Business, Person)
+- `<id>` - Entity ID
+
+**Options:**
+
+```bash
+--fields           Comma-separated fields to include
+--format, -f       Output format (json, yaml, pretty)
+```
+
+**Examples:**
+
+```bash
+# Get business by ID
+do db get Business acme-corp
+
+# Get with specific fields
+do db get Person john-doe --fields "name,email"
+
+# Get with pretty output
+do db get Business acme-corp --format pretty
+```
+
+### `do db create`
+
+Create new entity.
+
+**Usage:**
+
+```bash
+do db create <Type> <data> [options]
+```
+
+**Arguments:**
+
+- `<Type>` - Semantic type
+- `<data>` - Entity data as JSON string or @filename
+
+**Options:**
+
+```bash
+--file, -f         Read data from file
+--batch, -b        Create multiple entities from array
+--dry-run          Validate without creating
+--format           Output format (json, yaml, pretty)
+```
+
+**Examples:**
+
+```bash
+# Create from JSON string
+do db create Person '{"$id": "jane", "name": "Jane Doe"}'
+
+# Create from file
+do db create Person @person.json
+
+# Create from stdin
+echo '{"name": "John"}' | do db create Person
+
+# Batch create
+do db create Person '[{"name": "A"}, {"name": "B"}]' --batch
+
+# Dry run (validate only)
+do db create Person '{"name": "Test"}' --dry-run
+```
+
+### `do db update`
+
+Update existing entity.
+
+**Usage:**
+
+```bash
+do db update <Type> <id> <data> [options]
+```
+
+**Arguments:**
+
+- `<Type>` - Semantic type
+- `<id>` - Entity ID
+- `<data>` - Update data as JSON string or @filename
+
+**Options:**
+
+```bash
+--file, -f         Read data from file
+--merge            Merge with existing data (default: replace)
+--format           Output format (json, yaml, pretty)
+```
+
+**Examples:**
+
+```bash
+# Update entity
+do db update Person john-doe '{"jobTitle": "Senior Engineer"}'
+
+# Update from file
+do db update Person john-doe @updates.json
+
+# Merge update
+do db update Person john-doe '{"email": "new@example.com"}' --merge
+```
+
+### `do db delete`
+
+Delete entity.
+
+**Usage:**
+
+```bash
+do db delete <Type> <id> [options]
+```
+
+**Arguments:**
+
+- `<Type>` - Semantic type
+- `<id>` - Entity ID
+
+**Options:**
+
+```bash
+--force, -f        Skip confirmation prompt
+--soft             Soft delete (mark as deleted)
+```
+
+**Examples:**
+
+```bash
+# Delete entity
+do db delete Person john-doe
+
+# Delete without confirmation
+do db delete Person john-doe --force
+
+# Soft delete
+do db delete Person john-doe --soft
+```
+
+### `do db related`
+
+Query entity relationships.
+
+**Usage:**
+
+```bash
+do db related <Type>:<id> <predicate> <TargetType> [options]
+```
+
+**Arguments:**
+
+- `<Type>:<id>` - Source entity (e.g., Business:acme)
+- `<predicate>` - Relationship predicate (e.g., owns, employs)
+- `<TargetType>` - Target type (e.g., Brand, Person)
+
+**Options:**
+
+```bash
+--limit, -l        Maximum number of results
+--format           Output format (json, yaml, table)
+```
+
+**Examples:**
+
+```bash
+# Query relationships
+do db related Business:acme owns Brand
+do db related Organization:acme employs Person
+do db related Person:john worksFor Organization
+
+# With limit
+do db related Business:acme owns Brand --limit 5
+```
+
+### `do db relate`
+
+Create relationship between entities.
+
+**Usage:**
+
+```bash
+do db relate <Type>:<id> <predicate> <TargetType>:<targetId> [options]
+```
+
+**Arguments:**
+
+- `<Type>:<id>` - Source entity
+- `<predicate>` - Relationship predicate
+- `<TargetType>:<targetId>` - Target entity
+
+**Options:**
+
+```bash
+--metadata         Relationship metadata as JSON
+--format           Output format (json, yaml)
+```
+
+**Examples:**
+
+```bash
+# Create relationship
+do db relate Business:acme owns Brand:acme-brand
+do db relate Person:john worksFor Organization:acme
+
+# With metadata
+do db relate Person:john knows Person:jane --metadata '{"since": "2020"}'
+```
+
+## AI Commands
+
+### `do ai generate`
+
+Generate content using AI.
+
+**Usage:**
+
+```bash
+do ai generate <prompt> [options]
+```
+
+**Arguments:**
+
+- `<prompt>` - Text prompt or @filename
+
+**Options:**
+
+```bash
+--model, -m        AI model (claude-sonnet-4.5, gpt-5)
+--schema, -s       Semantic schema type (e.g., BlogPosting, Product)
+--format, -f       Output format (text, json, yaml)
+--temperature      Sampling temperature (0.0-2.0, default: 1.0)
+--max-tokens       Maximum tokens to generate
+--system           System prompt
+--file             Read prompt from file
+```
+
+**Examples:**
+
+```bash
+# Generate text
+do ai generate "Write a haiku about coding"
+
+# Generate with specific model
+do ai generate "Explain quantum computing" --model claude-sonnet-4.5
+
+# Generate with schema
+do ai generate "Create a product" --schema Product
+
+# Generate from file
+do ai generate @prompt.txt
+
+# Generate with temperature
+do ai generate "Be creative" --temperature 1.5
+
+# Generate with system prompt
+do ai generate "Answer" --system "You are a helpful assistant"
+```
+
+### `do ai embed`
+
+Create embeddings for text.
+
+**Usage:**
+
+```bash
+do ai embed <text> [options]
+```
+
+**Arguments:**
+
+- `<text>` - Text to embed or @filename
+
+**Options:**
+
+```bash
+--model, -m        Embedding model
+--format, -f       Output format (json, array)
+--dimensions       Number of dimensions (default: 1536)
+```
+
+**Examples:**
+
+```bash
+# Create embedding
+do ai embed "Hello world"
+
+# Embed from file
+do ai embed @document.txt
+
+# Custom dimensions
+do ai embed "Text" --dimensions 768
+```
+
+### `do ai batch`
+
+Batch process multiple AI requests.
+
+**Usage:**
+
+```bash
+do ai batch [options]
+```
+
+**Options:**
+
+```bash
+--file, -f         Input file with requests (JSON)
+--operation        Operation (generate, embed)
+--model, -m        AI model
+--output, -o       Output file
+--parallel         Number of parallel requests (default: 5)
+```
+
+**Examples:**
+
+```bash
+# Batch generate
+do ai batch --file prompts.json --operation generate
+
+# Batch embed
+do ai batch --file texts.json --operation embed
+
+# With output file
+do ai batch --file input.json --output results.json
+
+# With parallelism
+do ai batch --file input.json --parallel 10
+```
+
+## Event Commands
+
+### `do send`
+
+Send semantic event.
+
+**Usage:**
+
+```bash
+do send <pattern> <data> [options]
+```
+
+**Arguments:**
+
+- `<pattern>` - Event pattern (e.g., Order.created, Invoice.paid)
+- `<data>` - Event data as JSON string or @filename
+
+**Options:**
+
+```bash
+--file, -f         Read data from file
+--delay            Delay in milliseconds before sending
+--format           Output format (json, yaml)
+```
+
+**Examples:**
+
+```bash
+# Send event
+do send Order.created '{"id": "123", "total": 99.99}'
+
+# Send from file
+do send Order.created @order.json
+
+# Send with delay
+do send Invoice.paid '{"id": "456"}' --delay 5000
+
+# Send from stdin
+echo '{"id": "789"}' | do send Order.created
+```
+
+### `do on`
+
+Listen for semantic events.
+
+**Usage:**
+
+```bash
+do on <pattern> [options]
+```
+
+**Arguments:**
+
+- `<pattern>` - Event pattern to match (e.g., Order.created, \*.created)
+
+**Options:**
+
+```bash
+--handler, -h      Handler script path
+--exec, -e         Command to execute on event
+--format           Output format (json, yaml, pretty)
+--count            Exit after N events
+--timeout          Exit after timeout (ms)
+```
+
+**Examples:**
+
+```bash
+# Listen and print events
+do on Order.created
+
+# Listen with handler script
+do on Order.created --handler ./process-order.js
+
+# Listen with exec command
+do on Invoice.paid --exec "echo 'Invoice paid: $EVENT_ID'"
+
+# Listen with pattern matching
+do on "*.created"
+
+# Listen with count limit
+do on Order.created --count 10
+
+# Listen with timeout
+do on Order.created --timeout 60000
+```
+
+### `do watch`
+
+Watch events or database changes in real-time.
+
+**Usage:**
+
+```bash
+do watch <type> <target> [options]
+```
+
+**Arguments:**
+
+- `<type>` - Watch type (event, db)
+- `<target>` - Event pattern or database type
+
+**Options:**
+
+```bash
+--format           Output format (json, pretty, table)
+--filter           Filter expression
+--exec             Command to execute on change
+```
+
+**Examples:**
+
+```bash
+# Watch events
+do watch event Order.created
+do watch event "*.updated"
+
+# Watch database changes
+do watch db Business
+do watch db Person --filter '{"active": true}'
+
+# Watch with exec
+do watch event Order.created --exec "./notify.sh"
+```
+
+## Scheduled Workflow Commands
+
+### `do every`
+
+Schedule recurring tasks.
+
+**Usage:**
+
+```bash
+do every <interval> <command> [options]
+```
+
+**Arguments:**
+
+- `<interval>` - Time interval (Daily, Hourly, Weekly, or cron)
+- `<command>` - Command to execute (string or @filename)
+
+**Options:**
+
+```bash
+--name, -n         Task name (default: auto-generated)
+--timezone         Timezone for schedule (default: UTC)
+--enabled          Enable immediately (default: true)
+--metadata         Task metadata as JSON
+```
+
+**Examples:**
+
+```bash
+# Schedule daily task
+do every Daily "backup database"
+
+# Schedule hourly task
+do every Hourly "collect metrics"
+
+# Schedule weekly task
+do every Weekly "send report"
+
+# Schedule with cron
+do every "0 0 * * *" "full backup"
+
+# Schedule with name
+do every Daily "task" --name daily-backup
+
+# Schedule with timezone
+do every Daily "task" --timezone America/New_York
+```
+
+### `do every list`
+
+List scheduled tasks.
+
+**Usage:**
+
+```bash
+do every list [options]
+```
+
+**Options:**
+
+```bash
+--format           Output format (json, yaml, table)
+--status           Filter by status (enabled, disabled, all)
+```
+
+**Examples:**
+
+```bash
+# List all tasks
+do every list
+
+# List as table
+do every list --format table
+
+# List enabled only
+do every list --status enabled
+```
+
+### `do every remove`
+
+Remove scheduled task.
+
+**Usage:**
+
+```bash
+do every remove <name> [options]
+```
+
+**Arguments:**
+
+- `<name>` - Task name
+
+**Options:**
+
+```bash
+--force, -f        Skip confirmation
+```
+
+**Examples:**
+
+```bash
+# Remove task
+do every remove daily-backup
+
+# Remove without confirmation
+do every remove daily-backup --force
+```
+
+### `do every enable/disable`
+
+Enable or disable scheduled task.
+
+**Usage:**
+
+```bash
+do every enable <name>
+do every disable <name>
+```
+
+**Examples:**
+
+```bash
+# Enable task
+do every enable daily-backup
+
+# Disable task
+do every disable daily-backup
+```
+
+## User Commands
+
+### `do user current`
+
+Get current user information.
+
+**Usage:**
+
+```bash
+do user current [options]
+```
+
+**Options:**
+
+```bash
+--format           Output format (json, yaml, pretty)
+```
+
+**Examples:**
+
+```bash
+# Get current user
+do user current
+
+# Pretty output
+do user current --format pretty
+```
+
+### `do user session`
+
+Get current session information.
+
+**Usage:**
+
+```bash
+do user session [options]
+```
+
+**Options:**
+
+```bash
+--format           Output format (json, yaml)
+```
+
+**Examples:**
+
+```bash
+# Get session
+do user session
+```
+
+### `do user can`
+
+Check user permissions.
+
+**Usage:**
+
+```bash
+do user can <action> <Type> [id] [options]
+```
+
+**Arguments:**
+
+- `<action>` - Action (read, create, update, delete)
+- `<Type>` - Entity type
+- `[id]` - Optional entity ID
+
+**Examples:**
+
+```bash
+# Check type permission
+do user can edit Blog
+
+# Check entity permission
+do user can delete Blog engineering-blog
+```
+
+## Configuration Commands
+
+### `do config init`
+
+Initialize configuration.
+
+**Usage:**
+
+```bash
+do config init [options]
+```
+
+**Options:**
+
+```bash
+--env              Environment name
+--force            Overwrite existing config
+```
+
+**Examples:**
+
+```bash
+# Initialize default config
+do config init
+
+# Initialize for environment
+do config init --env production
+```
+
+### `do config get`
+
+Get configuration value.
+
+**Usage:**
+
+```bash
+do config get [key] [options]
+```
+
+**Arguments:**
+
+- `[key]` - Configuration key (optional, shows all if omitted)
+
+**Examples:**
+
+```bash
+# Get all config
+do config get
+
+# Get specific value
+do config get api.endpoint
+do config get output.format
+```
+
+### `do config set`
+
+Set configuration value.
+
+**Usage:**
+
+```bash
+do config set <key> <value> [options]
+```
+
+**Arguments:**
+
+- `<key>` - Configuration key
+- `<value>` - Configuration value
+
+**Options:**
+
+```bash
+--env              Environment name
+```
+
+**Examples:**
+
+```bash
+# Set value
+do config set api.key your-key
+do config set output.format table
+
+# Set for environment
+do config set api.endpoint https://staging.api.do --env staging
+```
+
+### `do config edit`
+
+Open configuration in editor.
+
+**Usage:**
+
+```bash
+do config edit [options]
+```
+
+**Options:**
+
+```bash
+--env              Environment name
+--editor           Editor command (overrides config)
+```
+
+**Examples:**
+
+```bash
+# Edit config
+do config edit
+
+# Edit specific environment
+do config edit --env production
+
+# Edit with specific editor
+do config edit --editor vim
+```
+
+## Utility Commands
+
+### `do repl`
+
+Start interactive REPL.
+
+**Usage:**
+
+```bash
+do repl [options]
+```
+
+**Options:**
+
+```bash
+--history          Enable command history (default: true)
+--file             Execute commands from file then exit
+```
+
+**Examples:**
+
+```bash
+# Start REPL
+do repl
+
+# Or just
+do
+```
+
+### `do docs`
+
+Open documentation.
+
+**Usage:**
+
+```bash
+do docs [topic] [options]
+```
+
+**Arguments:**
+
+- `[topic]` - Documentation topic (optional)
+
+**Examples:**
+
+```bash
+# Open main docs
+do docs
+
+# Open specific topic
+do docs database
+do docs ai
+do docs events
+```
+
+### `do completion`
+
+Generate shell completion script.
+
+**Usage:**
+
+```bash
+do completion <shell>
+```
+
+**Arguments:**
+
+- `<shell>` - Shell type (bash, zsh, fish, powershell)
+
+**Examples:**
+
+```bash
+# Generate bash completion
+do completion bash
+
+# Generate zsh completion
+do completion zsh
+
+# Install completion
+eval "$(do completion bash)"
+```
+
+### `do update`
+
+Check for updates.
+
+**Usage:**
+
+```bash
+do update [command] [options]
+```
+
+**Commands:**
+
+- `check` - Check for updates
+- `install` - Install updates
+
+**Examples:**
+
+```bash
+# Check for updates
+do update check
+
+# Install updates
+do update install
+```
+
+## Advanced Usage
+
+### Piping and Redirection
+
+```bash
+# Pipe output to another command
+do db list Business | jq '.[] | .name'
+
+# Redirect output to file
+do db list Business > businesses.json
+
+# Use output in another command
+BUSINESSES=$(do db list Business --format json)
+```
+
+### Input from Files
+
+```bash
+# Read from file
+do db create Person @person.json
+do ai generate @prompt.txt
+
+# Read from stdin
+echo '{"name": "John"}' | do db create Person
+cat prompt.txt | do ai generate
+```
+
+### Batch Operations
+
+```bash
+# Batch create from file
+do db create Person @people.json --batch
+
+# Batch generate
+cat prompts.txt | xargs -I {} do ai generate "{}"
+
+# Parallel execution
+cat ids.txt | parallel do db get Business {}
+```
+
+### Environment Variables
+
+All config values can be set via environment variables with `DO_` prefix:
+
+```bash
+export DO_API_ENDPOINT=https://api.do
+export DO_API_KEY=key
+export DO_OUTPUT_FORMAT=json
+export DO_LOG_LEVEL=info
+```
+
+## Exit Codes
+
+- `0` - Success
+- `1` - General error
+- `2` - Invalid arguments
+- `3` - Authentication error
+- `4` - Network error
+- `5` - Not found
+- `6` - Permission denied
+- `7` - Timeout
+- `8` - Validation error
+
+## See Also
+
+- [Getting Started](./getting-started) - Quick start guide
+- [Installation](./installation) - Installation instructions
+- [Examples](../examples/) - Real-world examples
+- [API Reference](../api/) - Programmatic usage
+
+---
+
+Part of the [cli.do](https://cli.do) documentation.

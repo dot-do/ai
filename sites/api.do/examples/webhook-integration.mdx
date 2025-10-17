@@ -1,0 +1,797 @@
+---
+$id: https://api.do/examples/webhook-integration
+$type: HowTo
+title: Webhook Integration Examples
+description: Complete examples of webhook integration with api.do
+keywords: [api, webhooks, events, integration, callbacks]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Webhook Integration Examples
+
+Complete examples demonstrating webhook integration with api.do.
+
+## Sending Webhooks
+
+Send webhook events to external services:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Send simple webhook
+await api.webhook('https://webhook.site/unique-url', {
+  event: 'order.created',
+  data: {
+    orderId: '12345',
+    total: 99.99,
+    customer: 'john@example.com',
+  },
+})
+
+// Send with custom headers
+await api.webhook(
+  'https://webhook.site/unique-url',
+  {
+    event: 'user.registered',
+    data: {
+      userId: '123',
+      email: 'john@example.com',
+      timestamp: new Date().toISOString(),
+    },
+  },
+  {
+    headers: {
+      'X-Event-Type': 'user.registered',
+      'X-Event-Id': 'evt_123456',
+    },
+  }
+)
+```
+
+## Stripe Webhooks
+
+Receive and process Stripe webhooks:
+
+```typescript
+import { $, api, db, on } from 'sdk.do'
+import { createHmac } from 'crypto'
+
+// Verify Stripe webhook signature
+function verifyStripeSignature(payload: string, signature: string, secret: string): boolean {
+  const timestamp = signature.split(',')[0].split('=')[1]
+  const sig = signature.split(',')[1].split('=')[1]
+
+  const expectedSig = createHmac('sha256', secret).update(`${timestamp}.${payload}`).digest('hex')
+
+  return sig === expectedSig
+}
+
+// Handle Stripe webhook
+on($.WebhookEvent.received, async (event) => {
+  if (event.source === 'stripe') {
+    const payload = event.rawBody
+    const signature = event.headers['stripe-signature']
+
+    // Verify signature
+    const isValid = verifyStripeSignature(payload, signature, process.env.STRIPE_WEBHOOK_SECRET)
+
+    if (!isValid) {
+      console.error('Invalid webhook signature')
+      return
+    }
+
+    const stripeEvent = JSON.parse(payload)
+
+    switch (stripeEvent.type) {
+      case 'payment_intent.succeeded':
+        const payment = stripeEvent.data.object
+
+        // Get order from database
+        const order = await db.get($.Order, payment.metadata.order_id)
+
+        // Update order status
+        await db.update(order.$id, {
+          paymentStatus: 'paid',
+          paidDate: new Date(),
+          stripePaymentId: payment.id,
+        })
+
+        // Send confirmation email
+        await api.post(
+          'https://api.sendgrid.com/v3/mail/send',
+          {
+            personalizations: [
+              {
+                to: [{ email: order.customer.email }],
+              },
+            ],
+            from: { email: 'orders@example.com' },
+            subject: 'Payment Received',
+            content: [
+              {
+                type: 'text/html',
+                value: `<p>Payment received for order ${order.orderNumber}</p>`,
+              },
+            ],
+          },
+          {
+            auth: {
+              type: 'bearer',
+              token: process.env.SENDGRID_API_KEY,
+            },
+          }
+        )
+        break
+
+      case 'payment_intent.payment_failed':
+        const failedPayment = stripeEvent.data.object
+
+        // Get order
+        const failedOrder = await db.get($.Order, failedPayment.metadata.order_id)
+
+        // Update order status
+        await db.update(failedOrder.$id, {
+          paymentStatus: 'failed',
+          paymentError: failedPayment.last_payment_error?.message,
+        })
+
+        // Notify customer
+        await api.webhook('https://notifications.example.com/webhook', {
+          event: 'payment.failed',
+          orderId: failedOrder.$id,
+          customerEmail: failedOrder.customer.email,
+        })
+        break
+
+      case 'customer.subscription.created':
+        const subscription = stripeEvent.data.object
+
+        // Create subscription record
+        await db.create($.Subscription, {
+          $type: 'Subscription',
+          stripeSubscriptionId: subscription.id,
+          customerId: subscription.customer,
+          status: subscription.status,
+          currentPeriodStart: new Date(subscription.current_period_start * 1000),
+          currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+        })
+        break
+
+      case 'customer.subscription.deleted':
+        const deletedSub = stripeEvent.data.object
+
+        // Update subscription status
+        const sub = await db.list($.Subscription, {
+          where: { stripeSubscriptionId: deletedSub.id },
+        })
+
+        if (sub.length > 0) {
+          await db.update(sub[0].$id, {
+            status: 'cancelled',
+            cancelledDate: new Date(),
+          })
+        }
+        break
+    }
+  }
+})
+```
+
+## GitHub Webhooks
+
+Receive and process GitHub webhooks:
+
+```typescript
+import { $, api, db, on } from 'sdk.do'
+import { createHmac } from 'crypto'
+
+// Verify GitHub webhook signature
+function verifyGitHubSignature(payload: string, signature: string, secret: string): boolean {
+  const sig = createHmac('sha256', secret).update(payload).digest('hex')
+
+  return `sha256=${sig}` === signature
+}
+
+// Handle GitHub webhook
+on($.WebhookEvent.received, async (event) => {
+  if (event.source === 'github') {
+    const payload = event.rawBody
+    const signature = event.headers['x-hub-signature-256']
+    const eventType = event.headers['x-github-event']
+
+    // Verify signature
+    const isValid = verifyGitHubSignature(payload, signature, process.env.GITHUB_WEBHOOK_SECRET)
+
+    if (!isValid) {
+      console.error('Invalid webhook signature')
+      return
+    }
+
+    const githubEvent = JSON.parse(payload)
+
+    switch (eventType) {
+      case 'push':
+        console.log('Push to:', githubEvent.ref)
+        console.log('Commits:', githubEvent.commits.length)
+
+        // Trigger CI/CD
+        await api.post('https://ci.example.com/api/builds', {
+          repository: githubEvent.repository.full_name,
+          branch: githubEvent.ref.replace('refs/heads/', ''),
+          commit: githubEvent.after,
+        })
+        break
+
+      case 'pull_request':
+        if (githubEvent.action === 'opened') {
+          const pr = githubEvent.pull_request
+
+          // Post comment on PR
+          await api.post(
+            pr.comments_url,
+            {
+              body: 'Thank you for your contribution! Our CI will test your changes.',
+            },
+            {
+              auth: {
+                type: 'bearer',
+                token: process.env.GITHUB_TOKEN,
+              },
+            }
+          )
+
+          // Notify Slack
+          await api.webhook('https://hooks.slack.com/services/YOUR/WEBHOOK/URL', {
+            text: `New PR: ${pr.title}`,
+            blocks: [
+              {
+                type: 'section',
+                text: {
+                  type: 'mrkdwn',
+                  text: `*New Pull Request*\n<${pr.html_url}|${pr.title}>\nby ${pr.user.login}`,
+                },
+              },
+            ],
+          })
+        }
+        break
+
+      case 'issues':
+        if (githubEvent.action === 'opened') {
+          const issue = githubEvent.issue
+
+          // Create issue in database
+          await db.create($.Issue, {
+            $type: 'Issue',
+            title: issue.title,
+            description: issue.body,
+            githubIssueId: issue.id,
+            githubNumber: issue.number,
+            status: 'open',
+            createdDate: new Date(issue.created_at),
+          })
+        }
+        break
+
+      case 'release':
+        if (githubEvent.action === 'published') {
+          const release = githubEvent.release
+
+          // Deploy release
+          await api.post('https://deploy.example.com/api/deployments', {
+            version: release.tag_name,
+            repository: githubEvent.repository.full_name,
+          })
+
+          // Announce release
+          await api.webhook('https://hooks.slack.com/services/YOUR/WEBHOOK/URL', {
+            text: `New Release: ${release.name}`,
+            blocks: [
+              {
+                type: 'section',
+                text: {
+                  type: 'mrkdwn',
+                  text: `*New Release Published*\n${release.name} (${release.tag_name})\n${release.body}`,
+                },
+              },
+            ],
+          })
+        }
+        break
+    }
+  }
+})
+```
+
+## Shopify Webhooks
+
+Receive and process Shopify webhooks:
+
+```typescript
+import { $, api, db, on } from 'sdk.do'
+import { createHmac } from 'crypto'
+
+// Verify Shopify webhook signature
+function verifyShopifySignature(payload: string, signature: string, secret: string): boolean {
+  const hash = createHmac('sha256', secret).update(payload, 'utf8').digest('base64')
+
+  return hash === signature
+}
+
+// Handle Shopify webhook
+on($.WebhookEvent.received, async (event) => {
+  if (event.source === 'shopify') {
+    const payload = event.rawBody
+    const signature = event.headers['x-shopify-hmac-sha256']
+    const topic = event.headers['x-shopify-topic']
+
+    // Verify signature
+    const isValid = verifyShopifySignature(payload, signature, process.env.SHOPIFY_WEBHOOK_SECRET)
+
+    if (!isValid) {
+      console.error('Invalid webhook signature')
+      return
+    }
+
+    const shopifyEvent = JSON.parse(payload)
+
+    switch (topic) {
+      case 'orders/create':
+        // Sync order to database
+        await db.create($.Order, {
+          $type: 'Order',
+          orderNumber: shopifyEvent.name,
+          shopifyOrderId: shopifyEvent.id,
+          customer: {
+            $type: 'Customer',
+            email: shopifyEvent.email,
+            name: `${shopifyEvent.customer.first_name} ${shopifyEvent.customer.last_name}`,
+          },
+          orderItems: shopifyEvent.line_items.map((item) => ({
+            $type: 'OrderItem',
+            name: item.name,
+            quantity: item.quantity,
+            price: parseFloat(item.price),
+          })),
+          totalPrice: parseFloat(shopifyEvent.total_price),
+          orderDate: new Date(shopifyEvent.created_at),
+        })
+
+        // Notify fulfillment service
+        await api.post('https://fulfillment.example.com/api/orders', {
+          order_id: shopifyEvent.id,
+          customer: shopifyEvent.customer,
+          items: shopifyEvent.line_items,
+          shipping_address: shopifyEvent.shipping_address,
+        })
+        break
+
+      case 'orders/fulfilled':
+        // Update order status
+        const order = await db.list($.Order, {
+          where: { shopifyOrderId: shopifyEvent.id },
+        })
+
+        if (order.length > 0) {
+          await db.update(order[0].$id, {
+            fulfillmentStatus: 'fulfilled',
+            fulfilledDate: new Date(),
+          })
+
+          // Send tracking email
+          await api.post(
+            'https://api.sendgrid.com/v3/mail/send',
+            {
+              personalizations: [
+                {
+                  to: [{ email: shopifyEvent.email }],
+                },
+              ],
+              from: { email: 'orders@example.com' },
+              subject: `Order ${shopifyEvent.name} Shipped`,
+              content: [
+                {
+                  type: 'text/html',
+                  value: `<p>Your order has been shipped!</p>`,
+                },
+              ],
+            },
+            {
+              auth: {
+                type: 'bearer',
+                token: process.env.SENDGRID_API_KEY,
+              },
+            }
+          )
+        }
+        break
+
+      case 'products/create':
+      case 'products/update':
+        // Sync product to database
+        const productData = {
+          $type: 'Product',
+          name: shopifyEvent.title,
+          description: shopifyEvent.body_html,
+          shopifyProductId: shopifyEvent.id,
+          sku: shopifyEvent.variants[0]?.sku,
+          price: parseFloat(shopifyEvent.variants[0]?.price || '0'),
+          image: shopifyEvent.images[0]?.src,
+          updatedDate: new Date(shopifyEvent.updated_at),
+        }
+
+        const existing = await db.list($.Product, {
+          where: { shopifyProductId: shopifyEvent.id },
+        })
+
+        if (existing.length > 0) {
+          await db.update(existing[0].$id, productData)
+        } else {
+          await db.create($.Product, productData)
+        }
+        break
+
+      case 'customers/create':
+        // Create customer record
+        await db.create($.Customer, {
+          $type: 'Customer',
+          name: `${shopifyEvent.first_name} ${shopifyEvent.last_name}`,
+          email: shopifyEvent.email,
+          telephone: shopifyEvent.phone,
+          shopifyCustomerId: shopifyEvent.id,
+          createdDate: new Date(shopifyEvent.created_at),
+        })
+        break
+    }
+  }
+})
+```
+
+## Twilio Webhooks
+
+Receive and process Twilio webhooks:
+
+```typescript
+import { $, api, db, on } from 'sdk.do'
+
+// Handle Twilio webhook
+on($.WebhookEvent.received, async (event) => {
+  if (event.source === 'twilio') {
+    const twilioEvent = event.data
+
+    switch (twilioEvent.MessageStatus || twilioEvent.SmsStatus) {
+      case 'sent':
+        console.log('Message sent:', twilioEvent.MessageSid)
+        break
+
+      case 'delivered':
+        // Update message status
+        await db.update(twilioEvent.MessageSid, {
+          status: 'delivered',
+          deliveredDate: new Date(),
+        })
+        break
+
+      case 'failed':
+        console.error('Message failed:', twilioEvent.ErrorMessage)
+        break
+    }
+
+    // Handle incoming messages
+    if (twilioEvent.Body) {
+      const message = {
+        from: twilioEvent.From,
+        to: twilioEvent.To,
+        body: twilioEvent.Body,
+        timestamp: new Date(),
+      }
+
+      // Store message
+      await db.create($.Message, {
+        $type: 'Message',
+        sender: message.from,
+        recipient: message.to,
+        messageText: message.body,
+        dateReceived: message.timestamp,
+      })
+
+      // Auto-reply
+      if (message.body.toLowerCase().includes('help')) {
+        await api.post(
+          `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}/Messages.json`,
+          new URLSearchParams({
+            From: message.to,
+            To: message.from,
+            Body: 'How can we help you? Reply with your question.',
+          }),
+          {
+            auth: {
+              type: 'basic',
+              username: process.env.TWILIO_ACCOUNT_SID,
+              password: process.env.TWILIO_AUTH_TOKEN,
+            },
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+          }
+        )
+      }
+    }
+  }
+})
+```
+
+## Slack Webhooks
+
+Send and receive Slack webhooks:
+
+```typescript
+import { $, api, on } from 'sdk.do'
+
+// Send notification to Slack
+async function notifySlack(message: string, blocks?: any[]) {
+  return await api.webhook(process.env.SLACK_WEBHOOK_URL, {
+    text: message,
+    blocks,
+  })
+}
+
+// Order notification
+on($.Order.created, async (event) => {
+  const order = event.data
+
+  await notifySlack('New Order Received', [
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: '*New Order Received*',
+      },
+    },
+    {
+      type: 'section',
+      fields: [
+        { type: 'mrkdwn', text: `*Order ID:*\n${order.orderNumber}` },
+        { type: 'mrkdwn', text: `*Customer:*\n${order.customer.name}` },
+        { type: 'mrkdwn', text: `*Total:*\n$${order.totalPrice}` },
+        { type: 'mrkdwn', text: `*Status:*\n${order.status}` },
+      ],
+    },
+    {
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: 'View Order' },
+          url: `https://admin.example.com/orders/${order.$id}`,
+        },
+      ],
+    },
+  ])
+})
+
+// Error notification
+on($.Error.occurred, async (event) => {
+  const error = event.data
+
+  await notifySlack(':warning: Error Occurred', [
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: '*Error Alert*',
+      },
+    },
+    {
+      type: 'section',
+      fields: [
+        { type: 'mrkdwn', text: `*Type:*\n${error.type}` },
+        { type: 'mrkdwn', text: `*Message:*\n${error.message}` },
+        { type: 'mrkdwn', text: `*Stack:*\n\`\`\`${error.stack?.substring(0, 100)}\`\`\`` },
+      ],
+    },
+  ])
+})
+
+// Deployment notification
+on($.Deployment.completed, async (event) => {
+  const deployment = event.data
+
+  await notifySlack('Deployment Completed', [
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: deployment.success ? ':white_check_mark: *Deployment Successful*' : ':x: *Deployment Failed*',
+      },
+    },
+    {
+      type: 'section',
+      fields: [
+        { type: 'mrkdwn', text: `*Environment:*\n${deployment.environment}` },
+        { type: 'mrkdwn', text: `*Version:*\n${deployment.version}` },
+        { type: 'mrkdwn', text: `*Duration:*\n${deployment.duration}s` },
+      ],
+    },
+  ])
+})
+```
+
+## Discord Webhooks
+
+Send notifications to Discord:
+
+```typescript
+import { api, on } from 'sdk.do'
+
+async function notifyDiscord(content: string, embeds?: any[]) {
+  return await api.webhook(process.env.DISCORD_WEBHOOK_URL, {
+    content,
+    embeds,
+  })
+}
+
+// New user registration
+on($.User.registered, async (event) => {
+  const user = event.data
+
+  await notifyDiscord('New User Registered', [
+    {
+      title: 'New User Registration',
+      color: 0x00ff00,
+      fields: [
+        { name: 'Name', value: user.name, inline: true },
+        { name: 'Email', value: user.email, inline: true },
+        { name: 'Registered', value: new Date().toISOString(), inline: true },
+      ],
+      timestamp: new Date().toISOString(),
+    },
+  ])
+})
+
+// System alert
+on($.Alert.triggered, async (event) => {
+  const alert = event.data
+
+  await notifyDiscord('System Alert', [
+    {
+      title: alert.title,
+      description: alert.message,
+      color: alert.severity === 'critical' ? 0xff0000 : 0xffaa00,
+      fields: [
+        { name: 'Severity', value: alert.severity, inline: true },
+        { name: 'Service', value: alert.service, inline: true },
+        { name: 'Time', value: new Date().toISOString(), inline: true },
+      ],
+      timestamp: new Date().toISOString(),
+    },
+  ])
+})
+```
+
+## Webhook Security
+
+Implement webhook security best practices:
+
+```typescript
+import { createHmac } from 'crypto'
+
+// Verify webhook signature
+function verifyWebhookSignature(payload: string, signature: string, secret: string, algorithm: 'sha256' | 'sha1' = 'sha256'): boolean {
+  const expectedSignature = createHmac(algorithm, secret).update(payload).digest('hex')
+
+  return signature === expectedSignature
+}
+
+// Verify timestamp to prevent replay attacks
+function verifyTimestamp(timestamp: string, maxAge: number = 300000): boolean {
+  const requestTime = parseInt(timestamp) * 1000
+  const currentTime = Date.now()
+  const age = currentTime - requestTime
+
+  return age < maxAge && age > 0
+}
+
+// Complete webhook verification
+function verifyWebhook(payload: string, signature: string, timestamp: string, secret: string): boolean {
+  // Verify signature
+  const isValidSignature = verifyWebhookSignature(payload, signature, secret)
+
+  // Verify timestamp (max 5 minutes old)
+  const isValidTimestamp = verifyTimestamp(timestamp)
+
+  return isValidSignature && isValidTimestamp
+}
+
+// Usage in webhook handler
+on($.WebhookEvent.received, async (event) => {
+  const { rawBody, headers } = event
+
+  const isValid = verifyWebhook(rawBody, headers['x-signature'], headers['x-timestamp'], process.env.WEBHOOK_SECRET)
+
+  if (!isValid) {
+    console.error('Invalid webhook signature or timestamp')
+    return
+  }
+
+  // Process webhook
+  const data = JSON.parse(rawBody)
+  // ... handle event
+})
+```
+
+## Webhook Retry Logic
+
+Implement reliable webhook delivery with retries:
+
+```typescript
+import { api } from 'sdk.do'
+
+async function sendWebhookWithRetry(url: string, payload: any, maxRetries: number = 3): Promise<boolean> {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      await api.webhook(url, payload, {
+        timeout: 10000,
+      })
+
+      console.log(`Webhook delivered successfully (attempt ${attempt})`)
+      return true
+    } catch (error) {
+      console.error(`Webhook delivery failed (attempt ${attempt}):`, error.message)
+
+      if (attempt < maxRetries) {
+        // Exponential backoff
+        const delay = Math.pow(2, attempt) * 1000
+        console.log(`Retrying in ${delay}ms...`)
+        await new Promise((resolve) => setTimeout(resolve, delay))
+      } else {
+        console.error('Max retries exceeded, webhook delivery failed')
+        return false
+      }
+    }
+  }
+
+  return false
+}
+
+// Usage
+on($.Order.created, async (event) => {
+  const order = event.data
+
+  const delivered = await sendWebhookWithRetry('https://webhook.example.com/orders', {
+    event: 'order.created',
+    data: order,
+  })
+
+  if (!delivered) {
+    // Store for manual retry or dead letter queue
+    await db.create($.FailedWebhook, {
+      url: 'https://webhook.example.com/orders',
+      payload: order,
+      failureReason: 'Max retries exceeded',
+      failedAt: new Date(),
+    })
+  }
+})
+```
+
+## See Also
+
+- [REST API Example](./rest-api) - REST integration patterns
+- [GraphQL API Example](./graphql-api) - GraphQL integration
+- [Making Requests](../docs/making-requests) - HTTP methods guide
+- [Authentication](../docs/authentication) - Auth patterns
+
+## Next Steps
+
+Explore more integration patterns:
+
+- [REST API Integration](./rest-api) - REST API patterns
+- [GraphQL API](./graphql-api) - Query GraphQL endpoints
+- [API Reference](../api/) - Complete API documentation
+
+## License
+
+MIT (Open Source)

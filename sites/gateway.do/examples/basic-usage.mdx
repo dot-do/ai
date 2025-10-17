@@ -1,0 +1,178 @@
+---
+$id: https://gateway.do/examples/basic-usage
+$type: HowTo
+title: Basic API Gateway Usage Examples
+description: Simple examples for using gateway.do
+keywords: [gateway, examples, basic, requests, authentication]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Basic Usage Examples
+
+## Security Best Practices
+
+**⚠️ IMPORTANT: Credential Management**
+
+- **Never** hardcode API keys, tokens, or passwords in your code
+- **Always** use environment variables for sensitive values
+- **Use** proper secret management in production:
+  - Cloudflare Secrets for Workers
+  - AWS Secrets Manager
+  - HashiCorp Vault
+  - Never commit `.env` files to version control
+- **Rotate** API keys and tokens regularly
+- **Use** least-privilege permissions for API keys
+
+## Example 1: Simple GET Request
+
+```typescript
+import { gateway } from 'sdk.do'
+
+const users = await gateway.get('https://api.example.com/users')
+console.log(users)
+```
+
+## Example 2: POST Request
+
+```typescript
+const user = await gateway.post('https://api.example.com/users', {
+  data: {
+    name: 'John Doe',
+    email: 'john@example.com',
+  },
+})
+console.log('Created user:', user)
+```
+
+## Example 3: Authentication
+
+```typescript
+// Bearer token
+const data = await gateway.get('https://api.example.com/protected', {
+  auth: {
+    type: 'bearer',
+    token: process.env.API_TOKEN,
+  },
+})
+
+// Basic auth
+const data = await gateway.get('https://api.example.com/protected', {
+  auth: {
+    type: 'basic',
+    username: 'user',
+    password: 'pass',
+  },
+})
+
+// API key
+const data = await gateway.get('https://api.example.com/protected', {
+  auth: {
+    type: 'apiKey',
+    key: 'X-API-Key',
+    value: process.env.API_KEY,
+    in: 'header',
+  },
+})
+```
+
+## Example 4: Caching
+
+```typescript
+const data = await gateway.get('https://api.example.com/static-data', {
+  cache: {
+    enabled: true,
+    ttl: 3600, // Cache for 1 hour
+  },
+})
+
+// First call: fetches from API
+// Subsequent calls: returns cached data
+```
+
+## Example 5: Rate Limiting
+
+```typescript
+const data = await gateway.get('https://api.example.com/data', {
+  rateLimit: {
+    requests: 100,
+    window: 60000, // 100 requests per minute
+  },
+})
+```
+
+## Example 6: Request Transformation
+
+```typescript
+const result = await gateway.post('https://api.example.com/users', {
+  data: { name: 'John', email: 'john@example.com' },
+  transform: {
+    request: (data) => ({
+      user: {
+        full_name: data.name,
+        email_address: data.email,
+      },
+    }),
+    response: (data) => ({
+      id: data.user_id,
+      name: data.full_name,
+      email: data.email_address,
+    }),
+  },
+})
+```
+
+## Example 7: Error Handling
+
+```typescript
+try {
+  const data = await gateway.get('https://api.example.com/data', {
+    retry: {
+      max: 3,
+      delay: 1000,
+      backoff: 'exponential',
+    },
+  })
+} catch (error) {
+  console.error('Request failed:', error.message)
+}
+```
+
+## Example 8: Parallel Requests
+
+```typescript
+const [users, products, orders] = await Promise.all([
+  gateway.get('https://api.example.com/users'),
+  gateway.get('https://api.example.com/products'),
+  gateway.get('https://api.example.com/orders'),
+])
+```
+
+## Example 9: Query Parameters
+
+```typescript
+const users = await gateway.get('https://api.example.com/users', {
+  params: {
+    page: 1,
+    limit: 20,
+    sort: 'name',
+  },
+})
+// Requests: https://api.example.com/users?page=1&limit=20&sort=name
+```
+
+## Example 10: Custom Headers
+
+```typescript
+const data = await gateway.get('https://api.example.com/data', {
+  headers: {
+    'X-Custom-Header': 'value',
+    'User-Agent': 'MyApp/1.0',
+  },
+})
+```
+
+## License
+
+MIT (Open Source)

@@ -1,0 +1,669 @@
+---
+$id: https://orders.do/docs/architecture
+$type: TechArticle
+title: Order Management Architecture
+description: Comprehensive architecture guide for building scalable order management systems with semantic patterns, event-driven workflows, and Schema.org types.
+keywords: [architecture, order management, system design, event-driven, semantic patterns, scalability]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Order Management Architecture
+
+This guide explains the architecture of order management systems built with orders.do, covering semantic patterns, event-driven workflows, and integration strategies.
+
+## System Overview
+
+An order management system handles the complete lifecycle of customer orders:
+
+```
+┌─────────────┐
+│   Customer   │
+└──────┬───────┘
+       │ places order
+       ▼
+┌─────────────────┐
+│  Order Created  │◄──── Event: $.Order.created
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  Order Validated│
+│  - Inventory    │
+│  - Payment      │
+│  - Address      │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ Order Processing│◄──── Status: OrderProcessing
+│  - Reserve inv  │
+│  - Process pay  │
+│  - Create task  │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ Order Fulfilled │
+│  - Pick items   │
+│  - Pack items   │
+│  - Generate lab │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ Order Shipped   │◄──── Status: OrderInTransit
+│  - Tracking #   │
+│  - Carrier      │
+│  - ETA          │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ Order Delivered │◄──── Status: OrderDelivered
+│  - Confirmation │
+│  - Review req   │
+└─────────────────┘
+```
+
+## Core Components
+
+### 1. Order Entity
+
+The order entity is the central data structure:
+
+```typescript
+interface Order {
+  $id: string
+  $type: 'Order'
+  orderNumber: string
+  orderDate: string
+  orderStatus: OrderStatus
+  customer: Person | Organization
+  orderedItem: OrderItem[]
+  paymentMethod: PaymentMethod
+  billingAddress: PostalAddress
+  orderDelivery: ParcelDelivery
+  priceSpecification: PriceSpecification
+  acceptedOffer?: Offer
+  seller?: Organization
+  confirmationNumber?: string
+  orderProblem?: string
+  cancellationReason?: string
+  metadata?: Record<string, any>
+}
+
+interface OrderItem {
+  $type: 'OrderItem'
+  orderItemNumber: string
+  orderedItem: Product | Service
+  orderQuantity: number
+  price: PriceSpecification
+  orderItemStatus?: string
+  orderDelivery?: ParcelDelivery
+}
+```
+
+### 2. Order Status State Machine
+
+Order status follows a state machine pattern:
+
+```typescript
+type OrderStatus =
+  | 'OrderPending' // Initial state
+  | 'OrderProcessing' // Being processed
+  | 'OrderInTransit' // Shipped
+  | 'OrderDelivered' // Delivered
+  | 'OrderPickupAvailable' // Ready for pickup
+  | 'OrderProblem' // Issue detected
+  | 'OrderCancelled' // Cancelled
+  | 'OrderReturned' // Returned
+
+// Valid state transitions
+const validTransitions: Record<OrderStatus, OrderStatus[]> = {
+  OrderPending: ['OrderProcessing', 'OrderCancelled'],
+  OrderProcessing: ['OrderInTransit', 'OrderProblem', 'OrderCancelled'],
+  OrderInTransit: ['OrderDelivered', 'OrderProblem'],
+  OrderDelivered: ['OrderReturned'],
+  OrderPickupAvailable: ['OrderDelivered', 'OrderCancelled'],
+  OrderProblem: ['OrderProcessing', 'OrderCancelled'],
+  OrderCancelled: [], // Terminal state
+  OrderReturned: [], // Terminal state
+}
+
+// Validate state transition
+function canTransition(from: OrderStatus, to: OrderStatus): boolean {
+  return validTransitions[from]?.includes(to) ?? false
+}
+
+// Update order status with validation
+async function updateOrderStatus(order: Order, newStatus: OrderStatus): Promise<Order> {
+  if (!canTransition(order.orderStatus, newStatus)) {
+    throw new Error(`Invalid status transition from ${order.orderStatus} to ${newStatus}`)
+  }
+
+  return await db.update(order, {
+    orderStatus: newStatus,
+    statusUpdatedAt: new Date().toISOString(),
+  })
+}
+```
+
+### 3. Event-Driven Architecture
+
+Orders use event-driven patterns for loose coupling:
+
+```typescript
+// Order events
+$.Order.created // New order placed
+$.Order.updated // Order modified
+$.Order.validated // Validation complete
+$.Order.fulfilled // Fulfillment complete
+$.Order.shipped // Order shipped
+$.Order.delivered // Order delivered
+$.Order.cancelled // Order cancelled
+$.Order.returned // Order returned
+
+// Event handlers
+import { on, send } from 'sdk.do'
+
+// Order creation workflow
+await on($.Order.created, async (order) => {
+  // Emit validation event
+  await send({
+    $type: 'OrderValidationRequest',
+    order: order.$id,
+  })
+})
+
+// Order validation workflow
+await on('OrderValidationRequest', async (request) => {
+  const order = await db.get($.Order, request.order)
+
+  // Validate inventory
+  const hasInventory = await validateInventory(order.orderedItem)
+
+  // Validate payment
+  const paymentValid = await validatePayment(order.paymentMethod)
+
+  if (hasInventory && paymentValid) {
+    await send({
+      $type: 'OrderValidated',
+      order: order.$id,
+    })
+  } else {
+    await db.update(order, {
+      orderStatus: 'OrderProblem',
+      orderProblem: 'Validation failed',
+    })
+  }
+})
+
+// Order fulfillment workflow
+await on('OrderValidated', async (event) => {
+  const order = await db.get($.Order, event.order)
+
+  // Reserve inventory
+  await reserveInventory(order.orderedItem)
+
+  // Process payment
+  await processPayment(order)
+
+  // Create fulfillment task
+  await send({
+    $type: 'FulfillmentTask',
+    order: order.$id,
+  })
+
+  // Update order status
+  await db.update(order, {
+    orderStatus: 'OrderProcessing',
+  })
+})
+```
+
+### 4. Inventory Management
+
+Track and reserve inventory for orders:
+
+```typescript
+interface InventoryItem {
+  $id: string
+  $type: 'Product'
+  sku: string
+  name: string
+  quantityAvailable: number
+  quantityReserved: number
+  quantityOnHand: number
+  reorderPoint: number
+  reorderQuantity: number
+}
+
+// Check inventory availability
+async function validateInventory(items: OrderItem[]): Promise<boolean> {
+  for (const item of items) {
+    const product = await db.get($.Product, item.orderedItem.$id)
+
+    if (product.quantityAvailable < item.orderQuantity) {
+      return false
+    }
+  }
+  return true
+}
+
+// Reserve inventory
+async function reserveInventory(items: OrderItem[]): Promise<void> {
+  for (const item of items) {
+    const product = await db.get($.Product, item.orderedItem.$id)
+
+    await db.update(product, {
+      quantityAvailable: product.quantityAvailable - item.orderQuantity,
+      quantityReserved: product.quantityReserved + item.orderQuantity,
+    })
+
+    // Check if reorder needed
+    if (product.quantityAvailable <= product.reorderPoint) {
+      await send({
+        $type: 'ReorderRequest',
+        product: product.$id,
+        quantity: product.reorderQuantity,
+      })
+    }
+  }
+}
+
+// Release inventory (on cancellation)
+async function releaseInventory(items: OrderItem[]): Promise<void> {
+  for (const item of items) {
+    const product = await db.get($.Product, item.orderedItem.$id)
+
+    await db.update(product, {
+      quantityAvailable: product.quantityAvailable + item.orderQuantity,
+      quantityReserved: product.quantityReserved - item.orderQuantity,
+    })
+  }
+}
+
+// Commit inventory (on shipment)
+async function commitInventory(items: OrderItem[]): Promise<void> {
+  for (const item of items) {
+    const product = await db.get($.Product, item.orderedItem.$id)
+
+    await db.update(product, {
+      quantityReserved: product.quantityReserved - item.orderQuantity,
+      quantityOnHand: product.quantityOnHand - item.orderQuantity,
+    })
+  }
+}
+```
+
+### 5. Payment Integration
+
+Handle payment processing within order workflow:
+
+```typescript
+interface PaymentResult {
+  success: boolean
+  transactionId?: string
+  errorMessage?: string
+  amount: number
+  currency: string
+}
+
+// Process payment
+async function processPayment(order: Order): Promise<PaymentResult> {
+  const amount = calculateOrderTotal(order)
+
+  try {
+    // Send payment request
+    const result = await send({
+      $type: 'PaymentRequest',
+      order: order.$id,
+      amount: amount.total,
+      currency: 'USD',
+      paymentMethod: order.paymentMethod,
+    })
+
+    // Update order with payment info
+    await db.update(order, {
+      paymentStatus: 'PaymentComplete',
+      paymentTransactionId: result.transactionId,
+    })
+
+    return {
+      success: true,
+      transactionId: result.transactionId,
+      amount: amount.total,
+      currency: 'USD',
+    }
+  } catch (error) {
+    await db.update(order, {
+      paymentStatus: 'PaymentDeclined',
+      orderStatus: 'OrderProblem',
+      orderProblem: error.message,
+    })
+
+    return {
+      success: false,
+      errorMessage: error.message,
+      amount: amount.total,
+      currency: 'USD',
+    }
+  }
+}
+```
+
+### 6. Fulfillment Workflow
+
+Automate order fulfillment:
+
+```typescript
+interface FulfillmentTask {
+  $type: 'FulfillmentTask'
+  order: string
+  pickList: PickListItem[]
+  packingSlip: string
+  shippingLabel: string
+  status: 'Pending' | 'InProgress' | 'Complete'
+}
+
+interface PickListItem {
+  product: Product
+  quantity: number
+  location: string
+  pickedQuantity?: number
+  picker?: string
+}
+
+// Create fulfillment task
+await on('OrderValidated', async (event) => {
+  const order = await db.get($.Order, event.order)
+
+  // Generate pick list
+  const pickList = await generatePickList(order.orderedItem)
+
+  // Generate packing slip
+  const packingSlip = await generatePackingSlip(order)
+
+  // Generate shipping label
+  const shippingLabel = await generateShippingLabel(order)
+
+  // Create fulfillment task
+  const task = await db.create($.Task, {
+    $type: 'FulfillmentTask',
+    order: order.$id,
+    pickList,
+    packingSlip,
+    shippingLabel,
+    status: 'Pending',
+  })
+
+  // Assign to fulfillment center
+  await send({
+    $type: 'TaskAssignment',
+    task: task.$id,
+    assignee: 'fulfillment-center-1',
+  })
+})
+
+// Process fulfillment task
+async function processFulfillmentTask(taskId: string) {
+  const task = await db.get($.Task, taskId)
+  const order = await db.get($.Order, task.order)
+
+  // Update task status
+  await db.update(task, { status: 'InProgress' })
+
+  // Pick items
+  for (const item of task.pickList) {
+    // Simulate picking process
+    item.pickedQuantity = item.quantity
+    item.picker = 'picker-123'
+  }
+
+  // Pack items
+  await packItems(task.pickList)
+
+  // Generate tracking number
+  const trackingNumber = await generateTrackingNumber()
+
+  // Update order with shipping info
+  await db.update(order, {
+    orderStatus: 'OrderInTransit',
+    orderDelivery: {
+      ...order.orderDelivery,
+      trackingNumber,
+      trackingUrl: `https://track.example.com/${trackingNumber}`,
+      estimatedDelivery: calculateDeliveryDate(),
+    },
+  })
+
+  // Commit inventory
+  await commitInventory(order.orderedItem)
+
+  // Mark task complete
+  await db.update(task, { status: 'Complete' })
+
+  // Emit shipped event
+  await send({
+    $type: 'OrderShipped',
+    order: order.$id,
+  })
+}
+```
+
+### 7. Notification System
+
+Send notifications throughout order lifecycle:
+
+```typescript
+// Order notifications
+const notifications = {
+  orderConfirmed: {
+    trigger: $.Order.created,
+    template: 'order-confirmation',
+    recipient: 'customer',
+  },
+  orderShipped: {
+    trigger: $.Order.shipped,
+    template: 'order-shipped',
+    recipient: 'customer',
+  },
+  orderDelivered: {
+    trigger: $.Order.delivered,
+    template: 'order-delivered',
+    recipient: 'customer',
+  },
+  orderCancelled: {
+    trigger: $.Order.cancelled,
+    template: 'order-cancelled',
+    recipient: 'customer',
+  },
+}
+
+// Notification handler
+await on($.Order.created, async (order) => {
+  await sendNotification({
+    template: 'order-confirmation',
+    recipient: order.customer.email,
+    data: {
+      orderNumber: order.orderNumber,
+      items: order.orderedItem,
+      total: calculateOrderTotal(order),
+      deliveryAddress: order.orderDelivery.deliveryAddress,
+    },
+  })
+})
+
+await on($.Order.shipped, async (order) => {
+  await sendNotification({
+    template: 'order-shipped',
+    recipient: order.customer.email,
+    data: {
+      orderNumber: order.orderNumber,
+      trackingNumber: order.orderDelivery.trackingNumber,
+      trackingUrl: order.orderDelivery.trackingUrl,
+      estimatedDelivery: order.orderDelivery.estimatedDelivery,
+    },
+  })
+})
+```
+
+## Scalability Patterns
+
+### 1. Order Partitioning
+
+Partition orders for horizontal scaling:
+
+```typescript
+// Partition by date
+const partition = {
+  key: 'orderDate',
+  strategy: 'range',
+  ranges: [
+    { start: '2025-01-01', end: '2025-03-31', shard: 'Q1' },
+    { start: '2025-04-01', end: '2025-06-30', shard: 'Q2' },
+    { start: '2025-07-01', end: '2025-09-30', shard: 'Q3' },
+    { start: '2025-10-01', end: '2025-12-31', shard: 'Q4' },
+  ],
+}
+
+// Partition by customer
+const partition = {
+  key: 'customer.$id',
+  strategy: 'hash',
+  shards: 16,
+}
+```
+
+### 2. Caching Strategy
+
+Cache frequently accessed data:
+
+```typescript
+// Cache order status
+const orderStatus = await cache.get(`order:${orderId}:status`)
+if (!orderStatus) {
+  const order = await db.get($.Order, orderId)
+  await cache.set(`order:${orderId}:status`, order.orderStatus, {
+    ttl: 60, // 1 minute
+  })
+}
+
+// Cache customer orders
+const customerOrders = await cache.get(`customer:${customerId}:orders`)
+if (!customerOrders) {
+  const orders = await db.list($.Order, {
+    where: { 'customer.$id': customerId },
+    sort: { orderDate: -1 },
+    limit: 10,
+  })
+  await cache.set(`customer:${customerId}:orders`, orders, {
+    ttl: 300, // 5 minutes
+  })
+}
+```
+
+### 3. Async Processing
+
+Use queues for non-blocking operations:
+
+```typescript
+// Queue order confirmation email
+await send({
+  $type: 'EmailTask',
+  queue: 'notifications',
+  priority: 'high',
+  data: {
+    template: 'order-confirmation',
+    order: order.$id,
+  },
+})
+
+// Queue inventory sync
+await send({
+  $type: 'InventorySync',
+  queue: 'inventory',
+  priority: 'normal',
+  data: {
+    products: order.orderedItem.map((i) => i.orderedItem.$id),
+  },
+})
+
+// Queue analytics update
+await send({
+  $type: 'AnalyticsUpdate',
+  queue: 'analytics',
+  priority: 'low',
+  data: {
+    event: 'order_created',
+    order: order.$id,
+  },
+})
+```
+
+## Integration Patterns
+
+### Integration with invoices.do
+
+```typescript
+await on($.Order.created, async (order) => {
+  const invoice = await db.create($.Invoice, {
+    $type: 'Invoice',
+    referencesOrder: order.$id,
+    customer: order.customer,
+    totalPaymentDue: calculateOrderTotal(order).total,
+    paymentDueDate: calculateDueDate(30), // 30 days
+  })
+})
+```
+
+### Integration with customers.do
+
+```typescript
+await on($.Order.created, async (order) => {
+  await db.update(order.customer, {
+    totalOrders: { $increment: 1 },
+    totalSpent: { $increment: calculateOrderTotal(order).total },
+    lastOrderDate: order.orderDate,
+  })
+})
+```
+
+### Integration with products.do
+
+```typescript
+await on($.Order.delivered, async (order) => {
+  for (const item of order.orderedItem) {
+    await db.update(item.orderedItem, {
+      totalSold: { $increment: item.orderQuantity },
+      lastSoldDate: new Date().toISOString(),
+    })
+  }
+})
+```
+
+## Best Practices
+
+1. **Use semantic types** - Always specify Schema.org types
+2. **Validate state transitions** - Enforce valid status changes
+3. **Event-driven workflows** - Use events for loose coupling
+4. **Async processing** - Queue non-critical operations
+5. **Cache strategically** - Cache frequently accessed data
+6. **Monitor performance** - Track order processing metrics
+
+## See Also
+
+- [Getting Started](./getting-started)
+- [Best Practices](./best-practices)
+- [API Reference](../api/)
+- [Examples](../examples/)
+
+## License
+
+MIT (Open Source)
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

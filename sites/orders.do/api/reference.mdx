@@ -1,0 +1,491 @@
+---
+$id: https://orders.do/api/reference
+$type: APIReference
+title: orders.do API Reference
+description: Complete API reference for orders.do including types, functions, and semantic patterns for order management.
+keywords: [API reference, types, functions, order management, Schema.org]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# orders.do API Reference
+
+Complete API reference for order management with semantic types and functions.
+
+## Types
+
+### Order
+
+Main order entity representing a customer purchase.
+
+```typescript
+interface Order {
+  $id: string
+  $type: 'Order'
+  orderNumber: string
+  orderDate: string
+  orderStatus: OrderStatus
+  customer: Person | Organization
+  orderedItem: OrderItem[]
+  paymentMethod?: PaymentMethod
+  billingAddress?: PostalAddress
+  orderDelivery?: ParcelDelivery
+  priceSpecification?: PriceSpecification
+  acceptedOffer?: Offer
+  seller?: Organization
+  confirmationNumber?: string
+  orderProblem?: string
+  cancellationReason?: string
+  paymentStatus?: PaymentStatus
+  paymentTransactionId?: string
+  deliveredAt?: string
+  cancelledAt?: string
+}
+```
+
+### OrderItem
+
+Individual item within an order.
+
+```typescript
+interface OrderItem {
+  $type: 'OrderItem'
+  orderItemNumber: string
+  orderedItem: Product | Service
+  orderQuantity: number
+  price: PriceSpecification
+  orderItemStatus?: string
+  orderDelivery?: ParcelDelivery
+}
+```
+
+### OrderStatus
+
+Valid order status values from Schema.org.
+
+```typescript
+type OrderStatus =
+  | 'OrderPending'
+  | 'OrderProcessing'
+  | 'OrderInTransit'
+  | 'OrderDelivered'
+  | 'OrderPickupAvailable'
+  | 'OrderProblem'
+  | 'OrderCancelled'
+  | 'OrderReturned'
+```
+
+### ParcelDelivery
+
+Shipping and delivery information.
+
+```typescript
+interface ParcelDelivery {
+  $type: 'ParcelDelivery'
+  deliveryAddress: PostalAddress
+  trackingNumber?: string
+  trackingUrl?: string
+  hasDeliveryMethod?: DeliveryMethod
+  expectedArrivalFrom?: string
+  expectedArrivalUntil?: string
+  carrier?: string
+  shippedAt?: string
+  deliveredAt?: string
+}
+```
+
+## Database Functions
+
+### db.create()
+
+Create a new order.
+
+```typescript
+const order = await db.create($.Order, {
+  $type: 'Order',
+  orderNumber: 'ORD-2025-001',
+  orderDate: new Date().toISOString(),
+  customer: customerData,
+  orderedItem: items,
+  orderStatus: 'OrderProcessing',
+})
+```
+
+### db.get()
+
+Retrieve an order by ID.
+
+```typescript
+const order = await db.get($.Order, 'order-id-123')
+```
+
+### db.list()
+
+List orders with optional filtering.
+
+```typescript
+// List all orders
+const orders = await db.list($.Order)
+
+// List with filters
+const orders = await db.list($.Order, {
+  where: {
+    orderStatus: 'OrderProcessing',
+    'customer.$id': 'customer-123',
+  },
+  sort: { orderDate: -1 },
+  limit: 50,
+})
+```
+
+### db.update()
+
+Update an order.
+
+```typescript
+await db.update(order, {
+  orderStatus: 'OrderInTransit',
+  orderDelivery: {
+    ...order.orderDelivery,
+    trackingNumber: '1Z999AA10123456784',
+  },
+})
+```
+
+### db.delete()
+
+Delete an order (use with caution).
+
+```typescript
+await db.delete(order)
+```
+
+## Event Functions
+
+### on()
+
+Listen for order events.
+
+```typescript
+import { on } from 'sdk.do'
+
+// Listen for new orders
+await on($.Order.created, async (order) => {
+  console.log('New order:', order.orderNumber)
+})
+
+// Listen for order updates
+await on($.Order.updated, async (order) => {
+  console.log('Order updated:', order.orderStatus)
+})
+
+// Listen for custom events
+await on('OrderValidated', async (event) => {
+  const order = await db.get($.Order, event.order)
+  // Process validated order
+})
+```
+
+### send()
+
+Emit order events.
+
+```typescript
+import { send } from 'sdk.do'
+
+// Emit custom event
+await send({
+  $type: 'OrderValidated',
+  order: order.$id,
+  timestamp: new Date().toISOString(),
+})
+
+// Send notification
+await send({
+  $type: 'EmailMessage',
+  recipient: order.customer.email,
+  subject: 'Order Update',
+  text: 'Your order has been updated',
+})
+```
+
+## Semantic Patterns
+
+### Order Types
+
+```typescript
+$.Order // Order entity
+$.OrderItem // Order line item
+$.OrderStatus // Order state
+$.ParcelDelivery // Shipment info
+```
+
+### Order Events
+
+```typescript
+$.Order.created // Order placed
+$.Order.updated // Order modified
+$.Order.validated // Validation complete
+$.Order.fulfilled // Fulfillment complete
+$.Order.shipped // Order shipped
+$.Order.delivered // Order delivered
+$.Order.cancelled // Order cancelled
+$.Order.returned // Order returned
+```
+
+### Order Relationships
+
+```typescript
+$.Order.has.OrderItem
+$.Order.has.Customer
+$.Order.has.PaymentMethod
+$.Order.references.Invoice
+$.Customer.placed.Order
+$.Order.contains.Product
+```
+
+### Order Predicates
+
+```typescript
+$.Order.orderNumber
+$.Order.orderDate
+$.Order.orderStatus
+$.Order.customer
+$.Order.orderedItem
+$.Order.paymentMethod
+$.Order.billingAddress
+$.Order.orderDelivery
+```
+
+## Utility Functions
+
+### calculateOrderTotal()
+
+Calculate order totals including tax and shipping.
+
+```typescript
+function calculateOrderTotal(order: Order) {
+  const subtotal = order.orderedItem.reduce((sum, item) => sum + item.price.price * item.orderQuantity, 0)
+  const tax = subtotal * 0.08 // 8% tax rate
+  const shipping = 9.99
+  const total = subtotal + tax + shipping
+
+  return { subtotal, tax, shipping, total }
+}
+```
+
+### validateOrder()
+
+Validate order data before processing.
+
+```typescript
+async function validateOrder(order: Order): Promise<{
+  valid: boolean
+  errors: string[]
+}> {
+  const errors: string[] = []
+
+  if (!order.customer) {
+    errors.push('Customer is required')
+  }
+
+  if (!order.orderedItem?.length) {
+    errors.push('Order must have at least one item')
+  }
+
+  // ... more validation
+
+  return {
+    valid: errors.length === 0,
+    errors,
+  }
+}
+```
+
+### generateOrderNumber()
+
+Generate unique order numbers.
+
+```typescript
+async function generateOrderNumber(): Promise<string> {
+  const date = new Date()
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+
+  const lastOrder = await db.list($.Order, {
+    where: {
+      orderNumber: { $regex: `^ORD-${year}${month}` },
+    },
+    sort: { orderNumber: -1 },
+    limit: 1,
+  })
+
+  const lastNum = lastOrder[0] ? parseInt(lastOrder[0].orderNumber.split('-').pop()) : 0
+
+  const nextNum = String(lastNum + 1).padStart(6, '0')
+  return `ORD-${year}${month}-${nextNum}`
+}
+```
+
+## Error Handling
+
+### OrderError
+
+Custom error type for order-related errors.
+
+```typescript
+class OrderError extends Error {
+  constructor(
+    message: string,
+    public code: string,
+    public order?: Order
+  ) {
+    super(message)
+    this.name = 'OrderError'
+  }
+}
+
+// Usage
+throw new OrderError('Payment failed', 'PAYMENT_FAILED', order)
+```
+
+### Common Errors
+
+```typescript
+// Invalid status transition
+throw new OrderError(`Cannot transition from ${currentStatus} to ${newStatus}`, 'INVALID_TRANSITION', order)
+
+// Insufficient inventory
+throw new OrderError('Insufficient inventory', 'INSUFFICIENT_INVENTORY', order)
+
+// Payment declined
+throw new OrderError('Payment was declined', 'PAYMENT_DECLINED', order)
+```
+
+## Constants
+
+### Order Status Values
+
+```typescript
+export const OrderStatuses = {
+  PENDING: 'OrderPending',
+  PROCESSING: 'OrderProcessing',
+  IN_TRANSIT: 'OrderInTransit',
+  DELIVERED: 'OrderDelivered',
+  PICKUP_AVAILABLE: 'OrderPickupAvailable',
+  PROBLEM: 'OrderProblem',
+  CANCELLED: 'OrderCancelled',
+  RETURNED: 'OrderReturned',
+} as const
+```
+
+### Payment Status Values
+
+```typescript
+export const PaymentStatuses = {
+  DUE: 'PaymentDue',
+  COMPLETE: 'PaymentComplete',
+  DECLINED: 'PaymentDeclined',
+  FAILED: 'PaymentFailed',
+  REFUNDED: 'PaymentRefunded',
+} as const
+```
+
+## Query Patterns
+
+### Find Orders by Customer
+
+```typescript
+const orders = await db.list($.Order, {
+  where: {
+    'customer.$id': customerId,
+  },
+  sort: { orderDate: -1 },
+})
+```
+
+### Find Orders by Status
+
+```typescript
+const orders = await db.list($.Order, {
+  where: {
+    orderStatus: 'OrderProcessing',
+  },
+})
+```
+
+### Find Orders by Date Range
+
+```typescript
+const orders = await db.list($.Order, {
+  where: {
+    orderDate: {
+      $gte: startDate.toISOString(),
+      $lte: endDate.toISOString(),
+    },
+  },
+})
+```
+
+### Find Orders by Product
+
+```typescript
+const orders = await db.list($.Order, {
+  where: {
+    'orderedItem.orderedItem.$id': productId,
+  },
+})
+```
+
+## Integration APIs
+
+### Invoice Integration
+
+```typescript
+// Create invoice from order
+const invoice = await db.create($.Invoice, {
+  $type: 'Invoice',
+  referencesOrder: order.$id,
+  customer: order.customer,
+  totalPaymentDue: calculateOrderTotal(order).total,
+})
+```
+
+### Payment Integration
+
+```typescript
+// Process payment for order
+const result = await send({
+  $type: 'PaymentRequest',
+  order: order.$id,
+  amount: calculateOrderTotal(order).total,
+  paymentMethod: order.paymentMethod,
+})
+```
+
+### Inventory Integration
+
+```typescript
+// Reserve inventory for order
+for (const item of order.orderedItem) {
+  await db.update(item.orderedItem, {
+    quantityAvailable: { $decrement: item.orderQuantity },
+    quantityReserved: { $increment: item.orderQuantity },
+  })
+}
+```
+
+## See Also
+
+- [Getting Started](../docs/getting-started)
+- [Examples](../examples/)
+- [Schema.org Order](https://schema.org/Order)
+
+## License
+
+MIT (Open Source)
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

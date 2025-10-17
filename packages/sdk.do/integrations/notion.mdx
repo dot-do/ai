@@ -1,0 +1,1336 @@
+---
+$id: https://integrations.do/notion
+$type: Integration
+name: Notion
+service: notion
+description: All-in-one workspace for notes, wikis, projects, and databases
+category: productivity
+sdkBased: true
+sdkPackage: '@notionhq/client'
+sdkVersion: ^2.2.15
+sdkImport: Client
+
+auth:
+  type: oauth2
+  location: header
+  headerName: Authorization
+  scheme: Bearer
+  oauth2:
+    authorizationUrl: https://api.notion.com/v1/oauth/authorize
+    tokenUrl: https://api.notion.com/v1/oauth/token
+    scopes: []
+    grantType: authorization_code
+
+apiVersion: '2022-06-28'
+
+resources:
+  - name: Page
+    plural: Pages
+    sdkPath: pages
+    description: Notion pages with properties and content
+    operations:
+      - name: create
+        method: create
+        params:
+          - name: params
+            type: CreatePageOptions
+            required: true
+            description: Page creation parameters (parent, properties, children)
+        returns: Page
+
+      - name: get
+        method: retrieve
+        params:
+          - name: pageId
+            type: string
+            required: true
+            description: Page ID
+        returns: Page
+
+      - name: update
+        method: update
+        params:
+          - name: pageId
+            type: string
+            required: true
+            description: Page ID
+          - name: params
+            type: UpdatePageOptions
+            required: true
+            description: Page update parameters (properties, archived, icon, cover)
+        returns: Page
+
+      - name: archive
+        method: update
+        params:
+          - name: pageId
+            type: string
+            required: true
+            description: Page ID
+        returns: Page
+
+      - name: list
+        method: search
+        params:
+          - name: options
+            type: ListAllOptions
+            required: false
+            description: List options (pagination)
+        returns: PaginatedResponse<Page | PartialPage>
+        pagination:
+          type: cursor
+          cursorParam: start_cursor
+          limitParam: page_size
+          defaultLimit: 100
+          maxLimit: 100
+
+      - name: search
+        method: search
+        params:
+          - name: query
+            type: string
+            required: false
+            description: Search query text
+          - name: options
+            type: SearchOptions
+            required: false
+            description: Search options (filter, sort, pagination)
+        returns: SearchResult
+        pagination:
+          type: cursor
+          cursorParam: start_cursor
+          limitParam: page_size
+          defaultLimit: 100
+          maxLimit: 100
+
+  - name: Database
+    plural: Databases
+    sdkPath: databases
+    description: Notion databases with schema and entries
+    operations:
+      - name: create
+        method: create
+        params:
+          - name: params
+            type: CreateDatabaseOptions
+            required: true
+            description: Database creation parameters (parent, title, properties)
+        returns: Database
+
+      - name: get
+        method: retrieve
+        params:
+          - name: databaseId
+            type: string
+            required: true
+            description: Database ID
+        returns: Database
+
+      - name: update
+        method: update
+        params:
+          - name: databaseId
+            type: string
+            required: true
+            description: Database ID
+          - name: params
+            type: UpdateDatabaseOptions
+            required: true
+            description: Database update parameters (title, description, properties)
+        returns: Database
+
+      - name: query
+        method: query
+        params:
+          - name: databaseId
+            type: string
+            required: true
+            description: Database ID
+          - name: params
+            type: QueryDatabaseOptions
+            required: false
+            description: Query parameters (filter, sorts, pagination)
+        returns: PaginatedResponse<Page | PartialPage>
+        pagination:
+          type: cursor
+          cursorParam: start_cursor
+          limitParam: page_size
+          defaultLimit: 100
+          maxLimit: 100
+
+      - name: archive
+        method: update
+        params:
+          - name: databaseId
+            type: string
+            required: true
+            description: Database ID
+        returns: Database
+
+  - name: Block
+    plural: Blocks
+    sdkPath: blocks
+    description: Content blocks within pages (paragraphs, headings, lists, etc.)
+    operations:
+      - name: get
+        method: retrieve
+        params:
+          - name: blockId
+            type: string
+            required: true
+            description: Block ID
+        returns: Block
+
+      - name: update
+        method: update
+        params:
+          - name: blockId
+            type: string
+            required: true
+            description: Block ID
+          - name: params
+            type: UpdateBlockOptions
+            required: true
+            description: Block update parameters
+        returns: Block
+
+      - name: delete
+        method: delete
+        params:
+          - name: blockId
+            type: string
+            required: true
+            description: Block ID
+        returns: Block
+
+      - name: append
+        method: children.append
+        params:
+          - name: blockId
+            type: string
+            required: true
+            description: Parent block or page ID
+          - name: params
+            type: AppendBlockChildrenOptions
+            required: true
+            description: Blocks to append (children array)
+        returns: PaginatedResponse<Block | PartialBlock>
+
+      - name: getChildren
+        method: children.list
+        params:
+          - name: blockId
+            type: string
+            required: true
+            description: Parent block ID
+          - name: options
+            type: ListAllOptions
+            required: false
+            description: List options (pagination)
+        returns: PaginatedResponse<Block | PartialBlock>
+        pagination:
+          type: cursor
+          cursorParam: start_cursor
+          limitParam: page_size
+          defaultLimit: 100
+          maxLimit: 100
+
+  - name: User
+    plural: Users
+    sdkPath: users
+    description: Users and bots in the workspace
+    operations:
+      - name: get
+        method: retrieve
+        params:
+          - name: userId
+            type: string
+            required: true
+            description: User ID
+        returns: User
+
+      - name: list
+        method: list
+        params:
+          - name: options
+            type: ListAllOptions
+            required: false
+            description: List options (pagination)
+        returns: PaginatedResponse<User | PartialUser>
+        pagination:
+          type: cursor
+          cursorParam: start_cursor
+          limitParam: page_size
+          defaultLimit: 100
+          maxLimit: 100
+
+      - name: getMe
+        method: me
+        params: []
+        returns: User
+
+  - name: Comment
+    plural: Comments
+    sdkPath: comments
+    description: Comments on pages and discussions
+    operations:
+      - name: create
+        method: create
+        params:
+          - name: params
+            type: CreateCommentOptions
+            required: true
+            description: Comment creation parameters (parent, rich_text)
+        returns: Comment
+
+      - name: list
+        method: list
+        params:
+          - name: blockId
+            type: string
+            required: true
+            description: Page or discussion ID
+          - name: options
+            type: ListAllOptions
+            required: false
+            description: List options (pagination)
+        returns: PaginatedResponse<Comment>
+        pagination:
+          type: cursor
+          cursorParam: start_cursor
+          limitParam: page_size
+          defaultLimit: 100
+          maxLimit: 100
+
+  - name: Search
+    plural: Search
+    sdkPath: search
+    description: Universal search across pages and databases
+    operations:
+      - name: query
+        method: search
+        params:
+          - name: options
+            type: SearchOptions
+            required: false
+            description: Search options (query, filter, sort, pagination)
+        returns: SearchResult
+        pagination:
+          type: cursor
+          cursorParam: start_cursor
+          limitParam: page_size
+          defaultLimit: 100
+          maxLimit: 100
+
+rateLimit:
+  requestsPerSecond: 3
+  burstSize: 10
+  retryAfterHeader: Retry-After
+
+webhooks:
+  enabled: true
+  signatureHeader: Notion-Signature
+  signatureAlgorithm: sha256
+  verificationMethod: signature
+  events:
+    - name: page.created
+      type: page.created
+      description: Occurs when a new page is created
+
+    - name: page.updated
+      type: page.updated
+      description: Occurs when a page is updated
+
+    - name: page.deleted
+      type: page.deleted
+      description: Occurs when a page is deleted or archived
+
+    - name: database.created
+      type: database.created
+      description: Occurs when a new database is created
+
+    - name: database.updated
+      type: database.updated
+      description: Occurs when a database is updated
+
+    - name: database.deleted
+      type: database.deleted
+      description: Occurs when a database is deleted or archived
+
+    - name: block.created
+      type: block.created
+      description: Occurs when a new block is created
+
+    - name: block.updated
+      type: block.updated
+      description: Occurs when a block is updated
+
+    - name: block.deleted
+      type: block.deleted
+      description: Occurs when a block is deleted
+
+    - name: comment.created
+      type: comment.created
+      description: Occurs when a new comment is created
+
+errors:
+  mapping:
+    - code: unauthorized
+      type: authentication
+      statusCode: 401
+      message: Authentication failed - invalid integration token
+      retryable: false
+
+    - code: restricted_resource
+      type: authorization
+      statusCode: 403
+      message: Permission denied - integration lacks required capabilities
+      retryable: false
+
+    - code: object_not_found
+      type: not_found
+      statusCode: 404
+      message: Page, database, or block not found
+      retryable: false
+
+    - code: conflict_error
+      type: validation
+      statusCode: 409
+      message: Conflict error - resource already exists or is in invalid state
+      retryable: false
+
+    - code: rate_limited
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded (3 requests per second)
+      retryable: true
+
+    - code: internal_server_error
+      type: server
+      statusCode: 500
+      message: Internal server error
+      retryable: true
+
+    - code: service_unavailable
+      type: server
+      statusCode: 503
+      message: Service temporarily unavailable
+      retryable: true
+
+    - code: database_connection_unavailable
+      type: server
+      statusCode: 503
+      message: Database connection unavailable
+      retryable: true
+
+    - code: validation_error
+      type: validation
+      statusCode: 400
+      message: Invalid request parameters
+      retryable: false
+
+    - code: invalid_json
+      type: validation
+      statusCode: 400
+      message: Invalid JSON in request body
+      retryable: false
+
+    - code: invalid_request_url
+      type: validation
+      statusCode: 400
+      message: Invalid request URL
+      retryable: false
+
+    - code: invalid_request
+      type: validation
+      statusCode: 400
+      message: Invalid request format
+      retryable: false
+
+  retryable: [rate_limited, internal_server_error, service_unavailable, database_connection_unavailable]
+  nonRetryable: [unauthorized, restricted_resource, object_not_found, conflict_error, validation_error, invalid_json, invalid_request_url, invalid_request]
+
+tests:
+  enabled: true
+  cleanup: true
+  scenarios:
+    - name: Page Operations
+      description: Test page CRUD operations and search
+      steps:
+        - action: create
+          resource: Page
+        - action: retrieve
+          resource: Page
+        - action: update
+          resource: Page
+        - action: list
+          resource: Page
+        - action: assert
+          expects:
+            fields:
+              archived: false
+
+    - name: Database Operations
+      description: Test database creation, querying, and updates
+      steps:
+        - action: create
+          resource: Database
+        - action: retrieve
+          resource: Database
+        - action: update
+          resource: Database
+        - action: assert
+          expects:
+            fields:
+              object: database
+
+    - name: Database Query with Filters
+      description: Test database filtering and sorting
+      steps:
+        - action: create
+          resource: Database
+        - action: create
+          resource: Page
+          params:
+            parent: database
+        - action: list
+          resource: Database
+        - action: assert
+          expects:
+            count: 1
+
+    - name: Block Operations
+      description: Test block creation and manipulation
+      steps:
+        - action: create
+          resource: Page
+        - action: create
+          resource: Block
+        - action: retrieve
+          resource: Block
+        - action: update
+          resource: Block
+        - action: list
+          resource: Block
+
+    - name: User Operations
+      description: Test user retrieval and listing
+      steps:
+        - action: retrieve
+          resource: User
+        - action: list
+          resource: User
+        - action: assert
+          expects:
+            fields:
+              object: user
+
+    - name: Comment Operations
+      description: Test comment creation and listing
+      steps:
+        - action: create
+          resource: Page
+        - action: create
+          resource: Comment
+        - action: list
+          resource: Comment
+        - action: assert
+          expects:
+            fields:
+              object: comment
+
+    - name: Search Operations
+      description: Test universal search functionality
+      steps:
+        - action: create
+          resource: Page
+        - action: create
+          resource: Database
+        - action: list
+          resource: Search
+        - action: assert
+          expects:
+            count: 2
+
+    - name: Webhook Verification
+      description: Test webhook signature verification
+      steps:
+        - action: assert
+          expects:
+            fields:
+              verified: true
+
+docs:
+  homepage: https://notion.so
+  apiDocs: https://developers.notion.com/reference
+  sdkDocs: https://github.com/makenotion/notion-sdk-js
+  guides:
+    quickstart: https://developers.notion.com/docs/getting-started
+    authorization: https://developers.notion.com/docs/authorization
+    webhooks: https://developers.notion.com/docs/webhooks
+    database: https://developers.notion.com/docs/working-with-databases
+    pages: https://developers.notion.com/docs/working-with-page-content
+---
+
+# Notion Workspace Integration
+
+Notion is an all-in-one workspace that combines notes, wikis, databases, and project management. It provides a flexible platform for organizing information, collaborating with teams, and building custom workflows.
+
+## Features
+
+- **Pages & Content**: Rich text editing with 50+ content block types (paragraphs, headings, lists, tables, embeds)
+- **Databases**: Structured data with 15+ property types (text, number, select, date, relation, etc.)
+- **Relations & Rollups**: Link databases and aggregate data across pages
+- **Real-time Collaboration**: Multi-user editing with comments and mentions
+- **Templates**: Reusable page and database templates
+- **API Access**: Full programmatic access to all workspace content
+- **Webhooks**: Real-time event notifications for changes
+- **OAuth 2.0**: Secure user authentication and authorization
+
+## Quick Start
+
+```typescript
+import { NotionClient } from '@dotdo/sdk.do/integrations/notion'
+
+const notion = new NotionClient({
+  auth: process.env.NOTION_TOKEN,
+})
+
+// Create a page
+const page = await notion.createPage({
+  parent: { page_id: 'parent-page-id' },
+  properties: {
+    title: {
+      title: [
+        {
+          text: {
+            content: 'My New Page',
+          },
+        },
+      ],
+    },
+  },
+  children: [
+    {
+      type: 'paragraph',
+      paragraph: {
+        rich_text: [
+          {
+            text: {
+              content: 'Hello from the Notion API!',
+            },
+          },
+        ],
+      },
+    },
+  ],
+})
+
+// Query a database
+const results = await notion.queryDatabase('database-id', {
+  filter: {
+    property: 'Status',
+    select: {
+      equals: 'In Progress',
+    },
+  },
+  sorts: [
+    {
+      property: 'Priority',
+      direction: 'descending',
+    },
+  ],
+})
+```
+
+## Authentication
+
+Notion supports two authentication methods:
+
+### 1. Internal Integration (Server-to-Server)
+
+Create an internal integration in your workspace:
+
+1. Go to https://www.notion.so/my-integrations
+2. Click "New integration"
+3. Select capabilities: Read content, Update content, Insert content, Comment
+4. Copy the "Internal Integration Token"
+5. Share pages/databases with your integration
+
+```typescript
+const notion = new NotionClient({
+  auth: process.env.NOTION_TOKEN, // Internal Integration Token
+})
+```
+
+### 2. OAuth 2.0 (User Authorization)
+
+For public integrations that access user workspaces:
+
+```typescript
+// Step 1: Redirect user to Notion authorization
+const authUrl = `https://api.notion.com/v1/oauth/authorize?client_id=${CLIENT_ID}&response_type=code&redirect_uri=${REDIRECT_URI}`
+
+// Step 2: Exchange authorization code for access token
+const response = await fetch('https://api.notion.com/v1/oauth/token', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    Authorization: `Basic ${Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64')}`,
+  },
+  body: JSON.stringify({
+    grant_type: 'authorization_code',
+    code: authorizationCode,
+    redirect_uri: REDIRECT_URI,
+  }),
+})
+
+const { access_token } = await response.json()
+
+// Step 3: Use access token
+const notion = new NotionClient({
+  auth: access_token,
+})
+```
+
+## Resources
+
+### Pages
+
+Pages are the fundamental building blocks of Notion. They can exist standalone or within databases.
+
+```typescript
+// Create a standalone page
+const page = await notion.createPage({
+  parent: { page_id: 'parent-page-id' },
+  properties: {
+    title: {
+      title: [{ text: { content: 'Page Title' } }],
+    },
+  },
+})
+
+// Get page by ID
+const retrieved = await notion.getPage(page.id)
+
+// Update page properties
+await notion.updatePage(page.id, {
+  properties: {
+    title: {
+      title: [{ text: { content: 'Updated Title' } }],
+    },
+  },
+  icon: {
+    type: 'emoji',
+    emoji: '📝',
+  },
+  cover: {
+    type: 'external',
+    external: { url: 'https://example.com/cover.jpg' },
+  },
+})
+
+// Archive page
+await notion.archivePage(page.id)
+
+// Search pages
+const results = await notion.searchPages('search term', {
+  sort: {
+    direction: 'descending',
+    timestamp: 'last_edited_time',
+  },
+})
+```
+
+### Databases
+
+Databases are collections of pages with structured properties.
+
+```typescript
+// Create database
+const database = await notion.createDatabase({
+  parent: { page_id: 'parent-page-id' },
+  title: [{ text: { content: 'Tasks Database' } }],
+  properties: {
+    Name: {
+      title: {},
+    },
+    Status: {
+      select: {
+        options: [
+          { name: 'Not Started', color: 'red' },
+          { name: 'In Progress', color: 'yellow' },
+          { name: 'Done', color: 'green' },
+        ],
+      },
+    },
+    Priority: {
+      number: { format: 'number' },
+    },
+    'Due Date': {
+      date: {},
+    },
+    Assignee: {
+      people: {},
+    },
+    Tags: {
+      multi_select: {
+        options: [
+          { name: 'Bug', color: 'red' },
+          { name: 'Feature', color: 'blue' },
+        ],
+      },
+    },
+    Completed: {
+      checkbox: {},
+    },
+  },
+})
+
+// Query database with filters
+const tasks = await notion.queryDatabase(database.id, {
+  filter: {
+    and: [
+      {
+        property: 'Status',
+        select: { equals: 'In Progress' },
+      },
+      {
+        property: 'Priority',
+        number: { greater_than: 3 },
+      },
+    ],
+  },
+  sorts: [{ property: 'Due Date', direction: 'ascending' }],
+  page_size: 50,
+})
+
+// Create page in database
+const taskPage = await notion.createPage({
+  parent: { database_id: database.id },
+  properties: {
+    Name: {
+      title: [{ text: { content: 'Implement feature X' } }],
+    },
+    Status: {
+      select: { name: 'In Progress' },
+    },
+    Priority: {
+      number: 5,
+    },
+    'Due Date': {
+      date: { start: '2025-10-15' },
+    },
+    Completed: {
+      checkbox: false,
+    },
+  },
+})
+```
+
+### Blocks
+
+Blocks are the content within pages (paragraphs, headings, lists, embeds, etc.).
+
+```typescript
+// Append blocks to page
+await notion.appendBlockChildren(page.id, {
+  children: [
+    {
+      type: 'heading_1',
+      heading_1: {
+        rich_text: [{ text: { content: 'Main Heading' } }],
+      },
+    },
+    {
+      type: 'paragraph',
+      paragraph: {
+        rich_text: [
+          { text: { content: 'This is ' } },
+          {
+            text: { content: 'bold text' },
+            annotations: { bold: true },
+          },
+          { text: { content: ' and ' } },
+          {
+            text: { content: 'italic text' },
+            annotations: { italic: true },
+          },
+        ],
+      },
+    },
+    {
+      type: 'bulleted_list_item',
+      bulleted_list_item: {
+        rich_text: [{ text: { content: 'First item' } }],
+      },
+    },
+    {
+      type: 'bulleted_list_item',
+      bulleted_list_item: {
+        rich_text: [{ text: { content: 'Second item' } }],
+      },
+    },
+    {
+      type: 'to_do',
+      to_do: {
+        rich_text: [{ text: { content: 'Task to complete' } }],
+        checked: false,
+      },
+    },
+    {
+      type: 'code',
+      code: {
+        rich_text: [{ text: { content: 'console.log("Hello")' } }],
+        language: 'javascript',
+      },
+    },
+  ],
+})
+
+// Get block children
+const children = await notion.getBlockChildren(page.id)
+
+// Update block
+await notion.updateBlock(blockId, {
+  paragraph: {
+    rich_text: [{ text: { content: 'Updated content' } }],
+  },
+})
+
+// Delete block
+await notion.deleteBlock(blockId)
+```
+
+### Users
+
+Access workspace users and bot information.
+
+```typescript
+// Get current bot user
+const bot = await notion.getMe()
+console.log(bot.type) // 'bot'
+console.log(bot.name) // Integration name
+
+// List all users
+const users = await notion.listUsers()
+
+// Get specific user
+const user = await notion.getUser(userId)
+```
+
+### Comments
+
+Add and retrieve comments on pages.
+
+```typescript
+// Create comment
+const comment = await notion.createComment({
+  parent: { page_id: page.id },
+  rich_text: [
+    {
+      text: {
+        content: 'This needs review!',
+      },
+    },
+  ],
+})
+
+// Get comments for page
+const comments = await notion.getComments(page.id)
+```
+
+### Search
+
+Universal search across all pages and databases.
+
+```typescript
+// Search everything
+const results = await notion.search({
+  query: 'project roadmap',
+  sort: {
+    direction: 'descending',
+    timestamp: 'last_edited_time',
+  },
+})
+
+// Filter by type
+const pages = await notion.search({
+  query: 'Q4 goals',
+  filter: {
+    value: 'page',
+    property: 'object',
+  },
+})
+
+const databases = await notion.search({
+  query: 'customers',
+  filter: {
+    value: 'database',
+    property: 'object',
+  },
+})
+```
+
+## Webhooks
+
+Notion sends webhook events when pages, databases, blocks, or comments are created, updated, or deleted.
+
+### Setting Up Webhooks
+
+1. Go to your integration settings
+2. Add webhook URL endpoint
+3. Copy webhook secret for signature verification
+4. Subscribe to event types
+
+### Webhook Verification
+
+```typescript
+import { NotionWebhooks, EventRouter } from '@dotdo/sdk.do/integrations/notion'
+
+// Verify webhook signature
+const isValid = NotionWebhooks.verifySignature(
+  requestBody, // Raw body string
+  request.headers['notion-signature'],
+  process.env.NOTION_WEBHOOK_SECRET
+)
+
+if (!isValid) {
+  return new Response('Invalid signature', { status: 401 })
+}
+
+// Parse event
+const event = NotionWebhooks.parseEvent(requestBody)
+```
+
+### Event Handling
+
+```typescript
+const router = new EventRouter()
+
+// Handle specific events
+router.on('page.created', async (event, page) => {
+  console.log('New page created:', page.id)
+  // Process new page
+})
+
+router.on('page.updated', async (event, page) => {
+  console.log('Page updated:', page.id)
+  // Sync changes
+})
+
+router.on('database.updated', async (event, database) => {
+  console.log('Database schema changed:', database.id)
+  // Update local schema
+})
+
+// Handle all page events with wildcards
+router.on('page.*', async (event, page) => {
+  console.log('Page event:', event.type, page.id)
+})
+
+// Handle all events
+router.on('*', async (event, data) => {
+  console.log('Event received:', event.type)
+})
+
+// Process webhook
+await router.handle(event)
+```
+
+### Available Events
+
+- **Page Events**: `page.created`, `page.updated`, `page.deleted`
+- **Database Events**: `database.created`, `database.updated`, `database.deleted`
+- **Block Events**: `block.created`, `block.updated`, `block.deleted`
+- **Comment Events**: `comment.created`
+
+## Error Handling
+
+```typescript
+import { NotionIntegrationError, NotionErrorCode } from '@dotdo/sdk.do/integrations/notion'
+
+try {
+  await notion.getPage('invalid-page-id')
+} catch (error) {
+  if (error instanceof NotionIntegrationError) {
+    console.error('Error:', error.code, error.message)
+
+    switch (error.code) {
+      case NotionErrorCode.AUTHENTICATION_FAILED:
+        // Invalid or expired token
+        break
+
+      case NotionErrorCode.PERMISSION_DENIED:
+        // Integration lacks required capabilities
+        // Or page/database not shared with integration
+        break
+
+      case NotionErrorCode.OBJECT_NOT_FOUND:
+        // Page, database, or block doesn't exist
+        break
+
+      case NotionErrorCode.RATE_LIMIT_EXCEEDED:
+        // Exceeded 3 requests per second
+        if (error.isRetriable()) {
+          // Wait and retry
+          await new Promise((resolve) => setTimeout(resolve, 1000))
+        }
+        break
+
+      case NotionErrorCode.VALIDATION_ERROR:
+        // Invalid request parameters
+        break
+    }
+  }
+}
+```
+
+## Rate Limits
+
+Notion enforces the following rate limits:
+
+- **3 requests per second** per integration
+- **Burst allowance**: Up to 10 requests in quick succession
+- **Rate limit headers**: Check `Retry-After` header when rate limited
+
+Best practices:
+
+1. Implement exponential backoff for retries
+2. Batch operations where possible
+3. Cache frequently accessed data
+4. Use webhooks instead of polling
+
+## Property Types
+
+Notion supports 15+ property types for database columns:
+
+```typescript
+// All property types in a database
+const properties = {
+  // Text
+  Title: { title: {} },
+  Description: { rich_text: {} },
+
+  // Numbers
+  Count: { number: { format: 'number' } },
+  Price: { number: { format: 'dollar' } },
+
+  // Selection
+  Status: {
+    select: {
+      options: [
+        { name: 'Active', color: 'green' },
+        { name: 'Inactive', color: 'red' },
+      ],
+    },
+  },
+  Tags: {
+    multi_select: {
+      options: [
+        { name: 'Important', color: 'red' },
+        { name: 'Urgent', color: 'orange' },
+      ],
+    },
+  },
+
+  // Date & Time
+  'Due Date': { date: {} },
+  'Created Time': { created_time: {} },
+  'Last Edited Time': { last_edited_time: {} },
+
+  // People
+  Assignee: { people: {} },
+  'Created By': { created_by: {} },
+  'Last Edited By': { last_edited_by: {} },
+
+  // Relations
+  'Related Pages': {
+    relation: {
+      database_id: 'related-database-id',
+    },
+  },
+
+  // Other
+  Completed: { checkbox: {} },
+  URL: { url: {} },
+  Email: { email: {} },
+  Phone: { phone_number: {} },
+  Files: { files: {} },
+
+  // Formulas & Rollups
+  Formula: {
+    formula: {
+      expression: 'prop("Count") * 2',
+    },
+  },
+  Rollup: {
+    rollup: {
+      relation_property_name: 'Related Pages',
+      relation_property_id: 'relation-property-id',
+      rollup_property_name: 'Status',
+      rollup_property_id: 'status-property-id',
+      function: 'count',
+    },
+  },
+}
+```
+
+## Best Practices
+
+1. **Share with Integration**: Always share pages/databases with your integration before accessing
+2. **Use Webhooks**: Prefer webhooks over polling for real-time updates
+3. **Batch Operations**: Group multiple block appends into single requests
+4. **Error Handling**: Implement comprehensive error handling with retries for transient errors
+5. **Property Types**: Validate property types before creating/updating pages
+6. **Pagination**: Always handle pagination for list operations (100 items per page)
+7. **Rich Text**: Use rich text arrays for formatted content with annotations
+8. **Archive Instead of Delete**: Notion archives pages/databases instead of deleting them
+9. **API Version**: Pin to a specific API version for stability
+10. **Rate Limiting**: Respect rate limits and implement exponential backoff
+
+## Common Use Cases
+
+### Create Task Management Database
+
+```typescript
+// Create tasks database
+const database = await notion.createDatabase({
+  parent: { page_id: 'workspace-page-id' },
+  title: [{ text: { content: 'Team Tasks' } }],
+  properties: {
+    Task: { title: {} },
+    Status: {
+      select: {
+        options: [
+          { name: 'Todo', color: 'red' },
+          { name: 'In Progress', color: 'yellow' },
+          { name: 'Done', color: 'green' },
+        ],
+      },
+    },
+    Priority: { number: {} },
+    Assignee: { people: {} },
+    'Due Date': { date: {} },
+  },
+})
+
+// Add task
+await notion.createPage({
+  parent: { database_id: database.id },
+  properties: {
+    Task: {
+      title: [{ text: { content: 'Build new feature' } }],
+    },
+    Status: {
+      select: { name: 'In Progress' },
+    },
+    Priority: {
+      number: 1,
+    },
+    'Due Date': {
+      date: { start: '2025-10-20' },
+    },
+  },
+})
+```
+
+### Sync Content from External System
+
+```typescript
+// Sync projects from external system
+for (const project of externalProjects) {
+  const page = await notion.createPage({
+    parent: { database_id: 'projects-database-id' },
+    properties: {
+      Name: {
+        title: [{ text: { content: project.name } }],
+      },
+      'External ID': {
+        rich_text: [{ text: { content: project.id } }],
+      },
+      Status: {
+        select: { name: project.status },
+      },
+    },
+  })
+
+  // Add project details as blocks
+  await notion.appendBlockChildren(page.id, {
+    children: [
+      {
+        type: 'heading_2',
+        heading_2: {
+          rich_text: [{ text: { content: 'Project Details' } }],
+        },
+      },
+      {
+        type: 'paragraph',
+        paragraph: {
+          rich_text: [{ text: { content: project.description } }],
+        },
+      },
+    ],
+  })
+}
+```
+
+### Generate Report from Database
+
+```typescript
+// Query tasks by status
+const tasks = await notion.queryDatabase('tasks-database-id', {
+  filter: {
+    property: 'Status',
+    select: { equals: 'Done' },
+  },
+})
+
+// Create report page
+const report = await notion.createPage({
+  parent: { page_id: 'reports-page-id' },
+  properties: {
+    title: {
+      title: [{ text: { content: 'Weekly Report' } }],
+    },
+  },
+})
+
+// Add task summary
+const blocks = tasks.results.map((task) => ({
+  type: 'bulleted_list_item',
+  bulleted_list_item: {
+    rich_text: [
+      {
+        text: {
+          content: task.properties.Task.title[0]?.text.content || 'Untitled',
+        },
+      },
+    ],
+  },
+}))
+
+await notion.appendBlockChildren(report.id, { children: blocks })
+```
+
+## API Reference
+
+Full API documentation: https://developers.notion.com/reference
+
+**Key Resources**:
+
+- Pages: https://developers.notion.com/reference/page
+- Databases: https://developers.notion.com/reference/database
+- Blocks: https://developers.notion.com/reference/block
+- Users: https://developers.notion.com/reference/user
+- Comments: https://developers.notion.com/reference/comment
+- Search: https://developers.notion.com/reference/post-search
+- Webhooks: https://developers.notion.com/docs/webhooks
+
+## Support
+
+- **Documentation**: https://developers.notion.com
+- **API Reference**: https://developers.notion.com/reference
+- **Community**: https://developers.notion.com/community
+- **Status**: https://status.notion.so
+- **SDK**: https://github.com/makenotion/notion-sdk-js

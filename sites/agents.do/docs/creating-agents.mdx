@@ -1,0 +1,743 @@
+---
+$id: https://agents.do/docs/creating-agents
+$type: TechArticle
+title: Creating Agents
+description: Learn how to create autonomous agents with personas, capabilities, and goals
+keywords: [create agents, agent personas, agent capabilities, agent design, autonomous agents]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Creating Agents
+
+Learn how to design and build autonomous agents with rich personas, capabilities, and goals.
+
+## Agent Anatomy
+
+Every agent consists of several key components:
+
+```typescript
+interface Agent {
+  // Identity
+  $type: 'Agent'
+  $id: string
+  name: string
+  role: string
+
+  // Persona
+  persona?: AgentPersona
+
+  // Purpose
+  goal: string | string[]
+  goals?: Goal[]
+
+  // Abilities
+  capabilities: string[]
+  tools: Tool[]
+
+  // Intelligence
+  model: string
+  temperature?: number
+
+  // Memory
+  memory: AgentMemory
+
+  // State
+  state: AgentState
+}
+```
+
+## Agent Identity
+
+Define who your agent is:
+
+```typescript
+const agent = {
+  $type: 'Agent',
+  $id: 'https://example.com/agents/sarah-sdr',
+  name: 'Sarah Chen',
+  role: 'Sales Development Representative',
+}
+```
+
+### Naming Conventions
+
+Choose clear, descriptive names:
+
+```typescript
+// Good: Personal names for human-like agents
+name: 'Sarah Chen'
+name: 'Alex Kumar'
+name: 'Maria Rodriguez'
+
+// Good: Descriptive names for functional agents
+name: 'Lead Research Agent'
+name: 'Customer Support Bot'
+name: 'Data Analysis Engine'
+
+// Avoid: Generic or confusing names
+name: 'Agent 1'
+name: 'Bot'
+name: 'AI'
+```
+
+### Role Definition
+
+Define the agent's role clearly:
+
+```typescript
+// Good: Specific roles
+role: 'Sales Development Representative'
+role: 'Customer Success Manager'
+role: 'DevOps Engineer'
+role: 'Financial Analyst'
+
+// Avoid: Vague roles
+role: 'Helper'
+role: 'Assistant'
+role: 'Worker'
+```
+
+## Agent Personas
+
+Personas give agents personality and context:
+
+```typescript
+const salesAgent = await agent.create({
+  name: 'Sarah Chen',
+  role: 'Sales Development Representative',
+  persona: {
+    background: 'Former tech recruiter with 5 years in B2B SaaS sales',
+    expertise: ['lead qualification', 'cold outreach', 'discovery calls', 'pipeline management'],
+    style: 'consultative, relationship-focused, data-driven',
+    communication: {
+      tone: 'professional yet personable',
+      approach: 'value-focused, concise',
+      preferences: ['leads with insights', 'asks discovery questions', 'focuses on business outcomes'],
+    },
+    values: ['Build trust through expertise', 'Qualify rigorously', 'Respect prospects time'],
+  },
+})
+```
+
+### Background
+
+Provide context about the agent's experience:
+
+```typescript
+background: 'Former tech recruiter with 5 years in B2B SaaS sales. Specialized in enterprise accounts in the healthcare vertical. Consistently exceeded quota by 120%.'
+```
+
+### Expertise
+
+List specific areas of expertise:
+
+```typescript
+expertise: ['lead qualification', 'cold outreach', 'discovery calls', 'objection handling', 'MEDDIC methodology', 'enterprise sales']
+```
+
+### Style
+
+Define the agent's working style:
+
+```typescript
+style: 'consultative, relationship-focused, data-driven, proactive'
+```
+
+### Communication
+
+Specify how the agent communicates:
+
+```typescript
+communication: {
+  tone: 'professional yet personable',
+  approach: 'value-focused and concise',
+  format: 'structured with clear action items',
+  preferences: [
+    'leads with insights',
+    'asks open-ended questions',
+    'provides specific examples',
+    'includes clear next steps'
+  ]
+}
+```
+
+### Values
+
+Define guiding principles:
+
+```typescript
+values: [
+  'Build trust through demonstrated expertise',
+  'Qualify rigorously to respect everyones time',
+  'Focus on customer outcomes over features',
+  'Follow up consistently and promptly',
+]
+```
+
+## Agent Goals
+
+Define what the agent should accomplish:
+
+### Simple Goals
+
+String-based goals for straightforward objectives:
+
+```typescript
+goal: 'Qualify leads and book discovery meetings'
+```
+
+### Structured Goals
+
+Rich goal objects with metrics:
+
+```typescript
+goals: [
+  {
+    $type: 'Goal',
+    name: 'Qualify Leads',
+    description: 'Research and qualify inbound leads',
+    target: {
+      metric: 'leads_qualified',
+      value: 20,
+      period: 'week',
+    },
+    priority: 'high',
+  },
+  {
+    $type: 'Goal',
+    name: 'Book Meetings',
+    description: 'Schedule discovery calls with qualified leads',
+    target: {
+      metric: 'meetings_booked',
+      value: 10,
+      period: 'week',
+    },
+    priority: 'high',
+  },
+  {
+    $type: 'Goal',
+    name: 'Meeting Show Rate',
+    description: 'Maintain high meeting attendance rate',
+    target: {
+      metric: 'show_rate',
+      value: 0.5,
+      period: 'week',
+    },
+    priority: 'medium',
+  },
+]
+```
+
+### Goal Tracking
+
+Monitor goal progress:
+
+```typescript
+// Get goal progress
+const progress = await agent.getGoalProgress()
+
+console.log(progress)
+// {
+//   'Qualify Leads': {
+//     current: 18,
+//     target: 20,
+//     progress: 0.9,
+//     status: 'on_track'
+//   },
+//   'Book Meetings': {
+//     current: 12,
+//     target: 10,
+//     progress: 1.2,
+//     status: 'ahead'
+//   }
+// }
+```
+
+## Agent Capabilities
+
+Capabilities define what an agent can do:
+
+```typescript
+const agent = await agent.create({
+  name: 'Sales Agent',
+  capabilities: ['research', 'outreach', 'qualification', 'scheduling', 'follow_up'],
+})
+```
+
+### Built-in Capabilities
+
+Common capabilities available by default:
+
+```typescript
+capabilities: [
+  // Research
+  'research',
+  'analysis',
+  'summarization',
+
+  // Communication
+  'email',
+  'chat',
+  'phone',
+
+  // Data
+  'data_entry',
+  'data_validation',
+  'data_enrichment',
+
+  // Workflow
+  'task_management',
+  'scheduling',
+  'follow_up',
+]
+```
+
+### Custom Capabilities
+
+Define domain-specific capabilities:
+
+```typescript
+const agent = await agent.create({
+  name: 'Healthcare SDR',
+  capabilities: [
+    {
+      $type: 'Capability',
+      name: 'hipaa_compliance',
+      description: 'Ensure HIPAA compliance in all communications',
+      rules: ['Never include PHI in emails', 'Use secure communication channels', 'Log all access to patient data'],
+    },
+    {
+      $type: 'Capability',
+      name: 'clinical_research',
+      description: 'Research healthcare organizations and decision makers',
+      tools: ['healthcare_database', 'linkedin', 'hospital_systems'],
+    },
+  ],
+})
+```
+
+### Capability Dependencies
+
+Some capabilities require others:
+
+```typescript
+const agent = await agent.create({
+  capabilities: [
+    {
+      name: 'email_outreach',
+      requires: ['research', 'personalization'],
+    },
+    {
+      name: 'qualification',
+      requires: ['research', 'analysis', 'note_taking'],
+    },
+  ],
+})
+```
+
+## Agent Tools
+
+Tools enable agents to interact with systems:
+
+```typescript
+const agent = await agent.create({
+  name: 'Sales Agent',
+  tools: {
+    // Email tool
+    email: {
+      $type: 'Tool',
+      name: 'email',
+      description: 'Send and manage emails',
+      functions: {
+        send: async (params) => {
+          return await sendEmail(params)
+        },
+        read: async (id) => {
+          return await getEmail(id)
+        },
+        search: async (query) => {
+          return await searchEmails(query)
+        },
+      },
+    },
+
+    // CRM tool
+    crm: {
+      $type: 'Tool',
+      name: 'crm',
+      description: 'Manage customer relationships',
+      functions: {
+        createLead: async (data) => {
+          return await db.create($.Lead, data)
+        },
+        updateLead: async (id, data) => {
+          return await db.update($.Lead, id, data)
+        },
+        getLead: async (id) => {
+          return await db.get($.Lead, id)
+        },
+        logActivity: async (leadId, activity) => {
+          return await db.create($.Activity, { lead: leadId, ...activity })
+        },
+      },
+    },
+
+    // Calendar tool
+    calendar: {
+      $type: 'Tool',
+      name: 'calendar',
+      description: 'Schedule and manage meetings',
+      functions: {
+        checkAvailability: async (date) => {
+          return await getAvailability(date)
+        },
+        bookMeeting: async (params) => {
+          return await createMeeting(params)
+        },
+        sendInvite: async (meetingId, attendees) => {
+          return await sendCalendarInvite(meetingId, attendees)
+        },
+      },
+    },
+  },
+})
+```
+
+### Tool Permissions
+
+Control which tools agents can use:
+
+```typescript
+await agent.configure({
+  tool_permissions: {
+    email: {
+      allowed_functions: ['send', 'read'],
+      restrictions: {
+        send: {
+          max_recipients: 1,
+          requires_approval: false,
+        },
+      },
+    },
+    crm: {
+      allowed_functions: ['createLead', 'updateLead', 'getLead'],
+      restrictions: {
+        updateLead: {
+          requires_approval: true,
+          approval_required_for: ['status', 'owner'],
+        },
+      },
+    },
+  },
+})
+```
+
+### Tool Usage Monitoring
+
+Monitor how agents use tools:
+
+```typescript
+// Track tool usage
+agent.on('tool_used', (event) => {
+  console.log(`Tool: ${event.tool}, Function: ${event.function}, Result: ${event.result}`)
+})
+
+// Get tool usage metrics
+const toolMetrics = await agent.getToolMetrics()
+console.log(toolMetrics)
+// {
+//   email: { usage_count: 150, success_rate: 0.95 },
+//   crm: { usage_count: 200, success_rate: 0.98 },
+//   calendar: { usage_count: 80, success_rate: 0.90 }
+// }
+```
+
+## Agent Intelligence
+
+Configure the agent's AI model:
+
+```typescript
+const agent = await agent.create({
+  name: 'Agent',
+  model: 'claude-sonnet-4.5',
+  temperature: 0.7,
+  maxTokens: 4096,
+  reasoning: {
+    strategy: 'deliberative', // 'reactive' | 'deliberative' | 'hybrid'
+    planning_depth: 3,
+    self_reflection: true,
+  },
+})
+```
+
+### Model Selection
+
+Choose the appropriate model:
+
+```typescript
+// High-capability tasks
+model: 'claude-sonnet-4.5' // Complex reasoning, creativity
+
+// Balanced tasks
+model: 'gpt-5' // General-purpose, cost-effective
+
+// Simple tasks
+model: 'gpt-5-mini' // Fast, low-cost
+```
+
+### Temperature
+
+Control randomness and creativity:
+
+```typescript
+// Creative tasks (high temperature)
+temperature: 0.9 // Varied, creative outputs
+
+// Balanced
+temperature: 0.7 // Good balance of consistency and variety
+
+// Deterministic (low temperature)
+temperature: 0.3 // Consistent, focused outputs
+```
+
+### Reasoning Strategies
+
+Choose how agents think:
+
+```typescript
+// Reactive: Fast, pattern-based responses
+reasoning: { strategy: 'reactive' }
+
+// Deliberative: Deep analysis and planning
+reasoning: { strategy: 'deliberative', planning_depth: 5 }
+
+// Hybrid: Balance of speed and depth
+reasoning: { strategy: 'hybrid', planning_depth: 3 }
+```
+
+## Agent Memory
+
+Configure agent memory systems:
+
+```typescript
+const agent = await agent.create({
+  name: 'Agent',
+  memory: {
+    // Short-term memory (current task)
+    short_term: {
+      enabled: true,
+      capacity: 10000, // tokens
+    },
+
+    // Long-term memory (persistent knowledge)
+    long_term: {
+      enabled: true,
+      storage: 'database',
+      indexing: 'semantic',
+    },
+
+    // Episodic memory (past interactions)
+    episodic: {
+      enabled: true,
+      retention: '90_days',
+      max_entries: 1000,
+    },
+  },
+})
+```
+
+### Memory Operations
+
+```typescript
+// Store in memory
+await agent.remember({
+  type: 'company_profile',
+  company: 'Acme Corp',
+  data: {
+    industry: 'SaaS',
+    size: '100-500',
+    location: 'San Francisco',
+    decision_makers: ['John Doe (CTO)', 'Jane Smith (VP Sales)'],
+  },
+})
+
+// Recall from memory
+const profile = await agent.recall({
+  type: 'company_profile',
+  company: 'Acme Corp',
+})
+
+// Search memory
+const similar = await agent.searchMemory({
+  query: 'SaaS companies in San Francisco',
+  limit: 5,
+})
+```
+
+## Complete Agent Example
+
+Putting it all together:
+
+```typescript
+const salesAgent = await agent.create({
+  // Identity
+  $type: 'Agent',
+  $id: 'https://example.com/agents/sarah-sdr',
+  name: 'Sarah Chen',
+  role: 'Sales Development Representative',
+
+  // Persona
+  persona: {
+    background: 'Former tech recruiter with 5 years in B2B SaaS sales',
+    expertise: ['lead qualification', 'cold outreach', 'discovery calls'],
+    style: 'consultative, relationship-focused, data-driven',
+    communication: {
+      tone: 'professional yet personable',
+      approach: 'value-focused, concise',
+    },
+  },
+
+  // Goals
+  goals: [
+    {
+      name: 'Qualify Leads',
+      target: { metric: 'leads_qualified', value: 20, period: 'week' },
+    },
+    {
+      name: 'Book Meetings',
+      target: { metric: 'meetings_booked', value: 10, period: 'week' },
+    },
+  ],
+
+  // Capabilities
+  capabilities: ['research', 'outreach', 'qualification', 'scheduling'],
+
+  // Tools
+  tools: {
+    email: emailTool,
+    crm: crmTool,
+    calendar: calendarTool,
+    linkedin: linkedinTool,
+  },
+
+  // Intelligence
+  model: 'claude-sonnet-4.5',
+  temperature: 0.7,
+  reasoning: {
+    strategy: 'deliberative',
+    planning_depth: 3,
+  },
+
+  // Memory
+  memory: {
+    short_term: { enabled: true, capacity: 10000 },
+    long_term: { enabled: true, storage: 'database' },
+    episodic: { enabled: true, retention: '90_days' },
+  },
+})
+
+// Configure behavior
+await salesAgent.configure({
+  autonomy: 'supervised',
+  notifications: ['task_complete', 'decision_required'],
+  error_handling: {
+    retry: { attempts: 3 },
+    fallback: 'escalate_to_human',
+  },
+})
+
+// Execute tasks
+const result = await salesAgent.execute({
+  task: 'Qualify and reach out to new lead',
+  input: {
+    lead: {
+      name: 'John Doe',
+      company: 'Acme Corp',
+      email: 'john@acme.com',
+      source: 'whitepaper_download',
+    },
+  },
+})
+```
+
+## Best Practices
+
+### 1. Clear Identity
+
+Give agents clear names and roles:
+
+```typescript
+// Good
+name: 'Sarah Chen - SDR'
+role: 'Sales Development Representative'
+
+// Avoid
+name: 'Agent 1'
+role: 'Helper'
+```
+
+### 2. Rich Personas
+
+Provide detailed context:
+
+```typescript
+// Good
+persona: {
+  background: 'Former recruiter, 5 years SaaS sales',
+  expertise: ['qualification', 'outreach'],
+  style: 'consultative, data-driven'
+}
+
+// Avoid
+persona: {
+  description: 'Sales agent'
+}
+```
+
+### 3. Measurable Goals
+
+Define specific, trackable goals:
+
+```typescript
+// Good
+goals: [{ name: 'Qualify Leads', target: { metric: 'leads_qualified', value: 20, period: 'week' } }]
+
+// Avoid
+goals: ['Do sales stuff']
+```
+
+### 4. Appropriate Tools
+
+Give agents the right tools:
+
+```typescript
+// Good: Focused tool set
+tools: ['email', 'crm', 'calendar', 'linkedin']
+
+// Avoid: Too many or irrelevant tools
+tools: ['email', 'crm', 'calendar', 'photo_editor', 'video_maker']
+```
+
+### 5. Start Simple
+
+Begin with focused agents:
+
+```typescript
+// Good: Focused agent
+capabilities: ['research', 'qualification']
+
+// Avoid: Swiss army knife
+capabilities: ['research', 'sales', 'support', 'analytics', 'devops']
+```
+
+## Next Steps
+
+- [Agent Communication](./agent-communication) - Learn agent-to-agent patterns
+- [Examples](../examples/) - See real-world agent implementations
+- [API Reference](../api/) - Complete API documentation
+
+---
+
+Ready to enable agent communication? Learn [Agent Communication](./agent-communication).

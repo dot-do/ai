@@ -1,0 +1,104 @@
+---
+$id: https://integrations.do/spotify
+$type: Integration
+name: Spotify
+service: spotify
+description: Spotify is a digital music and podcast streaming service with millions of tracks, personalized playlists, and social sharing features
+category: social-media
+sdkBased: false
+baseUrl: https://api.spotify.com
+
+auth:
+  type: oauth2
+  authorizationUrl: https://accounts.spotify.com/authorize
+  tokenUrl: https://accounts.spotify.com/api/token
+  scopes:
+    - user-read-private user-read-email app-remote-control streaming user-modify-playback-state user-read-playback-state user-read-currently-playing
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Spotify actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: true
+  verificationMethod: none
+  events:
+    - name: generic_trigger
+      type: trigger
+      description: Generic webhook trigger
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://spotify.com
+  apiDocs: https://spotify.com
+---
+
+# Spotify Integration
+
+Spotify is a digital music and podcast streaming service with millions of tracks, personalized playlists, and social sharing features
+
+## Quick Start
+
+```typescript
+import { SpotifyClient } from '@dotdo/sdk.do/integrations/spotify'
+
+const spotify = new SpotifyClient({
+  apiKey: process.env.SPOTIFY_API_KEY,
+})
+
+const result = await spotify.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Spotify provides 109 actions through the Composio API.
+
+## Webhooks
+
+Spotify supports 3 webhook triggers for real-time event notifications.
+
+## License
+
+MIT

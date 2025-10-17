@@ -1,0 +1,815 @@
+---
+$id: https://integrations.do
+$type: WebSite
+name: integrations.do
+description: External service integration platform for Business-as-Code with pre-built connectors for CRM, payments, communication, and storage
+keywords: [integrations, api, crm, payments, stripe, salesforce, hubspot, slack, s3, business-as-code]
+license: CC-BY-4.0
+---
+
+# integrations.do
+
+**Pre-built external service integrations for Business-as-Code**
+
+integrations.do provides a unified platform for connecting your Business-as-Code applications with external services. Access pre-built integrations for CRM systems (Salesforce, HubSpot), payment processors (Stripe, PayPal), communication platforms (Slack, SendGrid), and storage services (S3, Dropbox) through semantic `$.Subject.predicate.Object` patterns.
+
+## Quick Start
+
+```typescript
+import { $, integrations } from 'sdk.do'
+
+// Initialize Salesforce integration
+const salesforce = await integrations.use($.Salesforce, {
+  clientId: process.env.SALESFORCE_CLIENT_ID,
+  clientSecret: process.env.SALESFORCE_CLIENT_SECRET,
+  instanceUrl: process.env.SALESFORCE_INSTANCE_URL,
+})
+
+// Create a lead in Salesforce
+const lead = await salesforce.create($.Lead, {
+  $type: 'Lead',
+  firstName: 'John',
+  lastName: 'Smith',
+  company: 'Acme Corp',
+  email: 'john@acme.com',
+  status: 'Open',
+})
+
+// Use Stripe for payments
+const stripe = await integrations.use($.Stripe, {
+  apiKey: process.env.STRIPE_API_KEY,
+})
+
+// Create payment
+const payment = await stripe.create($.PaymentIntent, {
+  amount: 5000, // $50.00
+  currency: 'usd',
+  customer: customerId,
+})
+```
+
+## Key Features
+
+### Pre-Built Integrations
+
+Out-of-the-box connectors for popular services:
+
+```typescript
+import { $, integrations } from 'sdk.do'
+
+// CRM Integrations
+const salesforce = await integrations.use($.Salesforce)
+const hubspot = await integrations.use($.HubSpot)
+const pipedrive = await integrations.use($.Pipedrive)
+
+// Payment Integrations
+const stripe = await integrations.use($.Stripe)
+const paypal = await integrations.use($.PayPal)
+const square = await integrations.use($.Square)
+
+// Communication Integrations
+const slack = await integrations.use($.Slack)
+const sendgrid = await integrations.use($.SendGrid)
+const twilio = await integrations.use($.Twilio)
+
+// Storage Integrations
+const s3 = await integrations.use($.AmazonS3)
+const dropbox = await integrations.use($.Dropbox)
+const googleDrive = await integrations.use($.GoogleDrive)
+```
+
+### Semantic Integration Patterns
+
+Use semantic patterns for consistent integration:
+
+```typescript
+import { $, integrations, db } from 'sdk.do'
+
+// Semantic CRM sync
+const salesforce = await integrations.use($.Salesforce)
+
+// Map database entities to CRM
+await db.map($.Organization, $.syncsWith, salesforce)
+
+// When organization is created locally, sync to Salesforce
+on($.Organization.created, async (event) => {
+  const org = event.data
+
+  await salesforce.create($.Account, {
+    $type: 'Account',
+    name: org.name,
+    website: org.url,
+    industry: org.industry,
+  })
+})
+```
+
+### OAuth 2.0 Integration
+
+Built-in OAuth 2.0 flows for secure authentication:
+
+```typescript
+import { $, integrations } from 'sdk.do'
+
+// Initialize OAuth flow
+const authUrl = await integrations.oauth($.Salesforce, {
+  clientId: process.env.SALESFORCE_CLIENT_ID,
+  redirectUri: 'https://example.com/oauth/callback',
+  scope: ['full', 'refresh_token'],
+})
+
+// Redirect user to authUrl...
+
+// Handle callback
+const salesforce = await integrations.callback($.Salesforce, {
+  code: authorizationCode,
+  clientId: process.env.SALESFORCE_CLIENT_ID,
+  clientSecret: process.env.SALESFORCE_CLIENT_SECRET,
+  redirectUri: 'https://example.com/oauth/callback',
+})
+
+// Use authenticated integration
+const accounts = await salesforce.list($.Account)
+```
+
+### Schema.org Mapping
+
+Automatic mapping between Schema.org types and external service types:
+
+```typescript
+import { $, integrations } from 'sdk.do'
+
+const salesforce = await integrations.use($.Salesforce)
+
+// Create Person → mapped to Salesforce Contact
+const contact = await salesforce.create($.Person, {
+  $type: 'Person',
+  name: 'John Smith',
+  email: 'john@example.com',
+  telephone: '+1-555-0100',
+  jobTitle: 'CEO',
+})
+// Automatically creates Salesforce Contact with proper field mapping
+
+// Create Organization → mapped to Salesforce Account
+const account = await salesforce.create($.Organization, {
+  $type: 'Organization',
+  name: 'Acme Corp',
+  url: 'https://acme.com',
+  industry: 'Technology',
+})
+// Automatically creates Salesforce Account
+```
+
+### Bi-Directional Sync
+
+Keep data in sync between your database and external services:
+
+```typescript
+import { $, integrations, db, on } from 'sdk.do'
+
+const salesforce = await integrations.use($.Salesforce)
+
+// Sync to external service
+await integrations.sync({
+  from: db,
+  to: salesforce,
+  type: $.Organization,
+  mapping: {
+    name: 'Name',
+    url: 'Website',
+    industry: 'Industry',
+  },
+})
+
+// Sync from external service
+await integrations.sync({
+  from: salesforce,
+  to: db,
+  type: $.Account,
+  mapping: {
+    Name: 'name',
+    Website: 'url',
+    Industry: 'industry',
+  },
+})
+
+// Real-time sync with webhooks
+on($.Account.updated, async (event) => {
+  // Salesforce webhook received
+  const account = event.data
+
+  await db.update(account.externalId, {
+    name: account.Name,
+    url: account.Website,
+  })
+})
+```
+
+## Available Integrations
+
+### CRM Systems
+
+**Salesforce** - Enterprise CRM platform
+
+```typescript
+const salesforce = await integrations.use($.Salesforce)
+await salesforce.create($.Lead, leadData)
+await salesforce.create($.Account, accountData)
+await salesforce.create($.Opportunity, opportunityData)
+```
+
+**HubSpot** - Marketing and sales CRM
+
+```typescript
+const hubspot = await integrations.use($.HubSpot)
+await hubspot.create($.Contact, contactData)
+await hubspot.create($.Company, companyData)
+await hubspot.create($.Deal, dealData)
+```
+
+**Pipedrive** - Sales-focused CRM
+
+```typescript
+const pipedrive = await integrations.use($.Pipedrive)
+await pipedrive.create($.Person, personData)
+await pipedrive.create($.Organization, organizationData)
+await pipedrive.create($.Deal, dealData)
+```
+
+### Payment Processors
+
+**Stripe** - Online payment processing
+
+```typescript
+const stripe = await integrations.use($.Stripe)
+await stripe.create($.Customer, customerData)
+await stripe.create($.PaymentIntent, paymentData)
+await stripe.create($.Subscription, subscriptionData)
+```
+
+**PayPal** - Online payments and transfers
+
+```typescript
+const paypal = await integrations.use($.PayPal)
+await paypal.create($.Order, orderData)
+await paypal.capture($.Payment, paymentId)
+```
+
+**Square** - Point of sale and payments
+
+```typescript
+const square = await integrations.use($.Square)
+await square.create($.Payment, paymentData)
+await square.create($.Customer, customerData)
+```
+
+### Communication Platforms
+
+**Slack** - Team communication
+
+```typescript
+const slack = await integrations.use($.Slack)
+await slack.send($.Message, {
+  channel: '#general',
+  text: 'Hello from integrations.do!',
+})
+```
+
+**SendGrid** - Email delivery
+
+```typescript
+const sendgrid = await integrations.use($.SendGrid)
+await sendgrid.send($.EmailMessage, {
+  to: 'user@example.com',
+  subject: 'Welcome',
+  html: '<h1>Welcome!</h1>',
+})
+```
+
+**Twilio** - SMS and voice
+
+```typescript
+const twilio = await integrations.use($.Twilio)
+await twilio.send($.Message, {
+  to: '+15550100',
+  body: 'Hello from integrations.do!',
+})
+```
+
+### Storage Services
+
+**Amazon S3** - Cloud object storage
+
+```typescript
+const s3 = await integrations.use($.AmazonS3)
+await s3.upload($.File, {
+  bucket: 'my-bucket',
+  key: 'documents/file.pdf',
+  body: fileBuffer,
+})
+```
+
+**Dropbox** - File hosting
+
+```typescript
+const dropbox = await integrations.use($.Dropbox)
+await dropbox.upload($.File, {
+  path: '/documents/file.pdf',
+  contents: fileBuffer,
+})
+```
+
+**Google Drive** - Cloud storage
+
+```typescript
+const drive = await integrations.use($.GoogleDrive)
+await drive.upload($.File, {
+  name: 'document.pdf',
+  parents: ['folder-id'],
+  contents: fileBuffer,
+})
+```
+
+## Features
+
+- **Pre-Built Connectors** - 50+ pre-built integrations for popular services
+- **OAuth 2.0 Support** - Built-in OAuth flows for secure authentication
+- **Schema.org Mapping** - Automatic type mapping between Schema.org and service types
+- **Bi-Directional Sync** - Keep data in sync with external services
+- **Webhook Support** - Real-time updates via webhooks
+- **Rate Limiting** - Automatic rate limit handling and retry logic
+- **Error Handling** - Structured error responses with retry strategies
+- **Type Safety** - Full TypeScript support with Schema.org types
+- **Semantic Patterns** - `$.Subject.predicate.Object` integration patterns
+
+## Documentation
+
+- [Getting Started](./docs/getting-started) - Installation and basic setup
+- [Architecture](./docs/architecture) - Integration architecture and patterns
+- [Best Practices](./docs/best-practices) - Recommended patterns and practices
+- [Troubleshooting](./docs/troubleshooting) - Common issues and solutions
+
+## Examples
+
+- [Basic Usage](./examples/basic-usage) - Simple integration examples
+- [Advanced Patterns](./examples/advanced-patterns) - Complex integration patterns
+- [Integration](./examples/integration) - Full integration workflows
+- [Real-World Use Case](./examples/real-world-use-case) - Complete use case example
+
+## API Reference
+
+- [API Reference](./api/reference) - Complete API documentation
+
+## Use Cases
+
+### CRM Data Sync
+
+Automatically sync customers and organizations to your CRM:
+
+```typescript
+import { $, integrations, db, on } from 'sdk.do'
+
+const salesforce = await integrations.use($.Salesforce)
+
+// Sync new organizations to Salesforce
+on($.Organization.created, async (event) => {
+  const org = event.data
+
+  const account = await salesforce.create($.Account, {
+    $type: 'Account',
+    name: org.name,
+    website: org.url,
+    industry: org.industry,
+    externalId: org.$id,
+  })
+
+  // Store Salesforce ID
+  await db.update(org.$id, {
+    salesforceAccountId: account.id,
+  })
+})
+
+// Sync updates back to database
+on($.Account.updated, async (event) => {
+  const account = event.data
+
+  const org = await db.get($.Organization, {
+    where: { salesforceAccountId: account.id },
+  })
+
+  await db.update(org.$id, {
+    name: account.Name,
+    url: account.Website,
+    industry: account.Industry,
+  })
+})
+```
+
+### Payment Processing
+
+Process payments with Stripe integration:
+
+```typescript
+import { $, integrations, db, on } from 'sdk.do'
+
+const stripe = await integrations.use($.Stripe)
+
+// Process order payment
+on($.Order.created, async (event) => {
+  const order = event.data
+
+  // Create Stripe customer if needed
+  let customer = order.customer.stripeCustomerId
+  if (!customer) {
+    const stripeCustomer = await stripe.create($.Customer, {
+      email: order.customer.email,
+      name: order.customer.name,
+      metadata: {
+        customerId: order.customer.$id,
+      },
+    })
+
+    customer = stripeCustomer.id
+
+    await db.update(order.customer.$id, {
+      stripeCustomerId: customer,
+    })
+  }
+
+  // Create payment intent
+  const paymentIntent = await stripe.create($.PaymentIntent, {
+    amount: order.totalPrice * 100, // cents
+    currency: 'usd',
+    customer,
+    metadata: {
+      orderId: order.$id,
+    },
+  })
+
+  // Update order with payment intent
+  await db.update(order.$id, {
+    stripePaymentIntentId: paymentIntent.id,
+    paymentStatus: 'pending',
+  })
+})
+
+// Handle payment success
+on($.PaymentIntent.succeeded, async (event) => {
+  const paymentIntent = event.data
+
+  const order = await db.get($.Order, {
+    where: { stripePaymentIntentId: paymentIntent.id },
+  })
+
+  await db.update(order.$id, {
+    paymentStatus: 'paid',
+    paidDate: new Date(),
+  })
+})
+```
+
+### Team Notifications
+
+Send notifications to Slack:
+
+```typescript
+import { $, integrations, on } from 'sdk.do'
+
+const slack = await integrations.use($.Slack)
+
+// Notify team of new orders
+on($.Order.created, async (event) => {
+  const order = event.data
+
+  await slack.send($.Message, {
+    channel: '#orders',
+    blocks: [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: '*New Order Received*',
+        },
+      },
+      {
+        type: 'section',
+        fields: [
+          { type: 'mrkdwn', text: `*Order:*\n${order.orderNumber}` },
+          { type: 'mrkdwn', text: `*Customer:*\n${order.customer.name}` },
+          { type: 'mrkdwn', text: `*Total:*\n$${order.totalPrice}` },
+          { type: 'mrkdwn', text: `*Items:*\n${order.orderItems.length}` },
+        ],
+      },
+    ],
+  })
+})
+
+// Notify team of errors
+on($.Error.occurred, async (event) => {
+  const error = event.data
+
+  await slack.send($.Message, {
+    channel: '#alerts',
+    text: `:warning: Error: ${error.message}`,
+  })
+})
+```
+
+### Document Storage
+
+Store files in S3:
+
+```typescript
+import { $, integrations, on } from 'sdk.do'
+
+const s3 = await integrations.use($.AmazonS3)
+
+// Upload invoice PDFs to S3
+on($.Invoice.created, async (event) => {
+  const invoice = event.data
+
+  // Generate PDF
+  const pdf = await generateInvoicePDF(invoice)
+
+  // Upload to S3
+  const file = await s3.upload($.File, {
+    bucket: 'invoices',
+    key: `invoices/${invoice.invoiceNumber}.pdf`,
+    body: pdf,
+    contentType: 'application/pdf',
+    metadata: {
+      invoiceId: invoice.$id,
+      customerId: invoice.customer.$id,
+    },
+  })
+
+  // Store S3 URL
+  await db.update(invoice.$id, {
+    pdfUrl: file.url,
+  })
+})
+```
+
+## Integration with `.do` Platform
+
+integrations.do integrates seamlessly with other `.do` platform services:
+
+```typescript
+import { $, ai, integrations, db, on } from 'sdk.do'
+
+const salesforce = await integrations.use($.Salesforce)
+
+// AI-powered CRM enrichment
+on($.Lead.created, async (event) => {
+  const lead = event.data
+
+  // Use AI to analyze lead
+  const analysis = await ai.generate('Analyze lead quality and suggest next steps', {
+    context: lead,
+    schema: $.LeadAnalysis,
+    structured: true,
+  })
+
+  // Update lead in Salesforce
+  await salesforce.update(lead.salesforceId, {
+    LeadScore: analysis.score,
+    NextSteps: analysis.nextSteps,
+    Priority: analysis.priority,
+  })
+
+  // Update in database
+  await db.update(lead.$id, {
+    score: analysis.score,
+    nextSteps: analysis.nextSteps,
+    priority: analysis.priority,
+  })
+})
+```
+
+## Semantic Patterns
+
+integrations.do uses `$.Subject.predicate.Object` patterns for integration operations:
+
+```typescript
+import { $, integrations } from 'sdk.do'
+
+// Semantic integration patterns
+await integrations.connect($.Application, $.integrates, $.Salesforce)
+await integrations.sync($.Organization, $.syncsWith, $.Account)
+await integrations.map($.Person, $.mapsTo, $.Contact)
+
+// Event-based integration
+on($.Organization.created, async (org) => {
+  await integrations.send(org, $.createIn, $.Salesforce)
+})
+
+// Relationship patterns
+await integrations.relate(localEntity, $.linkedTo, externalEntity)
+```
+
+## Configuration
+
+### Environment Variables
+
+```bash
+# Salesforce
+SALESFORCE_CLIENT_ID=your_client_id
+SALESFORCE_CLIENT_SECRET=your_client_secret
+SALESFORCE_INSTANCE_URL=https://your-instance.salesforce.com
+
+# HubSpot
+HUBSPOT_API_KEY=your_api_key
+HUBSPOT_PORTAL_ID=your_portal_id
+
+# Stripe
+STRIPE_API_KEY=sk_live_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+
+# PayPal
+PAYPAL_CLIENT_ID=your_client_id
+PAYPAL_CLIENT_SECRET=your_client_secret
+PAYPAL_MODE=sandbox # or live
+
+# Slack
+SLACK_BOT_TOKEN=xoxb-...
+SLACK_SIGNING_SECRET=your_signing_secret
+
+# SendGrid
+SENDGRID_API_KEY=SG...
+
+# Twilio
+TWILIO_ACCOUNT_SID=AC...
+TWILIO_AUTH_TOKEN=your_auth_token
+
+# AWS S3
+AWS_ACCESS_KEY_ID=AKIA...
+AWS_SECRET_ACCESS_KEY=your_secret_key
+AWS_REGION=us-east-1
+
+# Dropbox
+DROPBOX_ACCESS_TOKEN=your_access_token
+
+# Google Drive
+GOOGLE_CLIENT_ID=your_client_id
+GOOGLE_CLIENT_SECRET=your_client_secret
+```
+
+### Global Configuration
+
+```typescript
+import { integrations } from 'sdk.do'
+
+integrations.config({
+  timeout: 30000,
+  retries: 3,
+  retryDelay: 1000,
+  cacheEnabled: true,
+  cacheTTL: 300000, // 5 minutes
+})
+```
+
+## Best Practices
+
+### 1. Store Credentials Securely
+
+Always use environment variables for API keys and secrets:
+
+```typescript
+// Good: Environment variables
+const stripe = await integrations.use($.Stripe, {
+  apiKey: process.env.STRIPE_API_KEY,
+})
+
+// Avoid: Hardcoded credentials
+const stripe = await integrations.use($.Stripe, {
+  apiKey: 'sk_live_hardcoded_key',
+})
+```
+
+### 2. Handle OAuth Flows Properly
+
+Implement proper OAuth flows with state validation:
+
+```typescript
+import { integrations } from 'sdk.do'
+
+// Generate state token
+const state = crypto.randomUUID()
+
+// Store state in session
+session.oauthState = state
+
+// Generate auth URL with state
+const authUrl = await integrations.oauth($.Salesforce, {
+  clientId: process.env.SALESFORCE_CLIENT_ID,
+  redirectUri: 'https://example.com/oauth/callback',
+  state,
+})
+
+// In callback, validate state
+if (request.query.state !== session.oauthState) {
+  throw new Error('Invalid OAuth state')
+}
+```
+
+### 3. Implement Error Handling
+
+Always handle integration errors gracefully:
+
+```typescript
+try {
+  const account = await salesforce.create($.Account, accountData)
+} catch (error) {
+  if (error.code === 'DUPLICATE_VALUE') {
+    // Handle duplicate
+  } else if (error.code === 'REQUIRED_FIELD_MISSING') {
+    // Handle missing field
+  } else {
+    // Log and handle unknown error
+    console.error('Salesforce error:', error)
+  }
+}
+```
+
+### 4. Use Schema Mapping
+
+Map data between Schema.org types and service-specific types:
+
+```typescript
+const salesforce = await integrations.use($.Salesforce)
+
+// Define mapping
+await salesforce.configure({
+  mapping: {
+    [$.Person]: 'Contact',
+    [$.Organization]: 'Account',
+    [$.Opportunity]: 'Opportunity',
+  },
+  fieldMapping: {
+    [$.Person]: {
+      name: 'Name',
+      email: 'Email',
+      telephone: 'Phone',
+    },
+  },
+})
+```
+
+### 5. Implement Retry Logic
+
+Use retry logic for transient failures:
+
+```typescript
+const result = await integrations.execute(operation, {
+  retry: {
+    attempts: 3,
+    delay: 1000,
+    backoff: 'exponential',
+  },
+})
+```
+
+## License
+
+integrations.do is released under the [Creative Commons Attribution 4.0 International License (CC-BY-4.0)](https://creativecommons.org/licenses/by/4.0/).
+
+This means you are free to:
+
+- **Share**: Copy and redistribute the material in any medium or format
+- **Adapt**: Remix, transform, and build upon the material for any purpose, even commercially
+
+Under the following terms:
+
+- **Attribution**: You must give appropriate credit, provide a link to the license, and indicate if changes were made
+
+## Resources
+
+- [sdk.do](https://sdk.do) - Core SDK documentation
+- [connectors.do](https://connectors.do) - Service connectors and adapters
+- [webhooks.do](https://webhooks.do) - Webhook management
+- [api.do](https://api.do) - External API integration
+- [`.do` Platform](https://do)
+
+## Related Domains
+
+- **[connectors.do](https://connectors.do)** - Service connectors and adapters
+- **[webhooks.do](https://webhooks.do)** - Webhook management
+- **[api.do](https://api.do)** - External API integration
+- **[db.do](https://db.do)** - Database operations
+- **[on.do](https://on.do)** - Event listeners
+
+## Contributing
+
+integrations.do is part of the [`.do` platform](https://do) ecosystem. Contributions are welcome!
+
+See the [ai repository](https://github.com/dot-do/ai) for contribution guidelines.
+
+## Acknowledgments
+
+integrations.do builds upon:
+
+- [Schema.org](https://schema.org) - Structured data vocabulary
+- [OAuth 2.0](https://oauth.net/2/) - Authorization framework
+- [JSON-LD](https://www.w3.org/TR/json-ld11/) - Linked data format
+- Service provider APIs (Salesforce, Stripe, HubSpot, etc.)

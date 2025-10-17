@@ -1,0 +1,95 @@
+---
+$id: https://workers.do/docs/getting-started
+$type: TechArticle
+title: Getting Started with workers.do
+description: Quick start guide for worker fleet management in the .do platform
+keywords: [workers, fleet management, orchestration, scaling, getting started]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Getting Started
+
+Get started with worker fleet management and orchestration in the `.do` platform.
+
+## Installation
+
+```bash
+pnpm add sdk.do
+```
+
+## Environment Setup
+
+```bash
+# LLM Provider
+OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
+
+# Database
+DATABASE_URL=...
+
+# Monitoring (optional)
+MONITORING_API_KEY=...
+```
+
+## Create a Worker Fleet
+
+```typescript
+import { $, workers } from 'sdk.do'
+
+const salesFleet = await workers.createFleet({
+  $type: 'WorkerFleet',
+  name: 'Sales Development Fleet',
+  workerTemplate: {
+    role: $.SalesDevelopmentRepresentative,
+    capabilities: ['research', 'outreach', 'qualification'],
+    model: 'claude-sonnet-4.5',
+  },
+  scaling: {
+    min: 5,
+    max: 50,
+    metric: 'queue_depth',
+    target: 100,
+  },
+})
+```
+
+## Scale Fleet
+
+```typescript
+// Manual scaling
+await salesFleet.scale({ count: 10 })
+
+// Auto-scaling based on metrics
+await salesFleet.enableAutoScaling({
+  metric: 'queue_depth',
+  scaleUp: { threshold: 150, increment: 5 },
+  scaleDown: { threshold: 50, decrement: 2 },
+})
+```
+
+## Distribute Work
+
+```typescript
+// Assign work to fleet
+await salesFleet.assignWork({
+  tasks: leadList,
+  distribution: 'round_robin', // or 'load_balanced', 'priority'
+})
+```
+
+## Monitor Fleet
+
+```typescript
+const metrics = await salesFleet.getMetrics()
+
+console.log(`Active workers: ${metrics.activeWorkers}`)
+console.log(`Queue depth: ${metrics.queueDepth}`)
+console.log(`Throughput: ${metrics.tasksPerHour}/hour`)
+console.log(`Average completion time: ${metrics.avgCompletionTime}s`)
+```
+
+## License
+
+MIT (Open Source)

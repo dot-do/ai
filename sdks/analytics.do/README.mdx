@@ -1,0 +1,574 @@
+---
+$id: https://analytics.do/sdk
+$type: https://schema.org/SoftwareApplication
+name: analytics.do SDK
+description: TypeScript/JavaScript SDK for analytics.do event tracking and analytics
+---
+
+# analytics.do SDK
+
+TypeScript/JavaScript SDK for tracking events and querying analytics data with **analytics.do**.
+
+## Features
+
+- 🎯 **Type-safe** - Full TypeScript support with comprehensive types
+- 🚀 **Lightweight** - <5KB gzipped for browser
+- 📦 **Multi-platform** - Browser, Node.js, React, Next.js
+- 🔄 **Batching** - Automatic event batching for performance
+- 🎨 **Auto-capture** - Automatic pageview and click tracking
+- 🔍 **Query API** - Query, aggregate, cohort, and funnel analysis
+- ⚡ **Fast** - Built on semantic `$.Event.tracked` patterns
+
+## Installation
+
+```bash
+npm install @dotdo/analytics.do
+# or
+pnpm add @dotdo/analytics.do
+```
+
+## Quick Start
+
+### Browser
+
+```typescript
+import { analytics } from '@dotdo/analytics.do/browser'
+
+// Initialize
+analytics.init({
+  writeKey: 'YOUR_WRITE_KEY',
+  host: 'https://analytics.do',
+  autoTrackPageViews: true,
+  autoTrackClicks: true
+})
+
+// Track events
+analytics.track('button_clicked', {
+  button_id: 'cta-signup',
+  page: 'homepage'
+})
+
+// Track pageviews
+analytics.page('Homepage')
+
+// Identify users
+analytics.identify('user-123', {
+  email: 'user@example.com',
+  plan: 'pro'
+})
+```
+
+### React
+
+```typescript
+import { AnalyticsProvider, useAnalytics } from '@dotdo/analytics.do/react'
+
+function App() {
+  return (
+    <AnalyticsProvider
+      config={{
+        writeKey: 'YOUR_WRITE_KEY',
+        host: 'https://analytics.do'
+      }}
+      autoTrackPageViews={true}
+    >
+      <MyComponent />
+    </AnalyticsProvider>
+  )
+}
+
+function MyComponent() {
+  const analytics = useAnalytics()
+
+  return (
+    <button onClick={() => analytics.track('button_clicked')}>
+      Click Me
+    </button>
+  )
+}
+```
+
+### Node.js Server
+
+```typescript
+import { analytics } from '@dotdo/analytics.do/server'
+
+analytics.init({
+  writeKey: 'YOUR_WRITE_KEY',
+  host: 'https://analytics.do',
+  batchSize: 100,
+  batchInterval: 5000
+})
+
+// Track server-side events
+await analytics.track('subscription_created', {
+  plan: 'pro',
+  amount: 99
+}, {
+  userId: 'user-123'
+})
+
+// Bulk tracking
+await analytics.trackBulk([
+  { event: 'api_request', userId: 'user-123', properties: { endpoint: '/api/users' } },
+  { event: 'api_request', userId: 'user-456', properties: { endpoint: '/api/orders' } }
+])
+
+// Graceful shutdown
+await analytics.shutdown()
+```
+
+## Core API
+
+### `analytics.track(event, properties?, options?)`
+
+Track an event with optional properties.
+
+```typescript
+await analytics.track('button_clicked', {
+  button_id: 'cta-signup',
+  page: 'homepage',
+  variant: 'blue'
+}, {
+  userId: 'user-123',
+  context: {
+    campaign: {
+      source: 'google',
+      medium: 'cpc'
+    }
+  }
+})
+```
+
+### `analytics.page(name?, properties?, options?)`
+
+Track a pageview.
+
+```typescript
+await analytics.page('Homepage', {
+  title: 'Welcome to our site',
+  url: 'https://example.com',
+  referrer: 'https://google.com'
+})
+```
+
+### `analytics.identify(userId, traits?, options?)`
+
+Identify a user with traits.
+
+```typescript
+await analytics.identify('user-123', {
+  email: 'user@example.com',
+  name: 'John Doe',
+  plan: 'pro',
+  createdAt: '2025-01-01T00:00:00Z'
+})
+```
+
+### `analytics.group(userId, groupId, traits?, options?)`
+
+Group a user into an organization.
+
+```typescript
+await analytics.group('user-123', 'org-abc', {
+  name: 'Acme Inc',
+  plan: 'enterprise',
+  employees: 500
+})
+```
+
+### `analytics.alias(userId, previousId, options?)`
+
+Alias user identities (e.g., anonymous → identified).
+
+```typescript
+await analytics.alias('user-123', 'anon-456')
+```
+
+## Query API
+
+### `analytics.query(options)`
+
+Query stored events with filtering and pagination.
+
+```typescript
+const events = await analytics.query({
+  event: 'button_clicked',
+  from: '2025-01-01',
+  to: '2025-01-31',
+  limit: 100,
+  offset: 0,
+  sort: { timestamp: 'desc' },
+  filter: {
+    'properties.page': 'homepage'
+  }
+})
+
+console.log(events.data)     // Array of events
+console.log(events.total)    // Total count
+console.log(events.hasMore)  // Pagination flag
+```
+
+### `analytics.aggregate(options)`
+
+Aggregate metrics with grouping and time intervals.
+
+```typescript
+const metrics = await analytics.aggregate({
+  metric: 'count',
+  groupBy: ['event', 'properties.page'],
+  from: '2025-01-01',
+  to: '2025-01-31',
+  interval: 'day',
+  filter: {
+    event: 'button_clicked'
+  }
+})
+
+// Result: { groups: [{ key: { event: '...', page: '...' }, value: 123 }], total: 456 }
+```
+
+### `analytics.cohort(options)`
+
+Cohort retention analysis.
+
+```typescript
+const cohorts = await analytics.cohort({
+  activation: 'signup',      // Activation event
+  retention: 'login',        // Retention event
+  period: 'week',            // week | day | month
+  cohorts: 12,               // Number of cohorts
+  from: '2025-01-01'
+})
+
+// Result: { cohorts: [{ cohort: 'Week 1', size: 100, periods: [...] }] }
+```
+
+### `analytics.funnel(options)`
+
+Funnel conversion analysis.
+
+```typescript
+const funnel = await analytics.funnel({
+  steps: ['page_view', 'signup_clicked', 'signup_completed'],
+  from: '2025-01-01',
+  to: '2025-01-31',
+  groupBy: 'properties.campaign'
+})
+
+// Result: { steps: [{ step: 'page_view', count: 1000, percentage: 100 }, ...], conversion: 0.45 }
+```
+
+## Browser Features
+
+### Auto-capture Pageviews
+
+Automatically track pageviews on navigation (including SPA routing):
+
+```typescript
+import { analytics } from '@dotdo/analytics.do/browser'
+
+analytics.init({
+  autoTrackPageViews: true  // Default: true
+})
+```
+
+### Auto-capture Clicks
+
+Automatically track clicks on elements with `data-track` attributes:
+
+```html
+<button data-track="button_clicked" data-track-button-id="cta">
+  Sign Up
+</button>
+```
+
+```typescript
+analytics.init({
+  autoTrackClicks: true,
+  clickSelector: '[data-track]'  // Default selector
+})
+```
+
+### Anonymous ID
+
+Automatically generates and persists an `anonymousId` in `localStorage`:
+
+```typescript
+// Automatically included in all events
+analytics.track('page_viewed')  // Includes anonymousId
+```
+
+### UTM Parameters
+
+Automatically extracts and includes UTM campaign parameters:
+
+```typescript
+// URL: https://example.com?utm_source=google&utm_medium=cpc
+analytics.page()  // Includes context.campaign: { source: 'google', medium: 'cpc' }
+```
+
+## React Integration
+
+### `AnalyticsProvider`
+
+Wrap your app with the provider:
+
+```typescript
+<AnalyticsProvider
+  config={{
+    writeKey: 'YOUR_WRITE_KEY',
+    host: 'https://analytics.do'
+  }}
+  autoTrackPageViews={true}
+>
+  <App />
+</AnalyticsProvider>
+```
+
+### `useAnalytics()`
+
+Hook to access the analytics client:
+
+```typescript
+function MyComponent() {
+  const analytics = useAnalytics()
+
+  return (
+    <button onClick={() => analytics.track('clicked')}>
+      Click
+    </button>
+  )
+}
+```
+
+### `useTrackEvent(event, properties?, deps?)`
+
+Hook to track an event on mount:
+
+```typescript
+function MyComponent() {
+  useTrackEvent('component_mounted', { component: 'MyComponent' })
+  return <div>Hello</div>
+}
+```
+
+### `useTrackPageView(name?, properties?)`
+
+Hook to track pageview on mount:
+
+```typescript
+function HomePage() {
+  useTrackPageView('Home', { section: 'landing' })
+  return <div>Home</div>
+}
+```
+
+### `useTrackClick(event, properties?)`
+
+Hook to get a click handler:
+
+```typescript
+function MyComponent() {
+  const trackClick = useTrackClick('button_clicked', { button: 'cta' })
+
+  return <button onClick={trackClick}>Click Me</button>
+}
+```
+
+### `<TrackPageView>`
+
+Component to track pageview:
+
+```typescript
+function Page() {
+  return (
+    <>
+      <TrackPageView name="About" properties={{ section: 'company' }} />
+      <h1>About Us</h1>
+    </>
+  )
+}
+```
+
+## Next.js Integration
+
+### App Router
+
+```typescript
+// app/providers.tsx
+'use client'
+
+import { AnalyticsProvider, useAnalytics } from '@dotdo/analytics.do/react'
+import { usePathname, useSearchParams } from 'next/navigation'
+import { useEffect } from 'react'
+
+export function Providers({ children }: { children: React.ReactNode }) {
+  return (
+    <AnalyticsProvider
+      config={{
+        writeKey: process.env.NEXT_PUBLIC_ANALYTICS_WRITE_KEY!,
+        host: 'https://analytics.do'
+      }}
+      autoTrackPageViews={false}
+    >
+      <PageViewTracker />
+      {children}
+    </AnalyticsProvider>
+  )
+}
+
+function PageViewTracker() {
+  const analytics = useAnalytics()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+
+  useEffect(() => {
+    analytics.page(pathname, {
+      path: pathname,
+      search: searchParams?.toString()
+    })
+  }, [pathname, searchParams, analytics])
+
+  return null
+}
+```
+
+```typescript
+// app/layout.tsx
+import { Providers } from './providers'
+
+export default function RootLayout({ children }) {
+  return (
+    <html>
+      <body>
+        <Providers>{children}</Providers>
+      </body>
+    </html>
+  )
+}
+```
+
+## Configuration
+
+### `AnalyticsConfig`
+
+```typescript
+interface AnalyticsConfig {
+  writeKey?: string          // API write key
+  host?: string              // API host (default: 'https://analytics.do')
+  debug?: boolean            // Enable debug logging (default: false)
+  batchSize?: number         // Batch events (default: no batching)
+  batchInterval?: number     // Batch interval in ms (default: 5000)
+  timeout?: number           // Request timeout in ms (default: 10000)
+  headers?: Record<string, string>  // Custom headers
+}
+```
+
+### Browser-specific
+
+```typescript
+interface BrowserConfig extends AnalyticsConfig {
+  autoTrackPageViews?: boolean  // Auto-track pageviews (default: true)
+  autoTrackClicks?: boolean     // Auto-track clicks (default: false)
+  clickSelector?: string        // Click selector (default: '[data-track]')
+}
+```
+
+### Server-specific
+
+```typescript
+interface ServerConfig extends AnalyticsConfig {
+  flushInterval?: number     // Auto-flush interval in ms
+  maxQueueSize?: number      // Max queue size (default: 1000)
+}
+```
+
+## Semantic Patterns
+
+The SDK follows `.do` semantic patterns:
+
+```typescript
+// $.Event.tracked pattern
+await $.Event.track({
+  event: 'button_clicked',
+  userId: 'user-123',
+  properties: { button_id: 'cta' }
+})
+
+// $.Analytics.queried pattern
+const metrics = await $.Analytics.query({
+  event: 'button_clicked',
+  from: '2025-01-01',
+  to: '2025-01-31'
+})
+```
+
+## Event Context
+
+All events automatically include context:
+
+```typescript
+{
+  library: {
+    name: 'analytics.do',
+    version: '1.0.0'
+  },
+  page: {
+    title: 'Page Title',
+    url: 'https://example.com',
+    path: '/path',
+    referrer: 'https://google.com'
+  },
+  userAgent: 'Mozilla/5.0...',
+  locale: 'en-US',
+  timezone: 'America/New_York',
+  screen: {
+    width: 1920,
+    height: 1080
+  },
+  campaign: {
+    source: 'google',
+    medium: 'cpc',
+    name: 'summer-sale'
+  }
+}
+```
+
+## Examples
+
+See the [examples/](./examples/) directory for complete examples:
+
+- [browser.html](./examples/browser.html) - Browser tracking pixel
+- [react.tsx](./examples/react.tsx) - React app integration
+- [nextjs.tsx](./examples/nextjs.tsx) - Next.js App Router integration
+- [node.ts](./examples/node.ts) - Node.js server tracking
+- [query.ts](./examples/query.ts) - Querying analytics data
+
+## TypeScript
+
+Full TypeScript support with comprehensive types:
+
+```typescript
+import type {
+  AnalyticsConfig,
+  TrackEvent,
+  PageEvent,
+  IdentifyEvent,
+  QueryOptions,
+  AggregateOptions,
+  CohortOptions,
+  FunnelResult
+} from '@dotdo/analytics.do'
+```
+
+## License
+
+MIT
+
+## Links
+
+- [Documentation](https://analytics.do/docs)
+- [API Reference](https://analytics.do/api)
+- [GitHub](https://github.com/dot-do/platform/tree/main/ai/sdks/analytics.do)
+- [Issues](https://github.com/dot-do/platform/issues)

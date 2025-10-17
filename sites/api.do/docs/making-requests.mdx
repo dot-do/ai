@@ -1,0 +1,830 @@
+---
+$id: https://api.do/docs/making-requests
+$type: TechArticle
+title: Making HTTP Requests
+description: Complete guide to HTTP methods and request patterns with api.do
+keywords: [api, http, rest, get, post, put, delete, patch, requests]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Making HTTP Requests
+
+Complete guide to HTTP methods and request patterns with api.do.
+
+## HTTP Methods
+
+api.do supports all standard HTTP methods for RESTful API interactions.
+
+### GET - Retrieve Resources
+
+Retrieve data from an API endpoint.
+
+**Basic GET:**
+
+```typescript
+import { api } from 'sdk.do'
+
+const users = await api.get('https://api.example.com/users')
+console.log(users)
+```
+
+**GET with Query Parameters:**
+
+```typescript
+import { api } from 'sdk.do'
+
+const users = await api.get('https://api.example.com/users', {
+  params: {
+    page: 1,
+    limit: 20,
+    sort: 'name',
+    order: 'asc',
+    status: 'active',
+  },
+})
+// Sends: https://api.example.com/users?page=1&limit=20&sort=name&order=asc&status=active
+```
+
+**GET Single Resource:**
+
+```typescript
+import { api } from 'sdk.do'
+
+const user = await api.get('https://api.example.com/users/123')
+console.log(user.id, user.name, user.email)
+```
+
+### POST - Create Resources
+
+Create new resources.
+
+**Basic POST:**
+
+```typescript
+import { api } from 'sdk.do'
+
+const newUser = await api.post('https://api.example.com/users', {
+  name: 'John Smith',
+  email: 'john@example.com',
+  role: 'admin',
+})
+
+console.log(newUser.id) // Newly created user ID
+```
+
+**POST with Schema Type:**
+
+```typescript
+import { $, api } from 'sdk.do'
+
+const person = await api.post('https://api.example.com/persons', {
+  $type: 'Person',
+  name: 'John Smith',
+  email: 'john@example.com',
+  telephone: '+1-555-0123',
+  address: {
+    $type: 'PostalAddress',
+    streetAddress: '123 Main St',
+    addressLocality: 'San Francisco',
+    addressRegion: 'CA',
+    postalCode: '94102',
+  },
+})
+```
+
+**POST with File Upload:**
+
+```typescript
+import { api } from 'sdk.do'
+
+const formData = new FormData()
+formData.append('file', fileBlob, 'image.png')
+formData.append('title', 'Profile Picture')
+
+const uploaded = await api.post('https://api.example.com/upload', formData, {
+  headers: {
+    'Content-Type': 'multipart/form-data',
+  },
+})
+```
+
+### PUT - Replace Resources
+
+Replace entire resource with new data.
+
+**Basic PUT:**
+
+```typescript
+import { api } from 'sdk.do'
+
+const updated = await api.put('https://api.example.com/users/123', {
+  name: 'John Smith Updated',
+  email: 'john.updated@example.com',
+  role: 'editor',
+})
+```
+
+**PUT with Full Resource:**
+
+```typescript
+import { $, api } from 'sdk.do'
+
+const updated = await api.put('https://api.example.com/users/123', {
+  $type: 'Person',
+  name: 'John Smith',
+  email: 'john@example.com',
+  telephone: '+1-555-0123',
+  jobTitle: 'Senior Developer',
+  worksFor: {
+    $type: 'Organization',
+    name: 'TechCorp',
+  },
+})
+```
+
+### PATCH - Update Resources
+
+Update specific fields of a resource.
+
+**Basic PATCH:**
+
+```typescript
+import { api } from 'sdk.do'
+
+const updated = await api.patch('https://api.example.com/users/123', {
+  email: 'newemail@example.com',
+})
+```
+
+**PATCH Multiple Fields:**
+
+```typescript
+import { api } from 'sdk.do'
+
+const updated = await api.patch('https://api.example.com/users/123', {
+  email: 'newemail@example.com',
+  telephone: '+1-555-9999',
+  jobTitle: 'Lead Developer',
+})
+```
+
+### DELETE - Remove Resources
+
+Delete resources from the API.
+
+**Basic DELETE:**
+
+```typescript
+import { api } from 'sdk.do'
+
+await api.delete('https://api.example.com/users/123')
+console.log('User deleted successfully')
+```
+
+**DELETE with Confirmation:**
+
+```typescript
+import { api } from 'sdk.do'
+
+try {
+  const response = await api.delete('https://api.example.com/users/123', {
+    fullResponse: true,
+  })
+
+  if (response.status === 204) {
+    console.log('User deleted successfully')
+  }
+} catch (error) {
+  console.error('Delete failed:', error.message)
+}
+```
+
+### HEAD - Get Headers
+
+Get response headers without body.
+
+```typescript
+import { api } from 'sdk.do'
+
+const response = await api.head('https://api.example.com/users/123', {
+  fullResponse: true,
+})
+
+console.log(response.headers['content-type'])
+console.log(response.headers['content-length'])
+console.log(response.headers['last-modified'])
+```
+
+### OPTIONS - Get Allowed Methods
+
+Check which methods are allowed.
+
+```typescript
+import { api } from 'sdk.do'
+
+const response = await api.options('https://api.example.com/users', {
+  fullResponse: true,
+})
+
+console.log(response.headers['allow']) // "GET, POST, PUT, DELETE"
+```
+
+## Request Options
+
+### Headers
+
+Add custom headers to requests:
+
+```typescript
+import { api } from 'sdk.do'
+
+const data = await api.get('https://api.example.com/data', {
+  headers: {
+    Accept: 'application/json',
+    'Accept-Language': 'en-US',
+    'User-Agent': 'MyApp/1.0',
+    'X-Custom-Header': 'custom-value',
+  },
+})
+```
+
+### Query Parameters
+
+Add URL query parameters:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Object notation
+const data = await api.get('https://api.example.com/search', {
+  params: {
+    q: 'laptop',
+    category: 'electronics',
+    minPrice: 500,
+    maxPrice: 2000,
+    sort: 'price',
+    order: 'asc',
+  },
+})
+
+// Array values
+const data2 = await api.get('https://api.example.com/products', {
+  params: {
+    tags: ['laptop', 'gaming', 'portable'],
+    colors: ['black', 'silver'],
+  },
+})
+// Sends: ?tags=laptop&tags=gaming&tags=portable&colors=black&colors=silver
+```
+
+### Request Body
+
+Send request body in different formats:
+
+**JSON (Default):**
+
+```typescript
+import { api } from 'sdk.do'
+
+await api.post('https://api.example.com/users', {
+  name: 'John Smith',
+  email: 'john@example.com',
+})
+// Content-Type: application/json
+```
+
+**Form Data:**
+
+```typescript
+import { api } from 'sdk.do'
+
+const formData = new FormData()
+formData.append('name', 'John Smith')
+formData.append('email', 'john@example.com')
+
+await api.post('https://api.example.com/users', formData, {
+  headers: {
+    'Content-Type': 'multipart/form-data',
+  },
+})
+```
+
+**URL Encoded:**
+
+```typescript
+import { api } from 'sdk.do'
+
+await api.post('https://api.example.com/users', 'name=John+Smith&email=john@example.com', {
+  headers: {
+    'Content-Type': 'application/x-www-form-urlencoded',
+  },
+})
+```
+
+**XML:**
+
+```typescript
+import { api } from 'sdk.do'
+
+const xml = `<?xml version="1.0"?>
+<user>
+  <name>John Smith</name>
+  <email>john@example.com</email>
+</user>`
+
+await api.post('https://api.example.com/users', xml, {
+  headers: {
+    'Content-Type': 'application/xml',
+  },
+})
+```
+
+### Timeout
+
+Set request timeout in milliseconds:
+
+```typescript
+import { api } from 'sdk.do'
+
+// 10 second timeout
+const data = await api.get('https://api.example.com/data', {
+  timeout: 10000,
+})
+
+// Different timeouts for different endpoints
+const fastData = await api.get('https://api.example.com/fast', {
+  timeout: 2000,
+})
+
+const slowData = await api.get('https://api.example.com/slow', {
+  timeout: 60000,
+})
+```
+
+### Response Type
+
+Specify expected response type:
+
+**JSON (Default):**
+
+```typescript
+import { api } from 'sdk.do'
+
+const data = await api.get('https://api.example.com/users')
+// Returns parsed JSON object
+```
+
+**Text:**
+
+```typescript
+import { api } from 'sdk.do'
+
+const html = await api.get('https://example.com', {
+  responseType: 'text',
+})
+// Returns raw text string
+```
+
+**Blob (Binary):**
+
+```typescript
+import { api } from 'sdk.do'
+
+const image = await api.get('https://example.com/image.png', {
+  responseType: 'blob',
+})
+// Returns Blob object
+```
+
+**ArrayBuffer:**
+
+```typescript
+import { api } from 'sdk.do'
+
+const buffer = await api.get('https://example.com/file.pdf', {
+  responseType: 'arraybuffer',
+})
+// Returns ArrayBuffer
+```
+
+## Response Handling
+
+### Default Response
+
+By default, api.do returns the response body:
+
+```typescript
+import { api } from 'sdk.do'
+
+const users = await api.get('https://api.example.com/users')
+// users = response body (parsed JSON)
+```
+
+### Full Response
+
+Get full response including status, headers, and body:
+
+```typescript
+import { api } from 'sdk.do'
+
+const response = await api.get('https://api.example.com/users', {
+  fullResponse: true,
+})
+
+console.log(response.status) // 200
+console.log(response.statusText) // "OK"
+console.log(response.headers) // Headers object
+console.log(response.data) // Response body
+```
+
+### Response Headers
+
+Access specific headers:
+
+```typescript
+import { api } from 'sdk.do'
+
+const response = await api.get('https://api.example.com/users', {
+  fullResponse: true,
+})
+
+const contentType = response.headers['content-type']
+const rateLimit = response.headers['x-ratelimit-remaining']
+const etag = response.headers['etag']
+```
+
+### Status Codes
+
+Check response status:
+
+```typescript
+import { api } from 'sdk.do'
+
+const response = await api.get('https://api.example.com/users', {
+  fullResponse: true,
+})
+
+if (response.status === 200) {
+  console.log('Success')
+} else if (response.status === 404) {
+  console.log('Not found')
+} else if (response.status >= 500) {
+  console.log('Server error')
+}
+```
+
+## Advanced Patterns
+
+### Request Transformation
+
+Transform request data before sending:
+
+```typescript
+import { $, api } from 'sdk.do'
+
+const order = await api.post(
+  'https://api.example.com/orders',
+  {
+    $type: 'Order',
+    customer: { $id: 'customer_123' },
+    items: [{ $id: 'product_456', quantity: 2 }],
+  },
+  {
+    transform: {
+      request: (data) => ({
+        customer_id: data.customer.$id,
+        line_items: data.items.map((item) => ({
+          product_id: item.$id,
+          qty: item.quantity,
+        })),
+      }),
+    },
+  }
+)
+```
+
+### Response Transformation
+
+Transform response data after receiving:
+
+```typescript
+import { $, api } from 'sdk.do'
+
+const person = await api.get('https://api.example.com/users/123', {
+  transform: {
+    response: (data) => ({
+      $type: 'Person',
+      $id: `person_${data.id}`,
+      name: `${data.first_name} ${data.last_name}`,
+      email: data.email_address,
+      telephone: data.phone_number,
+    }),
+  },
+})
+
+console.log(person.$type) // "Person"
+console.log(person.name) // "John Smith"
+```
+
+### Schema Mapping
+
+Map API fields to Schema.org properties:
+
+```typescript
+import { $, api } from 'sdk.do'
+
+const person = await api.get('https://api.example.com/users/123', {
+  schema: $.Person,
+  mapping: {
+    full_name: 'name',
+    email_address: 'email',
+    phone_number: 'telephone',
+    job_title: 'jobTitle',
+    company_name: 'worksFor.name',
+  },
+})
+
+console.log(person.$type) // "Person"
+console.log(person.name) // Mapped from full_name
+console.log(person.worksFor.name) // Mapped from company_name
+```
+
+### Batch Requests
+
+Make multiple requests in parallel:
+
+```typescript
+import { api } from 'sdk.do'
+
+const [users, posts, comments] = await Promise.all([
+  api.get('https://api.example.com/users'),
+  api.get('https://api.example.com/posts'),
+  api.get('https://api.example.com/comments'),
+])
+
+console.log(users.length, posts.length, comments.length)
+```
+
+### Sequential Requests
+
+Make requests that depend on previous responses:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Get user
+const user = await api.get('https://api.example.com/users/123')
+
+// Get user's posts
+const posts = await api.get(`https://api.example.com/users/${user.id}/posts`)
+
+// Get comments for first post
+const comments = await api.get(`https://api.example.com/posts/${posts[0].id}/comments`)
+```
+
+### Pagination
+
+Handle paginated responses:
+
+```typescript
+import { api } from 'sdk.do'
+
+async function getAllUsers() {
+  const allUsers = []
+  let page = 1
+  let hasMore = true
+
+  while (hasMore) {
+    const response = await api.get('https://api.example.com/users', {
+      params: { page, limit: 100 },
+    })
+
+    allUsers.push(...response.data)
+
+    hasMore = response.hasMore
+    page++
+  }
+
+  return allUsers
+}
+
+const users = await getAllUsers()
+console.log(`Fetched ${users.length} users`)
+```
+
+### Retry Logic
+
+Implement custom retry logic:
+
+```typescript
+import { api } from 'sdk.do'
+
+async function fetchWithRetry(url: string, maxRetries = 3) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await api.get(url, {
+        timeout: 10000,
+      })
+    } catch (error) {
+      if (i === maxRetries - 1) throw error
+
+      const delay = Math.pow(2, i) * 1000 // Exponential backoff
+      await new Promise((resolve) => setTimeout(resolve, delay))
+    }
+  }
+}
+
+const data = await fetchWithRetry('https://api.example.com/data')
+```
+
+### Rate Limiting
+
+Implement rate limiting:
+
+```typescript
+import { api } from 'sdk.do'
+
+const data = await api.get('https://api.example.com/data', {
+  rateLimit: {
+    maxRequests: 100,
+    perMilliseconds: 60000, // 100 requests per minute
+  },
+})
+
+// Or use global rate limiting
+api.config({
+  rateLimit: {
+    maxRequests: 100,
+    perMilliseconds: 60000,
+  },
+})
+```
+
+### Caching
+
+Cache API responses:
+
+```typescript
+import { api } from 'sdk.do'
+
+const cache = new Map()
+
+async function fetchCached(url: string, ttl = 60000) {
+  const cached = cache.get(url)
+
+  if (cached && Date.now() - cached.timestamp < ttl) {
+    return cached.data
+  }
+
+  const data = await api.get(url)
+
+  cache.set(url, {
+    data,
+    timestamp: Date.now(),
+  })
+
+  return data
+}
+
+const users = await fetchCached('https://api.example.com/users')
+```
+
+## Error Handling
+
+### Basic Error Handling
+
+```typescript
+import { api } from 'sdk.do'
+
+try {
+  const data = await api.get('https://api.example.com/data')
+  console.log(data)
+} catch (error) {
+  console.error('Request failed:', error.message)
+}
+```
+
+### Specific Error Types
+
+```typescript
+import { api } from 'sdk.do'
+
+try {
+  const data = await api.get('https://api.example.com/data')
+} catch (error) {
+  switch (error.code) {
+    case 'TIMEOUT':
+      console.error('Request timed out')
+      break
+    case 'RATE_LIMIT_EXCEEDED':
+      console.error(`Rate limited. Retry after ${error.retryAfter}ms`)
+      break
+    case 'AUTH_FAILED':
+      console.error('Authentication failed')
+      break
+    case 'NOT_FOUND':
+      console.error('Resource not found')
+      break
+    case 'SERVER_ERROR':
+      console.error('Server error occurred')
+      break
+    default:
+      console.error('Unknown error:', error.message)
+  }
+}
+```
+
+### HTTP Status Code Errors
+
+```typescript
+import { api } from 'sdk.do'
+
+try {
+  const data = await api.get('https://api.example.com/data')
+} catch (error) {
+  if (error.status === 400) {
+    console.error('Bad request:', error.data)
+  } else if (error.status === 401) {
+    console.error('Unauthorized')
+  } else if (error.status === 403) {
+    console.error('Forbidden')
+  } else if (error.status === 404) {
+    console.error('Not found')
+  } else if (error.status >= 500) {
+    console.error('Server error')
+  }
+}
+```
+
+## Best Practices
+
+### 1. Use Appropriate HTTP Methods
+
+Follow REST conventions:
+
+- **GET** - Retrieve resources (idempotent, cacheable)
+- **POST** - Create resources (not idempotent)
+- **PUT** - Replace resources (idempotent)
+- **PATCH** - Update resources (not idempotent)
+- **DELETE** - Remove resources (idempotent)
+
+### 2. Handle Errors Gracefully
+
+Always implement error handling:
+
+```typescript
+try {
+  const data = await api.get('https://api.example.com/data')
+} catch (error) {
+  // Handle error appropriately
+  console.error('Failed:', error)
+}
+```
+
+### 3. Use Timeouts
+
+Set appropriate timeouts to prevent hanging:
+
+```typescript
+await api.get('https://api.example.com/data', {
+  timeout: 10000,
+})
+```
+
+### 4. Transform Responses
+
+Map external APIs to semantic types:
+
+```typescript
+const person = await api.get('https://api.example.com/users/123', {
+  schema: $.Person,
+  mapping: { full_name: 'name' },
+})
+```
+
+### 5. Implement Retry Logic
+
+Handle transient failures:
+
+```typescript
+await api.get('https://api.example.com/data', {
+  retry: {
+    attempts: 3,
+    delay: 1000,
+    backoff: 'exponential',
+  },
+})
+```
+
+## See Also
+
+- [Getting Started](./getting-started) - Basic setup and usage
+- [Authentication](./authentication) - Auth methods and patterns
+- [API Reference](../api/) - Complete API documentation
+- [REST API Example](../examples/rest-api) - REST integration example
+
+## License
+
+MIT (Open Source)

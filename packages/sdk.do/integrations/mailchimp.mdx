@@ -1,0 +1,723 @@
+---
+$id: https://integrations.do/mailchimp
+$type: Integration
+name: Mailchimp
+service: mailchimp
+description: Email marketing platform for campaigns and audience management
+category: marketing
+sdkBased: true
+sdkPackage: '@mailchimp/mailchimp_marketing'
+sdkVersion: ^3.0.0
+sdkImport: Mailchimp
+
+auth:
+  type: api-key
+  location: header
+  headerName: Authorization
+  scheme: Bearer
+
+resources:
+  - name: Campaign
+    plural: Campaigns
+    description: Create and manage email campaigns
+    operations:
+      - name: create
+        method: POST
+        path: /campaigns
+        params:
+          - name: type
+            type: string
+            required: true
+            description: Campaign type (regular, plaintext, absplit, rss, variate)
+          - name: recipients
+            type: object
+            required: true
+            description: List recipients
+          - name: settings
+            type: object
+            required: true
+            description: Campaign settings (subject_line, from_name, reply_to)
+        returns: Campaign
+
+      - name: get
+        method: GET
+        path: /campaigns/{campaign_id}
+        params:
+          - name: campaign_id
+            type: string
+            required: true
+            description: Campaign ID
+        returns: Campaign
+
+      - name: update
+        method: PATCH
+        path: /campaigns/{campaign_id}
+        params:
+          - name: campaign_id
+            type: string
+            required: true
+            description: Campaign ID
+          - name: settings
+            type: object
+            required: false
+            description: Updated campaign settings
+        returns: Campaign
+
+      - name: delete
+        method: DELETE
+        path: /campaigns/{campaign_id}
+        params:
+          - name: campaign_id
+            type: string
+            required: true
+            description: Campaign ID
+        returns: boolean
+
+      - name: list
+        method: GET
+        path: /campaigns
+        params:
+          - name: count
+            type: number
+            required: false
+            description: Number of campaigns to return
+          - name: offset
+            type: number
+            required: false
+            description: Number of records to skip
+        returns: Campaign[]
+        pagination:
+          type: offset
+          offsetField: offset
+          limitField: count
+          defaultLimit: 10
+          maxLimit: 1000
+
+  - name: List
+    plural: Lists
+    description: Manage audience lists
+    operations:
+      - name: create
+        method: POST
+        path: /lists
+        params:
+          - name: name
+            type: string
+            required: true
+            description: List name
+          - name: contact
+            type: object
+            required: true
+            description: Contact information for the list
+          - name: permission_reminder
+            type: string
+            required: true
+            description: Permission reminder for subscribers
+          - name: campaign_defaults
+            type: object
+            required: true
+            description: Default values for campaigns
+          - name: email_type_option
+            type: boolean
+            required: true
+            description: Whether the list supports multiple formats
+        returns: List
+
+      - name: get
+        method: GET
+        path: /lists/{list_id}
+        params:
+          - name: list_id
+            type: string
+            required: true
+            description: List ID
+        returns: List
+
+      - name: update
+        method: PATCH
+        path: /lists/{list_id}
+        params:
+          - name: list_id
+            type: string
+            required: true
+            description: List ID
+          - name: name
+            type: string
+            required: false
+            description: Updated list name
+        returns: List
+
+      - name: delete
+        method: DELETE
+        path: /lists/{list_id}
+        params:
+          - name: list_id
+            type: string
+            required: true
+            description: List ID
+        returns: boolean
+
+      - name: list
+        method: GET
+        path: /lists
+        params:
+          - name: count
+            type: number
+            required: false
+            description: Number of lists to return
+        returns: List[]
+        pagination:
+          type: offset
+          offsetField: offset
+          limitField: count
+          defaultLimit: 10
+
+  - name: Member
+    plural: Members
+    description: Manage list members (subscribers)
+    operations:
+      - name: create
+        method: POST
+        path: /lists/{list_id}/members
+        params:
+          - name: list_id
+            type: string
+            required: true
+            description: List ID
+          - name: email_address
+            type: string
+            required: true
+            description: Member email address
+          - name: status
+            type: string
+            required: true
+            description: Subscription status (subscribed, unsubscribed, cleaned, pending)
+          - name: merge_fields
+            type: object
+            required: false
+            description: Merge field values (FNAME, LNAME, etc.)
+          - name: tags
+            type: array
+            required: false
+            description: Member tags
+        returns: Member
+
+      - name: get
+        method: GET
+        path: /lists/{list_id}/members/{subscriber_hash}
+        params:
+          - name: list_id
+            type: string
+            required: true
+            description: List ID
+          - name: subscriber_hash
+            type: string
+            required: true
+            description: MD5 hash of lowercase email
+        returns: Member
+
+      - name: update
+        method: PATCH
+        path: /lists/{list_id}/members/{subscriber_hash}
+        params:
+          - name: list_id
+            type: string
+            required: true
+            description: List ID
+          - name: subscriber_hash
+            type: string
+            required: true
+            description: MD5 hash of lowercase email
+          - name: status
+            type: string
+            required: false
+            description: Updated subscription status
+          - name: merge_fields
+            type: object
+            required: false
+            description: Updated merge fields
+        returns: Member
+
+      - name: delete
+        method: DELETE
+        path: /lists/{list_id}/members/{subscriber_hash}
+        params:
+          - name: list_id
+            type: string
+            required: true
+            description: List ID
+          - name: subscriber_hash
+            type: string
+            required: true
+            description: MD5 hash of lowercase email
+        returns: boolean
+
+      - name: list
+        method: GET
+        path: /lists/{list_id}/members
+        params:
+          - name: list_id
+            type: string
+            required: true
+            description: List ID
+          - name: count
+            type: number
+            required: false
+            description: Number of members to return
+        returns: Member[]
+        pagination:
+          type: offset
+          offsetField: offset
+          limitField: count
+          defaultLimit: 10
+
+  - name: Template
+    plural: Templates
+    description: Manage email templates
+    operations:
+      - name: create
+        method: POST
+        path: /templates
+        params:
+          - name: name
+            type: string
+            required: true
+            description: Template name
+          - name: html
+            type: string
+            required: true
+            description: Template HTML content
+        returns: Template
+
+      - name: get
+        method: GET
+        path: /templates/{template_id}
+        params:
+          - name: template_id
+            type: string
+            required: true
+            description: Template ID
+        returns: Template
+
+      - name: update
+        method: PATCH
+        path: /templates/{template_id}
+        params:
+          - name: template_id
+            type: string
+            required: true
+            description: Template ID
+          - name: name
+            type: string
+            required: false
+            description: Updated template name
+          - name: html
+            type: string
+            required: false
+            description: Updated HTML content
+        returns: Template
+
+      - name: delete
+        method: DELETE
+        path: /templates/{template_id}
+        params:
+          - name: template_id
+            type: string
+            required: true
+            description: Template ID
+        returns: boolean
+
+      - name: list
+        method: GET
+        path: /templates
+        params:
+          - name: count
+            type: number
+            required: false
+            description: Number of templates to return
+        returns: Template[]
+        pagination:
+          type: offset
+          offsetField: offset
+          limitField: count
+          defaultLimit: 10
+
+webhooks:
+  enabled: true
+  signatureHeader: X-Mandrill-Signature
+  signatureAlgorithm: sha1
+  verificationMethod: signature
+  events:
+    - name: subscribe
+      type: subscribe
+      description: User subscribed to list
+    - name: unsubscribe
+      type: unsubscribe
+      description: User unsubscribed from list
+    - name: profile
+      type: profile
+      description: Profile information updated
+    - name: cleaned
+      type: cleaned
+      description: Email address cleaned
+    - name: upemail
+      type: upemail
+      description: Email address changed
+    - name: campaign
+      type: campaign
+      description: Campaign sent to list
+
+errors:
+  mapping:
+    - code: invalid_api_key
+      type: authentication
+      statusCode: 401
+      message: Invalid API key
+      retryable: false
+    - code: forbidden
+      type: authorization
+      statusCode: 403
+      message: Forbidden - insufficient permissions
+      retryable: false
+    - code: resource_not_found
+      type: not_found
+      statusCode: 404
+      message: Resource not found
+      retryable: false
+    - code: invalid_resource
+      type: validation
+      statusCode: 400
+      message: Invalid resource data
+      retryable: false
+    - code: too_many_requests
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+    - code: internal_server_error
+      type: server
+      statusCode: 500
+      message: Internal server error
+      retryable: true
+  retryable: [too_many_requests, internal_server_error, 429, 500, 503]
+  nonRetryable: [invalid_api_key, forbidden, resource_not_found, invalid_resource, 401, 403, 404, 400]
+
+tests:
+  enabled: true
+  cleanup: true
+  scenarios:
+    - name: Campaign Management
+      description: Test campaign CRUD operations
+      steps:
+        - action: create
+          resource: Campaign
+        - action: retrieve
+          resource: Campaign
+        - action: update
+          resource: Campaign
+        - action: list
+          resource: Campaign
+        - action: delete
+          resource: Campaign
+
+    - name: List Management
+      description: Test audience list operations
+      steps:
+        - action: create
+          resource: List
+        - action: retrieve
+          resource: List
+        - action: update
+          resource: List
+        - action: list
+          resource: List
+        - action: delete
+          resource: List
+
+    - name: Member Management
+      description: Test subscriber operations
+      steps:
+        - action: create
+          resource: Member
+        - action: retrieve
+          resource: Member
+        - action: update
+          resource: Member
+        - action: list
+          resource: Member
+        - action: delete
+          resource: Member
+
+    - name: Template Management
+      description: Test template operations
+      steps:
+        - action: create
+          resource: Template
+        - action: retrieve
+          resource: Template
+        - action: update
+          resource: Template
+        - action: list
+          resource: Template
+        - action: delete
+          resource: Template
+
+    - name: Webhook Verification
+      description: Test webhook signature verification
+      steps:
+        - action: assert
+          expects:
+            status: 200
+
+docs:
+  homepage: https://mailchimp.com
+  apiDocs: https://mailchimp.com/developer/marketing/api/
+  sdkDocs: https://github.com/mailchimp/mailchimp-marketing-node
+  guides:
+    quickstart: https://mailchimp.com/developer/marketing/guides/quick-start/
+    webhooks: https://mailchimp.com/developer/marketing/guides/sync-audience-data-webhooks/
+    authentication: https://mailchimp.com/developer/marketing/docs/fundamentals/
+---
+
+# Mailchimp Integration
+
+Mailchimp is a leading email marketing platform for creating campaigns, managing audiences, and automating marketing workflows.
+
+## Features
+
+- **Campaigns**: Create and manage email campaigns
+- **Lists**: Manage audience lists and segments
+- **Members**: Add and manage subscribers
+- **Templates**: Design and manage email templates
+- **API Key Auth**: Simple authentication
+- **Webhooks**: Real-time event notifications with signature verification
+
+## Quick Start
+
+```typescript
+import { MailchimpClient } from '@dotdo/sdk.do/integrations/mailchimp'
+
+const mailchimp = new MailchimpClient({
+  apiKey: process.env.MAILCHIMP_API_KEY,
+  server: 'us19', // Your Mailchimp server prefix
+})
+
+// Create a campaign
+const campaign = await mailchimp.campaign.create({
+  type: 'regular',
+  recipients: {
+    list_id: 'abc123',
+  },
+  settings: {
+    subject_line: 'Newsletter',
+    from_name: 'Company Name',
+    reply_to: 'hello@company.com',
+  },
+})
+
+// Add a subscriber
+const member = await mailchimp.member.create({
+  list_id: 'abc123',
+  email_address: 'subscriber@example.com',
+  status: 'subscribed',
+  merge_fields: {
+    FNAME: 'John',
+    LNAME: 'Doe',
+  },
+})
+```
+
+## Authentication
+
+Mailchimp uses API key authentication:
+
+```bash
+export MAILCHIMP_API_KEY=your_api_key-us19
+export MAILCHIMP_SERVER=us19
+```
+
+## Resources
+
+### Campaigns
+
+Create and manage campaigns:
+
+```typescript
+// Create campaign
+const campaign = await mailchimp.campaign.create({
+  type: 'regular',
+  recipients: {
+    list_id: 'list123',
+  },
+  settings: {
+    subject_line: 'Monthly Newsletter',
+    from_name: 'Acme Inc',
+    reply_to: 'news@acme.com',
+  },
+})
+
+// Get campaign
+const campaign = await mailchimp.campaign.get({ campaign_id: 'camp123' })
+
+// Update campaign
+await mailchimp.campaign.update({
+  campaign_id: 'camp123',
+  settings: {
+    subject_line: 'Updated Subject',
+  },
+})
+
+// List campaigns
+const campaigns = await mailchimp.campaign.list({ count: 50 })
+
+// Delete campaign
+await mailchimp.campaign.delete({ campaign_id: 'camp123' })
+```
+
+### Lists (Audiences)
+
+Manage audience lists:
+
+```typescript
+// Create list
+const list = await mailchimp.list.create({
+  name: 'Newsletter Subscribers',
+  contact: {
+    company: 'Acme Inc',
+    address1: '123 Main St',
+    city: 'Atlanta',
+    state: 'GA',
+    zip: '30301',
+    country: 'US',
+  },
+  permission_reminder: 'You signed up for our newsletter',
+  campaign_defaults: {
+    from_name: 'Acme Inc',
+    from_email: 'hello@acme.com',
+    subject: '',
+    language: 'en',
+  },
+  email_type_option: true,
+})
+
+// Get list
+const list = await mailchimp.list.get({ list_id: 'list123' })
+
+// List all lists
+const lists = await mailchimp.list.list()
+```
+
+### Members (Subscribers)
+
+Manage list members:
+
+```typescript
+// Add member
+const member = await mailchimp.member.create({
+  list_id: 'list123',
+  email_address: 'john@example.com',
+  status: 'subscribed',
+  merge_fields: {
+    FNAME: 'John',
+    LNAME: 'Doe',
+    COMPANY: 'Acme Inc',
+  },
+  tags: ['customer', 'vip'],
+})
+
+// Get member (requires MD5 hash of lowercase email)
+import crypto from 'crypto'
+const hash = crypto.createHash('md5').update('john@example.com'.toLowerCase()).digest('hex')
+const member = await mailchimp.member.get({
+  list_id: 'list123',
+  subscriber_hash: hash,
+})
+
+// Update member
+await mailchimp.member.update({
+  list_id: 'list123',
+  subscriber_hash: hash,
+  merge_fields: {
+    FNAME: 'Jane',
+  },
+})
+
+// List members
+const members = await mailchimp.member.list({ list_id: 'list123' })
+```
+
+### Templates
+
+Manage email templates:
+
+```typescript
+// Create template
+const template = await mailchimp.template.create({
+  name: 'Newsletter Template',
+  html: '<html><body>{{content}}</body></html>',
+})
+
+// Get template
+const template = await mailchimp.template.get({ template_id: 'tmpl123' })
+
+// List templates
+const templates = await mailchimp.template.list()
+```
+
+## Webhooks
+
+Mailchimp supports webhooks with SHA-1 HMAC signature verification:
+
+```typescript
+import { MailchimpWebhookHandler, WebhookEventRouter } from '@dotdo/sdk.do/integrations/mailchimp'
+
+const handler = new MailchimpWebhookHandler(process.env.MAILCHIMP_WEBHOOK_SECRET)
+const event = await handler.handleRequest(request)
+
+const router = new WebhookEventRouter()
+router.onSubscribe(async (event) => {
+  console.log('New subscriber:', event.data)
+})
+
+router.onUnsubscribe(async (event) => {
+  console.log('Unsubscribed:', event.data)
+})
+
+await router.route(event)
+```
+
+## Error Handling
+
+```typescript
+import { MailchimpError } from '@dotdo/sdk.do/integrations/mailchimp'
+
+try {
+  await mailchimp.campaign.create({
+    /* ... */
+  })
+} catch (error) {
+  if (error instanceof MailchimpError) {
+    console.error('Mailchimp Error:', error.code, error.message)
+    if (error.isRetriable()) {
+      // Retry logic
+    }
+  }
+}
+```
+
+## Best Practices
+
+1. **Rate Limits**: Mailchimp enforces rate limits based on plan
+2. **Server Prefix**: Always include correct server prefix (e.g., us19)
+3. **Email Hashes**: Use MD5 hash of lowercase email for member operations
+4. **List Hygiene**: Regular clean bounced and unsubscribed addresses
+5. **Merge Fields**: Use standard merge fields (FNAME, LNAME) consistently
+6. **Double Opt-in**: Consider using pending status for compliance
+
+## API Reference
+
+Full API documentation: https://mailchimp.com/developer/marketing/api/
+
+## License
+
+MIT

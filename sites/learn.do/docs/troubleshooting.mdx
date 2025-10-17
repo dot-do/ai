@@ -1,0 +1,78 @@
+---
+$id: https://learn.do/docs/troubleshooting
+$type: TechArticle
+title: Troubleshooting learn.do
+description: Common issues and solutions for learn.do
+keywords: [troubleshooting, issues, solutions]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Troubleshooting learn.do
+
+Common issues and solutions.
+
+## Progress Not Saving
+
+**Problem:** User progress not being tracked.
+
+**Solution:**
+
+```typescript
+// Ensure progress tracking is enabled
+await learn.trackProgress(user, course, {
+  lessonId: lesson.$id,
+  completed: true,
+  persist: true,
+})
+
+// Check progress
+const progress = await learn.getProgress(user, course)
+console.log('Completed lessons:', progress.completed)
+```
+
+## Video Playback Issues
+
+**Problem:** Videos not loading or buffering.
+
+**Solution:**
+
+1. **Check CDN configuration:**
+
+```bash
+export LEARN_VIDEO_CDN=https://cdn.learn.do
+```
+
+2. **Verify video encoding:**
+
+```typescript
+const video = await learn.getVideo(videoId)
+console.log('Formats:', video.formats)
+console.log('Status:', video.status)
+```
+
+## Assessment Errors
+
+**Problem:** Assessment submission failing.
+
+**Solution:**
+
+```typescript
+try {
+  await learn.submitAssessment(assessment, answers)
+} catch (error) {
+  if (error.code === 'TIME_EXPIRED') {
+    // Handle timeout
+    await learn.requestExtension(assessment)
+  } else if (error.code === 'INVALID_ANSWERS') {
+    // Validate answers format
+    await learn.validateAnswers(answers)
+  }
+}
+```
+
+## See Also
+
+- [Getting Started](./getting-started)
+- [Best Practices](./best-practices)

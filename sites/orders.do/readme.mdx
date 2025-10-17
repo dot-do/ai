@@ -1,0 +1,591 @@
+---
+$id: https://orders.do
+$type: WebSite
+title: orders.do - Order Management for Business-as-Code
+description: Build autonomous order management systems with semantic patterns. Handle order creation, fulfillment, tracking, cancellations, and returns using Schema.org Order types.
+keywords: [orders, order management, e-commerce, fulfillment, order tracking, Business-as-Code, Schema.org, semantic commerce]
+author:
+  $type: Organization
+  name: .do Platform
+license: MIT
+---
+
+# orders.do
+
+**Semantic Order Management for Business-as-Code**
+
+orders.do provides a comprehensive order management framework for the `.do` platform, enabling you to build autonomous order processing systems using semantic patterns. Create, track, fulfill, and manage orders with Schema.org Order types and Business-as-Code primitives.
+
+## What is Order Management?
+
+Order management encompasses the entire lifecycle of customer orders:
+
+- **Order Creation**: Capture customer orders with products, quantities, and pricing
+- **Order Validation**: Verify inventory, pricing, and payment information
+- **Order Fulfillment**: Process, pick, pack, and ship orders
+- **Order Tracking**: Provide real-time order status updates
+- **Order Modifications**: Handle changes, cancellations, and returns
+- **Order Analytics**: Monitor order metrics, trends, and performance
+
+## Quick Start
+
+```bash
+pnpm add sdk.do
+```
+
+```typescript
+import $, { db } from 'sdk.do'
+
+// Create a new order
+const order = await db.create($.Order, {
+  $type: 'Order',
+  orderNumber: 'ORD-2025-001',
+  orderDate: new Date().toISOString(),
+  customer: {
+    $type: 'Person',
+    name: 'Jane Smith',
+    email: 'jane@example.com',
+  },
+  orderedItem: [
+    {
+      $type: 'OrderItem',
+      orderItemNumber: '1',
+      orderedItem: {
+        $type: 'Product',
+        name: 'Wireless Headphones',
+        sku: 'WH-1000',
+      },
+      orderQuantity: 2,
+      price: {
+        $type: 'PriceSpecification',
+        price: 299.99,
+        priceCurrency: 'USD',
+      },
+    },
+  ],
+  orderStatus: 'OrderProcessing',
+  paymentMethod: {
+    $type: 'PaymentCard',
+    name: 'Visa ending in 1234',
+  },
+})
+```
+
+## Key Features
+
+### Semantic Order Types
+
+Use Schema.org Order types for standardized order representation:
+
+```typescript
+import $ from 'sdk.do'
+
+// Order type hierarchy
+$.Order // Base order type
+$.OrderItem // Individual order items
+$.OrderStatus // Order state
+$.OrderDelivery // Delivery information
+$.ParcelDelivery // Shipment tracking
+
+// Order status values
+$.OrderProcessing // Order is being processed
+$.OrderInTransit // Order is being shipped
+$.OrderDelivered // Order has been delivered
+$.OrderPickupAvailable // Order ready for pickup
+$.OrderProblem // Issue with order
+$.OrderCancelled // Order was cancelled
+$.OrderReturned // Order was returned
+```
+
+### Order Creation
+
+Create orders with complete product and customer information:
+
+```typescript
+const order = await db.create($.Order, {
+  $type: 'Order',
+  orderNumber: 'ORD-2025-001',
+  orderDate: new Date().toISOString(),
+  customer: {
+    $id: 'customer-123',
+    $type: 'Person',
+    name: 'Jane Smith',
+    email: 'jane@example.com',
+    telephone: '+1-555-0123',
+  },
+  orderedItem: [
+    {
+      $type: 'OrderItem',
+      orderItemNumber: '1',
+      orderedItem: {
+        $id: 'product-456',
+        $type: 'Product',
+        name: 'Wireless Headphones',
+        sku: 'WH-1000',
+        brand: {
+          $type: 'Brand',
+          name: 'TechAudio',
+        },
+      },
+      orderQuantity: 2,
+      price: {
+        $type: 'PriceSpecification',
+        price: 299.99,
+        priceCurrency: 'USD',
+      },
+    },
+    {
+      $type: 'OrderItem',
+      orderItemNumber: '2',
+      orderedItem: {
+        $id: 'product-789',
+        $type: 'Product',
+        name: 'USB-C Cable',
+        sku: 'USB-C-100',
+      },
+      orderQuantity: 1,
+      price: {
+        $type: 'PriceSpecification',
+        price: 19.99,
+        priceCurrency: 'USD',
+      },
+    },
+  ],
+  orderStatus: 'OrderProcessing',
+  paymentMethod: {
+    $type: 'PaymentCard',
+    name: 'Visa ending in 1234',
+  },
+  billingAddress: {
+    $type: 'PostalAddress',
+    streetAddress: '123 Main St',
+    addressLocality: 'San Francisco',
+    addressRegion: 'CA',
+    postalCode: '94102',
+    addressCountry: 'US',
+  },
+  orderDelivery: {
+    $type: 'ParcelDelivery',
+    deliveryAddress: {
+      $type: 'PostalAddress',
+      streetAddress: '123 Main St',
+      addressLocality: 'San Francisco',
+      addressRegion: 'CA',
+      postalCode: '94102',
+      addressCountry: 'US',
+    },
+    expectedArrivalFrom: '2025-10-15T09:00:00Z',
+    expectedArrivalUntil: '2025-10-15T17:00:00Z',
+  },
+})
+```
+
+### Order Status Tracking
+
+Track order status throughout the fulfillment lifecycle:
+
+```typescript
+// Update order status
+await db.update(order, {
+  orderStatus: 'OrderInTransit',
+  orderDelivery: {
+    $type: 'ParcelDelivery',
+    trackingNumber: '1Z999AA10123456784',
+    trackingUrl: 'https://track.example.com/1Z999AA10123456784',
+    hasDeliveryMethod: {
+      $type: 'DeliveryMethod',
+      name: 'Ground Shipping',
+    },
+  },
+})
+
+// Listen for order status changes
+await on($.Order.updated, async (order) => {
+  if (order.orderStatus === 'OrderDelivered') {
+    // Send delivery confirmation email
+    await send({
+      $type: 'EmailMessage',
+      recipient: order.customer.email,
+      subject: 'Your order has been delivered',
+      text: `Order ${order.orderNumber} was delivered successfully.`,
+    })
+  }
+})
+```
+
+### Order Fulfillment
+
+Process and fulfill orders with automated workflows:
+
+```typescript
+import { on, send, db } from 'sdk.do'
+
+// Automated order fulfillment workflow
+await on($.Order.created, async (order) => {
+  // 1. Validate inventory
+  const hasInventory = await validateInventory(order.orderedItem)
+
+  if (!hasInventory) {
+    await db.update(order, {
+      orderStatus: 'OrderProblem',
+      orderProblem: 'Insufficient inventory',
+    })
+    return
+  }
+
+  // 2. Reserve inventory
+  await reserveInventory(order.orderedItem)
+
+  // 3. Process payment
+  const paymentResult = await processPayment(order)
+
+  if (!paymentResult.success) {
+    await db.update(order, {
+      orderStatus: 'OrderProblem',
+      orderProblem: 'Payment failed',
+    })
+    return
+  }
+
+  // 4. Create fulfillment task
+  await send({
+    $type: 'FulfillmentTask',
+    order: order.$id,
+    pickList: order.orderedItem.map((item) => ({
+      product: item.orderedItem,
+      quantity: item.orderQuantity,
+    })),
+  })
+
+  // 5. Update order status
+  await db.update(order, {
+    orderStatus: 'OrderProcessing',
+    paymentStatus: 'PaymentComplete',
+  })
+
+  // 6. Send confirmation email
+  await send({
+    $type: 'EmailMessage',
+    recipient: order.customer.email,
+    subject: `Order ${order.orderNumber} confirmed`,
+    text: 'Your order is being processed.',
+  })
+})
+```
+
+### Order Cancellations
+
+Handle order cancellations with refund processing:
+
+```typescript
+async function cancelOrder(orderId: string, reason: string) {
+  const order = await db.get($.Order, orderId)
+
+  // Check if order can be cancelled
+  if (order.orderStatus === 'OrderDelivered') {
+    throw new Error('Cannot cancel delivered order')
+  }
+
+  // Cancel order
+  await db.update(order, {
+    orderStatus: 'OrderCancelled',
+    cancellationReason: reason,
+    cancelledAt: new Date().toISOString(),
+  })
+
+  // Release inventory
+  await releaseInventory(order.orderedItem)
+
+  // Process refund if payment was made
+  if (order.paymentStatus === 'PaymentComplete') {
+    await send({
+      $type: 'RefundRequest',
+      order: order.$id,
+      amount: calculateOrderTotal(order),
+      reason: reason,
+    })
+  }
+
+  // Notify customer
+  await send({
+    $type: 'EmailMessage',
+    recipient: order.customer.email,
+    subject: `Order ${order.orderNumber} cancelled`,
+    text: `Your order has been cancelled. Reason: ${reason}`,
+  })
+
+  return order
+}
+```
+
+### Order Returns
+
+Process order returns and exchanges:
+
+```typescript
+async function createReturn(orderId: string, items: ReturnItem[]) {
+  const order = await db.get($.Order, orderId)
+
+  // Create return order
+  const returnOrder = await db.create($.Order, {
+    $type: 'Order',
+    orderNumber: `RET-${order.orderNumber}`,
+    orderDate: new Date().toISOString(),
+    orderStatus: 'OrderReturned',
+    referencesOrder: order.$id,
+    customer: order.customer,
+    orderedItem: items.map((item) => ({
+      $type: 'OrderItem',
+      orderedItem: item.product,
+      orderQuantity: item.quantity,
+      returnReason: item.reason,
+    })),
+  })
+
+  // Create return label
+  const returnLabel = await createReturnShippingLabel({
+    from: order.orderDelivery.deliveryAddress,
+    to: order.seller.address,
+    order: returnOrder,
+  })
+
+  // Send return instructions
+  await send({
+    $type: 'EmailMessage',
+    recipient: order.customer.email,
+    subject: `Return label for order ${order.orderNumber}`,
+    text: 'Please use the attached label to return your items.',
+    attachment: returnLabel,
+  })
+
+  // Process refund once return is received
+  await on($.Order.updated, async (updatedReturn) => {
+    if (updatedReturn.$id === returnOrder.$id && updatedReturn.orderStatus === 'OrderDelivered') {
+      await send({
+        $type: 'RefundRequest',
+        order: order.$id,
+        amount: calculateReturnAmount(items),
+        reason: 'Return processed',
+      })
+    }
+  })
+
+  return returnOrder
+}
+```
+
+## Semantic Patterns
+
+orders.do uses semantic `$.Subject.predicate.Object` patterns:
+
+```typescript
+import $ from 'sdk.do'
+
+// Order types
+$.Order
+$.OrderItem
+$.OrderStatus
+$.OrderDelivery
+$.ParcelDelivery
+
+// Order operations
+$.Order.created
+$.Order.updated
+$.Order.cancelled
+$.Order.fulfilled
+$.Order.delivered
+$.Order.returned
+
+// Order relationships
+$.Order.has.OrderItem
+$.Order.has.Customer
+$.Order.has.PaymentMethod
+$.Order.has.BillingAddress
+$.Order.has.DeliveryAddress
+$.Customer.placed.Order
+$.Order.contains.Product
+```
+
+## Order Lifecycle
+
+### 1. Order Placement
+
+```typescript
+// Customer places order
+const order = await db.create($.Order, {
+  orderStatus: 'OrderPending',
+  // ... order details
+})
+```
+
+### 2. Order Validation
+
+```typescript
+// Validate inventory and payment
+const isValid = await validateOrder(order)
+if (isValid) {
+  await db.update(order, { orderStatus: 'OrderProcessing' })
+}
+```
+
+### 3. Order Fulfillment
+
+```typescript
+// Pick, pack, and ship
+await fulfillOrder(order)
+await db.update(order, { orderStatus: 'OrderInTransit' })
+```
+
+### 4. Order Delivery
+
+```typescript
+// Mark as delivered
+await db.update(order, {
+  orderStatus: 'OrderDelivered',
+  deliveredAt: new Date().toISOString(),
+})
+```
+
+### 5. Post-Delivery
+
+```typescript
+// Handle returns or reviews
+await on($.Order.delivered, async (order) => {
+  // Request review after 3 days
+  await send({
+    $type: 'ReviewRequest',
+    order: order.$id,
+    delay: '3 days',
+  })
+})
+```
+
+## Integration with .do Platform
+
+orders.do integrates seamlessly with other `.do` platform services:
+
+```typescript
+import $, { db, on, send, ai } from 'sdk.do'
+
+// Order → Invoice integration
+await on($.Order.created, async (order) => {
+  const invoice = await db.create($.Invoice, {
+    referencesOrder: order.$id,
+    customer: order.customer,
+    totalPaymentDue: calculateOrderTotal(order),
+  })
+})
+
+// Order → Payment integration
+await on($.Order.created, async (order) => {
+  const payment = await send({
+    $type: 'PaymentRequest',
+    order: order.$id,
+    amount: calculateOrderTotal(order),
+    paymentMethod: order.paymentMethod,
+  })
+})
+
+// Order → Customer integration
+await on($.Order.created, async (order) => {
+  await db.update(order.customer, {
+    totalOrders: { $increment: 1 },
+    lastOrderDate: order.orderDate,
+  })
+})
+
+// AI-powered order insights
+const insights = await ai.generate({
+  prompt: 'Analyze this order for potential issues',
+  context: { order },
+  schema: $.OrderAnalysis,
+})
+```
+
+## Documentation
+
+- [Getting Started](./docs/getting-started) - Setup and first order
+- [Architecture](./docs/architecture) - Order system design
+- [Best Practices](./docs/best-practices) - Order management patterns
+- [Troubleshooting](./docs/troubleshooting) - Common issues
+- [API Reference](./api/) - Complete API documentation
+- [Examples](./examples/) - Real-world order examples
+
+## Examples
+
+- [Basic Usage](./examples/basic-usage) - Simple order creation
+- [Advanced Patterns](./examples/advanced-patterns) - Complex order workflows
+- [Integration](./examples/integration) - Integration with other services
+- [Real-World Use Case](./examples/real-world-use-case) - Complete e-commerce example
+
+## Best Practices
+
+### 1. Use Semantic Types
+
+Always use Schema.org Order types:
+
+```typescript
+const order = await db.create($.Order, {
+  $type: 'Order',
+  // Always specify $type
+})
+```
+
+### 2. Track Order Status
+
+Maintain accurate order status throughout lifecycle:
+
+```typescript
+const statuses = ['OrderPending', 'OrderProcessing', 'OrderInTransit', 'OrderDelivered']
+```
+
+### 3. Validate Before Processing
+
+Validate inventory and payment before fulfillment:
+
+```typescript
+await validateInventory(order.orderedItem)
+await validatePayment(order.paymentMethod)
+```
+
+### 4. Handle Errors Gracefully
+
+Implement error handling and retry logic:
+
+```typescript
+try {
+  await processOrder(order)
+} catch (error) {
+  await db.update(order, {
+    orderStatus: 'OrderProblem',
+    orderProblem: error.message,
+  })
+}
+```
+
+### 5. Send Notifications
+
+Keep customers informed throughout the order lifecycle:
+
+```typescript
+await on($.Order.updated, async (order) => {
+  await sendOrderNotification(order)
+})
+```
+
+## Related Projects
+
+- [invoices.do](https://invoices.do) - Invoice management
+- [payments.do](https://payments.do) - Payment processing
+- [customers.do](https://customers.do) - Customer management
+- [products.do](https://products.do) - Product catalog
+- [schema.org.ai](https://schema.org.ai) - Schema.org types
+- [sdk.do](https://sdk.do) - Core SDK
+
+## License
+
+MIT (Open Source)
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

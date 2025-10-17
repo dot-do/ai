@@ -1,0 +1,781 @@
+---
+$id: https://ai.do/docs/batch-processing
+$type: TechArticle
+title: Batch Processing with ai.do
+description: Process large datasets with 50% cost savings using OpenAI Batch API
+keywords: [ai, batch, batch processing, openai, cost optimization]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Batch Processing
+
+Process large datasets with 50% cost savings using OpenAI's Batch API for asynchronous AI operations.
+
+## Overview
+
+The Batch API allows you to process multiple AI requests asynchronously with significant cost savings. Perfect for large-scale content generation, data enrichment, and bulk processing tasks.
+
+### Benefits
+
+- **50% Cost Reduction**: Batch requests cost half the price of real-time requests
+- **High Throughput**: Process thousands of requests efficiently
+- **No Rate Limits**: Batch jobs bypass standard rate limits
+- **Async Processing**: Submit jobs and retrieve results when complete
+
+### Use Cases
+
+- Content generation for thousands of products
+- Bulk translation of documents
+- Large-scale data enrichment
+- Automated content analysis
+- Mass embedding generation
+
+## Basic Usage
+
+Submit a batch job and retrieve results:
+
+```typescript
+import { $, ai } from 'sdk.do'
+
+// Prepare batch requests
+const requests = [
+  { prompt: 'Generate description for laptop' },
+  { prompt: 'Generate description for smartphone' },
+  { prompt: 'Generate description for headphones' },
+]
+
+// Create batch job
+const batch = await ai.batch.create(requests)
+
+console.log(batch.id) // batch_abc123
+console.log(batch.status) // 'validating'
+
+// Check status
+const status = await ai.batch.status(batch.id)
+console.log(status.status) // 'in_progress' | 'completed' | 'failed'
+
+// Get results when complete
+if (status.status === 'completed') {
+  const results = await ai.batch.results(batch.id)
+  console.log(results) // Array of generated content
+}
+```
+
+## Creating Batch Jobs
+
+### Simple Batch Requests
+
+Create batch with simple prompts:
+
+```typescript
+import { ai } from 'sdk.do'
+
+const batch = await ai.batch.create([
+  { prompt: 'Summarize: AI is transforming business...' },
+  { prompt: 'Summarize: Machine learning enables...' },
+  { prompt: 'Summarize: Deep learning uses...' },
+])
+```
+
+### Structured Batch Requests
+
+Generate structured output in batch:
+
+```typescript
+import { $, ai } from 'sdk.do'
+
+const batch = await ai.batch.create([
+  {
+    prompt: 'Create laptop product',
+    schema: $.Product,
+    structured: true,
+  },
+  {
+    prompt: 'Create smartphone product',
+    schema: $.Product,
+    structured: true,
+  },
+  {
+    prompt: 'Create tablet product',
+    schema: $.Product,
+    structured: true,
+  },
+])
+```
+
+### Custom Request Format
+
+Use OpenAI's batch format directly:
+
+```typescript
+import { ai } from 'sdk.do'
+
+const batch = await ai.batch.create([
+  {
+    custom_id: 'request-1',
+    method: 'POST',
+    url: '/v1/chat/completions',
+    body: {
+      model: 'gpt-5',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a product description writer',
+        },
+        {
+          role: 'user',
+          content: 'Write description for laptop',
+        },
+      ],
+      max_tokens: 500,
+    },
+  },
+  {
+    custom_id: 'request-2',
+    method: 'POST',
+    url: '/v1/chat/completions',
+    body: {
+      model: 'gpt-5',
+      messages: [
+        {
+          role: 'user',
+          content: 'Write description for smartphone',
+        },
+      ],
+    },
+  },
+])
+```
+
+## Checking Batch Status
+
+### Poll for Completion
+
+Check batch status periodically:
+
+```typescript
+import { ai } from 'sdk.do'
+
+async function waitForCompletion(batchId: string) {
+  while (true) {
+    const status = await ai.batch.status(batchId)
+
+    console.log(`Status: ${status.status}`)
+    console.log(`Progress: ${status.completed}/${status.total}`)
+
+    if (status.status === 'completed') {
+      return status
+    }
+
+    if (status.status === 'failed') {
+      throw new Error(`Batch failed: ${status.error}`)
+    }
+
+    // Wait 1 minute before checking again
+    await new Promise((resolve) => setTimeout(resolve, 60000))
+  }
+}
+
+const batch = await ai.batch.create(requests)
+await waitForCompletion(batch.id)
+```
+
+### Status Information
+
+Status object contains:
+
+```typescript
+interface BatchStatus {
+  id: string
+  status: 'validating' | 'in_progress' | 'completed' | 'failed' | 'cancelled'
+  total: number
+  completed: number
+  failed: number
+  createdAt: string
+  completedAt?: string
+  error?: string
+}
+```
+
+## Retrieving Results
+
+### Get All Results
+
+Retrieve results when batch is complete:
+
+```typescript
+import { ai } from 'sdk.do'
+
+const results = await ai.batch.results(batchId)
+
+for (const result of results) {
+  console.log(result.custom_id) // Your request ID
+  console.log(result.response) // Generated content
+}
+```
+
+### Handle Individual Failures
+
+Some requests may fail individually:
+
+```typescript
+import { ai } from 'sdk.do'
+
+const results = await ai.batch.results(batchId)
+
+for (const result of results) {
+  if (result.error) {
+    console.error(`Request ${result.custom_id} failed:`, result.error)
+    continue
+  }
+
+  console.log(`Success: ${result.response}`)
+}
+```
+
+## Practical Examples
+
+### Bulk Product Enrichment
+
+Enrich product descriptions in bulk:
+
+```typescript
+import { $, ai, db } from 'sdk.do'
+
+async function enrichProducts() {
+  // Get products needing descriptions
+  const products = await db.list($.Product, {
+    where: { description: null },
+  })
+
+  console.log(`Enriching ${products.length} products`)
+
+  // Prepare batch requests
+  const requests = products.map((product) => ({
+    custom_id: product.$id,
+    prompt: `Generate product description for ${product.name}`,
+    context: {
+      name: product.name,
+      category: product.category,
+      brand: product.brand,
+    },
+  }))
+
+  // Submit batch
+  const batch = await ai.batch.create(requests)
+  console.log(`Batch created: ${batch.id}`)
+
+  // Wait for completion
+  while (true) {
+    const status = await ai.batch.status(batch.id)
+
+    if (status.status === 'completed') {
+      console.log('Batch completed!')
+      break
+    }
+
+    console.log(`Progress: ${status.completed}/${status.total}`)
+    await new Promise((resolve) => setTimeout(resolve, 60000))
+  }
+
+  // Get results and update database
+  const results = await ai.batch.results(batch.id)
+
+  for (const result of results) {
+    if (!result.error) {
+      await db.update(result.custom_id, {
+        description: result.response,
+        enrichedAt: new Date().toISOString(),
+      })
+    }
+  }
+
+  console.log(`Enriched ${results.filter((r) => !r.error).length} products`)
+}
+
+await enrichProducts()
+```
+
+### Bulk Content Generation
+
+Generate content for multiple entities:
+
+```typescript
+import { $, ai, db } from 'sdk.do'
+
+async function generateBlogPosts(topics: string[]) {
+  // Prepare batch requests
+  const requests = topics.map((topic, i) => ({
+    custom_id: `post-${i}`,
+    prompt: `Write comprehensive blog post about ${topic}`,
+    schema: $.BlogPost,
+    structured: true,
+    context: {
+      wordCount: 1000,
+      tone: 'professional',
+      keywords: [topic],
+    },
+  }))
+
+  // Submit batch
+  const batch = await ai.batch.create(requests)
+
+  // Wait for completion
+  const status = await waitForCompletion(batch.id)
+
+  // Get results
+  const results = await ai.batch.results(batch.id)
+
+  // Save blog posts
+  const posts = []
+  for (const result of results) {
+    if (!result.error) {
+      const post = await db.create($.BlogPost, {
+        ...result.response,
+        publishedAt: new Date().toISOString(),
+      })
+      posts.push(post)
+    }
+  }
+
+  return posts
+}
+
+const topics = ['AI in Healthcare', 'Sustainable Technology', 'Future of Remote Work', 'Quantum Computing Basics', 'Blockchain Applications']
+
+const posts = await generateBlogPosts(topics)
+console.log(`Generated ${posts.length} blog posts`)
+```
+
+### Bulk Translation
+
+Translate content in multiple languages:
+
+```typescript
+import { $, ai, db } from 'sdk.do'
+
+async function translateArticles(articles: any[], targetLanguages: string[]) {
+  const requests = []
+
+  for (const article of articles) {
+    for (const lang of targetLanguages) {
+      requests.push({
+        custom_id: `${article.$id}-${lang}`,
+        prompt: `Translate this article to ${lang}`,
+        context: {
+          title: article.headline,
+          content: article.articleBody,
+        },
+      })
+    }
+  }
+
+  // Submit batch
+  const batch = await ai.batch.create(requests)
+  await waitForCompletion(batch.id)
+
+  // Get results
+  const results = await ai.batch.results(batch.id)
+
+  // Store translations
+  for (const result of results) {
+    if (!result.error) {
+      const [articleId, lang] = result.custom_id.split('-')
+
+      await db.create($.Article, {
+        originalArticle: articleId,
+        inLanguage: lang,
+        headline: result.response.title,
+        articleBody: result.response.content,
+      })
+    }
+  }
+}
+```
+
+### Bulk Embeddings
+
+Generate embeddings for large datasets:
+
+```typescript
+import { $, ai, db } from 'sdk.do'
+
+async function generateEmbeddings() {
+  const articles = await db.list($.Article, {
+    where: { embedding: null },
+  })
+
+  // Batch embeddings (ai.embed already batches efficiently)
+  const texts = articles.map((a) => `${a.headline} ${a.articleBody}`)
+  const embeddings = await ai.embed(texts)
+
+  // Update articles with embeddings
+  for (let i = 0; i < articles.length; i++) {
+    await db.update(articles[i].$id, {
+      embedding: embeddings[i],
+    })
+  }
+
+  console.log(`Generated ${embeddings.length} embeddings`)
+}
+```
+
+## Advanced Patterns
+
+### Chunked Batch Processing
+
+Process very large datasets in chunks:
+
+```typescript
+import { ai } from 'sdk.do'
+
+async function processInChunks(items: any[], chunkSize = 50000) {
+  const chunks = []
+  for (let i = 0; i < items.length; i += chunkSize) {
+    chunks.push(items.slice(i, i + chunkSize))
+  }
+
+  const allResults = []
+
+  for (let i = 0; i < chunks.length; i++) {
+    console.log(`Processing chunk ${i + 1}/${chunks.length}`)
+
+    const requests = chunks[i].map((item) => ({
+      custom_id: item.id,
+      prompt: `Process ${item.name}`,
+      context: item,
+    }))
+
+    const batch = await ai.batch.create(requests)
+    await waitForCompletion(batch.id)
+
+    const results = await ai.batch.results(batch.id)
+    allResults.push(...results)
+  }
+
+  return allResults
+}
+```
+
+### Retry Failed Requests
+
+Retry requests that failed:
+
+```typescript
+import { ai } from 'sdk.do'
+
+async function retryFailed(batchId: string) {
+  const results = await ai.batch.results(batchId)
+
+  // Find failed requests
+  const failed = results.filter((r) => r.error)
+
+  if (failed.length === 0) {
+    console.log('No failed requests')
+    return []
+  }
+
+  console.log(`Retrying ${failed.length} failed requests`)
+
+  // Retry failed requests
+  const retryBatch = await ai.batch.create(
+    failed.map((f) => ({
+      custom_id: f.custom_id,
+      prompt: f.request.prompt,
+    }))
+  )
+
+  await waitForCompletion(retryBatch.id)
+  return await ai.batch.results(retryBatch.id)
+}
+```
+
+### Priority Processing
+
+Process high-priority items first:
+
+```typescript
+import { ai } from 'sdk.do'
+
+async function processWithPriority(highPriority: any[], normalPriority: any[]) {
+  // Process high priority first
+  const highBatch = await ai.batch.create(
+    highPriority.map((item) => ({
+      custom_id: item.id,
+      prompt: item.prompt,
+    }))
+  )
+
+  // Process normal priority in parallel
+  const normalBatch = await ai.batch.create(
+    normalPriority.map((item) => ({
+      custom_id: item.id,
+      prompt: item.prompt,
+    }))
+  )
+
+  // Wait for high priority to complete first
+  await waitForCompletion(highBatch.id)
+  const highResults = await ai.batch.results(highBatch.id)
+
+  // Then get normal priority results
+  await waitForCompletion(normalBatch.id)
+  const normalResults = await ai.batch.results(normalBatch.id)
+
+  return {
+    high: highResults,
+    normal: normalResults,
+  }
+}
+```
+
+## Cost Optimization
+
+### Batch vs Real-Time Cost Comparison
+
+```typescript
+// Real-time processing (100% cost)
+for (const item of items) {
+  await ai.generate(item.prompt) // $0.01 per request
+}
+// Total: $10 for 1000 requests
+
+// Batch processing (50% cost)
+const batch = await ai.batch.create(items.map((item) => ({ prompt: item.prompt })))
+// Total: $5 for 1000 requests - 50% savings!
+```
+
+### When to Use Batch
+
+Use batch processing when:
+
+- Processing 100+ requests
+- Results not needed immediately
+- Cost is a concern
+- Processing can happen overnight
+
+Use real-time when:
+
+- Need immediate results
+- Processing < 100 requests
+- Interactive user experience required
+
+## Monitoring Batch Jobs
+
+### Track Multiple Batches
+
+Monitor multiple batch jobs:
+
+```typescript
+import { ai } from 'sdk.do'
+
+interface BatchJob {
+  id: string
+  name: string
+  startedAt: Date
+}
+
+async function monitorBatches(batches: BatchJob[]) {
+  const active = new Set(batches.map((b) => b.id))
+
+  while (active.size > 0) {
+    for (const batchId of active) {
+      const status = await ai.batch.status(batchId)
+      const batch = batches.find((b) => b.id === batchId)
+
+      console.log(`${batch.name}: ${status.completed}/${status.total}`)
+
+      if (status.status === 'completed' || status.status === 'failed') {
+        active.delete(batchId)
+
+        if (status.status === 'completed') {
+          console.log(`✓ ${batch.name} completed`)
+        } else {
+          console.log(`✗ ${batch.name} failed`)
+        }
+      }
+    }
+
+    if (active.size > 0) {
+      await new Promise((resolve) => setTimeout(resolve, 60000))
+    }
+  }
+}
+```
+
+### Batch Analytics
+
+Track batch performance:
+
+```typescript
+import { ai } from 'sdk.do'
+
+async function analyzeBatch(batchId: string) {
+  const status = await ai.batch.status(batchId)
+  const results = await ai.batch.results(batchId)
+
+  const successRate = (status.completed / status.total) * 100
+  const failureRate = (status.failed / status.total) * 100
+
+  const duration = new Date(status.completedAt).getTime() - new Date(status.createdAt).getTime()
+
+  console.log({
+    batchId,
+    total: status.total,
+    succeeded: status.completed,
+    failed: status.failed,
+    successRate: `${successRate.toFixed(2)}%`,
+    failureRate: `${failureRate.toFixed(2)}%`,
+    duration: `${(duration / 1000 / 60).toFixed(2)} minutes`,
+    costSavings: '50%',
+  })
+}
+```
+
+## Error Handling
+
+Handle batch errors gracefully:
+
+```typescript
+import { ai } from 'sdk.do'
+
+async function safeBatchProcess(requests: any[]) {
+  try {
+    // Create batch
+    const batch = await ai.batch.create(requests)
+
+    // Wait for completion with timeout
+    const timeout = 24 * 60 * 60 * 1000 // 24 hours
+    const startTime = Date.now()
+
+    while (true) {
+      if (Date.now() - startTime > timeout) {
+        throw new Error('Batch processing timeout')
+      }
+
+      const status = await ai.batch.status(batch.id)
+
+      if (status.status === 'completed') {
+        return await ai.batch.results(batch.id)
+      }
+
+      if (status.status === 'failed') {
+        throw new Error(`Batch failed: ${status.error}`)
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 60000))
+    }
+  } catch (error) {
+    console.error('Batch processing failed:', error)
+    throw error
+  }
+}
+```
+
+## Best Practices
+
+### 1. Use Custom IDs
+
+Assign meaningful custom IDs to track results:
+
+```typescript
+const requests = items.map((item) => ({
+  custom_id: item.$id, // Use entity ID
+  prompt: `Process ${item.name}`,
+}))
+```
+
+### 2. Implement Polling
+
+Check status periodically (recommended: 1 minute):
+
+```typescript
+while (status !== 'completed') {
+  await new Promise((resolve) => setTimeout(resolve, 60000))
+  status = await ai.batch.status(batchId)
+}
+```
+
+### 3. Handle Partial Failures
+
+Always check for individual request failures:
+
+```typescript
+const results = await ai.batch.results(batchId)
+
+const succeeded = results.filter((r) => !r.error)
+const failed = results.filter((r) => r.error)
+
+console.log(`Success: ${succeeded.length}, Failed: ${failed.length}`)
+```
+
+### 4. Set Reasonable Batch Sizes
+
+Optimal batch sizes:
+
+- **100-1,000**: Small batches, fast completion
+- **1,000-10,000**: Medium batches, good balance
+- **10,000-50,000**: Large batches, maximum savings
+
+### 5. Monitor Costs
+
+Track batch costs:
+
+```typescript
+const estimatedCost = requests.length * 0.00001 * 0.5 // 50% discount
+console.log(`Estimated cost: $${estimatedCost.toFixed(2)}`)
+```
+
+## Troubleshooting
+
+### Batch Taking Too Long
+
+Batches typically complete in 2-24 hours:
+
+```typescript
+// Check if batch is actually processing
+const status = await ai.batch.status(batchId)
+
+if (status.status === 'validating') {
+  console.log('Batch still validating requests')
+} else if (status.status === 'in_progress') {
+  console.log(`Progress: ${status.completed}/${status.total}`)
+}
+```
+
+### High Failure Rate
+
+If many requests fail:
+
+```typescript
+const results = await ai.batch.results(batchId)
+const errors = results.filter((r) => r.error)
+
+// Analyze error types
+const errorTypes = {}
+for (const error of errors) {
+  errorTypes[error.error.code] = (errorTypes[error.error.code] || 0) + 1
+}
+
+console.log('Error breakdown:', errorTypes)
+```
+
+## API Reference
+
+See the [API Reference](../api/) for complete function signatures.
+
+## Examples
+
+- [Structured Output](../examples/structured-output) - Batch structured generation
+
+## Next Steps
+
+- [Text Generation](./generation) - Generate AI content
+- [Embeddings](./embeddings) - Vector embeddings
+- [API Reference](../api/) - Complete API docs
+
+## License
+
+MIT (Open Source)

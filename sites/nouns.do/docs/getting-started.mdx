@@ -1,0 +1,650 @@
+---
+$id: https://nouns.do/docs/getting-started
+$type: TechArticle
+title: Getting Started with nouns.do
+description: Complete guide to using entity types and semantic nouns in Business-as-Code applications
+keywords: [getting started, nouns, entities, types, schema.org, tutorial]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Getting Started with nouns.do
+
+This guide will help you understand and use semantic entity types (nouns) in your Business-as-Code applications.
+
+## What Are Nouns?
+
+In Business-as-Code, **nouns** are entity types that represent the fundamental building blocks of your business domain:
+
+- **People**: Employees, customers, users, contacts
+- **Organizations**: Companies, departments, teams
+- **Products**: Physical goods, digital products, services
+- **Places**: Offices, stores, warehouses, addresses
+- **Things**: Documents, assets, equipment
+- **Concepts**: Orders, invoices, contracts, projects
+
+Nouns define **what** things are, while verbs define **what** you can do with them.
+
+## Prerequisites
+
+- Node.js 18+ installed
+- Basic TypeScript knowledge
+- SDK.do installed (`pnpm add sdk.do`)
+
+## Installation
+
+Install the core SDK which includes nouns.do:
+
+```bash
+pnpm add sdk.do
+```
+
+Optionally install Schema.org type definitions:
+
+```bash
+pnpm add schema.org.ai
+```
+
+## Your First Noun
+
+Create a simple Person entity:
+
+```typescript
+import $, { db } from 'sdk.do'
+
+async function createPerson() {
+  const person = await db.create($.Person, {
+    $type: 'Person',
+    name: 'Jane Smith',
+    email: 'jane@example.com',
+    jobTitle: 'Software Engineer',
+  })
+
+  console.log('Created person:', person.$id)
+  return person
+}
+
+createPerson()
+```
+
+Run the code:
+
+```bash
+tsx index.ts
+```
+
+Output:
+
+```
+Created person: person-abc123
+```
+
+## Understanding the $ Proxy
+
+The `$` proxy provides type-safe access to all Schema.org entity types:
+
+```typescript
+import $ from 'sdk.do'
+
+// Access entity types
+$.Person // Person type
+$.Organization // Organization type
+$.Product // Product type
+$.Place // Place type
+$.Event // Event type
+
+// Use in operations
+const person = await db.create($.Person, { name: 'John' })
+const people = await db.list($.Person)
+```
+
+**Why use `$`?**
+
+- **Type Safety**: TypeScript knows which properties are valid
+- **IDE Support**: Autocomplete for all 817+ Schema.org types
+- **Semantic Clarity**: Code is self-documenting
+- **AI Understanding**: AI agents can parse semantic patterns
+
+## Core Entity Types
+
+### Person
+
+Represents an individual person:
+
+```typescript
+import type { Person } from 'schema.org.ai'
+
+const person: Person = await db.create($.Person, {
+  $type: 'Person',
+  name: 'John Doe',
+  givenName: 'John',
+  familyName: 'Doe',
+  email: 'john@example.com',
+  telephone: '+1-555-0123',
+  jobTitle: 'Senior Developer',
+  worksFor: {
+    $type: 'Organization',
+    name: 'Acme Corp',
+  },
+})
+```
+
+**Common Person Properties**:
+
+- `name` - Full name
+- `givenName` - First name
+- `familyName` - Last name
+- `email` - Email address
+- `telephone` - Phone number
+- `jobTitle` - Job title
+- `worksFor` - Employer organization
+
+### Organization
+
+Represents a company or organization:
+
+```typescript
+import type { Organization } from 'schema.org.ai'
+
+const organization: Organization = await db.create($.Organization, {
+  $type: 'Organization',
+  name: 'Acme Corporation',
+  legalName: 'Acme Corporation Inc.',
+  taxID: '12-3456789',
+  industry: 'Technology',
+  foundingDate: '2020-01-15',
+  numberOfEmployees: 250,
+  url: 'https://acme.com',
+  address: {
+    $type: 'PostalAddress',
+    streetAddress: '123 Main St',
+    addressLocality: 'San Francisco',
+    addressRegion: 'CA',
+    postalCode: '94102',
+    addressCountry: 'US',
+  },
+})
+```
+
+**Common Organization Properties**:
+
+- `name` - Organization name
+- `legalName` - Legal entity name
+- `taxID` - Tax identification number
+- `industry` - Industry sector
+- `foundingDate` - Date founded
+- `numberOfEmployees` - Employee count
+- `address` - Physical address
+
+### Product
+
+Represents a product or service:
+
+```typescript
+import type { Product } from 'schema.org.ai'
+
+const product: Product = await db.create($.Product, {
+  $type: 'Product',
+  name: 'Smart Widget 2025',
+  brand: 'Acme',
+  model: 'SW-2025',
+  sku: 'ACM-SW-001',
+  description: 'Next-generation smart device',
+  price: 299.99,
+  priceCurrency: 'USD',
+  availability: 'InStock',
+  category: 'Electronics',
+  image: 'https://example.com/product.jpg',
+})
+```
+
+**Common Product Properties**:
+
+- `name` - Product name
+- `brand` - Brand name
+- `model` - Model number
+- `sku` - Stock keeping unit
+- `description` - Product description
+- `price` - Price amount
+- `priceCurrency` - Currency code
+- `availability` - Stock status
+
+### Place
+
+Represents a physical location:
+
+```typescript
+import type { Place } from 'schema.org.ai'
+
+const place: Place = await db.create($.Place, {
+  $type: 'Place',
+  name: 'Acme Headquarters',
+  description: 'Main office building',
+  address: {
+    $type: 'PostalAddress',
+    streetAddress: '456 Tech Boulevard',
+    addressLocality: 'San Francisco',
+    addressRegion: 'CA',
+    postalCode: '94103',
+    addressCountry: 'US',
+  },
+  geo: {
+    $type: 'GeoCoordinates',
+    latitude: 37.7749,
+    longitude: -122.4194,
+  },
+  telephone: '+1-555-0199',
+  openingHours: 'Mo-Fr 09:00-18:00',
+})
+```
+
+**Common Place Properties**:
+
+- `name` - Place name
+- `address` - Postal address
+- `geo` - Geographic coordinates
+- `telephone` - Contact phone
+- `openingHours` - Business hours
+
+## Working with Nouns
+
+### Creating Entities
+
+Use `db.create()` to create entity instances:
+
+```typescript
+import $, { db } from 'sdk.do'
+
+// Create a person
+const person = await db.create($.Person, {
+  $type: 'Person',
+  name: 'Alice Johnson',
+  email: 'alice@example.com',
+})
+
+// Create an organization
+const organization = await db.create($.Organization, {
+  $type: 'Organization',
+  name: 'Tech Startup Inc.',
+  industry: 'Software',
+})
+
+// Create a product
+const product = await db.create($.Product, {
+  $type: 'Product',
+  name: 'SaaS Platform',
+  price: 99.99,
+  priceCurrency: 'USD',
+})
+```
+
+### Reading Entities
+
+Use `db.get()` and `db.list()` to read entities:
+
+```typescript
+// Get single entity by ID
+const person = await db.get($.Person, 'person-123')
+
+// List all entities of a type
+const allPeople = await db.list($.Person)
+
+// List with filters
+const engineers = await db.list($.Person, {
+  where: { jobTitle: { $contains: 'Engineer' } },
+  limit: 10,
+  orderBy: { name: 'asc' },
+})
+
+// Count entities
+const personCount = await db.count($.Person)
+```
+
+### Updating Entities
+
+Use `db.update()` to modify entities:
+
+```typescript
+// Update entity properties
+await db.update(person, {
+  jobTitle: 'Senior Engineer',
+  telephone: '+1-555-0199',
+})
+
+// Update nested properties
+await db.update(organization, {
+  address: {
+    $type: 'PostalAddress',
+    streetAddress: '789 New St',
+    addressLocality: 'Seattle',
+  },
+})
+```
+
+### Deleting Entities
+
+Use `db.delete()` to remove entities:
+
+```typescript
+// Delete single entity
+await db.delete(person)
+
+// Delete by ID
+await db.delete($.Person, 'person-123')
+
+// Delete multiple entities
+await db.deleteMany($.Person, {
+  where: { jobTitle: null },
+})
+```
+
+## Type Hierarchies
+
+Schema.org types form a hierarchy where more specific types inherit from general ones:
+
+```typescript
+// Thing (base type)
+//   └── Person
+//         ├── Patient
+//         └── ...
+//   └── Organization
+//         ├── Corporation
+//         ├── LocalBusiness
+//         └── ...
+//   └── CreativeWork
+//         ├── Article
+//         ├── Book
+//         └── ...
+
+// Create specific subtypes
+const corporation = await db.create($.Organization, {
+  $type: 'Corporation', // More specific than Organization
+  name: 'Acme Corp',
+  legalName: 'Acme Corporation Inc.',
+})
+
+const article = await db.create($.Article, {
+  $type: 'Article', // More specific than CreativeWork
+  headline: 'News Story',
+  author: {
+    $type: 'Person',
+    name: 'Jane Smith',
+  },
+})
+```
+
+## Linked Data with $id and $type
+
+Every entity has `$id` and `$type` properties for linked data:
+
+```typescript
+const person = await db.create($.Person, {
+  $type: 'Person',
+  name: 'John Doe',
+  email: 'john@example.com',
+})
+
+console.log(person.$id) // 'person-abc123' or full URL
+console.log(person.$type) // 'Person'
+
+// Use $id to reference entities
+const organization = await db.create($.Organization, {
+  $type: 'Organization',
+  name: 'Acme Corp',
+  founder: {
+    $id: person.$id, // Reference by ID
+    $type: 'Person',
+  },
+})
+```
+
+## Relationships Between Nouns
+
+Entities can reference each other:
+
+```typescript
+// Create entities
+const person = await db.create($.Person, {
+  $type: 'Person',
+  name: 'Sarah Chen',
+})
+
+const organization = await db.create($.Organization, {
+  $type: 'Organization',
+  name: 'Tech Co',
+})
+
+// Create relationship using verbs
+await db.relate(person, $.worksFor, organization)
+
+// Query relationships
+const employer = await db.related(person, $.worksFor, $.Organization)
+console.log(employer.name) // 'Tech Co'
+
+const employees = await db.related(organization, $.employs, $.Person)
+console.log(employees.length) // Number of employees
+```
+
+## TypeScript Types
+
+Use Schema.org TypeScript types for type safety:
+
+```typescript
+import type { Person, Organization, Product } from 'schema.org.ai'
+
+// Type-safe entity creation
+const person: Person = {
+  $type: 'Person',
+  name: 'Jane Smith',
+  email: 'jane@example.com',
+  jobTitle: 'CTO',
+}
+
+// Type-safe function parameters
+async function createEmployee(data: Person): Promise<Person> {
+  return await db.create($.Person, data)
+}
+
+// Type-safe query results
+const people: Person[] = await db.list($.Person)
+
+// TypeScript ensures correctness
+person.name // ✓ Valid property
+person.jobTitle // ✓ Valid property
+person.invalidProp // ✗ TypeScript error
+```
+
+## Validation
+
+Validate entities against their types:
+
+```typescript
+import { validate } from 'sdk.do'
+
+const person = {
+  $type: 'Person',
+  name: 'John',
+  email: 'invalid-email', // Invalid format
+}
+
+const result = validate(person, $.Person)
+
+if (!result.valid) {
+  console.error('Validation errors:', result.errors)
+  // errors: [{ path: 'email', message: 'Invalid email format' }]
+}
+
+// Only create if valid
+if (result.valid) {
+  await db.create($.Person, person)
+}
+```
+
+## AI-Generated Entities
+
+Use AI to generate entities:
+
+```typescript
+import { ai } from 'sdk.do'
+
+// Generate a person
+const person = await ai.generate('Create a software engineer profile named Alex Kim', { schema: $.Person })
+
+console.log(person)
+// {
+//   $type: 'Person',
+//   name: 'Alex Kim',
+//   jobTitle: 'Software Engineer',
+//   email: 'alex.kim@example.com',
+//   ...
+// }
+
+// Generate multiple entities
+const products = await ai.batch([
+  { prompt: 'Create a laptop product', schema: $.Product },
+  { prompt: 'Create a phone product', schema: $.Product },
+  { prompt: 'Create a tablet product', schema: $.Product },
+])
+
+// AI respects the type schema
+products.forEach((product) => {
+  console.log(product.$type) // 'Product'
+  console.log(product.name) // AI-generated name
+})
+```
+
+## Common Patterns
+
+### Multi-Entity Creation
+
+Create multiple related entities:
+
+```typescript
+async function createCompany() {
+  // Create organization
+  const org = await db.create($.Organization, {
+    $type: 'Organization',
+    name: 'New Startup',
+    industry: 'Technology',
+  })
+
+  // Create employees
+  const ceo = await db.create($.Person, {
+    $type: 'Person',
+    name: 'Jane Founder',
+    jobTitle: 'CEO',
+    worksFor: { $id: org.$id, $type: 'Organization' },
+  })
+
+  const cto = await db.create($.Person, {
+    $type: 'Person',
+    name: 'Bob Tech',
+    jobTitle: 'CTO',
+    worksFor: { $id: org.$id, $type: 'Organization' },
+  })
+
+  return { org, ceo, cto }
+}
+```
+
+### Conditional Entity Creation
+
+Create entities based on conditions:
+
+```typescript
+async function createUserAccount(email: string, role: string) {
+  // Check if person exists
+  const existing = await db.list($.Person, {
+    where: { email },
+    limit: 1,
+  })
+
+  if (existing.length > 0) {
+    console.log('Person already exists')
+    return existing[0]
+  }
+
+  // Create new person
+  const person = await db.create($.Person, {
+    $type: 'Person',
+    email,
+    jobTitle: role,
+  })
+
+  return person
+}
+```
+
+### Batch Entity Operations
+
+Process multiple entities efficiently:
+
+```typescript
+// Create multiple entities
+const people = await Promise.all([db.create($.Person, { name: 'Alice' }), db.create($.Person, { name: 'Bob' }), db.create($.Person, { name: 'Carol' })])
+
+// Update multiple entities
+await Promise.all(people.map((person) => db.update(person, { jobTitle: 'Engineer' })))
+
+// Query multiple types
+const [people, orgs, products] = await Promise.all([db.list($.Person), db.list($.Organization), db.list($.Product)])
+```
+
+## Next Steps
+
+Now that you understand the basics of nouns.do, explore:
+
+1. **[Architecture](./architecture)** - Learn the system design
+2. **[Best Practices](./best-practices)** - Recommended patterns
+3. **[API Reference](../api/reference)** - Complete API docs
+4. **[Examples](../examples/)** - Practical code examples
+5. **[verbs.do](https://verbs.do)** - Learn about actions on entities
+6. **[resources.do](https://resources.do)** - Working with entity instances
+
+## Troubleshooting
+
+### Import Errors
+
+If you see import errors, ensure SDK is installed:
+
+```bash
+pnpm add sdk.do
+```
+
+### Type Errors
+
+Install Schema.org type definitions:
+
+```bash
+pnpm add schema.org.ai
+```
+
+### Database Connection
+
+Ensure `SDK_DATABASE_URL` is set in `.env`:
+
+```bash
+SDK_DATABASE_URL=postgres://user:pass@localhost:5432/db
+```
+
+### Validation Failures
+
+Check that entity data matches the type schema:
+
+```typescript
+import { validate } from 'sdk.do'
+
+const result = validate(entity, $.Person)
+console.log(result.errors) // See what's wrong
+```
+
+## Support
+
+- **Documentation**: [nouns.do](https://nouns.do)
+- **GitHub**: [github.com/dot-do/ai](https://github.com/dot-do/ai)
+- **Discord**: Join our community
+
+---
+
+Ready to dive deeper? Continue to [Architecture](./architecture) to understand how nouns.do works under the hood.

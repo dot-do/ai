@@ -1,0 +1,634 @@
+---
+$id: https://docs.do
+$type: WebSite
+name: docs.do
+description: Unified documentation hub for the .do platform with semantic search, versioning, and multi-language support
+keywords: [documentation, docs, search, versioning, api-reference, guides, tutorials, semantic-search]
+license: MIT
+---
+
+# docs.do
+
+**Unified documentation hub for the .do platform with semantic search, versioning, and multi-language support**
+
+docs.do is the central documentation aggregation and discovery platform for the entire `.do` ecosystem. It provides semantic search across all documentation, intelligent cross-linking, version management, and multi-language support for technical documentation.
+
+## Quick Start
+
+```bash
+pnpm add docs.do
+```
+
+```typescript
+import $, { docs } from 'docs.do'
+
+// Search documentation semantically
+const results = await docs.search('How do I create a database entity?', {
+  domains: ['sdk.do', 'database.do'],
+  limit: 10,
+})
+
+// Get documentation for a specific topic
+const guide = await docs.get($.Guide, 'getting-started-with-sdk')
+
+// Index new documentation
+await docs.index({
+  $type: 'TechArticle',
+  title: 'Building Your First Agent',
+  content: '...',
+  domain: 'agents.do',
+  version: '1.0.0',
+})
+
+// Get all versions of a document
+const versions = await docs.versions('getting-started-with-sdk')
+```
+
+## Key Features
+
+### Semantic Search
+
+Search across all `.do` documentation using natural language:
+
+```typescript
+import { docs } from 'docs.do'
+
+// Natural language search
+const results = await docs.search('create business entity with relationships', {
+  domains: ['sdk.do', 'database.do', 'graphdl.do'],
+  limit: 20,
+  minScore: 0.7,
+})
+
+// Results include relevance scoring and context
+results.forEach((result) => {
+  console.log(`${result.title} (${result.domain})`)
+  console.log(`Score: ${result.score}`)
+  console.log(`Excerpt: ${result.excerpt}`)
+  console.log(`URL: ${result.url}`)
+})
+
+// Search with filters
+const apiDocs = await docs.search('authentication', {
+  type: 'APIReference',
+  domains: ['auth.do', 'oauth.do', 'identity.do'],
+})
+
+// Search with semantic embeddings
+const embedding = await docs.embed('database operations')
+const similar = await docs.findSimilar(embedding, {
+  threshold: 0.8,
+  limit: 10,
+})
+```
+
+### Documentation Versioning
+
+Manage multiple versions of documentation:
+
+```typescript
+import { docs } from 'docs.do'
+
+// Create versioned documentation
+await docs.create({
+  $type: 'TechArticle',
+  $id: 'guide/getting-started',
+  title: 'Getting Started',
+  content: '...',
+  version: '2.0.0',
+  previousVersion: '1.0.0',
+})
+
+// Get specific version
+const v1 = await docs.get('guide/getting-started', { version: '1.0.0' })
+const v2 = await docs.get('guide/getting-started', { version: '2.0.0' })
+
+// Get latest version
+const latest = await docs.get('guide/getting-started')
+
+// List all versions
+const versions = await docs.versions('guide/getting-started')
+// Returns: [{ version: '2.0.0', date: '...' }, { version: '1.0.0', date: '...' }]
+
+// Compare versions
+const diff = await docs.diff('guide/getting-started', '1.0.0', '2.0.0')
+```
+
+### Multi-Language Support
+
+Documentation in multiple languages with automatic translation:
+
+```typescript
+import { docs } from 'docs.do'
+
+// Create documentation with translations
+await docs.create({
+  $type: 'TechArticle',
+  title: 'Getting Started',
+  content: '...',
+  language: 'en',
+  translations: {
+    es: {
+      title: 'Comenzando',
+      content: '...',
+    },
+    fr: {
+      title: 'Commencer',
+      content: '...',
+    },
+  },
+})
+
+// Get documentation in specific language
+const spanish = await docs.get('guide/getting-started', { language: 'es' })
+
+// Auto-translate documentation
+const translated = await docs.translate('guide/getting-started', 'de')
+
+// List available languages
+const languages = await docs.languages()
+// Returns: ['en', 'es', 'fr', 'de', 'ja', 'zh']
+```
+
+### Cross-Domain Linking
+
+Intelligent cross-linking across all `.do` domains:
+
+```typescript
+import { docs } from 'docs.do'
+
+// Find related documentation
+const related = await docs.related('sdk.do/getting-started', {
+  domains: ['database.do', 'events.do', 'workflows.do'],
+  limit: 5,
+})
+
+// Get documentation graph
+const graph = await docs.graph('sdk.do', {
+  depth: 2,
+  includeExternal: true,
+})
+
+// Find documentation dependencies
+const deps = await docs.dependencies('sdk.do/getting-started')
+// Returns: ['database.do/crud-operations', 'events.do/listeners', ...]
+
+// Get backlinks
+const backlinks = await docs.backlinks('sdk.do/getting-started')
+```
+
+### Documentation Generation
+
+Generate documentation from code and schemas:
+
+```typescript
+import { docs, ai } from 'docs.do'
+
+// Generate from TypeScript types
+const apiDocs = await docs.generateFromTypes('./src/api.ts', {
+  format: 'markdown',
+  includeExamples: true,
+})
+
+// Generate from Schema.org types
+const schemaDocs = await docs.generateFromSchema($.Product, {
+  includeRelationships: true,
+  includeExamples: true,
+})
+
+// Generate from function signatures
+const functionDocs = await docs.generateFromFunction(myFunction, {
+  includeUsage: true,
+  includeTests: true,
+})
+
+// AI-powered documentation generation
+const guide = await ai.generate('Write a guide for database relationships', {
+  schema: $.TechArticle,
+  domain: 'database.do',
+  includeCodeExamples: true,
+})
+```
+
+### Documentation Analytics
+
+Track documentation usage and effectiveness:
+
+```typescript
+import { docs } from 'docs.do'
+
+// Track page view
+await docs.track('page_view', {
+  documentId: 'sdk.do/getting-started',
+  userId: 'user-123',
+  timestamp: new Date(),
+})
+
+// Track search query
+await docs.track('search', {
+  query: 'database relationships',
+  resultsCount: 15,
+  clickedResult: 'database.do/relationships',
+})
+
+// Get analytics
+const analytics = await docs.analytics('sdk.do/getting-started', {
+  from: '2025-01-01',
+  to: '2025-01-31',
+})
+
+// Popular pages
+const popular = await docs.popular({ limit: 10 })
+
+// Common searches
+const searches = await docs.searchAnalytics({ limit: 20 })
+```
+
+## Semantic Patterns
+
+docs.do uses `$.Subject.predicate.Object` patterns for documentation operations:
+
+```typescript
+import $ from 'docs.do'
+
+// Documentation types
+$.TechArticle
+$.APIReference
+$.HowTo
+$.Course
+$.VideoObject
+$.CodeSnippet
+
+// Predicates
+$.about
+$.mentions
+$.relatedTo
+$.dependsOn
+$.isPartOf
+$.hasPart
+
+// Complete patterns
+$.TechArticle.about.SoftwareApplication
+$.APIReference.relatedTo.TechArticle
+$.HowTo.isPartOf.Course
+$.VideoObject.about.Product
+
+// Use in queries
+const articles = await docs.list($.TechArticle, {
+  where: {
+    [$.about]: $.Database,
+  },
+})
+
+// Create relationships
+await docs.relate(article, $.relatedTo, guide)
+await docs.relate(howto, $.isPartOf, course)
+```
+
+## Documentation
+
+- [Getting Started](./docs/getting-started) - Setup and basic usage
+- [Architecture](./docs/architecture) - System architecture and design
+- [Best Practices](./docs/best-practices) - Documentation best practices
+- [Troubleshooting](./docs/troubleshooting) - Common issues and solutions
+
+## Examples
+
+- [Basic Usage](./examples/basic-usage) - Basic documentation operations
+- [Advanced Patterns](./examples/advanced-patterns) - Advanced search and linking
+- [Integration](./examples/integration) - Integrating with your platform
+- [Real-World Use Case](./examples/real-world-use-case) - Complete documentation system
+
+## API Reference
+
+Complete documentation for all docs.do functions:
+
+- [API Reference](./api/reference) - Complete API documentation
+
+## Integration with .do Platform
+
+docs.do integrates seamlessly with other `.do` platform domains:
+
+- **[sdk.do](https://sdk.do)** - Core SDK documentation
+- **[cli.do](https://cli.do)** - CLI command documentation
+- **[database.do](https://database.do)** - Database documentation
+- **[ai.do](https://ai.do)** - AI-powered documentation features
+- **[search.org.ai](https://searches.org.ai)** - Semantic search patterns
+- **[learn.do](https://learn.do)** - Learning resources and courses
+- **[cms.do](https://cms.do)** - Content management for documentation
+
+## Use Cases
+
+### Centralized Documentation Hub
+
+```typescript
+import $, { docs } from 'docs.do'
+
+// Index all documentation from multiple domains
+const domains = ['sdk.do', 'database.do', 'events.do', 'workflows.do']
+
+for (const domain of domains) {
+  await docs.indexDomain(domain, {
+    includeExamples: true,
+    includeAPI: true,
+  })
+}
+
+// Unified search across all domains
+const results = await docs.search('event listeners', {
+  domains,
+  groupByDomain: true,
+})
+
+// Results organized by domain
+results.forEach((group) => {
+  console.log(`\n${group.domain}:`)
+  group.results.forEach((doc) => {
+    console.log(`  - ${doc.title}`)
+  })
+})
+```
+
+### Developer Portal
+
+```typescript
+import { docs, ai } from 'docs.do'
+
+// Create comprehensive developer portal
+async function buildDeveloperPortal() {
+  // Generate quick start guides
+  const quickStarts = await ai.batch(
+    ['sdk.do', 'database.do', 'events.do'].map((domain) => ({
+      prompt: `Generate a quick start guide for ${domain}`,
+      schema: $.TechArticle,
+    }))
+  )
+
+  // Index API references
+  for (const domain of ['sdk.do', 'database.do', 'events.do']) {
+    await docs.indexAPI(domain, {
+      format: 'openapi',
+      includeExamples: true,
+    })
+  }
+
+  // Create navigation structure
+  const nav = await docs.buildNav({
+    structure: 'hierarchical',
+    includeSearch: true,
+    includeVersions: true,
+  })
+
+  return { quickStarts, nav }
+}
+```
+
+### Documentation Migration
+
+```typescript
+import { docs } from 'docs.do'
+
+// Migrate from legacy documentation system
+async function migrateDocs(legacyDocs) {
+  for (const doc of legacyDocs) {
+    // Parse legacy format
+    const parsed = await docs.parse(doc.content, {
+      format: doc.format, // 'markdown', 'html', 'rst'
+    })
+
+    // Convert to semantic format
+    const semantic = await docs.convert(parsed, {
+      addSemanticTypes: true,
+      extractCodeExamples: true,
+      generateMetadata: true,
+    })
+
+    // Index with versioning
+    await docs.create(semantic, {
+      version: doc.version || '1.0.0',
+      preserveHistory: true,
+    })
+  }
+
+  console.log('Migration complete')
+}
+```
+
+### AI-Powered Documentation Assistant
+
+```typescript
+import { docs, ai } from 'docs.do'
+
+// Interactive documentation assistant
+async function documentationAssistant(userQuery: string) {
+  // Search documentation
+  const docs = await docs.search(userQuery, {
+    limit: 5,
+    includeContext: true,
+  })
+
+  // Generate response with AI
+  const response = await ai.generate(`Answer this question using the provided documentation: ${userQuery}`, {
+    context: docs,
+    includeReferences: true,
+  })
+
+  return {
+    answer: response.answer,
+    sources: docs.map((d) => ({ title: d.title, url: d.url })),
+  }
+}
+
+// Example usage
+const result = await documentationAssistant('How do I create a database relationship between two entities?')
+
+console.log(result.answer)
+console.log('\nSources:')
+result.sources.forEach((s) => console.log(`- ${s.title}: ${s.url}`))
+```
+
+## TypeScript Support
+
+docs.do is built with TypeScript and provides full type safety:
+
+```typescript
+import { docs } from 'docs.do'
+import type { TechArticle, APIReference, HowTo } from 'schema.org.ai'
+
+// Typed documentation operations
+const article: TechArticle = await docs.get($.TechArticle, 'guide-id')
+
+// Typed search results
+interface SearchResult {
+  title: string
+  url: string
+  excerpt: string
+  score: number
+  type: string
+}
+
+const results: SearchResult[] = await docs.search('query')
+
+// Typed creation
+const guide: TechArticle = await docs.create($.TechArticle, {
+  headline: 'Getting Started',
+  articleBody: '...',
+  author: { $type: 'Organization', name: '.do Platform' },
+})
+```
+
+## Environment Configuration
+
+Configure docs.do with environment variables:
+
+```bash
+# Required
+DOCS_DATABASE_URL=postgres://...
+DOCS_OPENAI_API_KEY=sk-...
+
+# Optional
+DOCS_ELASTICSEARCH_URL=http://localhost:9200  # For advanced search
+DOCS_REDIS_URL=redis://localhost:6379         # For caching
+DOCS_AI_MODEL=gpt-5                           # AI model for generation
+DOCS_DEFAULT_LANGUAGE=en                      # Default language
+DOCS_ENABLE_ANALYTICS=true                    # Track usage analytics
+DOCS_CACHE_TTL=3600                           # Cache TTL in seconds
+```
+
+## Best Practices
+
+### Structure Documentation Semantically
+
+Always use semantic types for documentation:
+
+```typescript
+// Good - semantic structure
+await docs.create({
+  $type: 'TechArticle',
+  headline: 'Getting Started',
+  articleBody: '...',
+  about: { $type: 'SoftwareApplication', name: 'sdk.do' },
+})
+
+// Avoid - unstructured
+await docs.create({
+  title: 'Getting Started',
+  content: '...',
+  tags: ['sdk', 'getting-started'],
+})
+```
+
+### Use Semantic Search
+
+Leverage semantic search for better discoverability:
+
+```typescript
+// Good - semantic search with context
+const results = await docs.search('database relationships', {
+  includeContext: true,
+  semanticBoost: 1.5,
+})
+
+// Avoid - basic keyword search
+const results = await docs.search('database AND relationships')
+```
+
+### Version Everything
+
+Maintain version history for all documentation:
+
+```typescript
+// Good - versioned updates
+await docs.update('guide-id', newContent, {
+  version: '2.0.0',
+  changeLog: 'Updated for new API changes',
+})
+
+// Avoid - unversioned updates
+await docs.update('guide-id', newContent)
+```
+
+### Cross-Link Extensively
+
+Create rich documentation graphs:
+
+```typescript
+// Good - explicit relationships
+await docs.relate(guide, $.relatedTo, apiReference)
+await docs.relate(howto, $.dependsOn, concept)
+
+// Avoid - isolated documentation
+await docs.create(guide) // No relationships
+```
+
+## Troubleshooting
+
+### Search Returns No Results
+
+Ensure documentation is properly indexed:
+
+```bash
+# Rebuild search index
+pnpm docs reindex --all
+
+# Or programmatically
+await docs.reindex({ force: true })
+```
+
+### Version Conflicts
+
+Resolve version conflicts with merge strategy:
+
+```typescript
+const resolved = await docs.resolveConflict('guide-id', {
+  strategy: 'latest',
+  preserveHistory: true,
+})
+```
+
+### Slow Search Performance
+
+Enable Elasticsearch for production:
+
+```bash
+export DOCS_ELASTICSEARCH_URL=http://localhost:9200
+```
+
+### Translation Issues
+
+Verify AI model configuration:
+
+```bash
+export DOCS_AI_MODEL=gpt-5
+export DOCS_OPENAI_API_KEY=sk-your-key
+```
+
+## License
+
+MIT (Open Source)
+
+docs.do is open-source software released under the MIT License. You are free to use, modify, and distribute it for any purpose.
+
+## Resources
+
+- [GitHub Repository](https://github.com/dot-do/ai)
+- [Issue Tracker](https://github.com/dot-do/ai/issues)
+- [Contributing Guide](https://github.com/dot-do/ai/blob/main/CONTRIBUTING.md)
+- [Changelog](https://github.com/dot-do/ai/blob/main/CHANGELOG.md)
+
+## Related Projects
+
+- **learn.do** - Learning resources and courses
+- **cms.do** - Content management system
+- **search.org.ai** - Semantic search patterns
+- **sdk.do** - Core SDK with documentation helpers
+
+## Contributing
+
+Contributions are welcome! docs.do is part of the [`.do` platform](https://github.com/dot-do/platform) ecosystem.
+
+See [CONTRIBUTING.md](https://github.com/dot-do/ai/blob/main/CONTRIBUTING.md) for guidelines.
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

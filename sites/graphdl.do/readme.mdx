@@ -1,0 +1,463 @@
+---
+$id: https://graphdl.do
+$type: WebSite
+name: graphdl.do
+description: Semantic graph types with $.Subject.predicate.Object patterns for Business-as-Code
+keywords: [graphdl, semantic, graph, rdf, linked-data, schema.org, gs1, onet, typescript, business-as-code]
+license: MIT
+---
+
+# graphdl.do
+
+**Semantic graph types with `$.Subject.predicate.Object` patterns for Business-as-Code**
+
+graphdl is a TypeScript library for building semantic graphs using natural, intuitive patterns. It provides the `$` semantic context proxy for creating type-safe `$.Subject.predicate.Object` relationships, along with builders for triples, graphs, and comprehensive semantic vocabulary support from Schema.org, GS1, and O\*NET.
+
+## Quick Start
+
+```bash
+pnpm add graphdl
+```
+
+```typescript
+import $ from 'graphdl'
+
+// Create semantic paths using property access
+const path = $.Person.worksFor.Organization
+console.log(String(path)) // "$.Person.worksFor.Organization"
+
+// Use in real scenarios
+const johnWorksForAcme = $.John.worksFor.Acme
+console.log(String(johnWorksForAcme)) // "$.John.worksFor.Acme"
+
+// Create relationships with context
+const employmentRelation = $.Employee.employs.Person
+const productLocation = $.Product.locatedAt.Warehouse
+```
+
+## Key Features
+
+### The $ Semantic Proxy
+
+The heart of graphdl is the `$` proxy - a type-safe way to create semantic paths using property access:
+
+```typescript
+import $ from 'graphdl'
+
+// Natural semantic patterns
+$.Person.hasOccupation.Occupation
+$.Organization.owns.Brand
+$.Product.locatedAt.Warehouse
+$.Order.shipping.Customer
+
+// Works with any identifier
+$.John.worksFor.Acme
+$.Acme.sells.Widget
+$.Widget.manufacturedAt.Factory
+
+// Convert to string
+String($.Person.worksFor.Organization)
+// "$.Person.worksFor.Organization"
+```
+
+### Triple Creation
+
+Build semantic triples (Subject-Predicate-Object statements):
+
+```typescript
+import { triple, createTriple } from 'graphdl'
+
+// Using builder pattern
+const t1 = triple('Person:john').predicate('worksFor').object('Organization:acme').context('https://schema.org').build()
+
+// Using function
+const t2 = createTriple('Person:john', 'hasSkill', 'Skill:typescript', {
+  context: 'https://schema.org',
+  metadata: { confidence: 0.95 },
+})
+```
+
+### Graph Building
+
+Create semantic graphs with nodes, edges, and relationships:
+
+```typescript
+import { graph, node, edge } from 'graphdl'
+
+const myGraph = graph()
+  .context('https://schema.org')
+  .node(
+    node('john', 'Person', {
+      name: 'John Doe',
+      email: 'john@example.com',
+    })
+  )
+  .node(
+    node('acme', 'Organization', {
+      name: 'Acme Corp',
+    })
+  )
+  .edge(edge('john', 'worksFor', 'acme'))
+  .metadata({
+    created: new Date().toISOString(),
+    source: 'user-input',
+  })
+  .build()
+
+// Export as JSON-LD
+const jsonld = graph()
+  .context('https://schema.org')
+  .nodes([node('john', 'Person', { name: 'John Doe' }), node('acme', 'Organization', { name: 'Acme Corp' })])
+  .edge(edge('john', 'worksFor', 'acme'))
+  .toJSONLD()
+```
+
+### Semantic Naming Conventions
+
+Built-in helpers for consistent naming patterns across Business-as-Code:
+
+```typescript
+import { toPlural, toActivity, toEvent } from 'graphdl'
+
+// Collections (plural)
+toPlural('order') // 'orders'
+toPlural('person') // 'people'
+toPlural('category') // 'categories'
+
+// Activities (present continuous)
+toActivity('create') // 'creating'
+toActivity('process') // 'processing'
+toActivity('send') // 'sending'
+
+// Events (past tense)
+toEvent('create') // 'created'
+toEvent('send') // 'sent'
+toEvent('process') // 'processed'
+```
+
+### Rich Vocabulary Support
+
+Works seamlessly with Schema.org, GS1, and O\*NET vocabularies:
+
+```typescript
+import $ from 'graphdl'
+import type { Thing } from 'schema.org.ai'
+import type { ObjectEvent } from 'gs1.org.ai'
+import type { Occupation } from 'soc.org.ai'
+
+// Schema.org patterns
+const personPath = $.Person.hasOccupation.Occupation
+const orgPath = $.Organization.owns.Brand
+
+// GS1 supply chain patterns (camelCase)
+const shipmentPath = $.Shipment.inTransit.Warehouse
+const productPath = $.Product.receiving.DistributionCenter
+
+// O*NET occupation patterns
+const skillPath = $.Occupation.requiresSkill.Programming
+const abilityPath = $.SoftwareDeveloper.requiresAbility.CriticalThinking
+```
+
+## Semantic Patterns
+
+graphdl enables `$.Subject.predicate.Object` patterns that mirror natural language and semantic web standards:
+
+### Pattern Structure
+
+```typescript
+// Pattern: $.Subject.predicate.Object
+$.Person.worksFor.Organization
+$.Product.manufacturedBy.Organization
+$.Order.fulfilledBy.Service
+$.Customer.purchasedFrom.Business
+
+// Each part represents:
+// $        - Semantic context prefix
+// Subject  - The entity type or instance
+// predicate - The relationship or property
+// Object   - The target entity type or instance
+```
+
+### Using with Database Operations
+
+```typescript
+import $, { db } from 'sdk.do'
+
+// List entities using semantic types
+const businesses = await db.list($.Business, {
+  where: { industry: 'Technology' },
+})
+
+// Create relationships
+await db.relate(person, $.worksFor, organization)
+await db.relate(business, $.owns, brand)
+
+// Query with semantic patterns
+const employees = await db.list($.Person, {
+  where: {
+    [$.worksFor]: organization.$id,
+  },
+})
+```
+
+### Event Patterns
+
+```typescript
+import { on, send } from 'sdk.do'
+
+// Listen for semantic events
+on($.Order.created, async (order) => {
+  console.log('New order:', order.$id)
+})
+
+// Publish semantic events
+send($.Order.created, {
+  $type: 'Order',
+  $id: 'order-123',
+  total: 99.99,
+})
+```
+
+## Documentation
+
+- [Getting Started](./docs/getting-started) - Installation and setup
+- [Semantic Patterns](./docs/semantic-patterns) - Understanding $.Subject.predicate.Object
+- [Relationships](./docs/relationships) - Building graph relationships
+- [API Reference](./api/) - Complete API documentation
+
+## Examples
+
+- [Basic Semantics](./examples/basic-semantics) - Working with the $ proxy
+- [Graph Queries](./examples/graph-queries) - Building and querying graphs
+
+## Integration with .do Platform
+
+graphdl is a core building block of the `.do` platform and integrates with:
+
+- **[sdk.do](https://sdk.do)** - Use semantic patterns in database operations
+- **[schema.org.ai](https://schema.org.ai)** - 800+ Schema.org types
+- **[gs1.org.ai](https://gs1.org.ai)** - GS1 supply chain vocabulary
+- **[soc.org.ai](https://soc.org.ai)** - O\*NET occupation types
+- **[mdxld](https://mdxld.org)** - Linked data in MDX with `$id` and `$type`
+- **[database.do](https://database.do)** - Semantic database operations
+- **[events.do](https://events.do)** - Semantic event patterns
+
+## Use Cases
+
+### Business Process Modeling
+
+```typescript
+import $ from 'graphdl'
+import { graph, node, edge } from 'graphdl'
+
+// Model business processes with semantic relationships
+const processGraph = graph()
+  .context('https://schema.org')
+  .node(
+    node('order-received', 'BusinessProcess', {
+      name: 'Order Received',
+      description: 'Customer places order',
+    })
+  )
+  .node(
+    node('payment-processed', 'BusinessProcess', {
+      name: 'Payment Processed',
+      description: 'Payment is verified and captured',
+    })
+  )
+  .node(
+    node('order-fulfilled', 'BusinessProcess', {
+      name: 'Order Fulfilled',
+      description: 'Order is shipped to customer',
+    })
+  )
+  .edge(edge('order-received', 'precedes', 'payment-processed'))
+  .edge(edge('payment-processed', 'precedes', 'order-fulfilled'))
+  .build()
+```
+
+### Supply Chain Tracking
+
+```typescript
+import $ from 'graphdl'
+
+// Track products through supply chain
+const productJourney = $.Product.inTransit.Container
+const warehouseLocation = $.Container.locatedAt.Warehouse
+const shipmentStatus = $.Shipment.inProgress.Delivery
+
+// Create complete supply chain graph
+const supplyChain = graph()
+  .node(node('widget-123', 'Product', { name: 'Widget' }))
+  .node(node('container-456', 'Container', { id: 'CONT-456' }))
+  .node(node('warehouse-sf', 'Warehouse', { location: 'San Francisco' }))
+  .edge(edge('widget-123', 'containedIn', 'container-456'))
+  .edge(edge('container-456', 'locatedAt', 'warehouse-sf'))
+  .build()
+```
+
+### Knowledge Graphs
+
+```typescript
+import $ from 'graphdl'
+
+// Build knowledge graphs with semantic relationships
+const knowledge = graph()
+  .context({
+    $vocab: 'https://schema.org/',
+    onet: 'https://www.onetonline.org/',
+  })
+  .node(
+    node('john-doe', 'Person', {
+      name: 'John Doe',
+      jobTitle: 'Software Developer',
+    })
+  )
+  .node(
+    node('15-1252.00', 'Occupation', {
+      title: 'Software Developers',
+      description: 'Develop software applications',
+    })
+  )
+  .node(
+    node('typescript', 'Skill', {
+      name: 'TypeScript',
+      category: 'Programming',
+    })
+  )
+  .edge(edge('john-doe', 'hasOccupation', '15-1252.00'))
+  .edge(edge('15-1252.00', 'requiresSkill', 'typescript'))
+  .edge(edge('john-doe', 'hasSkill', 'typescript'))
+  .build()
+```
+
+## TypeScript Support
+
+graphdl is built with TypeScript and provides full type safety:
+
+```typescript
+import $ from 'graphdl'
+import type { Triple, Graph, Node, Edge } from 'graphdl'
+import type { Thing } from 'schema.org.ai'
+
+// Type-safe triple creation
+const triple: Triple<string, string, string> = createTriple('Person:john', 'worksFor', 'Organization:acme')
+
+// Type-safe graph building
+const myGraph: Graph = graph()
+  .node(node('john', 'Person', { name: 'John' }))
+  .build()
+
+// Use with Schema.org types
+const person: Thing = {
+  $type: 'Person',
+  $id: 'https://example.com/john',
+  name: 'John Doe',
+}
+```
+
+## Best Practices
+
+### Use Semantic Patterns
+
+Always use the `$` proxy for creating semantic paths:
+
+```typescript
+// Good - semantic patterns
+const path = $.Person.worksFor.Organization
+
+// Avoid - string concatenation
+const path = 'Person.worksFor.Organization'
+```
+
+### Leverage Type Safety
+
+Use TypeScript types from vocabulary packages:
+
+```typescript
+import type { Thing, Person, Organization } from 'schema.org.ai'
+
+// Type-safe entity creation
+const person: Person = {
+  $type: 'Person',
+  name: 'John Doe',
+  email: 'john@example.com',
+}
+```
+
+### Use Consistent Naming
+
+Use the semantic naming helpers:
+
+```typescript
+import { toPlural, toActivity, toEvent } from 'graphdl'
+
+// Collections
+const collectionName = toPlural('Order') // 'Orders'
+
+// Activities
+const activityName = toActivity('process') // 'processing'
+
+// Events
+const eventName = toEvent('create') // 'created'
+```
+
+### Add Context to Graphs
+
+Always include semantic context in graphs:
+
+```typescript
+const graph = graph()
+  .context('https://schema.org')
+  .nodes([...])
+  .edges([...])
+  .build()
+```
+
+## Data Ingestion
+
+graphdl includes data ingestion scripts for importing industry standard taxonomies:
+
+```bash
+# Run all ingestion scripts
+pnpm ingest
+
+# Run individual scripts
+pnpm ingest:naics    # NAICS industry classifications
+pnpm ingest:apqc     # APQC process framework
+pnpm ingest:unedi    # UN/EDIFACT message types
+pnpm ingest:zapier   # Zapier app integrations
+```
+
+See the [package README](https://github.com/dot-do/ai/tree/main/packages/graphdl) for details.
+
+## License
+
+MIT (Open Source)
+
+graphdl is open-source software released under the MIT License. You are free to use, modify, and distribute it for any purpose.
+
+## Resources
+
+- [GitHub Repository](https://github.com/dot-do/ai/tree/main/packages/graphdl)
+- [NPM Package](https://www.npmjs.com/package/graphdl)
+- [Issue Tracker](https://github.com/dot-do/ai/issues)
+- [Contributing Guide](https://github.com/dot-do/ai/blob/main/CONTRIBUTING.md)
+
+## Related Projects
+
+- **sdk.do** - TypeScript SDK with semantic $ proxy
+- **schema.org.ai** - Schema.org vocabulary with AI-native types
+- **gs1.org.ai** - GS1 supply chain vocabulary
+- **soc.org.ai** - O\*NET occupation types
+- **mdxld** - Linked data in MDX
+
+## Contributing
+
+Contributions are welcome! graphdl is part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.
+
+See [CONTRIBUTING.md](https://github.com/dot-do/ai/blob/main/CONTRIBUTING.md) for guidelines.
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

@@ -1,0 +1,114 @@
+---
+$id: https://integrations.do/gitlab
+$type: Integration
+name: Gitlab
+service: gitlab
+description: A web-based DevOps lifecycle tool that provides a Git repository manager providing wiki, issue-tracking, and CI/CD pipeline features.
+category: productivity
+sdkBased: false
+baseUrl: https://api.gitlab.com
+
+auth:
+  type: oauth2
+  authorizationUrl: https://gitlab.com/oauth/authorize
+  tokenUrl: https://gitlab.com/oauth/token
+  scopes:
+    - api
+    - read_api
+    - read_user
+    - create_runner
+    - manage_runner
+    - k8s_proxy
+    - read_repository
+    - write_repository
+    - read_registry
+    - write_registry
+    - read_virtual_registry
+    - write_virtual_registry
+    - read_observability
+    - write_observability
+    - ai_features
+    - sudo
+    - read_service_ping
+    - profile
+    - email
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Gitlab actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: false
+  events: []
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://about.gitlab.com
+  apiDocs: https://about.gitlab.com
+---
+
+# Gitlab Integration
+
+A web-based DevOps lifecycle tool that provides a Git repository manager providing wiki, issue-tracking, and CI/CD pipeline features.
+
+## Quick Start
+
+```typescript
+import { GitlabClient } from '@dotdo/sdk.do/integrations/gitlab'
+
+const gitlab = new GitlabClient({
+  apiKey: process.env.GITLAB_API_KEY,
+})
+
+const result = await gitlab.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Gitlab provides 54 actions through the Composio API.
+
+## License
+
+MIT

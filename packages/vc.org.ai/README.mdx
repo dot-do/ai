@@ -1,0 +1,283 @@
+# vc.org.ai
+
+**Venture capital and startup data from Crunchbase Open Data** - Companies, funding rounds, investors, acquisitions from the Crunchbase open dataset.
+
+## Overview
+
+This package provides structured, semantic access to venture capital and startup data from the [Crunchbase Open Data](https://data.crunchbase.com/docs/open-data-map) initiative.
+
+**Data Types:**
+- **Companies** - Startups and organizations with funding data
+- **Funding Rounds** - Investment rounds with amounts and dates
+- **Investors** - VC firms, angels, and investment organizations
+- **Acquisitions** - Company acquisitions and M&A activity
+- **People** - Founders, executives, and key personnel
+
+## Installation
+
+```bash
+pnpm add vc.org.ai
+```
+
+## Usage
+
+### Get Company Data
+
+```typescript
+import { companies, getCompany, searchCompanies } from 'vc.org.ai/data'
+
+// Get specific company
+const anthropic = getCompany('anthropic')
+console.log(anthropic.$id) // https://vc.org.ai/companies/anthropic
+console.log(anthropic.totalFundingUsd)
+console.log(anthropic.lastFundingType)
+
+// Search companies
+const aiCompanies = searchCompanies({ categories: ['Artificial Intelligence'] })
+const sfCompanies = searchCompanies({ city: 'San Francisco' })
+```
+
+### Get Funding Data
+
+```typescript
+import { fundingRounds, getFundingRound } from 'vc.org.ai/data'
+
+// Get funding rounds
+const rounds = fundingRounds.filter((r) => r.fundingType === 'series_a')
+console.log(`Found ${rounds.length} Series A rounds`)
+
+// Get specific round
+const round = getFundingRound('anthropic-series-c')
+console.log(round.amountRaisedUsd)
+console.log(round.announcedDate)
+```
+
+### Get Investor Data
+
+```typescript
+import { investors, getInvestor } from 'vc.org.ai/data'
+
+// Get specific investor
+const a16z = getInvestor('andreessen-horowitz')
+console.log(a16z.investmentCount)
+console.log(a16z.investorType)
+
+// Find VCs by location
+const sfVCs = investors.filter((i) => i.city === 'San Francisco' && i.investorType === 'venture_capital')
+```
+
+### With sdk.do
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Reference VC entities
+const anthropic = {
+  $type: $.Company,
+  $id: 'https://vc.org.ai/companies/anthropic',
+  name: 'Anthropic',
+}
+
+// Query relationships
+const investors = await db.related(anthropic, $.fundedBy, $.Investor)
+const rounds = await db.related(anthropic, $.received, $.FundingRound)
+```
+
+## Data Structure
+
+### Company
+
+```typescript
+interface Company {
+  $type: 'Company'
+  $id: string // https://vc.org.ai/companies/[permalink]
+  uuid: string // Crunchbase UUID
+  permalink: string
+  name: string
+  legalName?: string
+  shortDescription?: string
+
+  // Location
+  city?: string
+  region?: string
+  countryCode?: string
+
+  // Dates
+  foundedDate?: string // ISO 8601
+  closedDate?: string
+
+  // Funding
+  totalFundingUsd?: number
+  totalFundingRounds?: number
+  lastFundingDate?: string
+  lastFundingType?: FundingRoundType
+
+  // Categories
+  categories?: string[]
+
+  // Semantic relationships
+  fundedBy?: Ref[] // $.Company.fundedBy.Investor
+  founded?: Ref[] // $.Company.founded.Person
+}
+```
+
+### FundingRound
+
+```typescript
+interface FundingRound {
+  $type: 'FundingRound'
+  $id: string // https://vc.org.ai/funding-rounds/[permalink]
+  uuid: string
+  fundingType: FundingRoundType // 'seed', 'series_a', etc.
+  announcedDate?: string
+  amountRaised?: number // USD
+
+  // Semantic relationships
+  organization?: Ref // $.FundingRound.organization.Company
+  leadInvestors?: Ref[] // $.FundingRound.leadInvestors.Investor
+  investors?: Ref[] // $.FundingRound.investors.Investor
+}
+```
+
+### Investor
+
+```typescript
+interface Investor {
+  $type: 'Investor'
+  $id: string // https://vc.org.ai/investors/[permalink]
+  uuid: string
+  name: string
+  investorType?: 'venture_capital' | 'angel' | 'private_equity' | 'corporate_venture_capital'
+  investmentCount?: number
+
+  // Semantic relationships
+  invested?: Ref[] // $.Investor.invested.Company
+  portfolioCompanies?: Ref[] // $.Investor.portfolioCompanies.Company
+}
+```
+
+## Data Import
+
+This package requires downloading Crunchbase Open Data CSV files manually.
+
+### 1. Download Data
+
+Visit [Crunchbase Open Data](https://data.crunchbase.com/docs/open-data-map) and download:
+- `organizations.csv`
+- `funding_rounds.csv`
+- `investors.csv`
+- `acquisitions.csv`
+- `people.csv`
+
+### 2. Place Files
+
+Put CSV files in `scripts/data/` directory:
+
+```
+ai/packages/vc.org.ai/
+└── scripts/
+    └── data/
+        ├── organizations.csv
+        ├── funding_rounds.csv
+        ├── investors.csv
+        ├── acquisitions.csv
+        └── people.csv
+```
+
+### 3. Run Import
+
+```bash
+# Sample mode (first 100 of each)
+pnpm import:sample
+
+# Full import (all data)
+pnpm import
+```
+
+This generates TypeScript files in `src/data/`:
+- `companies.ts`
+- `funding_rounds.ts`
+- `investors.ts`
+- `acquisitions.ts`
+- `people.ts`
+
+## Semantic Relationships
+
+All entities use explicit predicate patterns:
+
+### Company Relationships
+
+```typescript
+// Who funded this company?
+await db.related(company, $.fundedBy, $.Investor)
+
+// Who founded this company?
+await db.related(company, $.founded, $.Person)
+
+// What did this company acquire?
+await db.related(company, $.acquired, $.Company)
+```
+
+### Investor Relationships
+
+```typescript
+// What companies did this investor fund?
+await db.related(investor, $.invested, $.Company)
+
+// What's in this investor's portfolio?
+await db.related(investor, $.portfolioCompanies, $.Company)
+```
+
+### Funding Round Relationships
+
+```typescript
+// Which company received this funding?
+await db.related(round, $.organization, $.Company)
+
+// Who were the lead investors?
+await db.related(round, $.leadInvestors, $.Investor)
+
+// Who were all investors?
+await db.related(round, $.investors, $.Investor)
+```
+
+## Funding Round Types
+
+```typescript
+type FundingRoundType =
+  | 'pre_seed'
+  | 'seed'
+  | 'angel'
+  | 'series_a'
+  | 'series_b'
+  | 'series_c'
+  | 'series_d'
+  | 'series_e'
+  | 'series_f'
+  | 'venture'
+  | 'private_equity'
+  | 'debt_financing'
+  | 'convertible_note'
+  | 'grant'
+  | 'corporate_round'
+  | 'equity_crowdfunding'
+  | 'product_crowdfunding'
+  | 'post_ipo_equity'
+  | 'undisclosed'
+```
+
+## License
+
+MIT (package code)
+
+## Attribution
+
+This package uses data from Crunchbase Open Data. When using this data:
+
+> Data provided by Crunchbase (www.crunchbase.com). Used under the Crunchbase Open Data License.
+
+## Resources
+
+- **Crunchbase Open Data**: https://data.crunchbase.com/docs/open-data-map
+- **Crunchbase API**: https://data.crunchbase.com/docs/crunchbase-basic-api
+- **Data License**: https://data.crunchbase.com/docs/open-data-license

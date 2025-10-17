@@ -1,0 +1,98 @@
+---
+$id: https://integrations.do/whatsapp
+$type: Integration
+name: Whatsapp
+service: whatsapp
+description: Enables interaction with customers through the WhatsApp Business API for messaging and automation. Only supports WhatsApp Business accounts, not WhatsApp Personal accounts.
+category: productivity
+sdkBased: false
+baseUrl: https://api.whatsapp.com
+
+auth:
+  type: oauth2
+  authorizationUrl: https://www.facebook.com/v22.0/dialog/oauth
+  tokenUrl: https://graph.facebook.com/v22.0/oauth/access_token
+  scopes:
+    - whatsapp_business_management
+    - whatsapp_business_messaging
+    - business_management
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Whatsapp actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: false
+  events: []
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://web.whatsapp.com/
+  apiDocs: https://web.whatsapp.com/
+---
+
+# Whatsapp Integration
+
+Enables interaction with customers through the WhatsApp Business API for messaging and automation. Only supports WhatsApp Business accounts, not WhatsApp Personal accounts.
+
+## Quick Start
+
+```typescript
+import { WhatsappClient } from '@dotdo/sdk.do/integrations/whatsapp'
+
+const whatsapp = new WhatsappClient({
+  apiKey: process.env.WHATSAPP_API_KEY,
+})
+
+const result = await whatsapp.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Whatsapp provides 19 actions through the Composio API.
+
+## License
+
+MIT

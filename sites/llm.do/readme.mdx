@@ -1,0 +1,589 @@
+---
+$id: https://llm.do
+$type: WebSite
+name: llm.do
+description: LLM gateway for unified access to OpenAI, Anthropic, and other AI providers with semantic routing and cost optimization
+keywords: [llm, gateway, openai, anthropic, gpt-5, claude, ai, semantic, routing, batch processing, embeddings, streaming]
+license: CC-BY-4.0
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# llm.do
+
+**Universal LLM gateway for semantic AI operations with intelligent model routing and cost optimization**
+
+llm.do provides a unified gateway to leading AI providers (OpenAI, Anthropic, and more) with intelligent model routing, cost optimization, streaming support, and semantic integration with the `.do` platform's Business-as-Code SDK.
+
+## Quick Start
+
+```typescript
+import { $, llm } from 'sdk.do'
+
+// Simple text generation
+const response = await llm.generate('Write a product description for a smart watch')
+
+// Structured output with schema
+const product = await llm.generate('Create a product listing', {
+  schema: $.Product,
+  structured: true,
+})
+
+// Multi-provider routing
+const response = await llm.generate('Analyze this data', {
+  provider: 'openai', // or 'anthropic'
+  model: 'gpt-5', // or 'claude-sonnet-4.5'
+})
+
+// Streaming responses
+for await (const chunk of llm.stream('Write a long article')) {
+  process.stdout.write(chunk)
+}
+```
+
+## Key Features
+
+### 🎯 Multi-Provider Support
+
+Access multiple AI providers through a single, unified interface:
+
+```typescript
+import { llm } from 'sdk.do'
+
+// OpenAI GPT-5
+const gpt5Response = await llm.generate('prompt', {
+  provider: 'openai',
+  model: 'gpt-5',
+})
+
+// Anthropic Claude Sonnet 4.5
+const claudeResponse = await llm.generate('prompt', {
+  provider: 'anthropic',
+  model: 'claude-sonnet-4.5',
+})
+
+// Automatic provider selection based on task
+const optimizedResponse = await llm.generate('prompt', {
+  optimize: 'cost', // or 'quality', 'speed'
+})
+```
+
+### 🧠 Intelligent Model Routing
+
+Automatically route requests to the optimal model based on task characteristics:
+
+```typescript
+import { llm } from 'sdk.do'
+
+// Route based on task complexity
+const response = await llm.generate('Complex reasoning task', {
+  routing: {
+    strategy: 'auto', // auto, cost, quality, speed
+    fallback: 'claude-sonnet-4.5', // Fallback if primary fails
+  },
+})
+
+// Route based on capabilities
+const codeResponse = await llm.generate('Refactor this function', {
+  routing: {
+    capability: 'code', // code, creative, analytical
+    preferences: ['gpt-5-codex', 'gpt-5'],
+  },
+})
+
+// Load balancing across providers
+const balanced = await llm.generate('Generate content', {
+  routing: {
+    strategy: 'load_balance',
+    providers: ['openai', 'anthropic'],
+  },
+})
+```
+
+### 💰 Cost Optimization
+
+Reduce AI costs by 50-90% with intelligent optimization:
+
+```typescript
+import { $, llm } from 'sdk.do'
+
+// Batch processing for 50% cost reduction
+const batch = await llm.batch.create([
+  { prompt: 'Generate description 1', schema: $.Product },
+  { prompt: 'Generate description 2', schema: $.Product },
+  { prompt: 'Generate description 3', schema: $.Product },
+])
+
+// Smart caching for frequently used prompts
+const cached = await llm.generate('Common prompt', {
+  cache: {
+    enabled: true,
+    ttl: 3600, // 1 hour
+  },
+})
+
+// Model selection for cost efficiency
+const costEffective = await llm.generate('Simple task', {
+  model: 'gpt-5-nano', // Cheapest model
+  fallback: 'gpt-5-mini',
+})
+```
+
+### 🌊 Streaming Support
+
+Stream responses for real-time user experiences:
+
+```typescript
+import { llm } from 'sdk.do'
+
+// Basic streaming
+const stream = llm.stream('Write a comprehensive article')
+
+for await (const chunk of stream) {
+  process.stdout.write(chunk)
+}
+
+// Streaming with events
+const stream = llm.stream('Generate content', {
+  onStart: () => console.log('Generation started'),
+  onChunk: (chunk) => process.stdout.write(chunk),
+  onComplete: () => console.log('\nGeneration complete'),
+  onError: (error) => console.error('Error:', error),
+})
+
+await stream.complete()
+```
+
+### 🔢 Vector Embeddings
+
+Generate embeddings across multiple providers:
+
+```typescript
+import { llm } from 'sdk.do'
+
+// OpenAI embeddings (1536 dimensions)
+const openaiEmbedding = await llm.embed('semantic search query', {
+  provider: 'openai',
+  model: 'text-embedding-3-large',
+})
+
+// Anthropic embeddings (1024 dimensions)
+const claudeEmbedding = await llm.embed('semantic search query', {
+  provider: 'anthropic',
+})
+
+// Batch embeddings
+const embeddings = await llm.embed(['query 1', 'query 2', 'query 3'], {
+  provider: 'openai',
+})
+```
+
+### 📊 Usage Analytics
+
+Track usage, costs, and performance across providers:
+
+```typescript
+import { llm } from 'sdk.do'
+
+// Get usage statistics
+const stats = await llm.analytics.usage({
+  period: 'last_30_days',
+  groupBy: ['provider', 'model'],
+})
+
+console.log(stats)
+// {
+//   totalRequests: 10000,
+//   totalCost: 150.50,
+//   byProvider: {
+//     openai: { requests: 7000, cost: 100.00 },
+//     anthropic: { requests: 3000, cost: 50.50 }
+//   },
+//   byModel: {
+//     'gpt-5': { requests: 5000, cost: 80.00 },
+//     'gpt-5-mini': { requests: 2000, cost: 20.00 },
+//     'claude-sonnet-4.5': { requests: 3000, cost: 50.50 }
+//   }
+// }
+
+// Cost forecasting
+const forecast = await llm.analytics.forecast({
+  period: 'next_30_days',
+  confidence: 0.95,
+})
+```
+
+## Supported Providers
+
+### OpenAI
+
+- **gpt-5** - Latest GPT model (default)
+- **gpt-5-mini** - Cost-effective variant
+- **gpt-5-nano** - Fastest, cheapest variant
+- **gpt-5-codex** - Optimized for code tasks
+- **text-embedding-3-large** - High-quality embeddings (1536d)
+- **text-embedding-3-small** - Efficient embeddings (512d)
+
+### Anthropic
+
+- **claude-sonnet-4.5** - Latest Claude Sonnet model
+- **claude-opus-4** - Most capable Claude model
+- **claude-haiku-4** - Fastest, most affordable Claude model
+
+### Coming Soon
+
+- **Google Gemini** - Gemini Pro and Ultra models
+- **Cohere** - Command and Embed models
+- **Mistral AI** - Mistral Large and Medium models
+- **Together AI** - Open-source model hosting
+
+## Features
+
+- **Multi-Provider Access**: Unified interface for OpenAI, Anthropic, and more
+- **Intelligent Routing**: Automatic model selection based on task requirements
+- **Cost Optimization**: 50-90% cost reduction through batching, caching, and smart routing
+- **Streaming Support**: Real-time response streaming for better UX
+- **Vector Embeddings**: Generate embeddings across multiple providers
+- **Schema Integration**: Type-safe generation with Schema.org types
+- **Usage Analytics**: Track costs, performance, and usage patterns
+- **Failover Support**: Automatic failover to backup providers
+- **Rate Limiting**: Built-in rate limiting and retry logic
+- **Semantic Context**: Integration with `$.Subject.predicate.Object` patterns
+
+## Documentation
+
+- [Getting Started](./docs/getting-started) - Installation and basic setup
+- [Architecture](./docs/architecture) - Gateway architecture and design patterns
+- [Best Practices](./docs/best-practices) - Optimization and usage patterns
+- [Troubleshooting](./docs/troubleshooting) - Common issues and solutions
+- [API Reference](./api/reference) - Complete API documentation
+
+## Examples
+
+- [Basic Usage](./examples/basic-usage) - Simple text generation and embeddings
+- [Advanced Patterns](./examples/advanced-patterns) - Routing, streaming, and optimization
+- [Integration](./examples/integration) - Integration with other `.do` services
+- [Real-World Use Case](./examples/real-world-use-case) - Production-ready implementation
+
+## Use Cases
+
+### Content Generation at Scale
+
+Generate thousands of content pieces with cost optimization:
+
+```typescript
+import { $, llm, db } from 'sdk.do'
+
+// Get products needing descriptions
+const products = await db.list($.Product, {
+  where: { description: null },
+  limit: 10000,
+})
+
+// Batch generate descriptions (50% cost savings)
+const requests = products.map((product) => ({
+  prompt: `Generate SEO-optimized description for ${product.name}`,
+  schema: $.Product,
+  context: product,
+}))
+
+const batch = await llm.batch.create(requests, {
+  model: 'gpt-5-mini', // Cost-effective model
+  priority: 'low', // Lower priority = lower cost
+})
+
+// Process results as they complete
+for await (const result of llm.batch.stream(batch.id)) {
+  await db.update(result.custom_id, {
+    description: result.response,
+  })
+}
+```
+
+### Multi-Modal AI Workflows
+
+Combine multiple AI providers for optimal results:
+
+```typescript
+import { $, llm } from 'sdk.do'
+
+async function generateMarketingContent(product) {
+  // Use Claude for creative copywriting
+  const headline = await llm.generate(`Create attention-grabbing headline for ${product.name}`, {
+    provider: 'anthropic',
+    model: 'claude-sonnet-4.5',
+    temperature: 0.9,
+  })
+
+  // Use GPT-5 for structured data
+  const structuredData = await llm.generate(`Create Schema.org Product data for ${product.name}`, {
+    provider: 'openai',
+    model: 'gpt-5',
+    schema: $.Product,
+    structured: true,
+  })
+
+  // Use GPT-5 Mini for metadata
+  const metadata = await llm.generate(`Generate SEO metadata for ${product.name}`, {
+    provider: 'openai',
+    model: 'gpt-5-mini',
+    structured: true,
+    schema: {
+      title: 'string',
+      description: 'string',
+      keywords: 'string[]',
+    },
+  })
+
+  return { headline, structuredData, metadata }
+}
+```
+
+### Semantic Search with Multi-Provider Embeddings
+
+Build robust semantic search using multiple embedding providers:
+
+```typescript
+import { $, llm, db } from 'sdk.do'
+
+// Index with multiple embedding providers for redundancy
+async function indexProduct(product) {
+  const text = `${product.name} ${product.description}`
+
+  // Generate embeddings from multiple providers
+  const [openaiEmbedding, claudeEmbedding] = await Promise.all([llm.embed(text, { provider: 'openai' }), llm.embed(text, { provider: 'anthropic' })])
+
+  await db.update(product.$id, {
+    embeddings: {
+      openai: openaiEmbedding,
+      anthropic: claudeEmbedding,
+    },
+  })
+}
+
+// Search with fallback providers
+async function semanticSearch(query) {
+  try {
+    // Try OpenAI first (preferred)
+    const embedding = await llm.embed(query, { provider: 'openai' })
+    return await db.similaritySearch(embedding, {
+      field: 'embeddings.openai',
+      limit: 10,
+    })
+  } catch (error) {
+    // Fallback to Anthropic
+    const embedding = await llm.embed(query, { provider: 'anthropic' })
+    return await db.similaritySearch(embedding, {
+      field: 'embeddings.anthropic',
+      limit: 10,
+    })
+  }
+}
+```
+
+### Real-Time Streaming Chat
+
+Build interactive chat experiences with streaming:
+
+```typescript
+import { llm } from 'sdk.do'
+
+async function streamingChat(messages, res) {
+  // Set up SSE headers
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+  })
+
+  // Stream response with automatic provider failover
+  const stream = llm.stream({
+    messages,
+    model: 'gpt-5',
+    routing: {
+      fallback: 'claude-sonnet-4.5',
+    },
+  })
+
+  for await (const chunk of stream) {
+    res.write(`data: ${JSON.stringify({ content: chunk })}\n\n`)
+  }
+
+  res.write('data: [DONE]\n\n')
+  res.end()
+}
+```
+
+## Semantic Patterns
+
+llm.do uses `$.Subject.predicate.Object` patterns for semantic operations:
+
+```typescript
+import { $, llm } from 'sdk.do'
+
+// Generate with semantic schema
+await llm.generate('prompt', {
+  schema: $.Product,
+  context: {
+    manufacturer: $.Organization,
+    offers: $.Offer,
+    aggregateRating: $.AggregateRating,
+  },
+})
+
+// Semantic routing based on domain
+await llm.generate('prompt', {
+  routing: {
+    domain: $.Business,
+    capability: $.CreativeWork,
+  },
+})
+
+// Generate relationships
+await llm.generate('create employee', {
+  schema: $.Person,
+  context: {
+    worksFor: organization,
+    hasOccupation: occupation,
+    knows: colleagues,
+  },
+})
+```
+
+## Configuration
+
+### Environment Variables
+
+```bash
+# OpenAI (required for GPT models)
+OPENAI_API_KEY=sk-...
+
+# Anthropic (required for Claude models)
+ANTHROPIC_API_KEY=sk-ant-...
+
+# LLM Gateway Configuration
+LLM_DEFAULT_PROVIDER=openai
+LLM_DEFAULT_MODEL=gpt-5
+LLM_ENABLE_CACHING=true
+LLM_CACHE_TTL=3600
+LLM_ENABLE_ANALYTICS=true
+LLM_RATE_LIMIT=100  # Requests per minute
+```
+
+### SDK Configuration
+
+```typescript
+import { llm } from 'sdk.do'
+
+llm.config({
+  defaultProvider: 'openai',
+  defaultModel: 'gpt-5',
+  routing: {
+    strategy: 'auto',
+    fallback: 'claude-sonnet-4.5',
+  },
+  caching: {
+    enabled: true,
+    ttl: 3600,
+  },
+  analytics: {
+    enabled: true,
+    trackCosts: true,
+  },
+  rateLimit: {
+    requestsPerMinute: 100,
+    tokensPerMinute: 100000,
+  },
+})
+```
+
+## Integration with `.do` Platform
+
+llm.do integrates seamlessly with other `.do` services:
+
+```typescript
+import { $, llm, db, on, send } from 'sdk.do'
+
+// Generate content when entity is created
+on($.Product.created, async (event) => {
+  const product = event.data
+
+  // Generate description with intelligent routing
+  const description = await llm.generate(`Generate description for ${product.name}`, {
+    schema: $.Product,
+    routing: { optimize: 'cost' },
+  })
+
+  // Update product
+  await db.update(product.$id, { description })
+
+  // Send completion event
+  await send($.Product.enriched, { product })
+})
+
+// Semantic search integration
+on($.SearchAction.performed, async (event) => {
+  const { query } = event.data
+
+  // Generate embedding with fallback
+  const embedding = await llm.embed(query, {
+    provider: 'openai',
+    routing: { fallback: 'anthropic' },
+  })
+
+  // Search database
+  const results = await db.similaritySearch(embedding, {
+    limit: 10,
+    threshold: 0.8,
+  })
+
+  return results
+})
+```
+
+## License
+
+llm.do is released under the [Creative Commons Attribution 4.0 International License (CC-BY-4.0)](https://creativecommons.org/licenses/by/4.0/).
+
+This means you are free to:
+
+- **Share**: Copy and redistribute the material in any medium or format
+- **Adapt**: Remix, transform, and build upon the material for any purpose, even commercially
+
+Under the following terms:
+
+- **Attribution**: You must give appropriate credit, provide a link to the license, and indicate if changes were made
+
+## Resources
+
+- [sdk.do](https://sdk.do) - Core SDK documentation
+- [ai.do](https://ai.do) - AI services documentation
+- [gateway.do](https://gateway.do) - API gateway documentation
+- [schema.org.ai](https://schema.org.ai) - Schema.org types for AI
+- [OpenAI Platform](https://platform.openai.com) - OpenAI API documentation
+- [Anthropic Documentation](https://docs.anthropic.com) - Claude API documentation
+
+## Related Domains
+
+- **[ai.do](https://ai.do)** - AI services for text generation and embeddings
+- **[gateway.do](https://gateway.do)** - API gateway for unified access
+- **[api.do](https://api.do)** - External API integration
+- **[db.do](https://db.do)** - Database operations
+- **[on.do](https://on.do)** - Event listeners
+- **[send.do](https://send.do)** - Event publishing
+
+## Contributing
+
+llm.do is part of the [`.do` platform](https://do) ecosystem. Contributions are welcome!
+
+See the [ai repository](https://github.com/dot-do/ai) for contribution guidelines.
+
+## Acknowledgments
+
+llm.do builds upon:
+
+- [OpenAI API](https://platform.openai.com) - GPT models and APIs
+- [Anthropic API](https://anthropic.com) - Claude models
+- [Schema.org](https://schema.org) - Structured data vocabulary
+- [JSON-LD](https://www.w3.org/TR/json-ld11/) - Linked data format

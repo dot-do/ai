@@ -1,0 +1,573 @@
+---
+$id: https://docs.do/docs/getting-started
+$type: TechArticle
+title: Getting Started with docs.do
+description: Complete guide to setting up and using docs.do for documentation management
+keywords: [getting started, setup, documentation, search, versioning]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Getting Started with docs.do
+
+This guide will walk you through setting up docs.do and building your first documentation system.
+
+## Prerequisites
+
+Before you begin, ensure you have:
+
+- **Node.js 18+** installed on your system
+- **pnpm** package manager (recommended)
+- **PostgreSQL database** for document storage
+- **OpenAI API key** (for AI-powered features)
+- **Elasticsearch** (optional, for advanced search)
+
+## Installation
+
+Install docs.do using pnpm:
+
+```bash
+pnpm add docs.do
+```
+
+Or with npm:
+
+```bash
+npm install docs.do
+```
+
+## Environment Setup
+
+Create a `.env` file in your project root:
+
+```bash
+# Required: Database connection
+DOCS_DATABASE_URL=postgres://user:pass@localhost:5432/docs
+
+# Required: OpenAI API key (for AI features)
+DOCS_OPENAI_API_KEY=sk-your-api-key-here
+
+# Optional: Elasticsearch for advanced search
+DOCS_ELASTICSEARCH_URL=http://localhost:9200
+
+# Optional: Redis for caching
+DOCS_REDIS_URL=redis://localhost:6379
+
+# Optional: Configuration
+DOCS_AI_MODEL=gpt-5
+DOCS_DEFAULT_LANGUAGE=en
+DOCS_ENABLE_ANALYTICS=true
+DOCS_CACHE_TTL=3600
+```
+
+## Your First Documentation System
+
+Create a new file `index.ts`:
+
+```typescript
+import $, { docs } from 'docs.do'
+
+async function main() {
+  console.log('Building documentation system...\n')
+
+  // ==========================================
+  // 1. Create Documentation
+  // ==========================================
+
+  console.log('1. Creating documentation...')
+
+  // Create a technical article
+  const gettingStarted = await docs.create($.TechArticle, {
+    headline: 'Getting Started with SDK',
+    articleBody: `
+# Getting Started
+
+This guide will help you get started with our SDK.
+
+## Installation
+
+\`\`\`bash
+pnpm add sdk.do
+\`\`\`
+
+## Quick Example
+
+\`\`\`typescript
+import $ from 'sdk.do'
+\`\`\`
+    `,
+    author: {
+      $type: 'Organization',
+      name: '.do Platform',
+    },
+    about: {
+      $type: 'SoftwareApplication',
+      name: 'sdk.do',
+    },
+    domain: 'sdk.do',
+    version: '1.0.0',
+    language: 'en',
+  })
+
+  console.log('✓ Created article:', gettingStarted.$id)
+
+  // Create API reference
+  const apiRef = await docs.create($.APIReference, {
+    name: 'Database API',
+    description: 'Complete database API reference',
+    content: `
+# Database API
+
+## db.create()
+
+Creates a new entity in the database.
+
+**Signature:**
+\`\`\`typescript
+function create<T>(type: T, data: Partial<T>): Promise<T>
+\`\`\`
+    `,
+    domain: 'database.do',
+    version: '1.0.0',
+  })
+
+  console.log('✓ Created API reference:', apiRef.$id)
+
+  // Create how-to guide
+  const howto = await docs.create($.HowTo, {
+    name: 'Create Database Relationships',
+    description: 'Learn how to create relationships between entities',
+    step: [
+      {
+        $type: 'HowToStep',
+        name: 'Create entities',
+        text: 'First, create the entities you want to relate',
+      },
+      {
+        $type: 'HowToStep',
+        name: 'Use db.relate()',
+        text: 'Use the relate function to create relationships',
+      },
+      {
+        $type: 'HowToStep',
+        name: 'Query relationships',
+        text: 'Use db.related() to query relationships',
+      },
+    ],
+    domain: 'database.do',
+  })
+
+  console.log('✓ Created how-to guide:', howto.$id)
+  console.log()
+
+  // ==========================================
+  // 2. Search Documentation
+  // ==========================================
+
+  console.log('2. Searching documentation...')
+
+  // Basic search
+  const searchResults = await docs.search('database', {
+    limit: 10,
+  })
+
+  console.log(`✓ Found ${searchResults.length} results for "database"`)
+  searchResults.forEach((result) => {
+    console.log(`  - ${result.title} (${result.domain})`)
+  })
+
+  // Semantic search
+  const semanticResults = await docs.search('how to create entity relationships', {
+    semantic: true,
+    minScore: 0.7,
+    limit: 5,
+  })
+
+  console.log(`\n✓ Semantic search found ${semanticResults.length} results`)
+  semanticResults.forEach((result) => {
+    console.log(`  - ${result.title} (score: ${result.score.toFixed(2)})`)
+  })
+
+  // Search by type
+  const howtos = await docs.list($.HowTo, {
+    limit: 10,
+  })
+
+  console.log(`\n✓ Found ${howtos.length} how-to guides`)
+  console.log()
+
+  // ==========================================
+  // 3. Version Management
+  // ==========================================
+
+  console.log('3. Managing versions...')
+
+  // Update with new version
+  await docs.update(gettingStarted, {
+    articleBody: '# Updated Getting Started\n\nNew content here...',
+    version: '2.0.0',
+    previousVersion: '1.0.0',
+  })
+
+  console.log('✓ Updated to version 2.0.0')
+
+  // Get all versions
+  const versions = await docs.versions(gettingStarted.$id)
+  console.log(`✓ Document has ${versions.length} versions:`)
+  versions.forEach((v) => {
+    console.log(`  - ${v.version} (${v.date})`)
+  })
+
+  // Get specific version
+  const v1 = await docs.get(gettingStarted.$id, { version: '1.0.0' })
+  console.log(`✓ Retrieved version 1.0.0`)
+
+  // Compare versions
+  const diff = await docs.diff(gettingStarted.$id, '1.0.0', '2.0.0')
+  console.log(`✓ Version diff: ${diff.changes.length} changes`)
+  console.log()
+
+  // ==========================================
+  // 4. Cross-Linking
+  // ==========================================
+
+  console.log('4. Creating relationships...')
+
+  // Link related documentation
+  await docs.relate(howto, $.relatedTo, apiRef)
+  await docs.relate(gettingStarted, $.mentions, apiRef)
+
+  console.log('✓ Created documentation relationships')
+
+  // Find related docs
+  const related = await docs.related(gettingStarted, $.relatedTo)
+  console.log(`✓ Found ${related.length} related documents`)
+
+  // Get backlinks
+  const backlinks = await docs.backlinks(apiRef.$id)
+  console.log(`✓ API reference has ${backlinks.length} backlinks`)
+  console.log()
+
+  // ==========================================
+  // 5. Multi-Language Support
+  // ==========================================
+
+  console.log('5. Adding translations...')
+
+  // Add translations
+  await docs.translate(gettingStarted.$id, 'es', {
+    headline: 'Comenzando con SDK',
+    articleBody: '# Comenzando\n\nEsta guía te ayudará...',
+  })
+
+  await docs.translate(gettingStarted.$id, 'fr', {
+    headline: 'Commencer avec SDK',
+    articleBody: '# Commencer\n\nCe guide vous aidera...',
+  })
+
+  console.log('✓ Added Spanish translation')
+  console.log('✓ Added French translation')
+
+  // Get translated version
+  const spanish = await docs.get(gettingStarted.$id, { language: 'es' })
+  console.log(`✓ Retrieved Spanish version: ${spanish.headline}`)
+
+  // List available languages
+  const languages = await docs.languages(gettingStarted.$id)
+  console.log(`✓ Available languages: ${languages.join(', ')}`)
+  console.log()
+
+  // ==========================================
+  // 6. Analytics
+  // ==========================================
+
+  console.log('6. Tracking analytics...')
+
+  // Track page views
+  await docs.track('page_view', {
+    documentId: gettingStarted.$id,
+    userId: 'user-123',
+  })
+
+  await docs.track('search', {
+    query: 'database relationships',
+    resultsCount: 5,
+  })
+
+  console.log('✓ Tracked page view')
+  console.log('✓ Tracked search query')
+
+  // Get analytics
+  const analytics = await docs.analytics(gettingStarted.$id, {
+    from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+    to: new Date(),
+  })
+
+  console.log(`✓ Analytics: ${analytics.views} views, ${analytics.searches} searches`)
+  console.log()
+
+  console.log('=== Documentation System Ready ===')
+}
+
+main().catch(console.error)
+```
+
+## Run Your Application
+
+```bash
+tsx index.ts
+```
+
+You should see output like:
+
+```
+Building documentation system...
+
+1. Creating documentation...
+✓ Created article: tech-article-abc123
+✓ Created API reference: api-ref-xyz789
+✓ Created how-to guide: howto-def456
+
+2. Searching documentation...
+✓ Found 3 results for "database"
+  - Database API (database.do)
+  - Create Database Relationships (database.do)
+  - Getting Started with SDK (sdk.do)
+
+✓ Semantic search found 2 results
+  - Create Database Relationships (score: 0.89)
+  - Database API (score: 0.75)
+
+✓ Found 1 how-to guides
+
+3. Managing versions...
+✓ Updated to version 2.0.0
+✓ Document has 2 versions:
+  - 2.0.0 (2025-01-15)
+  - 1.0.0 (2025-01-15)
+✓ Retrieved version 1.0.0
+✓ Version diff: 12 changes
+
+4. Creating relationships...
+✓ Created documentation relationships
+✓ Found 1 related documents
+✓ API reference has 2 backlinks
+
+5. Adding translations...
+✓ Added Spanish translation
+✓ Added French translation
+✓ Retrieved Spanish version: Comenzando con SDK
+✓ Available languages: en, es, fr
+
+6. Tracking analytics...
+✓ Tracked page view
+✓ Tracked search query
+✓ Analytics: 1 views, 1 searches
+
+=== Documentation System Ready ===
+```
+
+## Understanding the Code
+
+### Documentation Types
+
+docs.do supports multiple Schema.org documentation types:
+
+```typescript
+// Technical articles
+const article = await docs.create($.TechArticle, {
+  headline: 'Title',
+  articleBody: '...',
+})
+
+// API references
+const apiRef = await docs.create($.APIReference, {
+  name: 'API Name',
+  description: '...',
+})
+
+// How-to guides
+const howto = await docs.create($.HowTo, {
+  name: 'Guide Name',
+  step: [
+    /* steps */
+  ],
+})
+
+// Code snippets
+const snippet = await docs.create($.SoftwareSourceCode, {
+  programmingLanguage: 'TypeScript',
+  codeSnippet: 'const x = 1',
+})
+```
+
+### Search Operations
+
+Multiple search strategies:
+
+```typescript
+// Keyword search
+const results = await docs.search('database relationships')
+
+// Semantic search with AI embeddings
+const semantic = await docs.search('how to link entities', {
+  semantic: true,
+  minScore: 0.8,
+})
+
+// Filtered search
+const filtered = await docs.search('getting started', {
+  domains: ['sdk.do', 'database.do'],
+  type: 'TechArticle',
+  language: 'en',
+})
+
+// Search with embeddings
+const embedding = await docs.embed('authentication flow')
+const similar = await docs.findSimilar(embedding, {
+  threshold: 0.7,
+  limit: 10,
+})
+```
+
+### Version Management
+
+Track documentation evolution:
+
+```typescript
+// Create versioned doc
+await docs.create($.TechArticle, {
+  headline: 'Guide',
+  version: '1.0.0',
+})
+
+// Update with new version
+await docs.update(doc, {
+  headline: 'Updated Guide',
+  version: '2.0.0',
+})
+
+// Access specific version
+const v1 = await docs.get(id, { version: '1.0.0' })
+const v2 = await docs.get(id, { version: '2.0.0' })
+
+// Compare versions
+const diff = await docs.diff(id, '1.0.0', '2.0.0')
+```
+
+## Next Steps
+
+Now that you have a basic documentation system running, explore:
+
+1. **[Architecture](./architecture)** - System architecture and design
+2. **[Best Practices](./best-practices)** - Documentation best practices
+3. **[API Reference](../api/reference)** - Complete API documentation
+4. **[Examples](../examples/)** - Practical code examples
+5. **[Troubleshooting](./troubleshooting)** - Common issues and solutions
+
+## Common Patterns
+
+### Multi-Domain Documentation Hub
+
+```typescript
+// Index multiple domains
+const domains = ['sdk.do', 'database.do', 'events.do', 'workflows.do']
+
+for (const domain of domains) {
+  await docs.indexDomain(domain, {
+    includeExamples: true,
+    includeAPI: true,
+    includeGuides: true,
+  })
+}
+
+// Unified search
+const results = await docs.search('event handlers', {
+  domains,
+  groupByDomain: true,
+})
+```
+
+### Automated Documentation Updates
+
+```typescript
+// Watch for code changes and update docs
+import { watch } from 'fs'
+
+watch('./src', async (event, filename) => {
+  if (filename.endsWith('.ts')) {
+    // Generate docs from types
+    const docs = await docs.generateFromTypes(filename)
+
+    // Update documentation
+    await docs.update(docs, {
+      version: 'auto',
+      source: filename,
+    })
+  }
+})
+```
+
+### Documentation as Code
+
+```typescript
+// Define documentation in code
+const documentation = {
+  'getting-started': {
+    $type: 'TechArticle',
+    headline: 'Getting Started',
+    sections: [
+      { title: 'Installation', content: '...' },
+      { title: 'Quick Start', content: '...' },
+    ],
+  },
+  'api-reference': {
+    $type: 'APIReference',
+    endpoints: [{ method: 'GET', path: '/api/users', description: '...' }],
+  },
+}
+
+// Sync to docs.do
+for (const [key, value] of Object.entries(documentation)) {
+  await docs.upsert(key, value)
+}
+```
+
+## Troubleshooting
+
+### Search Not Finding Results
+
+Rebuild the search index:
+
+```bash
+pnpm docs reindex --all
+```
+
+### Slow Search Performance
+
+Enable Elasticsearch:
+
+```bash
+export DOCS_ELASTICSEARCH_URL=http://localhost:9200
+```
+
+### Version Conflicts
+
+Use merge strategies:
+
+```typescript
+const resolved = await docs.resolveConflict(id, {
+  strategy: 'latest',
+})
+```
+
+## Support
+
+- **Documentation**: [docs.do](https://docs.do)
+- **GitHub Issues**: [github.com/dot-do/ai/issues](https://github.com/dot-do/ai/issues)
+- **Community**: [github.com/dot-do/ai/discussions](https://github.com/dot-do/ai/discussions)
+
+---
+
+Ready to learn more? Continue to [Architecture](./architecture) to understand the system design.

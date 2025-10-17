@@ -1,32 +1,41 @@
 import js from '@eslint/js'
-import eslintConfigPrettier from 'eslint-config-prettier'
-import turboPlugin from 'eslint-plugin-turbo'
-import tseslint from 'typescript-eslint'
-import onlyWarn from 'eslint-plugin-only-warn'
+import tseslint from '@typescript-eslint/eslint-plugin'
+import tsparser from '@typescript-eslint/parser'
 
-/**
- * A shared ESLint configuration for the repository.
- *
- * @type {import("eslint").Linter.Config}
- * */
-export const config = [
+export default [
   js.configs.recommended,
-  eslintConfigPrettier,
-  ...tseslint.configs.recommended,
   {
+    files: ['**/*.{js,jsx,ts,tsx}'],
+    languageOptions: {
+      parser: tsparser,
+      parserOptions: {
+        ecmaVersion: 'latest',
+        sourceType: 'module',
+      },
+    },
     plugins: {
-      turbo: turboPlugin,
+      '@typescript-eslint': tseslint,
     },
     rules: {
-      'turbo/no-undeclared-env-vars': 'warn',
+      '@typescript-eslint/ban-ts-comment': 'warn',
+      '@typescript-eslint/no-empty-object-type': 'warn',
+      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        {
+          vars: 'all',
+          args: 'after-used',
+          ignoreRestSiblings: false,
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          destructuredArrayIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^(_|ignore)',
+        },
+      ],
+      'no-unused-vars': 'off', // Disable base rule as it conflicts with @typescript-eslint/no-unused-vars
     },
   },
   {
-    plugins: {
-      onlyWarn,
-    },
-  },
-  {
-    ignores: ['dist/**'],
+    ignores: ['node_modules/', 'dist/', 'build/'],
   },
 ]

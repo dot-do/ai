@@ -1,0 +1,57 @@
+---
+$id: https://invoices.do/examples/basic-usage
+$type: HowTo
+title: Basic Invoice Management Usage
+description: Learn basic invoice management patterns including creating invoices and recording payments.
+keywords: [examples, basic usage, invoice creation, payments]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Basic Invoice Management Usage
+
+## Create Invoice
+
+```typescript
+import $, { db } from 'sdk.do'
+
+const invoice = await db.create($.Invoice, {
+  $type: 'Invoice',
+  invoiceNumber: 'INV-2025-001',
+  dateIssued: new Date().toISOString(),
+  customer: {
+    $type: 'Person',
+    name: 'Jane Smith',
+    email: 'jane@example.com',
+  },
+  totalPaymentDue: {
+    $type: 'PriceSpecification',
+    price: 500.0,
+    priceCurrency: 'USD',
+  },
+  paymentDueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+  paymentStatus: 'PaymentDue',
+})
+```
+
+## Record Payment
+
+```typescript
+async function recordPayment(invoiceId: string, amount: number) {
+  const invoice = await db.get($.Invoice, invoiceId)
+
+  await db.update(invoice, {
+    paymentStatus: 'PaymentComplete',
+    paymentDate: new Date().toISOString(),
+  })
+}
+```
+
+## License
+
+MIT (Open Source)
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

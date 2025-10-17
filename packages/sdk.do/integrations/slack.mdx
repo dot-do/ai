@@ -1,0 +1,1329 @@
+---
+$id: https://integrations.do/slack
+$type: Integration
+name: Slack
+service: slack
+description: Team collaboration and messaging platform
+category: communication
+sdkBased: true
+sdkPackage: '@slack/web-api'
+sdkVersion: ^7.0.0
+sdkImport: WebClient
+
+auth:
+  type: api-key
+  location: header
+  headerName: Authorization
+  scheme: Bearer
+
+resources:
+  - name: Message
+    plural: Messages
+    sdkPath: chat
+    description: Send, update, delete, and schedule messages
+    operations:
+      - name: post
+        method: postMessage
+        params:
+          - name: channel
+            type: string
+            required: true
+            description: Channel ID or name (e.g., C1234567890 or #general)
+          - name: text
+            type: string
+            required: true
+            description: Message text (required for fallback)
+          - name: blocks
+            type: array
+            required: false
+            description: Block Kit blocks for rich formatting
+          - name: attachments
+            type: array
+            required: false
+            description: Legacy attachments
+          - name: thread_ts
+            type: string
+            required: false
+            description: Thread timestamp to reply in a thread
+          - name: reply_broadcast
+            type: boolean
+            required: false
+            description: Reply to thread and broadcast to channel
+          - name: username
+            type: string
+            required: false
+            description: Custom username to display
+          - name: icon_emoji
+            type: string
+            required: false
+            description: Emoji to use as the icon
+          - name: icon_url
+            type: string
+            required: false
+            description: URL to an image for the icon
+          - name: metadata
+            type: object
+            required: false
+            description: Message metadata for app features
+        returns: '{ channel: string, ts: string, message: object }'
+
+      - name: update
+        method: update
+        params:
+          - name: channel
+            type: string
+            required: true
+            description: Channel ID
+          - name: ts
+            type: string
+            required: true
+            description: Message timestamp
+          - name: text
+            type: string
+            required: true
+            description: New message text
+          - name: blocks
+            type: array
+            required: false
+            description: Updated blocks
+          - name: attachments
+            type: array
+            required: false
+            description: Updated attachments
+        returns: '{ channel: string, ts: string, text: string }'
+
+      - name: delete
+        method: delete
+        params:
+          - name: channel
+            type: string
+            required: true
+            description: Channel ID
+          - name: ts
+            type: string
+            required: true
+            description: Message timestamp
+        returns: '{ ok: boolean }'
+
+      - name: scheduleMessage
+        method: scheduleMessage
+        params:
+          - name: channel
+            type: string
+            required: true
+            description: Channel ID
+          - name: text
+            type: string
+            required: true
+            description: Message text
+          - name: post_at
+            type: number
+            required: true
+            description: Unix timestamp when to post
+          - name: blocks
+            type: array
+            required: false
+            description: Block Kit blocks
+          - name: thread_ts
+            type: string
+            required: false
+            description: Thread timestamp
+        returns: '{ scheduled_message_id: string, channel: string, post_at: number }'
+
+      - name: getPermalink
+        method: getPermalink
+        params:
+          - name: channel
+            type: string
+            required: true
+            description: Channel ID
+          - name: message_ts
+            type: string
+            required: true
+            description: Message timestamp
+        returns: string
+
+  - name: Channel
+    plural: Channels
+    sdkPath: conversations
+    description: Create, manage, and archive channels
+    operations:
+      - name: list
+        method: list
+        params:
+          - name: limit
+            type: number
+            required: false
+            description: Maximum number of channels to return
+            default: 100
+          - name: cursor
+            type: string
+            required: false
+            description: Pagination cursor
+          - name: exclude_archived
+            type: boolean
+            required: false
+            description: Exclude archived channels
+            default: false
+          - name: types
+            type: string
+            required: false
+            description: 'Comma-separated list of types (public_channel, private_channel, mpim, im)'
+            default: 'public_channel,private_channel'
+        returns: '{ channels: array }'
+        pagination:
+          type: cursor
+          cursorParam: cursor
+          limitParam: limit
+          defaultLimit: 100
+          maxLimit: 1000
+
+      - name: get
+        method: info
+        params:
+          - name: channel
+            type: string
+            required: true
+            description: Channel ID
+        returns: '{ channel: object }'
+
+      - name: create
+        method: create
+        params:
+          - name: name
+            type: string
+            required: true
+            description: Channel name (lowercase, no spaces, max 80 chars)
+          - name: is_private
+            type: boolean
+            required: false
+            description: Create a private channel
+            default: false
+          - name: team_id
+            type: string
+            required: false
+            description: Team ID for Enterprise Grid
+        returns: '{ channel: object }'
+
+      - name: archive
+        method: archive
+        params:
+          - name: channel
+            type: string
+            required: true
+            description: Channel ID
+        returns: '{ ok: boolean }'
+
+      - name: unarchive
+        method: unarchive
+        params:
+          - name: channel
+            type: string
+            required: true
+            description: Channel ID
+        returns: '{ ok: boolean }'
+
+      - name: invite
+        method: invite
+        params:
+          - name: channel
+            type: string
+            required: true
+            description: Channel ID
+          - name: users
+            type: string
+            required: true
+            description: Comma-separated user IDs
+        returns: '{ ok: boolean }'
+
+      - name: kick
+        method: kick
+        params:
+          - name: channel
+            type: string
+            required: true
+            description: Channel ID
+          - name: user
+            type: string
+            required: true
+            description: User ID to remove
+        returns: '{ ok: boolean }'
+
+      - name: history
+        method: history
+        params:
+          - name: channel
+            type: string
+            required: true
+            description: Channel ID
+          - name: latest
+            type: string
+            required: false
+            description: End of time range (timestamp)
+          - name: oldest
+            type: string
+            required: false
+            description: Start of time range (timestamp)
+          - name: limit
+            type: number
+            required: false
+            description: Number of messages to return
+            default: 100
+          - name: cursor
+            type: string
+            required: false
+            description: Pagination cursor
+        returns: '{ messages: array }'
+        pagination:
+          type: cursor
+          cursorParam: cursor
+          limitParam: limit
+          defaultLimit: 100
+
+      - name: replies
+        method: replies
+        params:
+          - name: channel
+            type: string
+            required: true
+            description: Channel ID
+          - name: ts
+            type: string
+            required: true
+            description: Thread parent message timestamp
+        returns: '{ messages: array }'
+
+      - name: open
+        method: open
+        params:
+          - name: users
+            type: string
+            required: true
+            description: Comma-separated user IDs
+        returns: '{ channel: object }'
+
+  - name: User
+    plural: Users
+    sdkPath: users
+    description: Get information about workspace users
+    operations:
+      - name: list
+        method: list
+        params:
+          - name: limit
+            type: number
+            required: false
+            description: Maximum number of users to return
+            default: 100
+          - name: cursor
+            type: string
+            required: false
+            description: Pagination cursor
+          - name: team_id
+            type: string
+            required: false
+            description: Team ID for Enterprise Grid
+          - name: include_locale
+            type: boolean
+            required: false
+            description: Include locale information
+        returns: '{ members: array }'
+        pagination:
+          type: cursor
+          cursorParam: cursor
+          limitParam: limit
+          defaultLimit: 100
+
+      - name: get
+        method: info
+        params:
+          - name: user
+            type: string
+            required: true
+            description: User ID
+        returns: '{ user: object }'
+
+      - name: lookupByEmail
+        method: lookupByEmail
+        params:
+          - name: email
+            type: string
+            required: true
+            description: User email address
+        returns: '{ user: object }'
+
+      - name: setPresence
+        method: setPresence
+        params:
+          - name: presence
+            type: string
+            required: true
+            description: Presence status (auto or away)
+            validation:
+              enum: ['auto', 'away']
+        returns: '{ ok: boolean }'
+
+  - name: File
+    plural: Files
+    sdkPath: files
+    description: Upload, share, and manage files
+    operations:
+      - name: upload
+        method: uploadV2
+        params:
+          - name: content
+            type: string | Buffer
+            required: false
+            description: File content
+          - name: file
+            type: string
+            required: false
+            description: File path (alternative to content)
+          - name: filename
+            type: string
+            required: false
+            description: Filename
+          - name: filetype
+            type: string
+            required: false
+            description: File type identifier
+          - name: title
+            type: string
+            required: false
+            description: Title of the file
+          - name: initial_comment
+            type: string
+            required: false
+            description: Initial comment
+          - name: channel_id
+            type: string
+            required: false
+            description: Channel to share the file in
+          - name: thread_ts
+            type: string
+            required: false
+            description: Thread timestamp
+        returns: '{ file: object }'
+
+      - name: get
+        method: info
+        params:
+          - name: file
+            type: string
+            required: true
+            description: File ID
+        returns: '{ file: object }'
+
+      - name: delete
+        method: delete
+        params:
+          - name: file
+            type: string
+            required: true
+            description: File ID
+        returns: '{ ok: boolean }'
+
+  - name: Reaction
+    plural: Reactions
+    sdkPath: reactions
+    description: Add and remove emoji reactions
+    operations:
+      - name: add
+        method: add
+        params:
+          - name: channel
+            type: string
+            required: true
+            description: Channel ID
+          - name: timestamp
+            type: string
+            required: true
+            description: Message timestamp
+          - name: name
+            type: string
+            required: true
+            description: Emoji name (without colons, e.g., thumbsup)
+        returns: '{ ok: boolean }'
+
+      - name: remove
+        method: remove
+        params:
+          - name: channel
+            type: string
+            required: true
+            description: Channel ID
+          - name: timestamp
+            type: string
+            required: true
+            description: Message timestamp
+          - name: name
+            type: string
+            required: true
+            description: Emoji name (without colons, e.g., thumbsup)
+        returns: '{ ok: boolean }'
+
+webhooks:
+  enabled: true
+  signatureHeader: X-Slack-Signature
+  signatureAlgorithm: sha256
+  verificationMethod: signature
+  events:
+    - name: url_verification
+      type: url_verification
+      description: URL verification challenge for initial webhook setup
+    - name: event_callback
+      type: event_callback
+      description: Wrapper event for all workspace events
+    - name: message
+      type: message
+      description: A message was sent to a channel
+    - name: message.channels
+      type: message.channels
+      description: A message was posted to a channel
+    - name: message.groups
+      type: message.groups
+      description: A message was posted to a private channel
+    - name: message.im
+      type: message.im
+      description: A message was posted in a direct message
+    - name: message.mpim
+      type: message.mpim
+      description: A message was posted in a multi-person direct message
+    - name: app_mention
+      type: app_mention
+      description: App was mentioned in a message
+    - name: channel_created
+      type: channel_created
+      description: A channel was created
+    - name: channel_deleted
+      type: channel_deleted
+      description: A channel was deleted
+    - name: channel_rename
+      type: channel_rename
+      description: A channel was renamed
+    - name: channel_archive
+      type: channel_archive
+      description: A channel was archived
+    - name: channel_unarchive
+      type: channel_unarchive
+      description: A channel was unarchived
+    - name: member_joined_channel
+      type: member_joined_channel
+      description: A user joined a channel
+    - name: member_left_channel
+      type: member_left_channel
+      description: A user left a channel
+    - name: team_join
+      type: team_join
+      description: A new user joined the workspace
+    - name: user_change
+      type: user_change
+      description: A user's profile or settings changed
+    - name: reaction_added
+      type: reaction_added
+      description: A reaction was added to a message
+    - name: reaction_removed
+      type: reaction_removed
+      description: A reaction was removed from a message
+    - name: file_shared
+      type: file_shared
+      description: A file was shared
+    - name: file_public
+      type: file_public
+      description: A file was made public
+    - name: file_deleted
+      type: file_deleted
+      description: A file was deleted
+    - name: app_home_opened
+      type: app_home_opened
+      description: User opened the App Home
+    - name: app_uninstalled
+      type: app_uninstalled
+      description: App was uninstalled
+
+errors:
+  mapping:
+    - code: not_authed
+      type: authentication
+      statusCode: 401
+      message: Authentication failed - check your Slack token
+      retryable: false
+    - code: invalid_auth
+      type: authentication
+      statusCode: 401
+      message: Invalid authentication token
+      retryable: false
+    - code: token_revoked
+      type: authentication
+      statusCode: 401
+      message: Token has been revoked
+      retryable: false
+    - code: token_expired
+      type: authentication
+      statusCode: 401
+      message: Token has expired
+      retryable: false
+    - code: account_inactive
+      type: authorization
+      statusCode: 403
+      message: Slack account is inactive
+      retryable: false
+    - code: missing_scope
+      type: authorization
+      statusCode: 403
+      message: Insufficient permissions - check token scopes
+      retryable: false
+    - code: not_allowed_token_type
+      type: authorization
+      statusCode: 403
+      message: Token type not allowed for this operation
+      retryable: false
+    - code: channel_not_found
+      type: not_found
+      statusCode: 404
+      message: Channel not found
+      retryable: false
+    - code: user_not_found
+      type: not_found
+      statusCode: 404
+      message: User not found
+      retryable: false
+    - code: file_not_found
+      type: not_found
+      statusCode: 404
+      message: File not found
+      retryable: false
+    - code: message_not_found
+      type: not_found
+      statusCode: 404
+      message: Message not found
+      retryable: false
+    - code: invalid_arguments
+      type: validation
+      statusCode: 400
+      message: Invalid request parameters
+      retryable: false
+    - code: invalid_name
+      type: validation
+      statusCode: 400
+      message: Invalid name format
+      retryable: false
+    - code: invalid_channel
+      type: validation
+      statusCode: 400
+      message: Invalid channel format
+      retryable: false
+    - code: cant_invite_self
+      type: validation
+      statusCode: 422
+      message: Cannot invite yourself to a channel
+      retryable: false
+    - code: already_in_channel
+      type: validation
+      statusCode: 422
+      message: User is already in the channel
+      retryable: false
+    - code: cant_kick_self
+      type: validation
+      statusCode: 422
+      message: Cannot kick yourself from a channel
+      retryable: false
+    - code: cant_archive_general
+      type: validation
+      statusCode: 422
+      message: Cannot archive the general channel
+      retryable: false
+    - code: name_taken
+      type: validation
+      statusCode: 422
+      message: Channel name is already taken
+      retryable: false
+    - code: restricted_action
+      type: validation
+      statusCode: 422
+      message: Action is restricted
+      retryable: false
+    - code: rate_limited
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded - retry after delay
+      retryable: true
+    - code: internal_error
+      type: server
+      statusCode: 500
+      message: Slack API server error
+      retryable: true
+    - code: fatal_error
+      type: server
+      statusCode: 500
+      message: Slack API fatal error
+      retryable: true
+    - code: service_unavailable
+      type: server
+      statusCode: 503
+      message: Slack service temporarily unavailable
+      retryable: true
+  retryable: [rate_limited, internal_error, fatal_error, service_unavailable]
+  nonRetryable:
+    [
+      not_authed,
+      invalid_auth,
+      token_revoked,
+      token_expired,
+      account_inactive,
+      missing_scope,
+      channel_not_found,
+      user_not_found,
+      file_not_found,
+      message_not_found,
+      invalid_arguments,
+      cant_invite_self,
+      already_in_channel,
+    ]
+
+tests:
+  enabled: true
+  cleanup: true
+  scenarios:
+    - name: Message Operations
+      description: Test posting, updating, and deleting messages
+      steps:
+        - action: create
+          resource: Message
+          params:
+            channel: test-channel
+            text: E2E test message
+        - action: update
+          resource: Message
+        - action: delete
+          resource: Message
+    - name: Channel Management
+      description: Test channel CRUD operations
+      steps:
+        - action: create
+          resource: Channel
+          params:
+            name: test-e2e-channel
+        - action: retrieve
+          resource: Channel
+        - action: list
+          resource: Channel
+        - action: delete
+          resource: Channel
+    - name: User Lookup
+      description: Test user information retrieval
+      steps:
+        - action: list
+          resource: User
+        - action: retrieve
+          resource: User
+    - name: Threaded Messages
+      description: Test thread replies and conversation history
+      steps:
+        - action: create
+          resource: Message
+          params:
+            channel: test-channel
+            text: Parent message
+        - action: create
+          resource: Message
+          params:
+            channel: test-channel
+            text: Reply message
+            thread_ts: parent-ts
+    - name: Reactions
+      description: Test adding and removing reactions
+      steps:
+        - action: create
+          resource: Message
+        - action: custom
+          resource: Reaction
+          params:
+            action: add
+            name: thumbsup
+        - action: custom
+          resource: Reaction
+          params:
+            action: remove
+            name: thumbsup
+    - name: File Upload
+      description: Test file upload and management
+      steps:
+        - action: create
+          resource: File
+          params:
+            content: test content
+            filename: test.txt
+        - action: retrieve
+          resource: File
+        - action: delete
+          resource: File
+    - name: Webhook Verification
+      description: Test webhook signature verification
+      steps:
+        - action: assert
+          expects:
+            status: 200
+
+docs:
+  homepage: https://slack.com
+  apiDocs: https://api.slack.com/methods
+  sdkDocs: https://slack.dev/node-slack-sdk/
+  guides:
+    quickstart: https://api.slack.com/start/quickstart
+    webhooks: https://api.slack.com/messaging/webhooks
+    authentication: https://api.slack.com/authentication
+    scopes: https://api.slack.com/scopes
+    blockKit: https://api.slack.com/block-kit
+---
+
+# Slack Team Collaboration
+
+Slack is a channel-based messaging platform that brings teams together to collaborate, communicate, and work more efficiently. It provides real-time messaging, file sharing, workflow automation, and integrations with thousands of apps.
+
+## Features
+
+- **Messaging**: Real-time chat with threading, mentions, and rich formatting
+- **Channels**: Organized conversations by topic, project, or team
+- **Direct Messages**: Private conversations with individuals or small groups
+- **File Sharing**: Share and collaborate on files with team members
+- **Search**: Powerful search across all messages and files
+- **Integrations**: Connect with 2,500+ apps and services
+- **Workflows**: Automate routine tasks and processes
+- **Video/Audio**: Built-in calls and screen sharing
+
+## Quick Start
+
+```typescript
+import { SlackClient } from '@dotdo/sdk.do/integrations/slack'
+
+const slack = new SlackClient({
+  token: process.env.SLACK_BOT_TOKEN,
+})
+
+// Post a message
+const message = await slack.postMessage('C1234567890', 'Hello from SDK.do!', {
+  blocks: [
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: '*Welcome to Slack!* :wave:',
+      },
+    },
+  ],
+})
+
+// List channels
+const channels = await slack.listChannels({
+  exclude_archived: true,
+  limit: 50,
+})
+
+// Get user info
+const user = await slack.getUserByEmail('user@example.com')
+```
+
+## Authentication
+
+Slack uses OAuth 2.0 for authentication. You'll need a Bot User OAuth Token:
+
+1. Create a Slack App at https://api.slack.com/apps
+2. Add OAuth Scopes (permissions) to your app
+3. Install the app to your workspace
+4. Copy the Bot User OAuth Token (starts with `xoxb-`)
+
+Set your token as an environment variable:
+
+```bash
+export SLACK_BOT_TOKEN=xoxb-your-token-here
+```
+
+### Required Scopes
+
+Different operations require different OAuth scopes:
+
+- **Messaging**: `chat:write`, `chat:write.public`
+- **Channels**: `channels:read`, `channels:manage`, `channels:history`
+- **Users**: `users:read`, `users:read.email`
+- **Files**: `files:read`, `files:write`
+- **Reactions**: `reactions:read`, `reactions:write`
+
+## Resources
+
+### Messages
+
+Send, update, and manage messages in channels and threads.
+
+```typescript
+// Post a simple message
+await slack.postMessage('C1234567890', 'Hello, team!')
+
+// Post with Block Kit formatting
+await slack.postMessage('C1234567890', 'Fallback text', {
+  blocks: [
+    {
+      type: 'header',
+      text: { type: 'plain_text', text: 'Project Update' },
+    },
+    {
+      type: 'section',
+      text: { type: 'mrkdwn', text: 'Sprint completed! :tada:' },
+    },
+  ],
+})
+
+// Post a threaded reply
+await slack.postMessage('C1234567890', 'Reply in thread', {
+  thread_ts: '1234567890.123456',
+})
+
+// Update a message
+await slack.updateMessage('C1234567890', '1234567890.123456', 'Updated text')
+
+// Delete a message
+await slack.deleteMessage('C1234567890', '1234567890.123456')
+
+// Schedule a message for later
+await slack.scheduleMessage(
+  'C1234567890',
+  'Good morning!',
+  Math.floor(Date.now() / 1000) + 3600 // 1 hour from now
+)
+
+// Get permalink to a message
+const permalink = await slack.getPermalink('C1234567890', '1234567890.123456')
+```
+
+### Channels
+
+Create and manage channels (conversations).
+
+```typescript
+// List all channels
+const channels = await slack.listChannels({
+  exclude_archived: true,
+  types: 'public_channel,private_channel',
+})
+
+// Get channel info
+const channel = await slack.getChannel('C1234567890')
+
+// Create a new channel
+const newChannel = await slack.createChannel('project-alpha', {
+  is_private: false,
+})
+
+// Archive a channel
+await slack.archiveChannel('C1234567890')
+
+// Unarchive a channel
+await slack.unarchiveChannel('C1234567890')
+
+// Invite users to a channel
+await slack.inviteToChannel('C1234567890', ['U1234567890', 'U0987654321'])
+
+// Remove a user from a channel
+await slack.kickFromChannel('C1234567890', 'U1234567890')
+
+// Get channel history
+const messages = await slack.getConversationHistory('C1234567890', {
+  limit: 50,
+})
+
+// Get thread replies
+const replies = await slack.getConversationReplies('C1234567890', '1234567890.123456')
+
+// Open a direct message
+const dm = await slack.openConversation('U1234567890')
+```
+
+### Users
+
+Retrieve information about workspace users.
+
+```typescript
+// List all users
+const users = await slack.listUsers({
+  limit: 100,
+})
+
+// Get user info by ID
+const user = await slack.getUser('U1234567890')
+
+// Look up user by email
+const userByEmail = await slack.getUserByEmail('user@example.com')
+
+// Set user presence
+await slack.setUserPresence('auto') // or 'away'
+```
+
+### Files
+
+Upload and manage files.
+
+```typescript
+// Upload a file
+const file = await slack.uploadFile({
+  content: Buffer.from('Hello, world!'),
+  filename: 'greeting.txt',
+  channels: ['C1234567890'],
+  initial_comment: 'Check out this file',
+})
+
+// Upload from file path
+await slack.uploadFile({
+  file: '/path/to/document.pdf',
+  filename: 'document.pdf',
+  channels: ['C1234567890'],
+})
+
+// Get file info
+const fileInfo = await slack.getFileInfo('F1234567890')
+
+// Delete a file
+await slack.deleteFile('F1234567890')
+```
+
+### Reactions
+
+Add emoji reactions to messages.
+
+```typescript
+// Add a reaction
+await slack.addReaction('C1234567890', '1234567890.123456', 'thumbsup')
+
+// Remove a reaction
+await slack.removeReaction('C1234567890', '1234567890.123456', 'thumbsup')
+```
+
+## Webhooks
+
+Slack sends webhooks for real-time events. Always verify webhook signatures:
+
+```typescript
+import { SlackWebhooks, SlackEventRouter } from '@dotdo/sdk.do/integrations/slack'
+
+// Verify webhook signature
+const isValid = SlackWebhooks.verifySignature(
+  requestBody,
+  request.headers.get('x-slack-signature'),
+  request.headers.get('x-slack-request-timestamp'),
+  process.env.SLACK_SIGNING_SECRET
+)
+
+if (!isValid) {
+  throw new Error('Invalid webhook signature')
+}
+
+// Parse event
+const event = SlackWebhooks.parseEvent(JSON.parse(requestBody))
+
+// Handle URL verification challenge
+const challenge = SlackWebhooks.handleChallenge(event)
+if (challenge) {
+  return new Response(challenge, { headers: { 'Content-Type': 'text/plain' } })
+}
+
+// Route events using the event router
+const router = new SlackEventRouter()
+
+router.on('message', async (event) => {
+  console.log('New message:', event.event.text)
+})
+
+router.on('member_joined_channel', async (event) => {
+  console.log('User joined:', event.event.user)
+  // Send welcome message
+})
+
+router.on('app_mention', async (event) => {
+  console.log('App mentioned:', event.event.text)
+  // Respond to mention
+})
+
+await router.handle(event)
+```
+
+### Common Webhook Events
+
+- **Messages**: `message`, `message.channels`, `message.groups`, `message.im`
+- **Channels**: `channel_created`, `channel_deleted`, `channel_rename`, `channel_archive`
+- **Members**: `member_joined_channel`, `member_left_channel`, `team_join`
+- **Reactions**: `reaction_added`, `reaction_removed`
+- **Files**: `file_shared`, `file_public`, `file_deleted`
+- **App**: `app_mention`, `app_home_opened`, `app_uninstalled`
+
+## Error Handling
+
+```typescript
+import { SlackIntegrationError } from '@dotdo/sdk.do/integrations/slack'
+
+try {
+  await slack.postMessage('C1234567890', 'Hello!')
+} catch (error) {
+  if (error instanceof SlackIntegrationError) {
+    console.error('Slack Error:', error.code, error.message)
+
+    if (error.code === 'authentication_error') {
+      // Handle invalid token
+    } else if (error.code === 'channel_not_found') {
+      // Handle missing channel
+    } else if (error.isRateLimited) {
+      // Handle rate limiting
+      const retryAfter = error.getRetryDelay()
+      console.log(`Rate limited. Retry after ${retryAfter}ms`)
+    } else if (error.isRetriable()) {
+      // Retry server errors
+    }
+  }
+}
+```
+
+## Rate Limits
+
+Slack enforces rate limits per workspace and method:
+
+- **Tier 1** (posting messages): 1 request per second
+- **Tier 2** (most methods): 20+ requests per minute
+- **Tier 3** (less frequently used): 50+ requests per minute
+- **Tier 4** (rarely used): 100+ requests per minute
+
+When rate limited, Slack returns a `Retry-After` header indicating when to retry.
+
+## Best Practices
+
+1. **Use Block Kit**: Rich message formatting with [Block Kit](https://api.slack.com/block-kit)
+2. **Verify Webhooks**: Always verify webhook signatures to prevent spoofing
+3. **Handle Rate Limits**: Implement exponential backoff with `Retry-After`
+4. **Request Minimal Scopes**: Only request OAuth scopes your app needs
+5. **Use Threads**: Keep channels organized by replying in threads
+6. **Paginate Results**: Use cursor-based pagination for large result sets
+7. **Test in Test Workspace**: Create a test workspace for development
+8. **Handle Errors Gracefully**: Provide meaningful error messages to users
+9. **Use Ephemeral Messages**: Send temporary messages visible only to one user
+10. **Respect User Preferences**: Honor Do Not Disturb settings
+
+## Message Formatting
+
+Slack supports markdown-like formatting (mrkdwn):
+
+```typescript
+await slack.postMessage('C1234567890', 'Message with *bold*, _italic_, ~strikethrough~')
+
+// Mentions
+await slack.postMessage('C1234567890', 'Hey <@U1234567890>!')
+
+// Links
+await slack.postMessage('C1234567890', 'Visit <https://example.com|our website>')
+
+// Channel references
+await slack.postMessage('C1234567890', 'Check out <#C9876543210>')
+
+// Emoji
+await slack.postMessage('C1234567890', 'Great work! :tada: :rocket:')
+```
+
+## Block Kit Examples
+
+Create rich interactive messages with Block Kit:
+
+```typescript
+// Simple section with button
+await slack.postMessage('C1234567890', 'Fallback text', {
+  blocks: [
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: 'Would you like to approve this request?',
+      },
+    },
+    {
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: 'Approve' },
+          style: 'primary',
+          value: 'approve',
+          action_id: 'approve_request',
+        },
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: 'Deny' },
+          style: 'danger',
+          value: 'deny',
+          action_id: 'deny_request',
+        },
+      ],
+    },
+  ],
+})
+
+// Rich message with sections
+await slack.postMessage('C1234567890', 'Deploy completed', {
+  blocks: [
+    {
+      type: 'header',
+      text: { type: 'plain_text', text: 'Deploy Successful :white_check_mark:' },
+    },
+    {
+      type: 'section',
+      fields: [
+        { type: 'mrkdwn', text: '*Environment:*\nProduction' },
+        { type: 'mrkdwn', text: '*Version:*\nv2.1.0' },
+        { type: 'mrkdwn', text: '*Deployed by:*\n<@U1234567890>' },
+        { type: 'mrkdwn', text: '*Duration:*\n3m 24s' },
+      ],
+    },
+    {
+      type: 'context',
+      elements: [
+        {
+          type: 'mrkdwn',
+          text: 'Deployed at <!date^1234567890^{date_short_pretty} at {time}|timestamp>',
+        },
+      ],
+    },
+  ],
+})
+```
+
+## Advanced SDK Usage
+
+Access the underlying Slack Web API client for advanced operations:
+
+```typescript
+const slack = new SlackClient({ token: process.env.SLACK_BOT_TOKEN })
+
+// Access raw SDK
+const webClient = slack.sdk
+
+// Call any Slack API method directly
+const result = await webClient.admin.users.list({
+  team_id: 'T1234567890',
+})
+
+// Use method-specific options
+await webClient.chat.postMessage({
+  channel: 'C1234567890',
+  text: 'Hello',
+  as_user: true,
+  unfurl_links: false,
+  unfurl_media: false,
+})
+```
+
+## Testing
+
+Test your integration in a dedicated test workspace:
+
+1. Create a Slack workspace for testing
+2. Install your app in the test workspace
+3. Use test channels and users for E2E tests
+4. Clean up test data after each test run
+
+```typescript
+// E2E test example
+import { SlackClient } from '@dotdo/sdk.do/integrations/slack'
+
+const slack = new SlackClient({
+  token: process.env.SLACK_BOT_TOKEN,
+})
+
+// Post test message
+const message = await slack.postMessage('test-channel', 'E2E test')
+
+// Verify message was posted
+expect(message.ts).toBeDefined()
+
+// Clean up
+await slack.deleteMessage('test-channel', message.ts)
+```
+
+## Common Use Cases
+
+### Send Daily Standup Reminder
+
+```typescript
+await slack.postMessage('C1234567890', 'Daily standup starts in 10 minutes! :clock10:', {
+  blocks: [
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: '*Daily Standup Reminder* :bell:\n\nStandup starts in 10 minutes. Please prepare your updates!',
+      },
+    },
+  ],
+})
+```
+
+### Notify on CI/CD Build
+
+```typescript
+const buildStatus = 'success' // or 'failure'
+const emoji = buildStatus === 'success' ? ':white_check_mark:' : ':x:'
+
+await slack.postMessage('deploys', `Build ${buildStatus} ${emoji}`, {
+  blocks: [
+    {
+      type: 'header',
+      text: { type: 'plain_text', text: `Build ${buildStatus} ${emoji}` },
+    },
+    {
+      type: 'section',
+      fields: [
+        { type: 'mrkdwn', text: `*Branch:*\nmain` },
+        { type: 'mrkdwn', text: `*Commit:*\nabc1234` },
+      ],
+    },
+  ],
+})
+```
+
+### Welcome New Team Members
+
+```typescript
+// Listen for team_join event
+router.on('team_join', async (event) => {
+  const userId = event.event.user.id
+  const dm = await slack.openConversation(userId)
+
+  await slack.postMessage(dm.id, `Welcome to the team! :wave:`, {
+    blocks: [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: '*Welcome to the team!* :wave:\n\nWe're excited to have you here. Check out these resources to get started:',
+        },
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: '• <#C1234567890> - General discussion\n• <#C9876543210> - Random fun\n• <https://docs.company.com|Team Handbook>',
+        },
+      },
+    ],
+  })
+})
+```
+
+## API Reference
+
+Full API documentation:
+
+- **Slack API Methods**: https://api.slack.com/methods
+- **Web API Client**: https://slack.dev/node-slack-sdk/web-api
+- **Block Kit Builder**: https://app.slack.com/block-kit-builder
+- **Webhook Events**: https://api.slack.com/events
+
+## Support
+
+- **Documentation**: https://api.slack.com/docs
+- **Community**: https://slackcommunity.com
+- **Status**: https://status.slack.com
+- **Support**: https://slack.com/help/contact

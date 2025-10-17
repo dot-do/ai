@@ -1,0 +1,265 @@
+---
+$id: https://validate.do/api/reference
+$type: APIReference
+title: validate.do API Reference
+description: Complete API reference for validate.do functions and types
+keywords: [validate, api, reference, documentation, types]
+---
+
+# validate.do API Reference
+
+Complete API documentation for validate.do functions, types, and interfaces.
+
+## Functions
+
+### validate()
+
+Main function for data validation.
+
+**Signature:**
+
+```typescript
+async function validate<T = any>(data: T | ValidateInput, options?: ValidateOptions): Promise<ValidateResult<T>>
+```
+
+**Parameters:**
+
+- `data` - Input data to process
+- `options` - Optional configuration options
+
+**Returns:** Promise resolving to result object
+
+**Example:**
+
+```typescript
+const result = await validate({
+  data: 'input',
+  options: { format: 'json' },
+})
+```
+
+### validate.create()
+
+Create a reusable instance.
+
+**Signature:**
+
+```typescript
+function create(config: ValidateConfig): ValidateInstance
+```
+
+**Parameters:**
+
+- `config` - Instance configuration
+
+**Returns:** Instance object
+
+**Example:**
+
+```typescript
+const instance = validate.create({
+  timeout: 30000,
+  retries: 3,
+})
+
+const result = await instance.process(data)
+```
+
+### validate.batch()
+
+Process multiple items.
+
+**Signature:**
+
+```typescript
+async function batch<T>(items: T[], options?: BatchOptions): Promise<ValidateResult<T>[]>
+```
+
+**Parameters:**
+
+- `items` - Array of items to process
+- `options` - Optional batch options
+
+**Returns:** Promise resolving to array of results
+
+**Example:**
+
+```typescript
+const results = await validate.batch([item1, item2, item3])
+```
+
+### validate.stream()
+
+Process data as a stream.
+
+**Signature:**
+
+```typescript
+async function* stream<T>(
+  data: AsyncIterable<T>,
+  options?: StreamOptions
+): AsyncGenerator<ValidateResult<T>>
+```
+
+**Parameters:**
+
+- `data` - Async iterable data source
+- `options` - Optional stream options
+
+**Returns:** Async generator yielding results
+
+**Example:**
+
+```typescript
+for await (const result of validate.stream(dataStream)) {
+  console.log('Result:', result)
+}
+```
+
+## Types
+
+### ValidateOptions
+
+Configuration options for validate().
+
+```typescript
+interface ValidateOptions {
+  // Format options
+  format?: 'json' | 'xml' | 'text'
+
+  // Validation
+  validate?: boolean
+  strict?: boolean
+
+  // Performance
+  timeout?: number
+  cache?: boolean
+  cacheTTL?: number
+
+  // Error handling
+  throwOnError?: boolean
+  retries?: number
+}
+```
+
+### ValidateResult
+
+Result object returned by validate().
+
+```typescript
+interface ValidateResult<T = any> {
+  // Success indicator
+  success: boolean
+
+  // Result data
+  data?: T
+
+  // Error information
+  error?: string
+  code?: string
+
+  // Metadata
+  metadata?: {
+    duration: number
+    timestamp: Date
+    cached: boolean
+  }
+}
+```
+
+### ValidateConfig
+
+Configuration for creating instances.
+
+```typescript
+interface ValidateConfig {
+  // API configuration
+  apiKey?: string
+  endpoint?: string
+
+  // Timeouts
+  timeout?: number
+  retries?: number
+
+  // Defaults
+  defaultOptions?: ValidateOptions
+}
+```
+
+### ValidateInstance
+
+Instance created by validate.create().
+
+```typescript
+interface ValidateInstance {
+  // Process method
+  process<T>(data: T, options?: ValidateOptions): Promise<ValidateResult<T>>
+
+  // Batch method
+  batch<T>(items: T[], options?: BatchOptions): Promise<ValidateResult<T>[]>
+
+  // Close instance
+  close(): Promise<void>
+
+  // Get metrics
+  getMetrics(): Metrics
+}
+```
+
+### ValidateError
+
+Custom error class.
+
+```typescript
+class ValidateError extends Error {
+  code: string
+  details?: any
+
+  constructor(message: string, code: string, details?: any)
+}
+```
+
+## Constants
+
+### DEFAULT_OPTIONS
+
+Default options used when none provided.
+
+```typescript
+const DEFAULT_OPTIONS: ValidateOptions = {
+  format: 'json',
+  validate: true,
+  timeout: 30000,
+  retries: 3,
+}
+```
+
+## Events
+
+### Instance Events
+
+Instances emit events for monitoring:
+
+```typescript
+instance.on('start', (data) => {
+  console.log('Processing started:', data)
+})
+
+instance.on('complete', (result) => {
+  console.log('Processing completed:', result)
+})
+
+instance.on('error', (error) => {
+  console.error('Processing error:', error)
+})
+```
+
+## Learn More
+
+- [Getting Started](../docs/getting-started) - Setup guide
+- [Examples](../examples/basic-usage) - Code examples
+- [Best Practices](../docs/best-practices) - Recommended patterns
+
+---
+
+Part of the [validate.do](https://validate.do) documentation.

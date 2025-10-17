@@ -1,0 +1,893 @@
+---
+$id: https://mcp.do/examples/execute-typescript
+$type: HowTo
+title: Executing TypeScript via MCP
+description: Advanced TypeScript execution patterns with mcp.do
+keywords: [typescript, execution, advanced, patterns, mcp]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Executing TypeScript via MCP
+
+Advanced TypeScript execution patterns with mcp.do.
+
+## Overview
+
+The `do` tool accepts TypeScript code and executes it in a secure sandbox with full access to `sdk.do`. This enables Claude to perform complex operations using the entire `.do` platform API.
+
+## Execution Model
+
+### Code Structure
+
+TypeScript code passed to the `do` tool should:
+
+1. **Import from sdk.do**: Import necessary functions
+2. **Execute operations**: Perform database queries, AI generation, etc.
+3. **Return results**: Return data that Claude can present
+
+```typescript
+import $, { db, ai } from 'sdk.do'
+
+// Your code here
+const result = await someOperation()
+
+// Always return something
+return result
+```
+
+### Available Imports
+
+All `sdk.do` exports are available:
+
+```typescript
+// Semantic context proxy
+import $ from 'sdk.do'
+
+// Core functions
+import { ai, api, db, on, send, every, user } from 'sdk.do'
+
+// Everything at once
+import $, { ai, api, db, on, send, every, user } from 'sdk.do'
+```
+
+## Advanced Database Operations
+
+### Complex Queries
+
+Multi-table joins and aggregations:
+
+**Prompt**:
+
+```
+Use the do tool to analyze revenue by business and product category for the last quarter
+```
+
+**Claude executes**:
+
+```typescript
+import { db } from 'sdk.do'
+
+const quarterStart = new Date()
+quarterStart.setMonth(quarterStart.getMonth() - 3)
+
+const result = await db.query(
+  `
+  SELECT
+    b.name as business_name,
+    p.category,
+    COUNT(o.id) as order_count,
+    SUM(o.amount) as total_revenue,
+    AVG(o.amount) as avg_order_value
+  FROM orders o
+  JOIN products p ON o.product_id = p.id
+  JOIN businesses b ON p.business_id = b.id
+  WHERE o.created_at >= ?
+  GROUP BY b.name, p.category
+  ORDER BY total_revenue DESC
+`,
+  [quarterStart]
+)
+
+return {
+  quarter: 'Q1 2025',
+  analysis: result,
+  totalBusinesses: new Set(result.map((r) => r.business_name)).size,
+}
+```
+
+### Transaction Processing
+
+Execute multiple operations atomically:
+
+**Prompt**:
+
+```
+Use the do tool to transfer a product from one business to another
+```
+
+**Claude executes**:
+
+```typescript
+import $, { db } from 'sdk.do'
+
+const productId = 'product-123'
+const fromBusinessId = 'business-a'
+const toBusinessId = 'business-b'
+
+try {
+  // Begin transaction
+  await db.transaction(async (tx) => {
+    // Get product
+    const product = await tx.get($.Product, productId)
+
+    if (product.business !== fromBusinessId) {
+      throw new Error('Product does not belong to source business')
+    }
+
+    // Update product
+    await tx.update($.Product, productId, {
+      business: toBusinessId,
+      transferDate: new Date(),
+    })
+
+    // Create audit log
+    await tx.create($.AuditLog, {
+      type: 'product_transfer',
+      productId,
+      fromBusinessId,
+      toBusinessId,
+      timestamp: new Date(),
+    })
+  })
+
+  return {
+    success: true,
+    message: 'Product transferred successfully',
+  }
+} catch (error) {
+  return {
+    error: true,
+    message: error.message,
+  }
+}
+```
+
+### Batch Operations
+
+Process multiple entities efficiently:
+
+**Prompt**:
+
+```
+Use the do tool to update prices for all products in a category
+```
+
+**Claude executes**:
+
+```typescript
+import $, { db } from 'sdk.do'
+
+const category = 'Electronics'
+const priceIncrease = 1.1 // 10% increase
+
+// Get all products in category
+const products = await db.list($.Product, {
+  where: { category },
+})
+
+// Update prices in batch
+const updates = products.map((product) => ({
+  id: product.$id,
+  updates: {
+    price: Math.round(product.price * priceIncrease * 100) / 100,
+    lastPriceUpdate: new Date(),
+  },
+}))
+
+const results = await db.batchUpdate($.Product, updates)
+
+return {
+  category,
+  productsUpdated: results.length,
+  averageIncrease: priceIncrease,
+  results,
+}
+```
+
+## Advanced AI Operations
+
+### Multi-Step AI Generation
+
+Chain multiple AI operations:
+
+**Prompt**:
+
+```
+Use the do tool to generate a product description, then create marketing copy based on it
+```
+
+**Claude executes**:
+
+```typescript
+import $, { ai } from 'sdk.do'
+
+const productName = 'AI-Powered CRM'
+
+// Step 1: Generate product description
+const description = await ai.generate({
+  prompt: `Write a detailed technical description for ${productName}`,
+  schema: $.Text,
+  model: 'gpt-5',
+})
+
+// Step 2: Generate marketing copy based on description
+const marketing = await ai.generate({
+  prompt: `Based on this product description, write compelling marketing copy:
+    ${description.text}`,
+  schema: $.MarketingCopy,
+  model: 'gpt-5',
+})
+
+// Step 3: Generate social media posts
+const socialPosts = await ai.generate({
+  prompt: `Create 3 social media posts to promote this product:
+    ${marketing.text}`,
+  schema: $.SocialMediaPost,
+  model: 'gpt-5',
+  count: 3,
+})
+
+return {
+  product: productName,
+  description: description.text,
+  marketing: marketing.text,
+  socialPosts: socialPosts,
+}
+```
+
+### Embeddings and Semantic Search
+
+Create embeddings and perform semantic search:
+
+**Prompt**:
+
+```
+Use the do tool to find products similar to "project management software"
+```
+
+**Claude executes**:
+
+```typescript
+import $, { db, ai } from 'sdk.do'
+
+const searchQuery = 'project management software'
+
+// Generate embedding for search query
+const queryEmbedding = await ai.embed({
+  text: searchQuery,
+  model: 'text-embedding-3-small',
+})
+
+// Search for similar products using vector similarity
+const similarProducts = await db.vectorSearch($.Product, {
+  embedding: queryEmbedding,
+  limit: 10,
+  threshold: 0.7,
+})
+
+// Enrich results with AI-generated similarity explanations
+const results = []
+for (const product of similarProducts) {
+  const explanation = await ai.generate({
+    prompt: `Explain why "${product.name}" is similar to "${searchQuery}"`,
+    schema: $.Text,
+    model: 'gpt-5-mini',
+  })
+
+  results.push({
+    product: {
+      id: product.$id,
+      name: product.name,
+      category: product.category,
+    },
+    similarity: product._similarity,
+    explanation: explanation.text,
+  })
+}
+
+return {
+  query: searchQuery,
+  resultsCount: results.length,
+  results,
+}
+```
+
+### AI-Powered Data Validation
+
+Use AI to validate and clean data:
+
+**Prompt**:
+
+```
+Use the do tool to validate and standardize business addresses using AI
+```
+
+**Claude executes**:
+
+```typescript
+import $, { db, ai } from 'sdk.do'
+
+// Get businesses with potentially invalid addresses
+const businesses = await db.list($.Business, {
+  where: { addressValidated: false },
+  limit: 20,
+})
+
+const results = []
+
+for (const business of businesses) {
+  // Use AI to validate and standardize address
+  const validation = await ai.generate({
+    prompt: `Validate and standardize this address, return as structured JSON:
+      ${business.address}
+
+      Return format: {
+        valid: boolean,
+        standardized: string,
+        components: { street, city, state, zip, country }
+      }`,
+    schema: $.AddressValidation,
+    model: 'gpt-5',
+  })
+
+  // Update business if address is valid
+  if (validation.valid) {
+    await db.update($.Business, business.$id, {
+      address: validation.standardized,
+      addressValidated: true,
+      addressComponents: validation.components,
+    })
+
+    results.push({
+      business: business.name,
+      original: business.address,
+      standardized: validation.standardized,
+      status: 'updated',
+    })
+  } else {
+    results.push({
+      business: business.name,
+      original: business.address,
+      status: 'invalid',
+    })
+  }
+}
+
+return {
+  processed: results.length,
+  validated: results.filter((r) => r.status === 'updated').length,
+  invalid: results.filter((r) => r.status === 'invalid').length,
+  results,
+}
+```
+
+## Event-Driven Patterns
+
+### Event Listeners
+
+Set up event listeners:
+
+**Prompt**:
+
+```
+Use the do tool to create a listener for new orders that creates invoices
+```
+
+**Claude executes**:
+
+```typescript
+import $, { on, db, send } from 'sdk.do'
+
+on($.Order.created, async (order) => {
+  // Create invoice
+  const invoice = await db.create($.Invoice, {
+    order: order.$id,
+    business: order.business,
+    amount: order.total,
+    dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    status: 'pending',
+  })
+
+  // Send invoice created event
+  await send($.Invoice.created, invoice)
+
+  // Update order with invoice reference
+  await db.update($.Order, order.$id, {
+    invoice: invoice.$id,
+    status: 'invoiced',
+  })
+})
+
+return {
+  listener: 'created',
+  event: '$.Order.created',
+  action: 'create_invoice',
+}
+```
+
+### Event Publishing
+
+Publish events to trigger workflows:
+
+**Prompt**:
+
+```
+Use the do tool to publish a customer signup event with user data
+```
+
+**Claude executes**:
+
+```typescript
+import $, { send, db } from 'sdk.do'
+
+const customer = await db.get($.Customer, 'customer-123')
+
+// Publish customer signup event
+await send($.Customer.signedUp, {
+  customerId: customer.$id,
+  email: customer.email,
+  signupDate: new Date(),
+  source: 'web',
+  metadata: {
+    plan: customer.plan,
+    referrer: customer.referrer,
+  },
+})
+
+return {
+  event: 'customer.signedUp',
+  customerId: customer.$id,
+  status: 'published',
+}
+```
+
+## Scheduled Workflows
+
+### Create Scheduled Tasks
+
+Set up recurring tasks:
+
+**Prompt**:
+
+```
+Use the do tool to create a daily task that generates a sales report
+```
+
+**Claude executes**:
+
+```typescript
+import $, { every, db, ai, send } from 'sdk.do'
+
+every('0 9 * * *', async () => {
+  // Get yesterday's sales data
+  const yesterday = new Date()
+  yesterday.setDate(yesterday.getDate() - 1)
+  yesterday.setHours(0, 0, 0, 0)
+
+  const sales = await db.query(
+    `
+    SELECT
+      COUNT(*) as order_count,
+      SUM(amount) as total_revenue,
+      AVG(amount) as avg_order_value,
+      MAX(amount) as largest_order
+    FROM orders
+    WHERE created_at >= ? AND created_at < ?
+  `,
+    [yesterday, new Date()]
+  )
+
+  // Generate AI insights
+  const insights = await ai.generate({
+    prompt: `Analyze these daily sales metrics and provide insights:
+      - Orders: ${sales[0].order_count}
+      - Revenue: $${sales[0].total_revenue}
+      - Average: $${sales[0].avg_order_value}`,
+    schema: $.Report,
+    model: 'gpt-5',
+  })
+
+  // Create report
+  const report = await db.create($.DailyReport, {
+    date: yesterday,
+    type: 'sales',
+    metrics: sales[0],
+    insights: insights.text,
+  })
+
+  // Send report
+  await send($.DailyReport.created, report)
+})
+
+return {
+  schedule: '0 9 * * *',
+  description: 'Daily sales report at 9 AM',
+  status: 'scheduled',
+}
+```
+
+### Interval-Based Tasks
+
+Create tasks that run at intervals:
+
+**Prompt**:
+
+```
+Use the do tool to create a task that syncs data every 15 minutes
+```
+
+**Claude executes**:
+
+```typescript
+import $, { every, db, api } from 'sdk.do'
+
+every('*/15 * * * *', async () => {
+  // Fetch data from external API
+  const data = await api.fetch('https://api.example.com/data')
+
+  // Sync to database
+  for (const item of data.items) {
+    await db.upsert($.ExternalData, item.id, {
+      ...item,
+      lastSync: new Date(),
+    })
+  }
+
+  return {
+    synced: data.items.length,
+    timestamp: new Date(),
+  }
+})
+
+return {
+  schedule: '*/15 * * * *',
+  description: 'Sync data every 15 minutes',
+  status: 'scheduled',
+}
+```
+
+## External API Integration
+
+### Call External APIs
+
+Integrate with external services:
+
+**Prompt**:
+
+```
+Use the do tool to fetch weather data and store it in the database
+```
+
+**Claude executes**:
+
+```typescript
+import $, { api, db } from 'sdk.do'
+
+const city = 'San Francisco'
+
+// Fetch weather data
+const weather = await api.fetch(`https://api.weather.com/v1/current`, {
+  params: { city },
+  headers: {
+    Authorization: `Bearer ${process.env.WEATHER_API_KEY}`,
+  },
+})
+
+// Store in database
+const record = await db.create($.WeatherData, {
+  city,
+  temperature: weather.temp,
+  condition: weather.condition,
+  humidity: weather.humidity,
+  timestamp: new Date(),
+})
+
+return {
+  city,
+  weather: weather,
+  stored: true,
+  recordId: record.$id,
+}
+```
+
+### Chain API Calls
+
+Chain multiple API calls together:
+
+**Prompt**:
+
+```
+Use the do tool to get a user's GitHub repos and analyze them with AI
+```
+
+**Claude executes**:
+
+```typescript
+import { api, ai } from 'sdk.do'
+
+const username = 'octocat'
+
+// Fetch GitHub repos
+const repos = await api.fetch(`https://api.github.com/users/${username}/repos`)
+
+// Analyze repos with AI
+const analysis = await ai.generate({
+  prompt: `Analyze this developer's repositories:
+    ${repos.map((r) => `${r.name}: ${r.description}`).join('\n')}
+
+    Provide insights about their tech stack, interests, and expertise.`,
+  schema: $.Analysis,
+  model: 'gpt-5',
+})
+
+return {
+  username,
+  repoCount: repos.length,
+  analysis: analysis.text,
+  topLanguages: [...new Set(repos.map((r) => r.language).filter(Boolean))],
+}
+```
+
+## Error Handling and Retry Logic
+
+### Comprehensive Error Handling
+
+Handle all possible errors:
+
+**Prompt**:
+
+```
+Use the do tool to fetch data with comprehensive error handling
+```
+
+**Claude executes**:
+
+```typescript
+import $, { db, ai } from 'sdk.do'
+
+async function generateWithRetry(prompt: string, maxRetries = 3) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await ai.generate({
+        prompt,
+        model: 'gpt-5',
+      })
+    } catch (error) {
+      if (i === maxRetries - 1) {
+        throw error
+      }
+      // Wait before retry (exponential backoff)
+      await new Promise((resolve) => setTimeout(resolve, Math.pow(2, i) * 1000))
+    }
+  }
+}
+
+try {
+  // Get business
+  const business = await db.get($.Business, 'business-123')
+
+  if (!business) {
+    return {
+      error: true,
+      code: 'NOT_FOUND',
+      message: 'Business not found',
+    }
+  }
+
+  // Generate description with retry
+  const description = await generateWithRetry(`Write a description for ${business.name}`)
+
+  // Update business
+  const updated = await db.update($.Business, business.$id, {
+    description: description.text,
+  })
+
+  return {
+    success: true,
+    business: updated,
+  }
+} catch (error) {
+  return {
+    error: true,
+    code: error.code || 'UNKNOWN_ERROR',
+    message: error.message,
+    stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+  }
+}
+```
+
+## Performance Optimization
+
+### Parallel Execution
+
+Execute operations in parallel:
+
+**Prompt**:
+
+```
+Use the do tool to fetch multiple entities in parallel
+```
+
+**Claude executes**:
+
+```typescript
+import $, { db } from 'sdk.do'
+
+const ids = ['business-1', 'business-2', 'business-3', 'business-4']
+
+// Fetch all in parallel
+const businesses = await Promise.all(ids.map((id) => db.get($.Business, id)))
+
+return {
+  count: businesses.length,
+  businesses,
+}
+```
+
+### Caching Results
+
+Implement caching for expensive operations:
+
+**Prompt**:
+
+```
+Use the do tool to implement a cached AI generation function
+```
+
+**Claude executes**:
+
+```typescript
+import $, { db, ai } from 'sdk.do'
+
+const cacheKey = 'ai_generation_cache'
+
+async function generateWithCache(prompt: string) {
+  // Check cache
+  const cached = await db.get($.Cache, cacheKey)
+
+  if (cached && cached.prompt === prompt) {
+    return {
+      result: cached.result,
+      cached: true,
+    }
+  }
+
+  // Generate
+  const result = await ai.generate({
+    prompt,
+    model: 'gpt-5',
+  })
+
+  // Store in cache
+  await db.upsert($.Cache, cacheKey, {
+    prompt,
+    result: result.text,
+    timestamp: new Date(),
+  })
+
+  return {
+    result: result.text,
+    cached: false,
+  }
+}
+
+const result = await generateWithCache('Write a haiku about AI')
+
+return result
+```
+
+## Testing and Debugging
+
+### Debug Logging
+
+Add debug logging to code:
+
+**Prompt**:
+
+```
+Use the do tool with debug logging enabled
+```
+
+**Claude executes**:
+
+```typescript
+import $, { db } from 'sdk.do'
+
+const debug = true
+
+if (debug) console.log('Starting query...')
+
+const businesses = await db.list($.Business, {
+  where: { industry: 'Technology' },
+})
+
+if (debug) console.log(`Found ${businesses.length} businesses`)
+
+if (debug) console.log('Query complete')
+
+return {
+  count: businesses.length,
+  data: businesses,
+}
+```
+
+### Validation and Testing
+
+Validate inputs and outputs:
+
+**Prompt**:
+
+```
+Use the do tool to validate data before processing
+```
+
+**Claude executes**:
+
+```typescript
+import $, { db } from 'sdk.do'
+
+function validateBusiness(data: any) {
+  const errors = []
+
+  if (!data.name || data.name.trim().length === 0) {
+    errors.push('Name is required')
+  }
+
+  if (!data.industry) {
+    errors.push('Industry is required')
+  }
+
+  if (data.email && !data.email.includes('@')) {
+    errors.push('Invalid email format')
+  }
+
+  return errors
+}
+
+const businessData = {
+  name: 'Acme Corp',
+  industry: 'Technology',
+  email: 'contact@acme.com',
+}
+
+const errors = validateBusiness(businessData)
+
+if (errors.length > 0) {
+  return {
+    error: true,
+    message: 'Validation failed',
+    errors,
+  }
+}
+
+const business = await db.create($.Business, businessData)
+
+return {
+  success: true,
+  business,
+}
+```
+
+## Next Steps
+
+- [Claude Workflow](./claude-workflow) - Complete workflow examples
+- [API Reference](../api/) - Complete tool reference
+- [Basic Examples](./basic) - Common patterns
+
+## See Also
+
+- [sdk.do](https://sdk.do) - Complete SDK documentation
+- [Getting Started](../docs/getting-started) - Setup guide
+- [Claude Integration](../docs/claude-integration) - Claude Desktop configuration

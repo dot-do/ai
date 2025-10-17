@@ -1,0 +1,159 @@
+/**
+ * Zeplin Errors
+ *
+ * Auto-generated error handling for Zeplin Integration.
+ * Generated from MDXLD Integration definition.
+ *
+ * @see https://integrations.do/zeplin
+ */
+
+/**
+ * Error type enum
+ */
+export enum ZeplinErrorType {
+  Authentication = 'authentication',
+  Authorization = 'authorization',
+  Validation = 'validation',
+  NotFound = 'not_found',
+  RateLimit = 'rate_limit',
+  Server = 'server',
+  Network = 'network',
+  Unknown = 'unknown',
+}
+
+/**
+ * Zeplin Error class
+ *
+ * Custom error class for Zeplin Integration operations.
+ */
+export class ZeplinError extends Error {
+  public readonly code: string | number
+  public readonly type: ZeplinErrorType
+  public readonly statusCode?: number
+  public readonly retryable: boolean
+  public readonly originalError?: Error
+
+  constructor(
+    message: string,
+    code: string | number,
+    type: ZeplinErrorType,
+    options?: {
+      statusCode?: number
+      retryable?: boolean
+      originalError?: Error
+    }
+  ) {
+    super(message)
+    this.name = 'ZeplinError'
+    this.code = code
+    this.type = type
+    this.statusCode = options?.statusCode
+    this.retryable = options?.retryable ?? false
+    this.originalError = options?.originalError
+
+    // Maintain proper stack trace
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, ZeplinError)
+    }
+  }
+
+  /**
+   * Create error from API error response
+   *
+   * @param error - Original error
+   * @returns ZeplinError instance
+   */
+  static fromError(error: any): ZeplinError {
+    const code = error.code || error.error_code || error.type || 'unknown'
+    const statusCode = error.statusCode || error.status
+    const message = error.message || 'An unknown error occurred'
+
+    // Map error codes to types
+    const errorMap: Record<string, { type: ZeplinErrorType; retryable: boolean }> = {
+      '401': { type: ZeplinErrorType.Authentication, retryable: false },
+      '429': { type: ZeplinErrorType.RateLimit, retryable: true },
+    }
+
+    const mapping = errorMap[code]
+    if (mapping) {
+      return new ZeplinError(message, code, mapping.type, {
+        statusCode,
+        retryable: mapping.retryable,
+        originalError: error,
+      })
+    }
+
+    // Default error mapping based on status code
+    let type = ZeplinErrorType.Unknown
+    let retryable = false
+
+    if (statusCode === 401) {
+      type = ZeplinErrorType.Authentication
+    } else if (statusCode === 403) {
+      type = ZeplinErrorType.Authorization
+    } else if (statusCode === 404) {
+      type = ZeplinErrorType.NotFound
+    } else if (statusCode === 422 || statusCode === 400) {
+      type = ZeplinErrorType.Validation
+    } else if (statusCode === 429) {
+      type = ZeplinErrorType.RateLimit
+      retryable = true
+    } else if (statusCode && statusCode >= 500) {
+      type = ZeplinErrorType.Server
+      retryable = true
+    }
+
+    return new ZeplinError(message, code, type, {
+      statusCode,
+      retryable,
+      originalError: error,
+    })
+  }
+
+  /** Check if error is retryable */
+  isRetriable(): boolean {
+    return this.retryable
+  }
+
+  /** Check if error is authentication error */
+  isAuthenticationError(): boolean {
+    return this.type === ZeplinErrorType.Authentication
+  }
+
+  /** Check if error is authorization error */
+  isAuthorizationError(): boolean {
+    return this.type === ZeplinErrorType.Authorization
+  }
+
+  /** Check if error is validation error */
+  isValidationError(): boolean {
+    return this.type === ZeplinErrorType.Validation
+  }
+
+  /** Check if error is not found error */
+  isNotFoundError(): boolean {
+    return this.type === ZeplinErrorType.NotFound
+  }
+
+  /** Check if error is rate limit error */
+  isRateLimitError(): boolean {
+    return this.type === ZeplinErrorType.RateLimit
+  }
+
+  /** Check if error is server error */
+  isServerError(): boolean {
+    return this.type === ZeplinErrorType.Server
+  }
+
+  /** Get error details as object */
+  toJSON() {
+    return {
+      name: this.name,
+      message: this.message,
+      code: this.code,
+      type: this.type,
+      statusCode: this.statusCode,
+      retryable: this.retryable,
+    }
+  }
+}

@@ -1,0 +1,728 @@
+---
+$id: https://on.do/docs/patterns
+$type: TechArticle
+title: Event Listener Patterns
+description: Common patterns for using event listeners in Business-as-Code applications
+keywords: [patterns, event-listeners, best-practices, reactive, event-driven]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Event Listener Patterns
+
+Common patterns and best practices for using event listeners with the `on` function in Business-as-Code applications.
+
+## Basic Patterns
+
+### Single Event Listener
+
+Subscribe to a specific event:
+
+```typescript
+import { on } from 'sdk.do'
+
+on('Order.created', async (event) => {
+  console.log('New order:', event.data.id)
+  await processOrder(event.data)
+})
+```
+
+### Multiple Event Listeners
+
+Register multiple handlers for the same event:
+
+```typescript
+// All handlers execute in parallel
+on('Order.created', async (event) => {
+  await sendConfirmationEmail(event.data)
+})
+
+on('Order.created', async (event) => {
+  await updateAnalytics(event.data)
+})
+
+on('Order.created', async (event) => {
+  await notifyWarehouse(event.data)
+})
+```
+
+### Multiple Events, Same Handler
+
+Listen to multiple events with one handler:
+
+```typescript
+// Array of event names
+on(['Order.created', 'Order.updated'], async (event) => {
+  await syncToAnalytics(event)
+})
+
+// Handle both payment events the same way
+on(['Payment.completed', 'Payment.refunded'], async (event) => {
+  await updateAccountingRecords(event)
+})
+```
+
+## Pattern Matching
+
+### Wildcard Patterns
+
+Use wildcards to listen to related events:
+
+```typescript
+// Listen to all Order events
+on('Order.*', async (event) => {
+  console.log(`Order event: ${event.type}`)
+  await auditLog(event)
+})
+
+// Listen to all Payment events
+on('Payment.*', async (event) => {
+  await trackPaymentMetrics(event)
+})
+
+// Listen to all events
+on('*', async (event) => {
+  await logAllEvents(event)
+})
+```
+
+### Entity-Specific Patterns
+
+Listen to all events for a specific entity type:
+
+```typescript
+// All User events
+on('User.*', async (event) => {
+  await updateUserProfile(event)
+})
+
+// All Product events
+on('Product.*', async (event) => {
+  await syncProductCatalog(event)
+})
+
+// All Invoice events
+on('Invoice.*', async (event) => {
+  await updateAccountingSystem(event)
+})
+```
+
+### Action-Specific Patterns
+
+Listen to the same action across different entities:
+
+```typescript
+// All created events
+on('*.created', async (event) => {
+  await trackCreationMetrics(event)
+})
+
+// All deleted events
+on('*.deleted', async (event) => {
+  await archiveDeletedEntity(event)
+})
+
+// All updated events
+on('*.updated', async (event) => {
+  await invalidateCache(event)
+})
+```
+
+## Event Chaining Patterns
+
+### Sequential Workflow
+
+Create multi-step workflows by chaining events:
+
+```typescript
+// Step 1: Order created
+on('Order.created', async (event) => {
+  const valid = await validateOrder(event.data)
+
+  if (valid) {
+    await send('Order.validated', event.data)
+  } else {
+    await send('Order.rejected', {
+      ...event.data,
+      reason: 'validation-failed',
+    })
+  }
+})
+
+// Step 2: Order validated
+on('Order.validated', async (event) => {
+  await send('Payment.requested', {
+    orderId: event.data.id,
+    amount: event.data.total,
+  })
+})
+
+// Step 3: Payment completed
+on('Payment.completed', async (event) => {
+  await send('Order.confirmed', {
+    orderId: event.data.orderId,
+  })
+})
+
+// Step 4: Order confirmed
+on('Order.confirmed', async (event) => {
+  await send('Warehouse.shipmentRequested', {
+    orderId: event.data.orderId,
+  })
+})
+```
+
+### Parallel Workflow
+
+Execute multiple independent actions in parallel:
+
+```typescript
+on('Order.created', async (event) => {
+  // All three execute in parallel
+  await send('Inventory.checkRequested', {
+    orderId: event.data.id,
+    items: event.data.items,
+  })
+
+  await send('Fraud.checkRequested', {
+    orderId: event.data.id,
+    customer: event.data.customer,
+  })
+
+  await send('Shipping.quoteRequested', {
+    orderId: event.data.id,
+    address: event.data.shippingAddress,
+  })
+})
+
+// Wait for all checks to complete
+let inventoryCheck, fraudCheck, shippingQuote
+
+on('Inventory.checkCompleted', async (event) => {
+  inventoryCheck = event.data
+  await checkAllCompleted()
+})
+
+on('Fraud.checkCompleted', async (event) => {
+  fraudCheck = event.data
+  await checkAllCompleted()
+})
+
+on('Shipping.quoteCompleted', async (event) => {
+  shippingQuote = event.data
+  await checkAllCompleted()
+})
+
+async function checkAllCompleted() {
+  if (inventoryCheck && fraudCheck && shippingQuote) {
+    await send('Order.validated', {
+      orderId: inventoryCheck.orderId,
+      checks: { inventoryCheck, fraudCheck, shippingQuote },
+    })
+  }
+}
+```
+
+### Saga Pattern
+
+Implement sagas with compensation logic:
+
+```typescript
+// Main workflow
+on('Order.created', async (event) => {
+  try {
+    // Reserve inventory
+    await send('Inventory.reservationRequested', event.data)
+
+    // Request payment
+    await send('Payment.requested', event.data)
+
+    // Confirm order
+    await send('Order.confirmed', event.data)
+  } catch (error) {
+    // Trigger compensation
+    await send('Order.compensationRequested', {
+      orderId: event.data.id,
+      reason: error.message,
+    })
+  }
+})
+
+// Compensation logic
+on('Order.compensationRequested', async (event) => {
+  // Rollback in reverse order
+  await send('Payment.cancelRequested', {
+    orderId: event.data.orderId,
+  })
+
+  await send('Inventory.releaseRequested', {
+    orderId: event.data.orderId,
+  })
+
+  await send('Order.cancelled', {
+    orderId: event.data.orderId,
+    reason: event.data.reason,
+  })
+})
+```
+
+## Integration Patterns
+
+### Database Integration
+
+Automatically publish events on database changes:
+
+```typescript
+import { db, on, send } from 'sdk.do'
+
+// Auto-publish on create
+db.on('create', async (entity) => {
+  await send(`${entity.$type}.created`, entity)
+})
+
+// Auto-publish on update
+db.on('update', async (entity, changes) => {
+  await send(`${entity.$type}.updated`, {
+    ...entity,
+    changes,
+  })
+})
+
+// Auto-publish on delete
+db.on('delete', async (entity) => {
+  await send(`${entity.$type}.deleted`, {
+    id: entity.$id,
+    type: entity.$type,
+  })
+})
+
+// React to events and update database
+on('Order.completed', async (event) => {
+  await db.update($.Order, event.data.id, {
+    status: 'completed',
+    completedAt: new Date(),
+  })
+})
+```
+
+### AI Integration
+
+Use AI services in event handlers:
+
+```typescript
+import { ai, on, send } from 'sdk.do'
+
+// AI-powered content generation
+on('Product.created', async (event) => {
+  const description = await ai.generate({
+    prompt: `Write a compelling product description for: ${event.data.name}`,
+    schema: $.ProductDescription,
+  })
+
+  await send('Product.descriptionGenerated', {
+    productId: event.data.id,
+    description,
+  })
+})
+
+// AI-powered sentiment analysis
+on('CustomerFeedback.received', async (event) => {
+  const sentiment = await ai.generate({
+    prompt: `Analyze sentiment: ${event.data.feedback}`,
+    schema: $.SentimentAnalysis,
+  })
+
+  if (sentiment.score < 0.3) {
+    await send('CustomerIssue.detected', {
+      feedbackId: event.data.id,
+      sentiment,
+      priority: 'high',
+    })
+  }
+})
+
+// AI-powered classification
+on('Support.ticketCreated', async (event) => {
+  const classification = await ai.generate({
+    prompt: `Classify support ticket: ${event.data.description}`,
+    schema: $.TicketClassification,
+  })
+
+  await send('Support.ticketClassified', {
+    ticketId: event.data.id,
+    category: classification.category,
+    priority: classification.priority,
+    suggestedTeam: classification.team,
+  })
+})
+```
+
+### Scheduled Workflow Integration
+
+Combine event listeners with scheduled workflows:
+
+```typescript
+import { every, on, send } from 'sdk.do'
+
+// Generate periodic events
+every($.Daily, async () => {
+  await send('Report.generationRequested', {
+    type: 'daily-summary',
+    date: new Date(),
+  })
+})
+
+// React to report requests
+on('Report.generationRequested', async (event) => {
+  const report = await generateReport(event.data)
+  await send('Report.generated', report)
+})
+
+// Process generated reports
+on('Report.generated', async (event) => {
+  await sendReportEmail(event.data)
+  await archiveReport(event.data)
+})
+
+// Periodic cleanup
+every($.Hourly, async () => {
+  await send('System.cleanupRequested', {
+    timestamp: new Date(),
+  })
+})
+
+on('System.cleanupRequested', async (event) => {
+  await cleanupExpiredSessions()
+  await cleanupTemporaryFiles()
+  await send('System.cleanupCompleted', {
+    completedAt: new Date(),
+  })
+})
+```
+
+### External API Integration
+
+Call external APIs in event handlers:
+
+```typescript
+import { api, on, send } from 'sdk.do'
+
+// Sync to external CRM
+on('Customer.created', async (event) => {
+  await api('https://crm.example.com/customers', {
+    method: 'POST',
+    body: JSON.stringify(event.data),
+  })
+
+  await send('Customer.syncedToCRM', {
+    customerId: event.data.id,
+  })
+})
+
+// Verify address with external service
+on('Order.addressValidationRequested', async (event) => {
+  const result = await api('https://address-validator.com/validate', {
+    method: 'POST',
+    body: JSON.stringify(event.data.address),
+  })
+
+  if (result.valid) {
+    await send('Order.addressValidated', {
+      orderId: event.data.orderId,
+      validatedAddress: result.standardizedAddress,
+    })
+  } else {
+    await send('Order.addressInvalid', {
+      orderId: event.data.orderId,
+      errors: result.errors,
+    })
+  }
+})
+```
+
+## Error Handling Patterns
+
+### Try-Catch with Error Events
+
+Handle errors gracefully and publish error events:
+
+```typescript
+on('Order.created', async (event) => {
+  try {
+    await processOrder(event.data)
+  } catch (error) {
+    console.error('Failed to process order:', error)
+
+    await send('Order.processingFailed', {
+      orderId: event.data.id,
+      error: error.message,
+      timestamp: new Date(),
+    })
+  }
+})
+
+// Handle processing failures
+on('Order.processingFailed', async (event) => {
+  // Notify customer
+  await sendErrorEmail(event.data)
+
+  // Notify admin
+  await alertAdmins(event.data)
+
+  // Update order status
+  await db.update($.Order, event.data.orderId, {
+    status: 'processing-failed',
+    errorMessage: event.data.error,
+  })
+})
+```
+
+### Retry Pattern
+
+Implement retry logic for transient failures:
+
+```typescript
+async function withRetry(fn, maxRetries = 3, delay = 1000) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn()
+    } catch (error) {
+      if (i === maxRetries - 1) throw error
+      await new Promise((resolve) => setTimeout(resolve, delay * (i + 1)))
+    }
+  }
+}
+
+on('Payment.requested', async (event) => {
+  try {
+    const result = await withRetry(() => processPayment(event.data), 3, 1000)
+
+    await send('Payment.completed', result)
+  } catch (error) {
+    await send('Payment.failed', {
+      orderId: event.data.orderId,
+      error: error.message,
+      retriesExhausted: true,
+    })
+  }
+})
+```
+
+### Dead Letter Queue Pattern
+
+Send failed events to a dead letter queue:
+
+```typescript
+on('Order.created', async (event) => {
+  try {
+    await processOrder(event.data)
+  } catch (error) {
+    console.error('Order processing failed:', error)
+
+    // Send to dead letter queue
+    await send('DeadLetter.queued', {
+      originalEvent: event,
+      error: error.message,
+      timestamp: new Date(),
+    })
+  }
+})
+
+// Process dead letter queue periodically
+every($.Hourly, async () => {
+  await send('DeadLetter.processingRequested', {
+    timestamp: new Date(),
+  })
+})
+
+on('DeadLetter.processingRequested', async (event) => {
+  const deadLetters = await db.list($.DeadLetter, {
+    where: { processed: false },
+    limit: 100,
+  })
+
+  for (const deadLetter of deadLetters) {
+    try {
+      // Retry processing
+      await send(deadLetter.originalEvent.type, deadLetter.originalEvent.data)
+
+      // Mark as processed
+      await db.update($.DeadLetter, deadLetter.id, {
+        processed: true,
+        processedAt: new Date(),
+      })
+    } catch (error) {
+      // Still failing, increment retry count
+      await db.update($.DeadLetter, deadLetter.id, {
+        retryCount: db.increment(1),
+        lastAttemptAt: new Date(),
+      })
+    }
+  }
+})
+```
+
+## Monitoring Patterns
+
+### Audit Logging
+
+Log all events for compliance:
+
+```typescript
+// Log all events
+on('*', async (event) => {
+  await db.create($.AuditLog, {
+    eventType: event.type,
+    eventData: event.data,
+    timestamp: event.metadata.timestamp,
+    userId: event.metadata.userId,
+    correlationId: event.metadata.correlationId,
+  })
+})
+
+// Log specific entity changes
+on(['Order.*', 'Payment.*', 'User.*'], async (event) => {
+  await db.create($.AuditLog, {
+    entityType: event.type.split('.')[0],
+    action: event.type.split('.')[1],
+    entityId: event.data.id || event.data.$id,
+    changes: event.data,
+    timestamp: new Date(),
+  })
+})
+```
+
+### Metrics Tracking
+
+Track metrics for business events:
+
+```typescript
+// Track order metrics
+on('Order.completed', async (event) => {
+  await send('Metrics.orderCompleted', {
+    orderId: event.data.id,
+    total: event.data.total,
+    duration: calculateOrderDuration(event.data),
+    itemCount: event.data.items.length,
+    completedAt: new Date(),
+  })
+})
+
+// Track payment metrics
+on('Payment.completed', async (event) => {
+  await send('Metrics.paymentCompleted', {
+    amount: event.data.amount,
+    currency: event.data.currency,
+    method: event.data.method,
+    processingTime: event.data.processingTime,
+    completedAt: new Date(),
+  })
+})
+
+// Aggregate metrics
+on('Metrics.*', async (event) => {
+  await updateMetricsDashboard(event)
+  await updateTimeSeriesData(event)
+})
+```
+
+### Performance Monitoring
+
+Monitor event processing performance:
+
+```typescript
+on('*', async (event) => {
+  const startTime = Date.now()
+
+  try {
+    await processEvent(event)
+  } finally {
+    const duration = Date.now() - startTime
+
+    await send('Performance.eventProcessed', {
+      eventType: event.type,
+      duration,
+      timestamp: new Date(),
+    })
+
+    if (duration > 5000) {
+      await send('Performance.slowEvent', {
+        eventType: event.type,
+        duration,
+        threshold: 5000,
+      })
+    }
+  }
+})
+```
+
+## Testing Patterns
+
+### Mock Event Publishing
+
+Test event listeners with mock events:
+
+```typescript
+import { on, send } from 'sdk.do'
+import { expect, test } from 'vitest'
+
+test('handles order creation', async () => {
+  let processed = false
+
+  on('Order.created', async (event) => {
+    processed = true
+    expect(event.data.id).toBe('12345')
+    expect(event.data.total).toBeGreaterThan(0)
+  })
+
+  await send('Order.created', {
+    id: '12345',
+    total: 100,
+  })
+
+  expect(processed).toBe(true)
+})
+```
+
+### Test Event Chains
+
+Test multi-step workflows:
+
+```typescript
+test('order workflow', async () => {
+  const events = []
+
+  on('Order.*', async (event) => {
+    events.push(event.type)
+  })
+
+  await send('Order.created', testOrder)
+  await waitForEvent('Order.completed')
+
+  expect(events).toEqual(['Order.created', 'Order.validated', 'Order.confirmed', 'Order.completed'])
+})
+```
+
+## Best Practices
+
+1. **Use semantic naming**: Always use `Object.Action` patterns
+2. **Keep handlers focused**: Each handler should do one thing well
+3. **Handle errors gracefully**: Don't break the event chain
+4. **Track correlations**: Use correlation IDs for tracing
+5. **Monitor performance**: Track slow handlers
+6. **Test thoroughly**: Test both success and error paths
+7. **Document workflows**: Diagram complex event chains
+8. **Version events**: Handle different event versions gracefully
+
+## Resources
+
+- [Getting Started](./getting-started)
+- [Event Filtering](./filtering)
+- [API Reference](../api/)
+- [Examples](../examples/)
+- [events.do Documentation](https://events.do)
+
+---
+
+Continue to [Event Filtering](./filtering) to learn advanced filtering techniques.

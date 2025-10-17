@@ -1,0 +1,554 @@
+---
+$id: https://evals.do
+$type: WebSite
+title: evals.do - AI Model and Agent Performance Evaluation Framework
+description: Evaluate AI models, agents, and workflows with comprehensive test suites, metrics, and human feedback loops. Measure accuracy, quality, and performance.
+keywords: [evals, evaluation, AI testing, model evaluation, agent evaluation, test suites, accuracy metrics, human feedback, LLM evaluation]
+author:
+  $type: Organization
+  name: .do Platform
+license: MIT
+---
+
+# evals.do
+
+**AI Model and Agent Performance Evaluation Framework**
+
+evals.do provides comprehensive evaluation capabilities for AI models, agents, and workflows on the `.do` platform. Build test suites, measure performance, collect human feedback, and ensure quality with semantic evaluation patterns.
+
+## What is evals.do?
+
+evals.do is the evaluation framework for measuring AI and agent performance:
+
+- **Test Suites**: Create comprehensive test cases for models and agents
+- **Automated Evaluation**: Run evaluations automatically with metrics
+- **Human Feedback**: Collect and integrate human assessments
+- **Accuracy Metrics**: Measure precision, recall, F1, and custom metrics
+- **Regression Testing**: Detect performance degradation
+- **Comparative Analysis**: Compare models, prompts, and configurations
+- **Continuous Evaluation**: Integrate into CI/CD pipelines
+
+## Quick Start
+
+```bash
+pnpm add sdk.do
+```
+
+```typescript
+import $, { evals } from 'sdk.do'
+
+// Create a test suite
+const testSuite = await evals.suite({
+  name: 'Sales Agent Evaluation',
+  description: 'Evaluate sales agent lead qualification',
+
+  tests: [
+    {
+      name: 'Qualify high-value lead',
+      input: {
+        company: 'Acme Corp',
+        employees: 500,
+        revenue: '50M',
+        industry: 'Technology',
+      },
+      expected: {
+        qualified: true,
+        score: { gte: 80 },
+      },
+    },
+    {
+      name: 'Disqualify small company',
+      input: {
+        company: 'Small Co',
+        employees: 5,
+        revenue: '100K',
+        industry: 'Retail',
+      },
+      expected: {
+        qualified: false,
+        score: { lte: 40 },
+      },
+    },
+  ],
+})
+
+// Run evaluation
+const results = await evals.run(testSuite, {
+  subject: salesAgent,
+  metrics: ['accuracy', 'precision', 'recall', 'latency'],
+})
+
+console.log('Evaluation Results:')
+console.log('- Accuracy:', results.metrics.accuracy)
+console.log('- Pass Rate:', results.passRate)
+console.log('- Average Latency:', results.metrics.avgLatency, 'ms')
+```
+
+## Key Features
+
+### Test Suite Management
+
+Create and organize test cases:
+
+```typescript
+// Define test suite
+const suite = await evals.suite({
+  $type: 'TestSuite',
+  name: 'Lead Qualification Tests',
+  description: 'Comprehensive lead qualification evaluation',
+
+  categories: [
+    {
+      name: 'Enterprise Leads',
+      tests: [
+        {
+          name: 'Large tech company',
+          input: { company: 'TechCorp', employees: 5000 },
+          expected: { qualified: true, score: { gte: 85 } },
+        },
+        {
+          name: 'Fortune 500 company',
+          input: { company: 'BigCo', employees: 50000 },
+          expected: { qualified: true, tier: 'enterprise' },
+        },
+      ],
+    },
+    {
+      name: 'SMB Leads',
+      tests: [
+        {
+          name: 'Small business',
+          input: { company: 'LocalCo', employees: 25 },
+          expected: { qualified: false },
+        },
+      ],
+    },
+  ],
+
+  // Shared test configuration
+  config: {
+    timeout: 30000,
+    retries: 2,
+    parallel: true,
+  },
+})
+```
+
+### Automated Evaluation
+
+Run evaluations with multiple metrics:
+
+```typescript
+// Run comprehensive evaluation
+const results = await evals.run(testSuite, {
+  subject: agent,
+
+  metrics: [
+    // Classification metrics
+    'accuracy', // Overall accuracy
+    'precision', // Precision score
+    'recall', // Recall score
+    'f1', // F1 score
+
+    // Performance metrics
+    'latency', // Response latency
+    'throughput', // Requests per second
+
+    // Quality metrics
+    'consistency', // Output consistency
+    'completeness', // Output completeness
+  ],
+
+  // Evaluation options
+  options: {
+    parallel: true,
+    timeout: 60000,
+    stopOnFailure: false,
+  },
+})
+
+// Access detailed results
+console.log('Test Results:')
+console.log('- Total Tests:', results.total)
+console.log('- Passed:', results.passed)
+console.log('- Failed:', results.failed)
+console.log('- Pass Rate:', results.passRate)
+
+console.log('\nMetrics:')
+console.log('- Accuracy:', results.metrics.accuracy)
+console.log('- Precision:', results.metrics.precision)
+console.log('- Recall:', results.metrics.recall)
+console.log('- F1 Score:', results.metrics.f1)
+console.log('- Avg Latency:', results.metrics.avgLatency, 'ms')
+
+// Failed tests
+if (results.failed > 0) {
+  console.log('\nFailed Tests:')
+  results.failures.forEach((failure) => {
+    console.log(`- ${failure.test.name}:`, failure.reason)
+  })
+}
+```
+
+### Human Feedback Integration
+
+Collect and integrate human assessments:
+
+```typescript
+// Enable human review
+const evaluation = await evals.run(testSuite, {
+  subject: agent,
+  humanReview: {
+    enabled: true,
+    criteria: [
+      {
+        name: 'Quality',
+        description: 'Is the output high quality?',
+        scale: '1-5',
+      },
+      {
+        name: 'Relevance',
+        description: 'Is the output relevant to the input?',
+        scale: '1-5',
+      },
+      {
+        name: 'Accuracy',
+        description: 'Is the output factually accurate?',
+        type: 'boolean',
+      },
+    ],
+    reviewers: ['reviewer@company.com'],
+    samplingRate: 0.1, // Review 10% of outputs
+  },
+})
+
+// Submit human feedback
+await evals.submitFeedback(evaluation.id, {
+  testId: 'test-123',
+  reviewer: 'reviewer@company.com',
+  scores: {
+    quality: 5,
+    relevance: 4,
+    accuracy: true,
+  },
+  comments: 'Excellent response, very thorough',
+})
+
+// Aggregate human feedback
+const feedbackSummary = await evals.aggregateFeedback(evaluation.id)
+console.log('Human Feedback Summary:')
+console.log('- Avg Quality:', feedbackSummary.avgQuality)
+console.log('- Avg Relevance:', feedbackSummary.avgRelevance)
+console.log('- Accuracy Rate:', feedbackSummary.accuracyRate)
+```
+
+### Comparative Evaluation
+
+Compare models, prompts, or configurations:
+
+```typescript
+// Compare two models
+const comparison = await evals.compare({
+  suite: testSuite,
+  subjects: [
+    { name: 'GPT-5', model: gpt5Agent },
+    { name: 'Claude Sonnet 4.5', model: claudeAgent },
+  ],
+  metrics: ['accuracy', 'latency', 'cost'],
+})
+
+console.log('Model Comparison:')
+comparison.results.forEach((result) => {
+  console.log(`\n${result.name}:`)
+  console.log('- Accuracy:', result.metrics.accuracy)
+  console.log('- Avg Latency:', result.metrics.avgLatency, 'ms')
+  console.log('- Total Cost:', `$${result.metrics.totalCost}`)
+})
+
+console.log('\nWinner:', comparison.winner.name)
+console.log('Winning Metrics:', comparison.winner.metrics)
+
+// Compare prompts
+const promptComparison = await evals.comparePrompts({
+  suite: testSuite,
+  prompts: [
+    { name: 'Original', template: originalPrompt },
+    { name: 'Optimized', template: optimizedPrompt },
+    { name: 'Detailed', template: detailedPrompt },
+  ],
+  model: gpt5,
+  metrics: ['accuracy', 'verbosity', 'clarity'],
+})
+```
+
+### Regression Testing
+
+Detect performance degradation:
+
+```typescript
+// Run regression tests
+const regression = await evals.regression({
+  suite: testSuite,
+  baseline: {
+    version: 'v1.0.0',
+    results: baselineResults,
+  },
+  current: {
+    version: 'v1.1.0',
+    subject: currentAgent,
+  },
+  thresholds: {
+    accuracy: { min: -0.02 }, // Max 2% accuracy drop
+    latency: { max: 1.2 }, // Max 20% latency increase
+    passRate: { min: -0.05 }, // Max 5% pass rate drop
+  },
+})
+
+if (regression.degraded) {
+  console.error('Performance Regression Detected:')
+  regression.degradations.forEach((deg) => {
+    console.error(`- ${deg.metric}: ${deg.baseline} → ${deg.current} (${deg.change})`)
+  })
+
+  // Fail CI if regression detected
+  process.exit(1)
+}
+
+console.log('✓ No regression detected')
+```
+
+### Custom Metrics
+
+Define custom evaluation metrics:
+
+```typescript
+// Define custom metric
+await evals.defineMetric({
+  name: 'sentiment_accuracy',
+  description: 'Accuracy of sentiment classification',
+
+  calculate: async (test, result) => {
+    const expected = test.expected.sentiment
+    const actual = result.output.sentiment
+    return expected === actual ? 1 : 0
+  },
+
+  aggregate: (scores) => {
+    return scores.reduce((a, b) => a + b, 0) / scores.length
+  },
+})
+
+// Use custom metric
+const results = await evals.run(testSuite, {
+  subject: sentimentAgent,
+  metrics: ['sentiment_accuracy', 'latency'],
+})
+```
+
+### LLM-as-Judge Evaluation
+
+Use LLMs to evaluate outputs:
+
+```typescript
+// LLM-based evaluation
+const llmEval = await evals.run(testSuite, {
+  subject: agent,
+
+  judge: {
+    model: 'claude-sonnet-4.5',
+    criteria: [
+      {
+        name: 'correctness',
+        prompt: 'Is the output correct and accurate?',
+        scale: '1-10',
+      },
+      {
+        name: 'helpfulness',
+        prompt: 'Is the output helpful and complete?',
+        scale: '1-10',
+      },
+      {
+        name: 'safety',
+        prompt: 'Is the output safe and appropriate?',
+        type: 'boolean',
+      },
+    ],
+  },
+})
+
+console.log('LLM Judge Results:')
+console.log('- Avg Correctness:', llmEval.metrics.avgCorrectness)
+console.log('- Avg Helpfulness:', llmEval.metrics.avgHelpfulness)
+console.log('- Safety Rate:', llmEval.metrics.safetyRate)
+```
+
+## Semantic Patterns
+
+evals.do uses semantic `$.Subject.predicate.Object` patterns:
+
+```typescript
+import $ from 'sdk.do'
+
+// Evaluation types
+$.Evaluation
+$.TestSuite
+$.TestCase
+$.EvaluationResult
+$.Metric
+$.HumanFeedback
+
+// Evaluation operations
+$.Evaluation.runs.TestSuite
+$.TestSuite.contains.TestCase
+$.Metric.measures.Performance
+$.Judge.evaluates.Output
+$.Reviewer.provides.Feedback
+
+// Evaluation patterns
+$.Agent.evaluated.by.TestSuite
+$.Model.compared.with.Model
+$.Performance.regressed.from.Baseline
+```
+
+## Integration with .do Platform
+
+evals.do integrates with all platform services:
+
+```typescript
+import $, { evals, agent, db, every } from 'sdk.do'
+
+// Evaluate agent on creation
+const createEvaluatedAgent = async (config) => {
+  const newAgent = await agent.create(config)
+
+  // Run evaluation
+  const eval = await evals.run(agentTestSuite, {
+    subject: newAgent,
+  })
+
+  // Store results
+  await db.create($.EvaluationResult, {
+    agent: newAgent.id,
+    suite: agentTestSuite.id,
+    metrics: eval.metrics,
+    passRate: eval.passRate,
+  })
+
+  return newAgent
+}
+
+// Continuous evaluation
+await every($.Daily, async () => {
+  // Evaluate production agents
+  const agents = await db.list($.Agent, {
+    where: { environment: 'production' },
+  })
+
+  for (const agent of agents) {
+    const results = await evals.run(agentTestSuite, {
+      subject: agent,
+      metrics: ['accuracy', 'latency'],
+    })
+
+    // Alert if performance degrades
+    if (results.metrics.accuracy < 0.8) {
+      await evals.alert({
+        agent: agent.id,
+        metric: 'accuracy',
+        value: results.metrics.accuracy,
+        threshold: 0.8,
+      })
+    }
+  }
+})
+```
+
+## Documentation
+
+- [Getting Started](./docs/getting-started.mdx) - Setup and first evaluation
+- [Architecture](./docs/architecture.mdx) - System design
+- [Best Practices](./docs/best-practices.mdx) - Recommended patterns
+- [Troubleshooting](./docs/troubleshooting.mdx) - Common issues
+- [API Reference](./api/reference.mdx) - Complete API
+
+## Examples
+
+- [Basic Usage](./examples/basic-usage.mdx) - Simple evaluations
+- [Advanced Patterns](./examples/advanced-patterns.mdx) - Complex scenarios
+- [Integration](./examples/integration.mdx) - CI/CD integration
+- [Real-World Use Case](./examples/real-world-use-case.mdx) - Production setup
+
+## Use Cases
+
+### Model Selection
+
+Evaluate and compare models for your use case:
+
+```typescript
+const modelSelection = await evals.compare({
+  suite: usecase TestSuite,
+  subjects: [
+    { name: 'GPT-5', provider: 'openai', model: 'gpt-5' },
+    { name: 'Claude Sonnet', provider: 'anthropic', model: 'claude-sonnet-4.5' },
+    { name: 'Gemini Pro', provider: 'google', model: 'gemini-pro' }
+  ],
+  metrics: ['accuracy', 'latency', 'cost', 'quality']
+})
+```
+
+### Prompt Optimization
+
+Iterate and optimize prompts:
+
+```typescript
+const promptOptimization = await evals.optimizePrompt({
+  suite: testSuite,
+  basePrompt: originalPrompt,
+  variations: 10,
+  targetMetric: 'accuracy',
+  model: 'gpt-5',
+})
+```
+
+### Quality Assurance
+
+Ensure consistent quality in production:
+
+```typescript
+await every($.Hourly, async () => {
+  const sample = await getSampleOutputs(100)
+
+  const qa = await evals.qualityCheck(sample, {
+    metrics: ['correctness', 'safety', 'relevance'],
+    threshold: 0.95,
+  })
+
+  if (qa.passRate < 0.95) {
+    await alert('Quality below threshold')
+  }
+})
+```
+
+## Best Practices
+
+1. **Comprehensive Test Coverage**: Include edge cases and failure modes
+2. **Diverse Test Data**: Use representative and diverse inputs
+3. **Multiple Metrics**: Measure different aspects of performance
+4. **Baseline Tracking**: Maintain baselines for regression detection
+5. **Continuous Evaluation**: Run evaluations regularly
+6. **Human Feedback**: Supplement automated metrics with human review
+
+## Related Projects
+
+- [analytics.do](https://analytics.do) - Analytics and metrics tracking
+- [experiments.do](https://experiments.do) - A/B testing framework
+- [benchmarks.do](https://benchmarks.do) - Performance benchmarking
+- [sdk.do](https://sdk.do) - Core SDK
+
+## License
+
+MIT (Open Source)
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

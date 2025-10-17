@@ -1,0 +1,179 @@
+---
+$id: https://integrations.do/surveymonkey
+$type: Integration
+name: SurveyMonkey
+service: surveymonkey
+description: Online survey creation and analysis platform
+category: forms
+sdkBased: false
+baseUrl: https://api.surveymonkey.com/v3
+
+auth:
+  type: oauth2
+  authorizationUrl: https://api.surveymonkey.com/oauth/authorize
+  tokenUrl: https://api.surveymonkey.com/oauth/token
+  scopes:
+    - surveys_read
+    - surveys_write
+    - responses_read
+
+resources:
+  - name: Survey
+    plural: Surveys
+    description: Create and manage surveys
+    operations:
+      - name: create
+        method: POST
+        path: /surveys
+        params:
+          - name: title
+            type: string
+            required: true
+            description: Survey title
+        returns: Survey
+
+      - name: get
+        method: GET
+        path: /surveys/{survey_id}
+        params:
+          - name: survey_id
+            type: string
+            required: true
+            description: Survey ID
+        returns: Survey
+
+      - name: update
+        method: PATCH
+        path: /surveys/{survey_id}
+        params:
+          - name: survey_id
+            type: string
+            required: true
+            description: Survey ID
+          - name: title
+            type: string
+            required: false
+            description: Updated title
+        returns: Survey
+
+      - name: delete
+        method: DELETE
+        path: /surveys/{survey_id}
+        params:
+          - name: survey_id
+            type: string
+            required: true
+            description: Survey ID
+        returns: boolean
+
+      - name: list
+        method: GET
+        path: /surveys
+        params:
+          - name: per_page
+            type: number
+            required: false
+            description: Results per page
+        returns: Survey[]
+
+  - name: Response
+    plural: Responses
+    description: Access survey responses
+    operations:
+      - name: get
+        method: GET
+        path: /surveys/{survey_id}/responses/{response_id}
+        params:
+          - name: survey_id
+            type: string
+            required: true
+            description: Survey ID
+          - name: response_id
+            type: string
+            required: true
+            description: Response ID
+        returns: Response
+
+      - name: list
+        method: GET
+        path: /surveys/{survey_id}/responses/bulk
+        params:
+          - name: survey_id
+            type: string
+            required: true
+            description: Survey ID
+          - name: per_page
+            type: number
+            required: false
+            description: Results per page
+        returns: Response[]
+
+webhooks:
+  enabled: true
+  verificationMethod: none
+  events:
+    - name: response_completed
+      type: response_completed
+      description: Survey response completed
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: true
+  scenarios:
+    - name: Survey Management
+      description: Test survey CRUD operations
+      steps:
+        - action: create
+          resource: Survey
+        - action: retrieve
+          resource: Survey
+        - action: update
+          resource: Survey
+        - action: list
+          resource: Survey
+        - action: delete
+          resource: Survey
+
+docs:
+  homepage: https://www.surveymonkey.com
+  apiDocs: https://developer.surveymonkey.com/api/v3/
+---
+
+# SurveyMonkey Integration
+
+Online survey creation and analysis platform.
+
+## Quick Start
+
+```typescript
+import { SurveyMonkeyClient } from '@dotdo/sdk.do/integrations/surveymonkey'
+
+const surveymonkey = new SurveyMonkeyClient({
+  clientId: process.env.SURVEYMONKEY_CLIENT_ID,
+  clientSecret: process.env.SURVEYMONKEY_CLIENT_SECRET,
+  accessToken: process.env.SURVEYMONKEY_ACCESS_TOKEN,
+})
+
+const survey = await surveymonkey.survey.create({
+  title: 'Customer Satisfaction Survey',
+})
+```
+
+## License
+
+MIT

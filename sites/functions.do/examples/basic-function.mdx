@@ -1,0 +1,583 @@
+---
+$id: https://functions.do/examples/basic-function
+$type: HowTo
+title: Basic Function Examples
+description: Simple, practical examples of creating and using functions with functions.do
+keywords: [examples, basic, functions, simple, tutorial]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Basic Function Examples
+
+This guide provides simple, practical examples of creating and using functions with functions.do.
+
+## Example 1: Simple Calculation
+
+A basic function that performs a calculation:
+
+```typescript
+import $, { fn } from 'sdk.do'
+
+// Calculate the area of a rectangle
+const calculateArea = fn($.CalculateArea, (width: number, height: number): number => {
+  return width * height
+})
+
+// Use the function
+const area = calculateArea(10, 5)
+console.log(area) // 50
+```
+
+## Example 2: String Transformation
+
+Transform strings with a reusable function:
+
+```typescript
+import $, { fn } from 'sdk.do'
+
+// Convert text to slug format
+const slugify = fn($.Slugify, (text: string): string => {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, '')
+    .replace(/[\s_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+})
+
+// Use the function
+const slug = slugify('Hello World! 123')
+console.log(slug) // "hello-world-123"
+```
+
+## Example 3: Array Filtering
+
+Filter arrays based on criteria:
+
+```typescript
+import $, { fn } from 'sdk.do'
+
+interface Product {
+  name: string
+  price: number
+  inStock: boolean
+}
+
+// Filter available products
+const filterAvailableProducts = fn($.FilterAvailableProducts, (products: Product[]): Product[] => {
+  return products.filter((product) => product.inStock && product.price > 0)
+})
+
+// Use the function
+const allProducts = [
+  { name: 'Widget', price: 10.99, inStock: true },
+  { name: 'Gadget', price: 0, inStock: true },
+  { name: 'Doohickey', price: 15.99, inStock: false },
+  { name: 'Thingamabob', price: 5.99, inStock: true },
+]
+
+const available = filterAvailableProducts(allProducts)
+console.log(available)
+// [
+//   { name: 'Widget', price: 10.99, inStock: true },
+//   { name: 'Thingamabob', price: 5.99, inStock: true }
+// ]
+```
+
+## Example 4: Data Validation
+
+Validate data with clear error messages:
+
+```typescript
+import $, { fn } from 'sdk.do'
+
+interface UserInput {
+  email: string
+  password: string
+  age: number
+}
+
+interface ValidationResult {
+  valid: boolean
+  errors: string[]
+}
+
+// Validate user registration data
+const validateUserRegistration = fn($.ValidateUserRegistration, (input: UserInput): ValidationResult => {
+  const errors: string[] = []
+
+  // Email validation
+  if (!input.email.includes('@')) {
+    errors.push('Email must contain @')
+  }
+
+  // Password validation
+  if (input.password.length < 8) {
+    errors.push('Password must be at least 8 characters')
+  }
+
+  // Age validation
+  if (input.age < 18) {
+    errors.push('Must be 18 or older')
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+  }
+})
+
+// Use the function
+const result = validateUserRegistration({
+  email: 'user@example.com',
+  password: 'password123',
+  age: 25,
+})
+
+console.log(result)
+// { valid: true, errors: [] }
+```
+
+## Example 5: Async Database Query
+
+Fetch data from a database asynchronously:
+
+```typescript
+import $, { fn, db } from 'sdk.do'
+
+// Get user by ID
+const getUserById = fn($.GetUserById, async (userId: string): Promise<$.Person | null> => {
+  try {
+    const user = await db.get($.Person, userId)
+    return user
+  } catch (error) {
+    console.error('Error fetching user:', error)
+    return null
+  }
+})
+
+// Use the function
+const user = await getUserById('user-123')
+
+if (user) {
+  console.log(`Found user: ${user.name}`)
+} else {
+  console.log('User not found')
+}
+```
+
+## Example 6: Date Formatting
+
+Format dates in a consistent way:
+
+```typescript
+import $, { fn } from 'sdk.do'
+
+// Format date as YYYY-MM-DD
+const formatDate = fn($.FormatDate, (date: Date): string => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+
+  return `${year}-${month}-${day}`
+})
+
+// Use the function
+const today = new Date()
+console.log(formatDate(today)) // "2025-10-10"
+```
+
+## Example 7: Price Calculation
+
+Calculate prices with tax and discounts:
+
+```typescript
+import $, { fn } from 'sdk.do'
+
+interface PriceCalculation {
+  subtotal: number
+  tax: number
+  discount: number
+  total: number
+}
+
+// Calculate final price
+const calculatePrice = fn($.CalculatePrice, (subtotal: number, taxRate: number, discountPercent: number): PriceCalculation => {
+  const discount = subtotal * (discountPercent / 100)
+  const subtotalAfterDiscount = subtotal - discount
+  const tax = subtotalAfterDiscount * taxRate
+  const total = subtotalAfterDiscount + tax
+
+  return {
+    subtotal,
+    tax: parseFloat(tax.toFixed(2)),
+    discount: parseFloat(discount.toFixed(2)),
+    total: parseFloat(total.toFixed(2)),
+  }
+})
+
+// Use the function
+const price = calculatePrice(100, 0.08, 10)
+console.log(price)
+// {
+//   subtotal: 100,
+//   tax: 7.20,
+//   discount: 10.00,
+//   total: 97.20
+// }
+```
+
+## Example 8: Search and Filter
+
+Search through data with multiple criteria:
+
+```typescript
+import $, { fn } from 'sdk.do'
+
+interface Product {
+  name: string
+  category: string
+  price: number
+  rating: number
+}
+
+interface SearchCriteria {
+  query?: string
+  category?: string
+  minPrice?: number
+  maxPrice?: number
+  minRating?: number
+}
+
+// Search products
+const searchProducts = fn($.SearchProducts, (products: Product[], criteria: SearchCriteria): Product[] => {
+  return products.filter((product) => {
+    // Text search
+    if (criteria.query) {
+      const searchTerm = criteria.query.toLowerCase()
+      if (!product.name.toLowerCase().includes(searchTerm)) {
+        return false
+      }
+    }
+
+    // Category filter
+    if (criteria.category && product.category !== criteria.category) {
+      return false
+    }
+
+    // Price range
+    if (criteria.minPrice !== undefined && product.price < criteria.minPrice) {
+      return false
+    }
+    if (criteria.maxPrice !== undefined && product.price > criteria.maxPrice) {
+      return false
+    }
+
+    // Rating filter
+    if (criteria.minRating !== undefined && product.rating < criteria.minRating) {
+      return false
+    }
+
+    return true
+  })
+})
+
+// Use the function
+const products = [
+  { name: 'Laptop', category: 'Electronics', price: 999, rating: 4.5 },
+  { name: 'Mouse', category: 'Electronics', price: 29, rating: 4.0 },
+  { name: 'Desk', category: 'Furniture', price: 299, rating: 4.2 },
+  { name: 'Chair', category: 'Furniture', price: 199, rating: 4.7 },
+]
+
+const results = searchProducts(products, {
+  category: 'Electronics',
+  maxPrice: 500,
+  minRating: 4.0,
+})
+
+console.log(results)
+// [{ name: 'Mouse', category: 'Electronics', price: 29, rating: 4.0 }]
+```
+
+## Example 9: Data Aggregation
+
+Aggregate data from multiple sources:
+
+```typescript
+import $, { fn } from 'sdk.do'
+
+interface Order {
+  id: string
+  customerId: string
+  total: number
+  status: 'pending' | 'completed' | 'cancelled'
+}
+
+interface OrderSummary {
+  totalOrders: number
+  completedOrders: number
+  pendingOrders: number
+  cancelledOrders: number
+  totalRevenue: number
+  averageOrderValue: number
+}
+
+// Aggregate order statistics
+const aggregateOrders = fn($.AggregateOrders, (orders: Order[]): OrderSummary => {
+  const summary: OrderSummary = {
+    totalOrders: orders.length,
+    completedOrders: 0,
+    pendingOrders: 0,
+    cancelledOrders: 0,
+    totalRevenue: 0,
+    averageOrderValue: 0,
+  }
+
+  orders.forEach((order) => {
+    switch (order.status) {
+      case 'completed':
+        summary.completedOrders++
+        summary.totalRevenue += order.total
+        break
+      case 'pending':
+        summary.pendingOrders++
+        break
+      case 'cancelled':
+        summary.cancelledOrders++
+        break
+    }
+  })
+
+  summary.averageOrderValue = summary.completedOrders > 0 ? summary.totalRevenue / summary.completedOrders : 0
+
+  return summary
+})
+
+// Use the function
+const orders = [
+  { id: '1', customerId: 'c1', total: 100, status: 'completed' as const },
+  { id: '2', customerId: 'c2', total: 200, status: 'completed' as const },
+  { id: '3', customerId: 'c3', total: 150, status: 'pending' as const },
+  { id: '4', customerId: 'c4', total: 50, status: 'cancelled' as const },
+]
+
+const summary = aggregateOrders(orders)
+console.log(summary)
+// {
+//   totalOrders: 4,
+//   completedOrders: 2,
+//   pendingOrders: 1,
+//   cancelledOrders: 1,
+//   totalRevenue: 300,
+//   averageOrderValue: 150
+// }
+```
+
+## Example 10: Email Template Generator
+
+Generate formatted email content:
+
+```typescript
+import $, { fn } from 'sdk.do'
+
+interface EmailData {
+  recipientName: string
+  orderNumber: string
+  total: number
+  items: Array<{ name: string; quantity: number; price: number }>
+}
+
+// Generate order confirmation email
+const generateOrderEmail = fn($.GenerateOrderEmail, (data: EmailData): string => {
+  const itemsList = data.items.map((item) => `- ${item.name} (x${item.quantity}): $${item.price.toFixed(2)}`).join('\n')
+
+  return `
+Hello ${data.recipientName},
+
+Thank you for your order #${data.orderNumber}!
+
+Order Details:
+${itemsList}
+
+Total: $${data.total.toFixed(2)}
+
+We'll send you a shipping confirmation once your order is on its way.
+
+Best regards,
+The Team
+    `.trim()
+})
+
+// Use the function
+const emailContent = generateOrderEmail({
+  recipientName: 'Alice',
+  orderNumber: 'ORD-12345',
+  total: 45.97,
+  items: [
+    { name: 'Widget', quantity: 2, price: 19.99 },
+    { name: 'Gadget', quantity: 1, price: 5.99 },
+  ],
+})
+
+console.log(emailContent)
+```
+
+## Example 11: JSON Transformation
+
+Transform JSON data structures:
+
+```typescript
+import $, { fn } from 'sdk.do'
+
+interface ApiUser {
+  id: number
+  first_name: string
+  last_name: string
+  email_address: string
+  created_at: string
+}
+
+interface AppUser {
+  $type: 'Person'
+  $id: string
+  name: string
+  email: string
+  createdAt: Date
+}
+
+// Transform API user to app user format
+const transformUser = fn($.TransformUser, (apiUser: ApiUser): AppUser => {
+  return {
+    $type: 'Person',
+    $id: `user-${apiUser.id}`,
+    name: `${apiUser.first_name} ${apiUser.last_name}`,
+    email: apiUser.email_address,
+    createdAt: new Date(apiUser.created_at),
+  }
+})
+
+// Use the function
+const apiUser = {
+  id: 123,
+  first_name: 'Alice',
+  last_name: 'Smith',
+  email_address: 'alice@example.com',
+  created_at: '2025-01-15T10:30:00Z',
+}
+
+const appUser = transformUser(apiUser)
+console.log(appUser)
+// {
+//   $type: 'Person',
+//   $id: 'user-123',
+//   name: 'Alice Smith',
+//   email: 'alice@example.com',
+//   createdAt: Date object
+// }
+```
+
+## Example 12: Retry Logic
+
+Implement simple retry logic:
+
+```typescript
+import $, { fn } from 'sdk.do'
+
+// Fetch with retry
+const fetchWithRetry = fn($.FetchWithRetry, async (url: string, maxRetries: number = 3): Promise<any> => {
+  let lastError: Error
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(url)
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      return await response.json()
+    } catch (error) {
+      lastError = error as Error
+      console.log(`Attempt ${attempt} failed: ${error.message}`)
+
+      // Wait before retrying (exponential backoff)
+      if (attempt < maxRetries) {
+        await new Promise((resolve) => setTimeout(resolve, Math.pow(2, attempt) * 1000))
+      }
+    }
+  }
+
+  throw new Error(`Failed after ${maxRetries} attempts: ${lastError.message}`)
+})
+
+// Use the function
+try {
+  const data = await fetchWithRetry('https://api.example.com/data', 3)
+  console.log('Data fetched:', data)
+} catch (error) {
+  console.error('All retry attempts failed:', error)
+}
+```
+
+## Next Steps
+
+Now that you've seen basic examples, explore more advanced patterns:
+
+- [Workflow Functions](./workflow-functions) - Complex workflow composition
+- [Error Handling](./error-handling) - Error handling patterns
+- [Creating Functions](../docs/creating-functions) - Detailed function creation guide
+- [Composition Patterns](../docs/composition) - Function composition techniques
+
+## Tips for Writing Functions
+
+1. **Keep it simple**: Each function should do one thing well
+2. **Use types**: TypeScript types make functions more reliable
+3. **Handle errors**: Always consider what could go wrong
+4. **Test thoroughly**: Write tests for your functions
+5. **Document**: Add comments for complex logic
+6. **Be consistent**: Follow naming conventions
+
+## Common Patterns
+
+### Input Validation Pattern
+
+```typescript
+const validate = (input: any) => {
+  if (!input) throw new Error('Input required')
+  // More validation...
+  return input
+}
+```
+
+### Transformation Pattern
+
+```typescript
+const transform = (data: InputType): OutputType => {
+  return {
+    /* transformed data */
+  }
+}
+```
+
+### Async Operation Pattern
+
+```typescript
+const fetchData = async (id: string) => {
+  const data = await api.get(id)
+  return data
+}
+```
+
+### Aggregation Pattern
+
+```typescript
+const aggregate = (items: Item[]) => {
+  return items.reduce((acc, item) => {
+    // Aggregation logic
+    return acc
+  }, initialValue)
+}
+```

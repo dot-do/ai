@@ -1,0 +1,477 @@
+---
+$id: https://ai.do/docs/getting-started
+$type: TechArticle
+title: Getting Started with ai.do
+description: Quick start guide for AI services in the .do platform
+keywords: [ai, getting started, sdk, setup, configuration]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Getting Started
+
+Get started with AI services in the `.do` platform in under 5 minutes.
+
+## Installation
+
+Install the SDK in your project:
+
+```bash
+pnpm add sdk.do
+```
+
+Or use the CLI:
+
+```bash
+pnpm add -g cli.do
+```
+
+## API Keys
+
+ai.do requires API keys for the AI providers you want to use.
+
+### OpenAI (GPT Models)
+
+1. Create an account at [platform.openai.com](https://platform.openai.com)
+2. Generate an API key
+3. Set the environment variable:
+
+```bash
+export OPENAI_API_KEY=sk-...
+```
+
+### Anthropic (Claude Models)
+
+1. Create an account at [console.anthropic.com](https://console.anthropic.com)
+2. Generate an API key
+3. Set the environment variable:
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+```
+
+## Basic Usage
+
+### Text Generation
+
+Generate text with a simple prompt:
+
+```typescript
+import { ai } from 'sdk.do'
+
+const response = await ai.generate('Write a haiku about coding')
+
+console.log(response)
+// Outputs: "Code flows like water / Through circuits and silicon / Logic finds its way"
+```
+
+### Structured Output
+
+Generate JSON objects with schema validation:
+
+```typescript
+import { $, ai } from 'sdk.do'
+
+const product = await ai.generate('Create a laptop product listing', {
+  schema: $.Product,
+  structured: true,
+})
+
+console.log(product)
+// {
+//   $type: "Product",
+//   name: "UltraBook Pro",
+//   description: "Lightweight laptop with 16GB RAM",
+//   price: { $type: "Offer", price: 999 }
+// }
+```
+
+### Vector Embeddings
+
+Create embeddings for semantic operations:
+
+```typescript
+import { ai } from 'sdk.do'
+
+const embedding = await ai.embed('machine learning and AI')
+
+console.log(embedding.length) // 1536 (OpenAI) or 1024 (Anthropic)
+console.log(embedding.slice(0, 5)) // [0.123, -0.456, 0.789, ...]
+```
+
+## Configuration
+
+### Set Default Model
+
+Configure the default AI model:
+
+```typescript
+import { ai } from 'sdk.do'
+
+ai.config({
+  model: 'gpt-5', // or 'claude-sonnet-4.5'
+  temperature: 0.7,
+  maxTokens: 4096,
+})
+```
+
+### Environment Variables
+
+You can also configure defaults via environment variables:
+
+```bash
+# .env file
+OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
+AI_MODEL=gpt-5
+AI_TEMPERATURE=0.7
+AI_MAX_TOKENS=4096
+```
+
+### Per-Request Configuration
+
+Override configuration for individual requests:
+
+```typescript
+import { ai } from 'sdk.do'
+
+const response = await ai.generate('prompt', {
+  model: 'claude-sonnet-4.5',
+  temperature: 0.9,
+  maxTokens: 8192,
+})
+```
+
+## Model Selection
+
+Choose the right model for your use case:
+
+### GPT-5 (Default)
+
+Best for general-purpose tasks:
+
+```typescript
+await ai.generate('Analyze this data', {
+  model: 'gpt-5',
+})
+```
+
+### GPT-5 Mini
+
+Cost-effective for simple tasks:
+
+```typescript
+await ai.generate('Summarize this text', {
+  model: 'gpt-5-mini',
+})
+```
+
+### GPT-5 Nano
+
+Fastest, cheapest for very simple tasks:
+
+```typescript
+await ai.generate('Extract category from: Electronics > Laptops', {
+  model: 'gpt-5-nano',
+})
+```
+
+### GPT-5 Codex
+
+Optimized for code-related tasks:
+
+```typescript
+await ai.generate('Refactor this function', {
+  model: 'gpt-5-codex',
+  context: { code: sourceCode },
+})
+```
+
+### Claude Sonnet 4.5
+
+Alternative high-quality model:
+
+```typescript
+await ai.generate('Write creative content', {
+  model: 'claude-sonnet-4.5',
+})
+```
+
+## Schema.org Integration
+
+Use Schema.org types for structured generation:
+
+```typescript
+import { $, ai } from 'sdk.do'
+
+// Generate Organization
+const org = await ai.generate('Create tech startup', {
+  schema: $.Organization,
+  structured: true,
+})
+
+// Generate Person
+const person = await ai.generate('Create employee profile', {
+  schema: $.Person,
+  structured: true,
+})
+
+// Generate Event
+const event = await ai.generate('Create conference event', {
+  schema: $.Event,
+  structured: true,
+})
+```
+
+Available schemas from [schema.org.ai](https://schema.org.ai):
+
+- **Business**: Organization, LocalBusiness, Corporation
+- **People**: Person, Employee, Customer
+- **Products**: Product, Service, Offer
+- **Content**: Article, BlogPost, HowTo
+- **Events**: Event, OnlineEvent, BusinessEvent
+- **Places**: Place, PostalAddress, GeoCoordinates
+
+See [schema.org.ai](https://schema.org.ai) for all 817 available types.
+
+## Semantic Context
+
+Provide semantic context for better generation:
+
+```typescript
+import { $, ai } from 'sdk.do'
+
+const article = await ai.generate('Write an article about sustainable business practices', {
+  schema: $.Article,
+  structured: true,
+  context: {
+    about: $.Sustainability,
+    audience: $.Business,
+    industry: $.Technology,
+    keywords: ['green tech', 'carbon neutral', 'circular economy'],
+  },
+})
+```
+
+## Error Handling
+
+Handle API errors gracefully:
+
+```typescript
+import { ai } from 'sdk.do'
+
+try {
+  const response = await ai.generate('prompt')
+  console.log(response)
+} catch (error) {
+  if (error.code === 'RATE_LIMIT_EXCEEDED') {
+    console.error('Rate limit exceeded, retry later')
+  } else if (error.code === 'INVALID_API_KEY') {
+    console.error('Invalid API key, check configuration')
+  } else {
+    console.error('Generation failed:', error.message)
+  }
+}
+```
+
+## Next Steps
+
+Now that you have ai.do set up, explore more features:
+
+- [Text Generation](./generation) - Advanced generation techniques
+- [Embeddings](./embeddings) - Vector embeddings for semantic search
+- [Batch Processing](./batch-processing) - Process large datasets efficiently
+- [API Reference](../api/) - Complete API documentation
+
+## Examples
+
+Check out practical examples:
+
+- [Basic Generation](../examples/basic-generation) - Simple text generation
+- [Structured Output](../examples/structured-output) - Schema-based generation
+- [Embeddings](../examples/embeddings) - Vector embeddings and similarity
+
+## Common Patterns
+
+### Content Generation
+
+```typescript
+import { $, ai } from 'sdk.do'
+
+// Blog post
+const post = await ai.generate('Write about AI ethics', {
+  schema: $.BlogPost,
+  structured: true,
+})
+
+// Product description
+const description = await ai.generate(`Product description for ${product.name}`, { schema: $.Product })
+```
+
+### Data Enrichment
+
+```typescript
+import { $, ai, db } from 'sdk.do'
+
+const products = await db.list($.Product, {
+  where: { description: null },
+})
+
+for (const product of products) {
+  const description = await ai.generate(`Generate description for ${product.name}`, { context: product })
+
+  await db.update(product.$id, { description })
+}
+```
+
+### Semantic Search
+
+```typescript
+import { ai, db } from 'sdk.do'
+
+// Create embeddings
+const query = 'laptop for students'
+const queryEmbedding = await ai.embed(query)
+
+// Find similar items
+const results = await db.similaritySearch(queryEmbedding, {
+  limit: 10,
+  threshold: 0.8,
+})
+```
+
+## Best Practices
+
+### 1. Use Appropriate Models
+
+Choose models based on task complexity:
+
+- **Simple tasks** (classification, extraction) → `gpt-5-nano`
+- **Standard tasks** (generation, analysis) → `gpt-5` or `gpt-5-mini`
+- **Complex tasks** (reasoning, creativity) → `gpt-5` or `claude-sonnet-4.5`
+- **Code tasks** (refactoring, generation) → `gpt-5-codex`
+
+### 2. Leverage Schemas
+
+Use Schema.org types for structured output:
+
+```typescript
+// Good: Type-safe structured output
+const product = await ai.generate('...', {
+  schema: $.Product,
+  structured: true,
+})
+
+// Avoid: Unstructured text parsing
+const text = await ai.generate('...')
+const product = parseProductFromText(text) // Error-prone
+```
+
+### 3. Provide Context
+
+Include relevant context for better results:
+
+```typescript
+// Good: Rich context
+await ai.generate('Write description', {
+  context: {
+    product: existingProduct,
+    brand: brand,
+    targetAudience: 'professionals',
+  },
+})
+
+// Avoid: No context
+await ai.generate('Write description')
+```
+
+### 4. Handle Errors
+
+Always implement error handling:
+
+```typescript
+try {
+  const result = await ai.generate('prompt')
+} catch (error) {
+  // Handle rate limits, retries, fallbacks
+  console.error('Generation failed:', error)
+}
+```
+
+### 5. Use Batch Processing
+
+For large datasets, use batch API for 50% cost savings:
+
+```typescript
+// Good: Batch processing (50% cheaper)
+const batch = await ai.batch.create(requests)
+
+// Avoid: Individual requests (expensive)
+for (const req of requests) {
+  await ai.generate(req.prompt)
+}
+```
+
+## Troubleshooting
+
+### "Invalid API key" Error
+
+Check that your API keys are set correctly:
+
+```bash
+echo $OPENAI_API_KEY
+echo $ANTHROPIC_API_KEY
+```
+
+### "Rate limit exceeded" Error
+
+Implement retry logic or use batch processing:
+
+```typescript
+import { ai } from 'sdk.do'
+
+async function generateWithRetry(prompt, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await ai.generate(prompt)
+    } catch (error) {
+      if (error.code === 'RATE_LIMIT_EXCEEDED' && i < retries - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 1000 * (i + 1)))
+        continue
+      }
+      throw error
+    }
+  }
+}
+```
+
+### Schema Validation Errors
+
+Ensure your schema is a valid Schema.org type:
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Valid schemas
+$.Product
+$.Organization
+$.Person
+
+// Invalid (not Schema.org types)
+$.CustomType // Error
+$.MyObject // Error
+```
+
+Check [schema.org.ai](https://schema.org.ai) for all available types.
+
+## Support
+
+- [API Reference](../api/) - Complete API documentation
+- [Examples](../examples/) - Code examples
+- [GitHub Issues](https://github.com/dot-do/ai/issues) - Report bugs
+- [Discord Community](https://discord.gg/dotdo) - Get help
+
+## License
+
+MIT (Open Source)

@@ -1,0 +1,614 @@
+---
+$id: https://user.do/examples/basic-user
+$type: HowTo
+title: Basic User Context Examples
+description: Simple examples of accessing user context and authentication state
+keywords: [user, examples, authentication, context, current-user]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Basic User Context
+
+Simple examples demonstrating user context access and authentication state checking.
+
+## Get Current User
+
+Access the authenticated user's information:
+
+```typescript
+import { user } from 'sdk.do'
+
+// Get current user
+const currentUser = await user.current()
+
+console.log(currentUser)
+// {
+//   $id: "user_123",
+//   $type: "Person",
+//   name: "John Smith",
+//   email: "john@example.com",
+//   role: "editor",
+//   organization: {
+//     $id: "org_456",
+//     name: "Acme Corp"
+//   }
+// }
+
+console.log(`Welcome, ${currentUser.name}!`)
+```
+
+## Check Authentication Status
+
+Verify if a user is logged in:
+
+```typescript
+import { user } from 'sdk.do'
+
+// Check if user is authenticated
+const isAuthenticated = await user.isAuthenticated()
+
+if (isAuthenticated) {
+  console.log('User is logged in')
+  const currentUser = await user.current()
+  console.log(`Logged in as: ${currentUser.name}`)
+} else {
+  console.log('User is not logged in')
+}
+```
+
+## Access User Properties
+
+Access specific user properties:
+
+```typescript
+import { user } from 'sdk.do'
+
+const currentUser = await user.current()
+
+// Basic properties
+console.log('Name:', currentUser.name)
+console.log('Email:', currentUser.email)
+console.log('Role:', currentUser.role)
+
+// Organization info
+console.log('Organization:', currentUser.organization?.name)
+console.log('Organization ID:', currentUser.organization?.$id)
+
+// Optional properties
+console.log('Given Name:', currentUser.givenName)
+console.log('Family Name:', currentUser.familyName)
+console.log('Job Title:', currentUser.jobTitle)
+console.log('Phone:', currentUser.telephone)
+```
+
+## Check User Role
+
+Verify user's role for role-based logic:
+
+```typescript
+import { user } from 'sdk.do'
+
+// Get current user
+const currentUser = await user.current()
+
+// Check role directly
+if (currentUser.role === 'admin') {
+  console.log('User is an administrator')
+}
+
+// Or use hasRole helper
+if (await user.hasRole('admin')) {
+  console.log('User is an administrator')
+}
+
+if (await user.hasRole('editor')) {
+  console.log('User is an editor')
+}
+
+if (await user.hasRole('viewer')) {
+  console.log('User is a viewer')
+}
+```
+
+## Check Organization Membership
+
+Verify user belongs to specific organization:
+
+```typescript
+import { user } from 'sdk.do'
+
+const currentUser = await user.current()
+
+// Check organization directly
+if (currentUser.organization?.$id === 'org_123') {
+  console.log('User belongs to specified organization')
+}
+
+// Or use belongsTo helper
+if (await user.belongsTo('org_123')) {
+  console.log('User belongs to organization')
+}
+```
+
+## Protected Route Example
+
+Require authentication for specific routes:
+
+```typescript
+import { user } from 'sdk.do'
+
+export async function protectedRoute(request: Request) {
+  // Check if user is authenticated
+  if (!(await user.isAuthenticated())) {
+    return Response.redirect('/login')
+  }
+
+  // Get current user
+  const currentUser = await user.current()
+
+  // Render protected content
+  return new Response(
+    `
+    <html>
+      <body>
+        <h1>Protected Page</h1>
+        <p>Welcome, ${currentUser.name}!</p>
+        <p>Email: ${currentUser.email}</p>
+        <p>Role: ${currentUser.role}</p>
+      </body>
+    </html>
+  `,
+    {
+      headers: { 'Content-Type': 'text/html' },
+    }
+  )
+}
+```
+
+## Personalized Welcome Message
+
+Display personalized content based on user:
+
+```typescript
+import { user } from 'sdk.do'
+
+export async function welcomeMessage() {
+  const currentUser = await user.current()
+
+  // Get time of day
+  const hour = new Date().getHours()
+  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
+
+  return `
+    ${greeting}, ${currentUser.name}!
+    ${currentUser.jobTitle ? `<br>Role: ${currentUser.jobTitle}` : ''}
+    ${currentUser.organization ? `<br>Organization: ${currentUser.organization.name}` : ''}
+  `
+}
+```
+
+## User Session Details
+
+Access session information:
+
+```typescript
+import { user } from 'sdk.do'
+
+// Get session details
+const session = await user.session()
+
+console.log('Session Details:', {
+  id: session.id,
+  userId: session.userId,
+  createdAt: session.createdAt,
+  expiresAt: session.expiresAt,
+  isActive: session.isActive,
+})
+
+// Check if session is about to expire
+const expiresIn = new Date(session.expiresAt).getTime() - Date.now()
+const hoursRemaining = expiresIn / (1000 * 60 * 60)
+
+if (hoursRemaining < 1) {
+  console.log('Warning: Session expires soon')
+  // Optionally refresh session
+  await user.refreshSession()
+}
+```
+
+## User Context in API Response
+
+Include user context in API responses:
+
+```typescript
+import { $, db, user } from 'sdk.do'
+
+export async function getUserDashboard() {
+  const currentUser = await user.current()
+
+  // Get user-specific data
+  const recentOrders = await db.list($.Order, {
+    where: { customer: currentUser.$id },
+    limit: 10,
+    orderBy: { createdAt: 'desc' },
+  })
+
+  const favorites = await db.list($.Product, {
+    where: { favoritedBy: currentUser.$id },
+  })
+
+  return Response.json({
+    user: {
+      name: currentUser.name,
+      email: currentUser.email,
+      role: currentUser.role,
+    },
+    dashboard: {
+      recentOrders,
+      favorites,
+      orderCount: recentOrders.length,
+    },
+  })
+}
+```
+
+## Conditional UI Rendering
+
+Show or hide UI elements based on user:
+
+```typescript
+import { user } from 'sdk.do'
+
+export async function renderNavigation() {
+  const currentUser = await user.current()
+
+  const nav = `
+    <nav>
+      <a href="/">Home</a>
+      <a href="/profile">${currentUser.name}</a>
+
+      ${
+        (await user.hasRole('admin'))
+          ? `
+        <a href="/admin">Admin Panel</a>
+      `
+          : ''
+      }
+
+      ${
+        (await user.hasRole('editor'))
+          ? `
+        <a href="/editor">Content Editor</a>
+      `
+          : ''
+      }
+
+      <a href="/logout">Logout</a>
+    </nav>
+  `
+
+  return nav
+}
+```
+
+## User Context Middleware
+
+Middleware to add user context to all requests:
+
+```typescript
+import { user } from 'sdk.do'
+
+export async function userContextMiddleware(request: Request, next: Function) {
+  try {
+    // Check if user is authenticated
+    if (await user.isAuthenticated()) {
+      // Get current user
+      const currentUser = await user.current()
+
+      // Add user to request context
+      request.user = currentUser
+
+      console.log(`Request by: ${currentUser.name} (${currentUser.role})`)
+    }
+
+    // Continue to next middleware
+    return await next(request)
+  } catch (error) {
+    console.error('User context middleware error:', error)
+    return await next(request)
+  }
+}
+```
+
+## Display User Profile
+
+Show user profile information:
+
+```typescript
+import { user } from 'sdk.do'
+
+export async function renderProfile() {
+  const currentUser = await user.current()
+
+  return `
+    <div class="profile">
+      ${
+        currentUser.image
+          ? `
+        <img src="${currentUser.image}" alt="${currentUser.name}" />
+      `
+          : ''
+      }
+
+      <h1>${currentUser.name}</h1>
+
+      ${
+        currentUser.jobTitle
+          ? `
+        <p class="job-title">${currentUser.jobTitle}</p>
+      `
+          : ''
+      }
+
+      <p class="email">${currentUser.email}</p>
+
+      ${
+        currentUser.telephone
+          ? `
+        <p class="phone">${currentUser.telephone}</p>
+      `
+          : ''
+      }
+
+      ${
+        currentUser.organization
+          ? `
+        <p class="organization">
+          Works at ${currentUser.organization.name}
+        </p>
+      `
+          : ''
+      }
+
+      ${
+        currentUser.address
+          ? `
+        <address>
+          ${currentUser.address.streetAddress}<br>
+          ${currentUser.address.addressLocality}, ${currentUser.address.addressRegion}
+          ${currentUser.address.postalCode}
+        </address>
+      `
+          : ''
+      }
+
+      <p class="role">Role: ${currentUser.role}</p>
+    </div>
+  `
+}
+```
+
+## Logout Functionality
+
+Implement user logout:
+
+```typescript
+import { user } from 'sdk.do'
+
+export async function logout() {
+  // Get current user for logging
+  const currentUser = await user.current()
+  console.log(`${currentUser.name} is logging out`)
+
+  // End session
+  await user.endSession()
+
+  // Verify logout
+  const isAuthenticated = await user.isAuthenticated()
+  console.log('Still authenticated:', isAuthenticated) // false
+
+  // Redirect to login
+  return Response.redirect('/login')
+}
+```
+
+## User-Specific Data Filtering
+
+Filter data based on current user:
+
+```typescript
+import { $, db, user } from 'sdk.do'
+
+// Get products created by current user
+export async function getMyProducts() {
+  const currentUser = await user.current()
+
+  const products = await db.list($.Product, {
+    where: {
+      creator: currentUser.$id,
+    },
+  })
+
+  return products
+}
+
+// Get orders for current user's organization
+export async function getOrganizationOrders() {
+  const currentUser = await user.current()
+
+  const orders = await db.list($.Order, {
+    where: {
+      organization: currentUser.organization.$id,
+    },
+  })
+
+  return orders
+}
+
+// Get tasks assigned to current user
+export async function getMyTasks() {
+  const currentUser = await user.current()
+
+  const tasks = await db.list($.Task, {
+    where: {
+      assignedTo: currentUser.$id,
+      status: { $ne: 'completed' },
+    },
+  })
+
+  return tasks
+}
+```
+
+## User Context in Events
+
+Include user context when publishing events:
+
+```typescript
+import { $, user, send } from 'sdk.do'
+
+export async function createOrder(orderData: any) {
+  const currentUser = await user.current()
+
+  // Create order
+  const order = await db.create($.Order, {
+    ...orderData,
+    customer: currentUser.$id,
+    organization: currentUser.organization.$id,
+    createdBy: currentUser.name,
+  })
+
+  // Publish event with user context
+  await send($.Order.created, {
+    order,
+    createdBy: {
+      $id: currentUser.$id,
+      name: currentUser.name,
+      email: currentUser.email,
+      role: currentUser.role,
+    },
+  })
+
+  return order
+}
+```
+
+## Check Multiple Users
+
+Work with multiple user accounts (e.g., impersonation):
+
+```typescript
+import { $, db, user } from 'sdk.do'
+
+export async function impersonateUser(targetUserId: string) {
+  const currentUser = await user.current()
+
+  // Only admins can impersonate
+  if (!(await user.hasRole('admin'))) {
+    throw new Error('Unauthorized: Only admins can impersonate users')
+  }
+
+  // Log impersonation for audit
+  console.log(`${currentUser.name} is impersonating user ${targetUserId}`)
+
+  // Get target user
+  const targetUser = await db.get($.Person, targetUserId)
+
+  // Create impersonation session
+  await user.impersonate(targetUserId)
+
+  // Verify impersonation
+  const impersonatedUser = await user.current()
+  console.log(`Now acting as: ${impersonatedUser.name}`)
+
+  return impersonatedUser
+}
+
+export async function stopImpersonation() {
+  // End impersonation and return to original user
+  await user.stopImpersonation()
+
+  const currentUser = await user.current()
+  console.log(`Returned to: ${currentUser.name}`)
+
+  return currentUser
+}
+```
+
+## Error Handling
+
+Handle user context errors gracefully:
+
+```typescript
+import { user } from 'sdk.do'
+
+export async function safeGetUser() {
+  try {
+    const currentUser = await user.current()
+    return currentUser
+  } catch (error) {
+    if (error.code === 'UNAUTHENTICATED') {
+      console.log('User is not authenticated')
+      return null
+    }
+
+    console.error('Failed to get user:', error)
+    throw error
+  }
+}
+
+export async function requireUser() {
+  try {
+    const currentUser = await user.current()
+    return currentUser
+  } catch (error) {
+    if (error.code === 'UNAUTHENTICATED') {
+      throw new Error('Authentication required')
+    }
+
+    throw error
+  }
+}
+```
+
+## Cache User Context
+
+Cache user context for performance:
+
+```typescript
+import { user } from 'sdk.do'
+
+let cachedUser: any = null
+let cacheExpiry: number = 0
+
+export async function getCachedUser() {
+  // Check if cache is valid
+  if (cachedUser && Date.now() < cacheExpiry) {
+    return cachedUser
+  }
+
+  // Fetch user
+  cachedUser = await user.current()
+  cacheExpiry = Date.now() + 60000 // Cache for 1 minute
+
+  return cachedUser
+}
+
+export function clearUserCache() {
+  cachedUser = null
+  cacheExpiry = 0
+}
+```
+
+## See Also
+
+- [Permission Examples](./permissions) - Authorization patterns
+- [Getting Started](../docs/getting-started) - Setup guide
+- [Authentication](../docs/authentication) - Authentication patterns
+- [API Reference](../api/) - Complete API documentation
+
+## License
+
+CC-BY-4.0 (Open Source)

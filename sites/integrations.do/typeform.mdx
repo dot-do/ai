@@ -1,0 +1,662 @@
+---
+$id: https://integrations.do/typeform
+$type: Integration
+name: Typeform
+service: typeform
+description: Online form builder for surveys, quizzes, and data collection
+category: forms
+sdkBased: true
+sdkPackage: '@typeform/api-client'
+sdkVersion: ^3.0.0
+sdkImport: createClient
+
+auth:
+  type: api-key
+  location: header
+  headerName: Authorization
+  scheme: Bearer
+
+resources:
+  - name: Form
+    plural: Forms
+    description: Create and manage forms
+    operations:
+      - name: create
+        method: POST
+        path: /forms
+        params:
+          - name: title
+            type: string
+            required: true
+            description: Form title
+          - name: fields
+            type: array
+            required: false
+            description: Form fields
+          - name: settings
+            type: object
+            required: false
+            description: Form settings
+        returns: Form
+
+      - name: get
+        method: GET
+        path: /forms/{form_id}
+        params:
+          - name: form_id
+            type: string
+            required: true
+            description: Form ID
+        returns: Form
+
+      - name: update
+        method: PUT
+        path: /forms/{form_id}
+        params:
+          - name: form_id
+            type: string
+            required: true
+            description: Form ID
+          - name: title
+            type: string
+            required: false
+            description: Updated form title
+          - name: fields
+            type: array
+            required: false
+            description: Updated form fields
+        returns: Form
+
+      - name: delete
+        method: DELETE
+        path: /forms/{form_id}
+        params:
+          - name: form_id
+            type: string
+            required: true
+            description: Form ID
+        returns: boolean
+
+      - name: list
+        method: GET
+        path: /forms
+        params:
+          - name: page
+            type: number
+            required: false
+            description: Page number
+          - name: page_size
+            type: number
+            required: false
+            description: Results per page
+        returns: Form[]
+        pagination:
+          type: page
+          pageParam: page
+          limitParam: page_size
+          defaultLimit: 10
+          maxLimit: 200
+
+  - name: Response
+    plural: Responses
+    description: Retrieve and manage form responses
+    operations:
+      - name: get
+        method: GET
+        path: /forms/{form_id}/responses/{response_id}
+        params:
+          - name: form_id
+            type: string
+            required: true
+            description: Form ID
+          - name: response_id
+            type: string
+            required: true
+            description: Response ID
+        returns: Response
+
+      - name: list
+        method: GET
+        path: /forms/{form_id}/responses
+        params:
+          - name: form_id
+            type: string
+            required: true
+            description: Form ID
+          - name: page_size
+            type: number
+            required: false
+            description: Results per page (max 1000)
+          - name: since
+            type: string
+            required: false
+            description: Start date (ISO 8601)
+          - name: until
+            type: string
+            required: false
+            description: End date (ISO 8601)
+          - name: after
+            type: string
+            required: false
+            description: Response token for pagination
+          - name: before
+            type: string
+            required: false
+            description: Response token for pagination
+        returns: Response[]
+        pagination:
+          type: cursor
+          cursorParam: after
+          limitParam: page_size
+          defaultLimit: 25
+          maxLimit: 1000
+
+      - name: delete
+        method: DELETE
+        path: /forms/{form_id}/responses
+        params:
+          - name: form_id
+            type: string
+            required: true
+            description: Form ID
+          - name: included_response_ids
+            type: array
+            required: true
+            description: Response IDs to delete
+        returns: boolean
+
+  - name: Webhook
+    plural: Webhooks
+    description: Create and manage webhooks
+    operations:
+      - name: create
+        method: PUT
+        path: /forms/{form_id}/webhooks/{tag}
+        params:
+          - name: form_id
+            type: string
+            required: true
+            description: Form ID
+          - name: tag
+            type: string
+            required: true
+            description: Webhook tag/identifier
+          - name: url
+            type: string
+            required: true
+            description: Webhook URL
+          - name: enabled
+            type: boolean
+            required: false
+            description: Enable webhook
+          - name: secret
+            type: string
+            required: false
+            description: Secret for signature verification
+        returns: Webhook
+
+      - name: get
+        method: GET
+        path: /forms/{form_id}/webhooks/{tag}
+        params:
+          - name: form_id
+            type: string
+            required: true
+            description: Form ID
+          - name: tag
+            type: string
+            required: true
+            description: Webhook tag
+        returns: Webhook
+
+      - name: delete
+        method: DELETE
+        path: /forms/{form_id}/webhooks/{tag}
+        params:
+          - name: form_id
+            type: string
+            required: true
+            description: Form ID
+          - name: tag
+            type: string
+            required: true
+            description: Webhook tag
+        returns: boolean
+
+  - name: Theme
+    plural: Themes
+    description: Create and manage form themes
+    operations:
+      - name: create
+        method: POST
+        path: /themes
+        params:
+          - name: name
+            type: string
+            required: true
+            description: Theme name
+          - name: colors
+            type: object
+            required: false
+            description: Theme colors
+          - name: font
+            type: string
+            required: false
+            description: Theme font
+        returns: Theme
+
+      - name: get
+        method: GET
+        path: /themes/{theme_id}
+        params:
+          - name: theme_id
+            type: string
+            required: true
+            description: Theme ID
+        returns: Theme
+
+      - name: update
+        method: PUT
+        path: /themes/{theme_id}
+        params:
+          - name: theme_id
+            type: string
+            required: true
+            description: Theme ID
+          - name: name
+            type: string
+            required: false
+            description: Updated theme name
+          - name: colors
+            type: object
+            required: false
+            description: Updated theme colors
+        returns: Theme
+
+      - name: delete
+        method: DELETE
+        path: /themes/{theme_id}
+        params:
+          - name: theme_id
+            type: string
+            required: true
+            description: Theme ID
+        returns: boolean
+
+      - name: list
+        method: GET
+        path: /themes
+        params:
+          - name: page
+            type: number
+            required: false
+            description: Page number
+          - name: page_size
+            type: number
+            required: false
+            description: Results per page
+        returns: Theme[]
+        pagination:
+          type: page
+          pageParam: page
+          limitParam: page_size
+          defaultLimit: 10
+          maxLimit: 200
+
+webhooks:
+  enabled: true
+  signatureHeader: Typeform-Signature
+  signatureAlgorithm: sha256
+  verificationMethod: signature
+  events:
+    - name: form_response
+      type: form_response
+      description: New form response submitted
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized - Invalid or missing API token
+      retryable: false
+    - code: 403
+      type: authorization
+      statusCode: 403
+      message: Forbidden - Insufficient permissions
+      retryable: false
+    - code: 404
+      type: not_found
+      statusCode: 404
+      message: Resource not found
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded (2 requests/second per account)
+      retryable: true
+  retryable: [429, 500, 502, 503]
+  nonRetryable: [400, 401, 403, 404]
+
+rateLimit:
+  requestsPerSecond: 2
+  retryAfterHeader: Retry-After
+
+tests:
+  enabled: true
+  cleanup: true
+  scenarios:
+    - name: Form Management
+      description: Test form CRUD operations
+      steps:
+        - action: create
+          resource: Form
+        - action: retrieve
+          resource: Form
+        - action: update
+          resource: Form
+        - action: list
+          resource: Form
+        - action: delete
+          resource: Form
+
+    - name: Response Retrieval
+      description: Test response operations
+      steps:
+        - action: list
+          resource: Response
+        - action: retrieve
+          resource: Response
+
+    - name: Webhook Management
+      description: Test webhook operations
+      steps:
+        - action: create
+          resource: Webhook
+        - action: retrieve
+          resource: Webhook
+        - action: delete
+          resource: Webhook
+
+    - name: Theme Management
+      description: Test theme operations
+      steps:
+        - action: create
+          resource: Theme
+        - action: retrieve
+          resource: Theme
+        - action: list
+          resource: Theme
+        - action: delete
+          resource: Theme
+
+docs:
+  homepage: https://www.typeform.com
+  apiDocs: https://www.typeform.com/developers/
+  sdkDocs: https://github.com/Typeform/js-api-client
+  guides:
+    authentication: https://www.typeform.com/developers/get-started/personal-access-token/
+    webhooks: https://www.typeform.com/developers/webhooks/secure-your-webhooks/
+    responses: https://www.typeform.com/developers/responses/
+---
+
+# Typeform Integration
+
+Online form builder for surveys, quizzes, and data collection.
+
+## Features
+
+- **Form Management**: Create, update, delete, and customize forms
+- **Response Retrieval**: Access and manage form submissions
+- **Webhooks**: Real-time notifications for new responses
+- **Themes**: Customize form appearance with themes
+- **API Key Authentication**: Simple personal access token authentication
+- **Automatic Pagination**: SDK handles pagination automatically
+
+## Quick Start
+
+```typescript
+import { TypeformClient } from '@dotdo/sdk.do/integrations/typeform'
+
+const typeform = new TypeformClient({
+  apiKey: process.env.TYPEFORM_API_KEY,
+})
+
+// Create a form
+const form = await typeform.form.create({
+  title: 'Customer Satisfaction Survey',
+  fields: [
+    {
+      type: 'short_text',
+      title: 'What is your name?',
+      required: true,
+    },
+    {
+      type: 'rating',
+      title: 'How satisfied are you?',
+      properties: { steps: 5 },
+    },
+  ],
+})
+
+// Get responses
+const responses = await typeform.response.list({
+  form_id: form.id,
+  page_size: 100,
+})
+```
+
+## Authentication
+
+Typeform uses personal access tokens for API authentication:
+
+```bash
+export TYPEFORM_API_KEY=your_personal_access_token
+```
+
+Generate tokens in your Typeform account:
+
+1. Log in to Typeform
+2. Click Account → Personal tokens
+3. Generate a new token with required scopes
+4. Keep your token secure!
+
+## Resources
+
+### Forms
+
+Create and manage forms:
+
+```typescript
+// Create form
+const form = await typeform.form.create({
+  title: 'My Survey',
+  fields: [
+    {
+      type: 'short_text',
+      title: 'Your name?',
+      required: true,
+    },
+  ],
+  settings: {
+    is_public: true,
+    show_progress_bar: true,
+  },
+})
+
+// Get form
+const form = await typeform.form.get({
+  form_id: 'abc123',
+})
+
+// Update form
+await typeform.form.update({
+  form_id: 'abc123',
+  title: 'Updated Survey Title',
+})
+
+// List forms
+const forms = await typeform.form.list({
+  page: 1,
+  page_size: 20,
+})
+
+// Delete form
+await typeform.form.delete({
+  form_id: 'abc123',
+})
+```
+
+### Responses
+
+Retrieve form submissions:
+
+```typescript
+// List responses
+const responses = await typeform.response.list({
+  form_id: 'abc123',
+  page_size: 100,
+  since: '2025-01-01T00:00:00Z',
+  until: '2025-12-31T23:59:59Z',
+})
+
+// Get specific response
+const response = await typeform.response.get({
+  form_id: 'abc123',
+  response_id: 'resp123',
+})
+
+// Delete responses
+await typeform.response.delete({
+  form_id: 'abc123',
+  included_response_ids: ['resp1', 'resp2'],
+})
+```
+
+### Webhooks
+
+Configure webhooks for real-time notifications:
+
+```typescript
+// Create webhook
+const webhook = await typeform.webhook.create({
+  form_id: 'abc123',
+  tag: 'production',
+  url: 'https://myapp.com/webhooks/typeform',
+  enabled: true,
+  secret: 'my-webhook-secret',
+})
+
+// Get webhook
+const webhook = await typeform.webhook.get({
+  form_id: 'abc123',
+  tag: 'production',
+})
+
+// Delete webhook
+await typeform.webhook.delete({
+  form_id: 'abc123',
+  tag: 'production',
+})
+```
+
+### Themes
+
+Customize form appearance:
+
+```typescript
+// Create theme
+const theme = await typeform.theme.create({
+  name: 'Brand Theme',
+  colors: {
+    question: '#3366FF',
+    answer: '#4FB0AE',
+    button: '#4FB0AE',
+    background: '#FFFFFF',
+  },
+  font: 'Karla',
+})
+
+// Get theme
+const theme = await typeform.theme.get({
+  theme_id: 'theme123',
+})
+
+// Update theme
+await typeform.theme.update({
+  theme_id: 'theme123',
+  colors: { question: '#FF6B35' },
+})
+
+// List themes
+const themes = await typeform.theme.list({
+  page_size: 50,
+})
+```
+
+## Webhooks
+
+Typeform sends webhook events for form responses:
+
+```typescript
+import { TypeformWebhookHandler, WebhookEventRouter } from '@dotdo/sdk.do/integrations/typeform'
+
+const handler = new TypeformWebhookHandler(process.env.TYPEFORM_WEBHOOK_SECRET)
+const event = await handler.handleRequest(request)
+
+const router = new WebhookEventRouter()
+router.onFormResponse(async (event) => {
+  console.log('New response:', event.data)
+  console.log('Form ID:', event.data.form_id)
+  console.log('Response ID:', event.data.response_id)
+  console.log('Answers:', event.data.answers)
+})
+
+await router.route(event)
+```
+
+**Important**: Typeform signature includes a trailing newline character (`\n`) in the calculation.
+
+## Error Handling
+
+```typescript
+import { TypeformError } from '@dotdo/sdk.do/integrations/typeform'
+
+try {
+  await typeform.form.create({
+    /* ... */
+  })
+} catch (error) {
+  if (error instanceof TypeformError) {
+    console.error('Typeform Error:', error.code, error.message)
+    if (error.isRetriable()) {
+      // Retry logic
+    }
+  }
+}
+```
+
+## Best Practices
+
+1. **Rate Limits**: Maximum 2 requests per second per account
+2. **Response Pagination**: Use `page_size` up to 1000, then use `since`/`until` or `after`/`before` for large datasets
+3. **Webhook Secrets**: Always set a secret for signature verification
+4. **Token Security**: Keep personal access tokens secure, never commit to version control
+5. **Scope Selection**: Only request scopes your application needs
+6. **Error Handling**: Handle 429 rate limit errors with exponential backoff
+7. **Large Response Sets**: For >1000 responses, use date filters (`since`/`until`) to narrow requests
+
+## Rate Limiting
+
+- **Create API**: 2 requests/second per account
+- **Responses API**: 2 requests/second per account
+- Exceeding limits returns 429 status code
+- Use `Retry-After` header for retry timing
+
+## API Reference
+
+Full API documentation: https://www.typeform.com/developers/
+
+## License
+
+MIT

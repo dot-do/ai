@@ -1,0 +1,477 @@
+---
+$id: https://bots.do/examples/integration
+$type: HowTo
+title: Bot Integration Examples
+description: Examples of integrating bots with external systems, databases, APIs, and other .do platform services.
+keywords: [integration, APIs, databases, external systems, sdk integration]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Bot Integration Examples
+
+Learn how to integrate bots with external systems and services.
+
+## Database Integration
+
+Integrate bots with databases using sdk.do:
+
+```typescript
+import $, { bot, db } from 'sdk.do'
+
+const dbBot = await bot.create({
+  name: 'Database Bot',
+  task: 'Manage database operations',
+  capabilities: ['database_operations'],
+  handler: async (operation) => {
+    switch (operation.type) {
+      case 'create':
+        return await db.create($.Customer, operation.data)
+
+      case 'read':
+        return await db.get($.Customer, operation.id)
+
+      case 'update':
+        return await db.update($.Customer, operation.id, operation.data)
+
+      case 'delete':
+        return await db.delete($.Customer, operation.id)
+
+      case 'list':
+        return await db.list($.Customer, operation.query)
+
+      default:
+        throw new Error(`Unknown operation: ${operation.type}`)
+    }
+  },
+})
+
+// Example usage
+const customer = await dbBot.execute({
+  type: 'create',
+  data: {
+    $type: 'Person',
+    name: 'John Doe',
+    email: 'john@example.com',
+    phone: '+1234567890',
+  },
+})
+```
+
+## API Integration
+
+Call external APIs with error handling:
+
+```typescript
+import $, { bot } from 'sdk.do'
+
+const apiBot = await bot.create({
+  name: 'API Bot',
+  task: 'Call external APIs',
+  capabilities: ['api_calls'],
+  errorHandling: {
+    retry: {
+      attempts: 3,
+      retryOn: ['TIMEOUT', 'CONNECTION_ERROR', '429', '503'],
+    },
+  },
+  handler: async (request) => {
+    // Configure API client
+    const client = createAPIClient({
+      baseURL: process.env.API_BASE_URL,
+      apiKey: process.env.API_KEY,
+      timeout: 30000,
+    })
+
+    // Make API call
+    const response = await client.request({
+      method: request.method,
+      endpoint: request.endpoint,
+      data: request.data,
+      headers: request.headers,
+    })
+
+    return response.data
+  },
+})
+
+// Example: Enrich customer data
+const enriched = await apiBot.execute({
+  method: 'POST',
+  endpoint: '/enrich',
+  data: {
+    email: 'john@example.com',
+  },
+})
+```
+
+## CRM Integration
+
+Sync with CRM systems:
+
+```typescript
+import $, { bot, db, on, send } from 'sdk.do'
+
+const crmBot = await bot.create({
+  name: 'CRM Sync Bot',
+  task: 'Sync with CRM',
+  capabilities: ['crm_integration'],
+  schedule: '*/15 * * * *', // Every 15 minutes
+})
+
+// Sync contacts to CRM
+await on($.Contact.created, async (contact) => {
+  await crmBot.execute({
+    action: 'create_contact',
+    data: {
+      firstName: contact.givenName,
+      lastName: contact.familyName,
+      email: contact.email,
+      phone: contact.telephone,
+      company: contact.worksFor?.name,
+    },
+  })
+})
+
+// Sync leads from CRM
+crmBot.onSchedule(async () => {
+  const leads = await fetchCRMLeads()
+
+  for (const lead of leads) {
+    // Create in local database
+    await db.create($.Lead, {
+      $type: 'Lead',
+      name: lead.name,
+      email: lead.email,
+      source: 'crm',
+      status: lead.status,
+      crmId: lead.id,
+    })
+
+    // Send event
+    await send($.Lead.created, lead)
+  }
+})
+```
+
+## Email Service Integration
+
+Send emails via SendGrid/Mailgun:
+
+```typescript
+import $, { bot, on } from 'sdk.do'
+
+const emailServiceBot = await bot.create({
+  name: 'Email Service Bot',
+  task: 'Send emails via SendGrid',
+  capabilities: ['email_sending'],
+})
+
+// Listen for events that trigger emails
+await on($.Order.completed, async (order) => {
+  await emailServiceBot.execute({
+    provider: 'sendgrid',
+    config: {
+      apiKey: process.env.SENDGRID_API_KEY,
+    },
+    email: {
+      to: order.customer.email,
+      from: 'orders@example.com',
+      subject: `Order ${order.id} Confirmed`,
+      template: 'order_confirmation',
+      templateData: {
+        orderNumber: order.id,
+        customerName: order.customer.name,
+        items: order.items,
+        total: order.total,
+        shippingAddress: order.shippingAddress,
+      },
+    },
+  })
+})
+```
+
+## Slack Integration
+
+Post notifications to Slack:
+
+```typescript
+import $, { bot, on } from 'sdk.do'
+
+const slackBot = await bot.create({
+  name: 'Slack Bot',
+  task: 'Post to Slack',
+  capabilities: ['slack_messaging'],
+})
+
+// Post to Slack on critical events
+await on($.Error.critical, async (error) => {
+  await slackBot.execute({
+    webhook: process.env.SLACK_WEBHOOK,
+    channel: '#alerts',
+    message: {
+      text: 'Critical Error Occurred',
+      blocks: [
+        {
+          type: 'header',
+          text: {
+            type: 'plain_text',
+            text: ' Critical Error',
+          },
+        },
+        {
+          type: 'section',
+          fields: [
+            {
+              type: 'mrkdwn',
+              text: `*Service:*\n${error.service}`,
+            },
+            {
+              type: 'mrkdwn',
+              text: `*Error:*\n${error.message}`,
+            },
+          ],
+        },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*Stack Trace:*\n\`\`\`${error.stack}\`\`\``,
+          },
+        },
+      ],
+    },
+  })
+})
+```
+
+## Payment Gateway Integration
+
+Process payments via Stripe:
+
+```typescript
+import $, { bot, on, send } from 'sdk.do'
+
+const paymentBot = await bot.create({
+  name: 'Payment Bot',
+  task: 'Process payments',
+  capabilities: ['payment_processing'],
+})
+
+await on($.Order.created, async (order) => {
+  try {
+    const payment = await paymentBot.execute({
+      provider: 'stripe',
+      config: {
+        apiKey: process.env.STRIPE_API_KEY,
+      },
+      payment: {
+        amount: order.total * 100, // Cents
+        currency: 'usd',
+        customer: order.customer.stripeId,
+        description: `Order ${order.id}`,
+        metadata: {
+          orderId: order.id,
+        },
+      },
+    })
+
+    await send($.Payment.succeeded, {
+      orderId: order.id,
+      paymentId: payment.id,
+      amount: order.total,
+    })
+  } catch (error) {
+    await send($.Payment.failed, {
+      orderId: order.id,
+      error: error.message,
+    })
+  }
+})
+```
+
+## AWS S3 Integration
+
+Upload/download files from S3:
+
+```typescript
+import $, { bot } from 'sdk.do'
+
+const s3Bot = await bot.create({
+  name: 'S3 Bot',
+  task: 'Manage S3 files',
+  capabilities: ['s3_operations'],
+})
+
+// Upload file
+const upload = await s3Bot.execute({
+  action: 'upload',
+  bucket: 'my-bucket',
+  key: 'reports/daily-report.pdf',
+  file: fileBuffer,
+  metadata: {
+    contentType: 'application/pdf',
+    date: new Date().toISOString(),
+  },
+})
+
+// Download file
+const download = await s3Bot.execute({
+  action: 'download',
+  bucket: 'my-bucket',
+  key: 'reports/daily-report.pdf',
+})
+
+// Generate signed URL
+const signedUrl = await s3Bot.execute({
+  action: 'getSignedUrl',
+  bucket: 'my-bucket',
+  key: 'reports/daily-report.pdf',
+  expiresIn: 3600, // 1 hour
+})
+```
+
+## Analytics Integration
+
+Track events in analytics platforms:
+
+```typescript
+import $, { bot, on } from 'sdk.do'
+
+const analyticsBot = await bot.create({
+  name: 'Analytics Bot',
+  task: 'Track analytics events',
+  capabilities: ['analytics_tracking'],
+})
+
+// Track all order events
+await on($.Order.created, async (order) => {
+  await analyticsBot.execute({
+    provider: 'segment',
+    config: {
+      writeKey: process.env.SEGMENT_WRITE_KEY,
+    },
+    event: {
+      type: 'track',
+      userId: order.customer.id,
+      event: 'Order Created',
+      properties: {
+        orderId: order.id,
+        total: order.total,
+        items: order.items.length,
+        revenue: order.total,
+      },
+    },
+  })
+})
+
+await on($.Order.completed, async (order) => {
+  await analyticsBot.execute({
+    provider: 'segment',
+    event: {
+      type: 'track',
+      userId: order.customer.id,
+      event: 'Order Completed',
+      properties: {
+        orderId: order.id,
+        total: order.total,
+      },
+    },
+  })
+})
+```
+
+## Integration with sdk.do Services
+
+Leverage all sdk.do capabilities:
+
+```typescript
+import $, { bot, db, on, send, every, user, api, ai } from 'sdk.do'
+
+const platformBot = await bot.create({
+  name: 'Platform Integration Bot',
+  task: 'Use all platform services',
+})
+
+// Database operations
+platformBot.withDatabase = async (operation) => {
+  return await db[operation.method](operation.params)
+}
+
+// Event handling
+await on($.User.created, async (newUser) => {
+  await platformBot.execute({ type: 'welcome', user: newUser })
+})
+
+// Event publishing
+platformBot.publishEvent = async (event) => {
+  await send(event.type, event.data)
+}
+
+// Scheduled tasks
+await every($.Daily, async () => {
+  await platformBot.execute({ type: 'daily_report' })
+})
+
+// User context
+platformBot.getCurrentUser = async () => {
+  return await user.current()
+}
+
+// External API calls
+platformBot.callExternalAPI = async (endpoint, data) => {
+  return await api.call(endpoint, data)
+}
+
+// AI operations
+platformBot.generateContent = async (prompt) => {
+  return await ai.generate(prompt, {
+    model: 'gpt-5',
+    schema: $.Article,
+  })
+}
+```
+
+## Multi-System Integration
+
+Integrate multiple systems in one bot:
+
+```typescript
+import $, { bot, db, on } from 'sdk.do'
+
+const integrationBot = await bot.create({
+  name: 'Multi-System Bot',
+  task: 'Sync across all systems',
+  capabilities: ['multi_system_sync'],
+})
+
+// Listen for customer updates
+await on($.Customer.updated, async (customer) => {
+  // Update in all systems
+  await Promise.all([
+    // Update CRM
+    updateCRM(customer),
+    // Update email service
+    updateEmailService(customer),
+    // Update analytics
+    updateAnalytics(customer),
+    // Update local database
+    db.update($.Customer, customer.id, customer),
+  ])
+})
+
+async function updateCRM(customer) {
+  // CRM API call
+}
+
+async function updateEmailService(customer) {
+  // Email service API call
+}
+
+async function updateAnalytics(customer) {
+  // Analytics API call
+}
+```
+
+See [Real-World Use Cases](./real-world-use-case) for complete production examples.

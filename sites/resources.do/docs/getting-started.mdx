@@ -1,0 +1,107 @@
+---
+$id: https://resources.do/docs/getting-started
+$type: TechArticle
+title: Getting Started with resources.do
+description: Complete guide to working with data records and entity instances
+keywords: [getting started, resources, data, records, crud, querying]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Getting Started with resources.do
+
+Learn how to work with data records and entity instances in your Business-as-Code applications.
+
+## What Are Resources?
+
+**Resources** are concrete instances of entity types - the actual data records:
+
+- **Types (nouns.do)**: $.Person (definition of what a person is)
+- **Resources**: Specific person records (Jane, John, Alice...)
+- **Verbs (verbs.do)**: Operations on resources (create, update, delete)
+
+## Installation
+
+```bash
+pnpm add sdk.do
+```
+
+## Creating Resources
+
+```typescript
+import $, { db } from 'sdk.do'
+
+// Create a person resource
+const person = await db.create($.Person, {
+  $type: 'Person',
+  name: 'Jane Smith',
+  email: 'jane@example.com',
+  jobTitle: 'Software Engineer',
+})
+
+console.log(person.$id) // 'person-abc123'
+console.log(person.$type) // 'Person'
+```
+
+## Reading Resources
+
+```typescript
+// Get by ID
+const person = await db.get($.Person, 'person-123')
+
+// List all
+const people = await db.list($.Person)
+
+// Filter
+const engineers = await db.list($.Person, {
+  where: { jobTitle: { $contains: 'Engineer' } },
+})
+```
+
+## Updating Resources
+
+```typescript
+await db.update(person, {
+  jobTitle: 'Senior Engineer',
+  email: 'jane.smith@newco.com',
+})
+```
+
+## Deleting Resources
+
+```typescript
+await db.delete(person)
+```
+
+## Querying Resources
+
+```typescript
+// Complex queries
+const results = await db.list($.Person, {
+  where: {
+    jobTitle: { $contains: 'Engineer' },
+    yearsExperience: { $gte: 5 },
+  },
+  limit: 10,
+  orderBy: { name: 'asc' },
+})
+```
+
+## Resource Relationships
+
+```typescript
+const person = await db.create($.Person, { name: 'John' })
+const org = await db.create($.Organization, { name: 'Acme' })
+
+await db.relate(person, $.worksFor, org)
+
+const employer = await db.related(person, $.worksFor, $.Organization)
+```
+
+## Next Steps
+
+- [Architecture](./architecture) - System design
+- [Best Practices](./best-practices) - Patterns
+- [API Reference](../api/reference) - Complete API
+- [Examples](../examples/) - Code examples

@@ -1,0 +1,880 @@
+---
+$id: https://context.do/examples/integration
+$type: https://schema.org/TechArticle
+name: Context Management Integration Examples
+description: Integration patterns for context.do with llm.do, workflows.do, agents.do, and other .do platform services
+version: 1.0.0
+license: MIT
+author:
+  $type: https://schema.org/Organization
+  name: .do
+  url: https://do.inc
+keywords:
+  - integration
+  - llm.do
+  - workflows.do
+  - agents.do
+  - database.do
+  - events
+---
+
+# Platform Integration Examples
+
+This guide demonstrates how to integrate `context.do` with other `.do` platform services for production applications.
+
+## Integration with llm.do
+
+### AI Generation with Context Management
+
+Seamlessly manage context for AI generation:
+
+```typescript
+import { $ } from 'sdk.do'
+
+async function generateWithContextManagement(conversationId: string, userMessage: string): Promise<string> {
+  // Load conversation
+  const conversation = await $.db.get('Conversation', conversationId)
+
+  // Add user message
+  conversation.messages.push({
+    role: 'user',
+    content: userMessage,
+  })
+
+  // Automatically compress if needed
+  const context = await $.Context.create({
+    content: conversation.messages,
+    maxTokens: 100000, // GPT-5 with headroom
+    overflow: 'compress',
+    compressionStrategy: 'semantic',
+    preserveRecent: 5,
+  })
+
+  // Generate response using llm.do
+  const response = await $.ai.generate({
+    model: 'gpt-5',
+    messages: context.content,
+    temperature: 0.7,
+  })
+
+  // Save assistant response
+  conversation.messages.push({
+    role: 'assistant',
+    content: response.content,
+  })
+
+  await $.db.update('Conversation', conversationId, {
+    messages: conversation.messages,
+  })
+
+  return response.content
+}
+
+// Usage
+const response = await generateWithContextManagement('conv-123', 'Tell me about AI context management')
+console.log(response)
+```
+
+### Batch Processing with Context
+
+Process multiple conversations with context management:
+
+```typescript
+import { $ } from 'sdk.do'
+
+async function batchProcessConversations(conversationIds: string[]): Promise<void> {
+  // Prepare batch requests with context compression
+  const requests = await Promise.all(
+    conversationIds.map(async (id) => {
+      const conversation = await $.db.get('Conversation', id)
+
+      // Compress context for batch processing
+      const compressed = await $.Context.compress({
+        messages: conversation.messages,
+        targetTokens: 8000, // Smaller context for batch
+        strategy: 'semantic',
+      })
+
+      return {
+        custom_id: id,
+        method: 'POST',
+        url: '/v1/chat/completions',
+        body: {
+          model: 'gpt-5',
+          messages: compressed.messages,
+        },
+      }
+    })
+  )
+
+  // Submit batch (50% cost savings)
+  const batch = await $.ai.batch.create({
+    requests: requests,
+    endpoint: '/v1/chat/completions',
+  })
+
+  console.log(`Batch created: ${batch.id}`)
+  console.log(`Processing ${requests.length} conversations`)
+
+  // Wait for completion
+  await batch.wait()
+
+  // Process results
+  for (const result of batch.results) {
+    const conversationId = result.custom_id
+    const response = result.response.choices[0].message.content
+
+    // Save response
+    await $.db.update('Conversation', conversationId, {
+      lastResponse: response,
+      processedAt: new Date(),
+    })
+  }
+
+  console.log('Batch processing complete')
+}
+
+// Usage
+await batchProcessConversations(['conv-1', 'conv-2', 'conv-3'])
+```
+
+## Integration with workflows.do
+
+### Context in Workflow Events
+
+Pass context through workflow events:
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Step 1: Order created
+$.on('$.Order.created', async ({ order }) => {
+  // Create workflow context
+  const context = await $.WorkflowContext.create({
+    $type: '$.Order.Processing.Context',
+    order: order,
+    customer: await $.db.get('Customer', order.customerId),
+    history: await $.db.query({
+      type: 'Order',
+      where: { customerId: order.customerId },
+    }),
+    timestamp: new Date().toISOString(),
+  })
+
+  // Compress for efficient transfer
+  const compressed = await context.compress({
+    targetTokens: 2000,
+    strategy: 'hierarchical',
+  })
+
+  // Send to next step
+  await $.send({
+    event: '$.Order.validated',
+    context: compressed.toJSON(),
+  })
+})
+
+// Step 2: Order validated
+$.on('$.Order.validated', async ({ context }) => {
+  // Expand context
+  const workflowContext = await $.WorkflowContext.fromJSON(context)
+
+  // Use context for processing
+  const order = workflowContext.data.order
+  const customer = workflowContext.data.customer
+
+  // AI-powered fraud detection with context
+  const fraudCheck = await $.ai.generate({
+    model: 'gpt-5',
+    messages: [
+      {
+        role: 'system',
+        content: 'You are a fraud detection system',
+      },
+      {
+        role: 'user',
+        content: `Check this order for fraud:\n${JSON.stringify(workflowContext.data, null, 2)}`,
+      },
+    ],
+  })
+
+  // Continue workflow
+  await $.send({
+    event: '$.Order.fraudChecked',
+    orderId: order.id,
+    result: fraudCheck.content,
+  })
+})
+```
+
+### Scheduled Context Cleanup
+
+Use workflows.do to clean up old contexts:
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Run daily at 2 AM
+$.every('$.Daily', { hour: 2 }, async () => {
+  console.log('Starting context cleanup')
+
+  // Find old conversations
+  const oldConversations = await $.db.query({
+    type: 'Conversation',
+    where: {
+      updatedAt: { $lt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }, // 30 days old
+    },
+  })
+
+  console.log(`Found ${oldConversations.length} old conversations`)
+
+  // Compress and archive
+  for (const conversation of oldConversations) {
+    // Compress to archive format
+    const compressed = await $.Context.compress({
+      messages: conversation.messages,
+      strategy: 'semantic',
+      targetTokens: 1000, // Aggressive compression for archive
+    })
+
+    // Save compressed version
+    await $.db.update('Conversation', conversation.id, {
+      messages: compressed.messages,
+      archived: true,
+      archivedAt: new Date(),
+      originalTokens: conversation.tokenCount,
+      compressedTokens: compressed.tokens,
+    })
+
+    console.log(`Archived conversation ${conversation.id}: ${conversation.tokenCount} -> ${compressed.tokens} tokens`)
+  }
+
+  console.log('Context cleanup complete')
+})
+```
+
+## Integration with agents.do
+
+### Agent Context Sharing
+
+Share context between autonomous agents:
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Research Agent
+class ResearchAgent {
+  async execute(task: string): Promise<void> {
+    console.log(`Research agent: ${task}`)
+
+    // Conduct research
+    const sources = await $.api.search({ query: task })
+
+    // Create rich context
+    const context = await $.WorkflowContext.create({
+      $type: '$.Research.Context',
+      task: task,
+      sources: sources,
+      findings: await this.analyze(sources),
+    })
+
+    // Compress for transfer
+    const compressed = await context.compress({ targetTokens: 2000 })
+
+    // Send to writing agent
+    await $.send({
+      event: '$.Research.completed',
+      to: '$.WritingAgent',
+      context: compressed.toJSON(),
+    })
+  }
+
+  private async analyze(sources: any[]): Promise<any> {
+    // AI-powered analysis with context
+    const context = await $.Context.create({
+      content: [
+        {
+          role: 'system',
+          content: 'Analyze these sources and extract key findings',
+        },
+        {
+          role: 'user',
+          content: JSON.stringify(sources, null, 2),
+        },
+      ],
+    })
+
+    const analysis = await $.ai.generate({
+      model: 'gpt-5',
+      messages: context.content,
+    })
+
+    return JSON.parse(analysis.content)
+  }
+}
+
+// Writing Agent
+class WritingAgent {
+  constructor() {
+    $.on('$.Research.completed', async ({ context }) => {
+      await this.writeArticle(context)
+    })
+  }
+
+  async writeArticle(compressedContext: any): Promise<void> {
+    console.log('Writing agent: Creating article')
+
+    // Expand context
+    const context = await $.WorkflowContext.fromJSON(compressedContext)
+
+    // Generate article with full context
+    const article = await $.ai.generate({
+      model: 'gpt-5',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a technical writer',
+        },
+        {
+          role: 'user',
+          content: `Write an article based on:\n${JSON.stringify(context.data, null, 2)}`,
+        },
+      ],
+    })
+
+    // Send to editing agent
+    await $.send({
+      event: '$.Article.drafted',
+      to: '$.EditingAgent',
+      article: article.content,
+      context: compressedContext,
+    })
+  }
+}
+
+// Editing Agent
+class EditingAgent {
+  constructor() {
+    $.on('$.Article.drafted', async ({ article, context }) => {
+      await this.edit(article, context)
+    })
+  }
+
+  async edit(article: string, context: any): Promise<void> {
+    console.log('Editing agent: Reviewing article')
+
+    // Edit with context awareness
+    const edited = await $.ai.generate({
+      model: 'gpt-5',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a professional editor',
+        },
+        {
+          role: 'user',
+          content: `Edit this article:\n${article}\n\nOriginal research context:\n${JSON.stringify(context, null, 2)}`,
+        },
+      ],
+    })
+
+    // Publish
+    await $.db.create('Article', {
+      content: edited.content,
+      publishedAt: new Date(),
+    })
+
+    console.log('Article published')
+  }
+}
+
+// Usage
+const researcher = new ResearchAgent()
+const writer = new WritingAgent()
+const editor = new EditingAgent()
+
+await researcher.execute('AI context management best practices')
+```
+
+## Integration with database.do
+
+### Context Persistence
+
+Store and retrieve contexts efficiently:
+
+```typescript
+import { $ } from 'sdk.do'
+
+class ContextRepository {
+  async saveConversation(userId: string, messages: Message[]): Promise<string> {
+    // Count tokens
+    const tokens = await $.Context.countTokens({ messages, model: 'gpt-5' })
+
+    // Compress if large
+    let storedMessages = messages
+    let compressed = false
+
+    if (tokens > 10000) {
+      const compression = await $.Context.compress({
+        messages: messages,
+        targetTokens: 8000,
+        strategy: 'semantic',
+      })
+
+      storedMessages = compression.messages
+      compressed = true
+    }
+
+    // Save to database
+    const conversation = await $.db.create('Conversation', {
+      userId: userId,
+      messages: storedMessages,
+      tokenCount: tokens,
+      compressed: compressed,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
+
+    return conversation.id
+  }
+
+  async loadConversation(conversationId: string): Promise<Message[]> {
+    const conversation = await $.db.get('Conversation', conversationId)
+
+    if (!conversation) {
+      throw new Error(`Conversation not found: ${conversationId}`)
+    }
+
+    return conversation.messages
+  }
+
+  async updateConversation(conversationId: string, newMessage: Message): Promise<void> {
+    const conversation = await $.db.get('Conversation', conversationId)
+
+    // Add message
+    conversation.messages.push(newMessage)
+
+    // Re-compress if needed
+    const tokens = await $.Context.countTokens({
+      messages: conversation.messages,
+      model: 'gpt-5',
+    })
+
+    let storedMessages = conversation.messages
+    let compressed = false
+
+    if (tokens > 10000) {
+      const compression = await $.Context.compress({
+        messages: conversation.messages,
+        targetTokens: 8000,
+        strategy: 'semantic',
+      })
+
+      storedMessages = compression.messages
+      compressed = true
+    }
+
+    // Update database
+    await $.db.update('Conversation', conversationId, {
+      messages: storedMessages,
+      tokenCount: tokens,
+      compressed: compressed,
+      updatedAt: new Date(),
+    })
+  }
+
+  async searchConversations(userId: string, query: string): Promise<any[]> {
+    // Find user's conversations
+    const conversations = await $.db.query({
+      type: 'Conversation',
+      where: { userId: userId },
+    })
+
+    // Search with embeddings
+    const queryEmbedding = await $.ai.embed({ text: query })
+
+    const results = []
+
+    for (const conv of conversations) {
+      // Create embedding of conversation
+      const convText = conv.messages.map((m: Message) => m.content).join('\n')
+      const convEmbedding = await $.ai.embed({ text: convText })
+
+      // Calculate similarity
+      const similarity = this.cosineSimilarity(queryEmbedding, convEmbedding)
+
+      if (similarity > 0.7) {
+        results.push({
+          conversation: conv,
+          similarity: similarity,
+        })
+      }
+    }
+
+    return results.sort((a, b) => b.similarity - a.similarity)
+  }
+
+  private cosineSimilarity(a: number[], b: number[]): number {
+    const dotProduct = a.reduce((sum, val, i) => sum + val * b[i], 0)
+    const magnitudeA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0))
+    const magnitudeB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0))
+    return dotProduct / (magnitudeA * magnitudeB)
+  }
+}
+
+// Usage
+const repo = new ContextRepository()
+
+// Save conversation
+const convId = await repo.saveConversation('user-123', messages)
+
+// Load conversation
+const messages = await repo.loadConversation(convId)
+
+// Update conversation
+await repo.updateConversation(convId, {
+  role: 'user',
+  content: 'New message',
+})
+
+// Search conversations
+const results = await repo.searchConversations('user-123', 'order issue')
+```
+
+### Context Caching Layer
+
+Implement caching for performance:
+
+```typescript
+import { $ } from 'sdk.do'
+
+class CachedContextManager {
+  private cache = new Map<string, { context: Message[]; timestamp: number }>()
+  private cacheTTL = 3600000 // 1 hour
+
+  async getConversation(conversationId: string): Promise<Message[]> {
+    // Check cache
+    const cached = this.cache.get(conversationId)
+
+    if (cached && Date.now() - cached.timestamp < this.cacheTTL) {
+      console.log('Cache hit')
+      return cached.context
+    }
+
+    console.log('Cache miss, loading from database')
+
+    // Load from database
+    const conversation = await $.db.get('Conversation', conversationId)
+
+    // Cache result
+    this.cache.set(conversationId, {
+      context: conversation.messages,
+      timestamp: Date.now(),
+    })
+
+    return conversation.messages
+  }
+
+  async updateConversation(conversationId: string, newMessage: Message): Promise<void> {
+    // Load current conversation
+    const messages = await this.getConversation(conversationId)
+
+    // Add message
+    messages.push(newMessage)
+
+    // Update database
+    await $.db.update('Conversation', conversationId, {
+      messages: messages,
+      updatedAt: new Date(),
+    })
+
+    // Update cache
+    this.cache.set(conversationId, {
+      context: messages,
+      timestamp: Date.now(),
+    })
+  }
+
+  clearCache(conversationId?: string): void {
+    if (conversationId) {
+      this.cache.delete(conversationId)
+    } else {
+      this.cache.clear()
+    }
+  }
+
+  getCacheStats(): { size: number; hitRate: number } {
+    // Implementation for monitoring
+    return {
+      size: this.cache.size,
+      hitRate: 0.85, // Calculate from metrics
+    }
+  }
+}
+
+// Usage
+const manager = new CachedContextManager()
+
+// First access: cache miss
+const messages1 = await manager.getConversation('conv-123')
+
+// Second access: cache hit
+const messages2 = await manager.getConversation('conv-123')
+```
+
+## Integration with Events
+
+### Event-Driven Context Updates
+
+Update context based on domain events:
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Update context when customer places order
+$.on('$.Order.created', async ({ order }) => {
+  // Find customer's active conversations
+  const conversations = await $.db.query({
+    type: 'Conversation',
+    where: {
+      userId: order.customerId,
+      status: 'active',
+    },
+  })
+
+  // Update context with order information
+  for (const conversation of conversations) {
+    const contextUpdate: Message = {
+      role: 'system',
+      content: `Customer placed order ${order.id} for ${order.items.length} items totaling $${order.total}`,
+    }
+
+    conversation.messages.push(contextUpdate)
+
+    await $.db.update('Conversation', conversation.id, {
+      messages: conversation.messages,
+      updatedAt: new Date(),
+    })
+
+    console.log(`Updated conversation ${conversation.id} with order context`)
+  }
+})
+
+// Update context when customer issue resolved
+$.on('$.Issue.resolved', async ({ issue }) => {
+  const conversations = await $.db.query({
+    type: 'Conversation',
+    where: {
+      userId: issue.customerId,
+      status: 'active',
+    },
+  })
+
+  for (const conversation of conversations) {
+    const contextUpdate: Message = {
+      role: 'system',
+      content: `Customer issue ${issue.id} was resolved: ${issue.resolution}`,
+    }
+
+    conversation.messages.push(contextUpdate)
+
+    await $.db.update('Conversation', conversation.id, {
+      messages: conversation.messages,
+      updatedAt: new Date(),
+    })
+  }
+})
+```
+
+## Integration with Monitoring
+
+### Context Metrics Dashboard
+
+Track context metrics across your application:
+
+```typescript
+import { $ } from 'sdk.do'
+
+class ContextMetricsCollector {
+  async trackCompression(conversationId: string, originalTokens: number, compressedTokens: number, strategy: string, durationMs: number): Promise<void> {
+    const reduction = ((1 - compressedTokens / originalTokens) * 100).toFixed(1)
+
+    // Send metrics
+    await $.metrics.histogram('context.compression.ratio', parseFloat(reduction), {
+      strategy: strategy,
+      conversationId: conversationId,
+    })
+
+    await $.metrics.histogram('context.compression.duration', durationMs, {
+      strategy: strategy,
+    })
+
+    await $.metrics.counter('context.compression.total', 1, {
+      strategy: strategy,
+    })
+
+    // Log for analysis
+    await $.db.create('CompressionLog', {
+      conversationId: conversationId,
+      originalTokens: originalTokens,
+      compressedTokens: compressedTokens,
+      strategy: strategy,
+      reduction: parseFloat(reduction),
+      durationMs: durationMs,
+      timestamp: new Date(),
+    })
+  }
+
+  async trackTokenUsage(conversationId: string, tokens: number, model: string): Promise<void> {
+    await $.metrics.gauge('context.tokens', tokens, {
+      conversationId: conversationId,
+      model: model,
+    })
+
+    // Calculate cost
+    const costPerToken = this.getCostPerToken(model)
+    const cost = tokens * costPerToken
+
+    await $.metrics.counter('context.cost', cost, {
+      model: model,
+    })
+
+    // Alert if approaching limit
+    const modelLimit = this.getModelLimit(model)
+    const utilization = (tokens / modelLimit) * 100
+
+    if (utilization > 80) {
+      await $.alerts.send({
+        level: 'warning',
+        message: `Conversation ${conversationId} at ${utilization.toFixed(1)}% token utilization`,
+        metadata: { conversationId, tokens, model },
+      })
+    }
+  }
+
+  private getCostPerToken(model: string): number {
+    const costs: Record<string, number> = {
+      'gpt-5': 0.0000002,
+      'claude-sonnet-4.5': 0.0000003,
+      'gpt-5-nano': 0.00000005,
+    }
+    return costs[model] ?? 0.0000002
+  }
+
+  private getModelLimit(model: string): number {
+    const limits: Record<string, number> = {
+      'gpt-5': 128000,
+      'claude-sonnet-4.5': 200000,
+      'gpt-5-nano': 32000,
+    }
+    return limits[model] ?? 128000
+  }
+}
+
+// Usage
+const metrics = new ContextMetricsCollector()
+
+// Track compression
+await metrics.trackCompression('conv-123', 10000, 3000, 'semantic', 1500)
+
+// Track token usage
+await metrics.trackTokenUsage('conv-123', 5000, 'gpt-5')
+```
+
+## Full Stack Integration Example
+
+Complete example integrating all services:
+
+```typescript
+import { $ } from 'sdk.do'
+
+class CustomerSupportSystem {
+  private contextManager = new CachedContextManager()
+  private metrics = new ContextMetricsCollector()
+
+  async handleMessage(userId: string, message: string): Promise<string> {
+    // Get or create conversation
+    let conversation = await this.getOrCreateConversation(userId)
+
+    // Add user message
+    await this.contextManager.updateConversation(conversation.id, {
+      role: 'user',
+      content: message,
+    })
+
+    // Get conversation context
+    const messages = await this.contextManager.getConversation(conversation.id)
+
+    // Create managed context
+    const context = await $.Context.create({
+      content: messages,
+      maxTokens: 100000,
+      overflow: 'compress',
+      compressionStrategy: 'semantic',
+      onTokenCountChange: async (tokens) => {
+        await this.metrics.trackTokenUsage(conversation.id, tokens, 'gpt-5')
+      },
+    })
+
+    // Generate response
+    const response = await $.ai.generate({
+      model: 'gpt-5',
+      messages: context.content,
+    })
+
+    // Save assistant response
+    await this.contextManager.updateConversation(conversation.id, {
+      role: 'assistant',
+      content: response.content,
+    })
+
+    // Send events for workflow integration
+    await $.send({
+      event: '$.Support.MessageHandled',
+      conversationId: conversation.id,
+      userId: userId,
+      handled: true,
+    })
+
+    return response.content
+  }
+
+  private async getOrCreateConversation(userId: string): Promise<any> {
+    // Find active conversation
+    const existing = await $.db.query({
+      type: 'Conversation',
+      where: { userId: userId, status: 'active' },
+      limit: 1,
+    })
+
+    if (existing.length > 0) {
+      return existing[0]
+    }
+
+    // Create new conversation
+    return $.db.create('Conversation', {
+      userId: userId,
+      messages: [],
+      status: 'active',
+      createdAt: new Date(),
+    })
+  }
+}
+
+// Usage
+const support = new CustomerSupportSystem()
+
+const response = await support.handleMessage('user-123', 'I need help with my order')
+console.log(response)
+```
+
+## Related Resources
+
+- [Basic Usage](./basic-usage.mdx) - Fundamental examples
+- [Advanced Patterns](./advanced-patterns.mdx) - Complex strategies
+- [Real-World Use Case](./real-world-use-case.mdx) - Production implementation
+- [API Reference](../api/reference.mdx) - Complete API documentation
+
+---
+
+Built with [sdk.do](https://sdk.do) - The semantic SDK for Business-as-Code

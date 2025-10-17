@@ -1,0 +1,836 @@
+---
+$id: https://on.do/examples/workflow-listeners
+$type: HowTo
+title: Workflow Event Listeners
+description: Complex multi-step workflow examples using event listeners and chains
+keywords: [examples, workflow, event-chains, sagas, orchestration]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Workflow Event Listeners
+
+Complex multi-step workflow examples demonstrating event chains, sagas, and orchestration patterns using the `on` function.
+
+## E-commerce Order Workflow
+
+Complete order processing workflow from creation to delivery:
+
+```typescript
+import { on, send, db, $ } from 'sdk.do'
+
+// ============================================================================
+// Step 1: Order Creation & Validation
+// ============================================================================
+
+on('Order.created', async (event) => {
+  const order = event.data
+
+  console.log(`Processing order ${order.id}...`)
+
+  try {
+    // Validate customer
+    const customer = await db.get($.Customer, order.customer.id)
+    if (!customer) {
+      throw new Error('Customer not found')
+    }
+
+    // Validate items
+    for (const item of order.items) {
+      const product = await db.get($.Product, item.product)
+      if (!product || !product.available) {
+        throw new Error(`Product ${item.product} not available`)
+      }
+    }
+
+    // Order is valid
+    await send('Order.validated', order, {
+      correlationId: event.metadata.correlationId,
+    })
+  } catch (error) {
+    await send('Order.validationFailed', {
+      orderId: order.id,
+      reason: error.message,
+    })
+  }
+})
+
+on('Order.validationFailed', async (event) => {
+  await db.update($.Order, event.data.orderId, {
+    status: 'validation-failed',
+    statusReason: event.data.reason,
+  })
+
+  await send('Notification.customerNotified', {
+    type: 'order-validation-failed',
+    orderId: event.data.orderId,
+    reason: event.data.reason,
+  })
+})
+
+// ============================================================================
+// Step 2: Inventory Reservation
+// ============================================================================
+
+on('Order.validated', async (event) => {
+  const order = event.data
+
+  console.log(`Reserving inventory for order ${order.id}...`)
+
+  try {
+    const reservations = []
+
+    for (const item of order.items) {
+      const available = await checkInventory(item.product, item.quantity)
+
+      if (!available) {
+        // Release previous reservations
+        for (const res of reservations) {
+          await releaseInventory(res)
+        }
+        throw new Error(`Insufficient inventory for ${item.product}`)
+      }
+
+      const reservation = await reserveInventory(item.product, item.quantity)
+      reservations.push(reservation)
+    }
+
+    await send(
+      'Inventory.reserved',
+      {
+        orderId: order.id,
+        reservations,
+        reservedAt: new Date(),
+      },
+      {
+        correlationId: event.metadata.correlationId,
+      }
+    )
+  } catch (error) {
+    await send('Inventory.reservationFailed', {
+      orderId: order.id,
+      reason: error.message,
+    })
+  }
+})
+
+// ============================================================================
+// Step 3: Payment Processing
+// ============================================================================
+
+on('Inventory.reserved', async (event) => {
+  const { orderId } = event.data
+  const order = await db.get($.Order, orderId)
+
+  console.log(`Requesting payment for order ${orderId}...`)
+
+  await send(
+    'Payment.requested',
+    {
+      orderId,
+      amount: order.total,
+      currency: order.currency || 'USD',
+      customer: order.customer,
+      paymentMethod: order.paymentMethod,
+    },
+    {
+      correlationId: event.metadata.correlationId,
+    }
+  )
+})
+
+on('Payment.requested', async (event) => {
+  const { orderId, amount, paymentMethod } = event.data
+
+  try {
+    const result = await processPayment({
+      amount,
+      paymentMethod,
+      orderId,
+    })
+
+    if (result.success) {
+      await send(
+        'Payment.completed',
+        {
+          orderId,
+          amount,
+          transactionId: result.transactionId,
+          completedAt: new Date(),
+        },
+        {
+          correlationId: event.metadata.correlationId,
+        }
+      )
+    } else {
+      await send('Payment.failed', {
+        orderId,
+        reason: result.reason,
+      })
+    }
+  } catch (error) {
+    await send('Payment.failed', {
+      orderId,
+      reason: error.message,
+    })
+  }
+})
+
+// Handle payment failures (trigger compensation)
+on('Payment.failed', async (event) => {
+  const { orderId } = event.data
+
+  // Release inventory
+  await send('Inventory.releaseRequested', {
+    orderId,
+    reason: 'payment-failed',
+  })
+
+  // Update order status
+  await db.update($.Order, orderId, {
+    status: 'payment-failed',
+  })
+
+  // Notify customer
+  await send('Notification.customerNotified', {
+    type: 'payment-failed',
+    orderId,
+    reason: event.data.reason,
+  })
+})
+
+// ============================================================================
+// Step 4: Order Confirmation
+// ============================================================================
+
+on('Payment.completed', async (event) => {
+  const { orderId, transactionId } = event.data
+
+  await db.update($.Order, orderId, {
+    status: 'confirmed',
+    paymentTransactionId: transactionId,
+    confirmedAt: new Date(),
+  })
+
+  const order = await db.get($.Order, orderId)
+
+  await send(
+    'Order.confirmed',
+    {
+      ...order,
+      transactionId,
+    },
+    {
+      correlationId: event.metadata.correlationId,
+    }
+  )
+})
+
+on('Order.confirmed', async (event) => {
+  const order = event.data
+
+  // Send confirmation email
+  await send('Email.sendRequested', {
+    to: order.customer.email,
+    template: 'order-confirmed',
+    data: { order },
+  })
+
+  // Request shipment
+  await send('Warehouse.shipmentRequested', {
+    orderId: order.id,
+    items: order.items,
+    shippingAddress: order.shippingAddress,
+  })
+})
+
+// ============================================================================
+// Step 5: Fulfillment & Shipping
+// ============================================================================
+
+on('Warehouse.shipmentRequested', async (event) => {
+  const { orderId, items, shippingAddress } = event.data
+
+  console.log(`Preparing shipment for order ${orderId}...`)
+
+  // Simulate warehouse processing
+  await delay(2000)
+
+  const trackingNumber = generateTrackingNumber()
+  const carrier = selectCarrier(shippingAddress)
+
+  await send('Order.shipped', {
+    orderId,
+    trackingNumber,
+    carrier,
+    shippedAt: new Date(),
+  })
+})
+
+on('Order.shipped', async (event) => {
+  const { orderId, trackingNumber, carrier } = event.data
+
+  await db.update($.Order, orderId, {
+    status: 'shipped',
+    trackingNumber,
+    carrier,
+    shippedAt: new Date(),
+  })
+
+  const order = await db.get($.Order, orderId)
+
+  await send('Email.sendRequested', {
+    to: order.customer.email,
+    template: 'order-shipped',
+    data: {
+      orderId,
+      trackingNumber,
+      carrier,
+    },
+  })
+})
+
+// ============================================================================
+// Step 6: Delivery & Completion
+// ============================================================================
+
+on('Order.delivered', async (event) => {
+  const { orderId, deliveredAt } = event.data
+
+  await db.update($.Order, orderId, {
+    status: 'delivered',
+    deliveredAt,
+  })
+
+  const order = await db.get($.Order, orderId)
+
+  await send('Email.sendRequested', {
+    to: order.customer.email,
+    template: 'order-delivered',
+    data: { orderId, deliveredAt },
+  })
+
+  // Complete the order
+  await send('Order.completed', {
+    orderId,
+    completedAt: new Date(),
+  })
+})
+
+on('Order.completed', async (event) => {
+  const { orderId } = event.data
+
+  await db.update($.Order, orderId, {
+    status: 'completed',
+    completedAt: new Date(),
+  })
+
+  console.log(`Order ${orderId} completed successfully`)
+
+  // Request feedback after 24 hours
+  setTimeout(
+    () => {
+      send('Feedback.requested', { orderId })
+    },
+    24 * 60 * 60 * 1000
+  )
+})
+```
+
+## SaaS User Onboarding Workflow
+
+Multi-step user onboarding with progressive engagement:
+
+```typescript
+import { on, send, db, $ } from 'sdk.do'
+
+// ============================================================================
+// Step 1: User Registration
+// ============================================================================
+
+on('User.registered', async (event) => {
+  const user = event.data
+
+  console.log(`Starting onboarding for ${user.email}`)
+
+  // Create user profile
+  await db.create($.UserProfile, {
+    userId: user.id,
+    createdAt: new Date(),
+    onboardingStatus: 'started',
+  })
+
+  // Send welcome email with verification link
+  await send('Email.sendRequested', {
+    to: user.email,
+    template: 'welcome-verification',
+    data: {
+      name: user.name,
+      verificationUrl: `https://app.example.com/verify/${user.verificationToken}`,
+    },
+  })
+
+  // Start onboarding workflow
+  await send('Onboarding.started', {
+    userId: user.id,
+    startedAt: new Date(),
+  })
+})
+
+// ============================================================================
+// Step 2: Email Verification
+// ============================================================================
+
+on('User.emailVerified', async (event) => {
+  const user = event.data
+
+  await db.update($.UserProfile, user.id, {
+    emailVerified: true,
+    onboardingStatus: 'email-verified',
+  })
+
+  // Send next onboarding step
+  await send('Email.sendRequested', {
+    to: user.email,
+    template: 'onboarding-profile-setup',
+    data: {
+      name: user.name,
+      setupUrl: 'https://app.example.com/onboarding/profile',
+    },
+  })
+
+  await send('Onboarding.emailVerified', {
+    userId: user.id,
+    verifiedAt: new Date(),
+  })
+})
+
+// ============================================================================
+// Step 3: Profile Setup
+// ============================================================================
+
+on('User.profileCompleted', async (event) => {
+  const user = event.data
+
+  await db.update($.UserProfile, user.id, {
+    profileComplete: true,
+    onboardingStatus: 'profile-completed',
+  })
+
+  // Personalized welcome based on user role
+  await send('Email.sendRequested', {
+    to: user.email,
+    template: `onboarding-${user.role}-guide`,
+    data: {
+      name: user.name,
+      resources: getResourcesForRole(user.role),
+    },
+  })
+
+  await send('Onboarding.profileCompleted', {
+    userId: user.id,
+    completedAt: new Date(),
+  })
+})
+
+// ============================================================================
+// Step 4: First Action
+// ============================================================================
+
+on('User.firstActionCompleted', async (event) => {
+  const { userId, action } = event.data
+
+  await db.update($.UserProfile, userId, {
+    firstAction: action,
+    firstActionAt: new Date(),
+    onboardingStatus: 'first-action-completed',
+  })
+
+  // Send congratulations and next steps
+  await send('Email.sendRequested', {
+    to: event.data.email,
+    template: 'onboarding-first-action',
+    data: {
+      action,
+      nextSteps: getNextSteps(action),
+    },
+  })
+
+  await send('Onboarding.firstActionCompleted', {
+    userId,
+    action,
+    completedAt: new Date(),
+  })
+})
+
+// ============================================================================
+// Step 5: Onboarding Completion
+// ============================================================================
+
+on('Onboarding.completed', async (event) => {
+  const { userId } = event.data
+
+  await db.update($.UserProfile, userId, {
+    onboardingStatus: 'completed',
+    onboardingCompletedAt: new Date(),
+  })
+
+  console.log(`User ${userId} completed onboarding`)
+
+  // Award completion badge
+  await send('Achievement.awarded', {
+    userId,
+    achievement: 'onboarding-complete',
+  })
+
+  // Start engagement workflow
+  await send('Engagement.workflowStarted', {
+    userId,
+    workflowType: 'regular-user',
+  })
+})
+
+// ============================================================================
+// Onboarding Reminders
+// ============================================================================
+
+// Remind users who haven't verified email (after 24 hours)
+on('Onboarding.reminderDue', async (event) => {
+  const { userId, step } = event.data
+
+  const profile = await db.get($.UserProfile, userId)
+
+  if (profile.onboardingStatus === 'started' && !profile.emailVerified) {
+    await send('Email.sendRequested', {
+      to: profile.email,
+      template: 'reminder-verify-email',
+      data: {
+        verificationUrl: profile.verificationUrl,
+      },
+    })
+  }
+
+  if (profile.onboardingStatus === 'email-verified' && !profile.profileComplete) {
+    await send('Email.sendRequested', {
+      to: profile.email,
+      template: 'reminder-complete-profile',
+      data: {
+        setupUrl: 'https://app.example.com/onboarding/profile',
+      },
+    })
+  }
+})
+
+function getResourcesForRole(role) {
+  const resources = {
+    developer: ['API Docs', 'SDK Guide', 'Code Examples'],
+    designer: ['Design System', 'Component Library', 'Templates'],
+    manager: ['Dashboard Guide', 'Team Setup', 'Reports'],
+  }
+  return resources[role] || []
+}
+
+function getNextSteps(action) {
+  const nextSteps = {
+    'created-project': ['Invite team members', 'Configure settings', 'Deploy first app'],
+    'invited-team': ['Set permissions', 'Create first task', 'Schedule meeting'],
+    'deployed-app': ['Configure monitoring', 'Set up CI/CD', 'Review logs'],
+  }
+  return nextSteps[action] || []
+}
+```
+
+## Subscription Management Workflow
+
+Handle subscription lifecycle from trial to cancellation:
+
+```typescript
+import { on, send, db, $ } from 'sdk.do'
+
+// ============================================================================
+// Trial Started
+// ============================================================================
+
+on('Subscription.trialStarted', async (event) => {
+  const subscription = event.data
+
+  await db.create($.Subscription, {
+    userId: subscription.userId,
+    status: 'trial',
+    trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days
+    createdAt: new Date(),
+  })
+
+  // Send trial welcome email
+  await send('Email.sendRequested', {
+    to: subscription.email,
+    template: 'trial-started',
+    data: {
+      trialEndsAt: subscription.trialEndsAt,
+      features: subscription.plan.features,
+    },
+  })
+
+  // Schedule trial ending reminders
+  await send('Scheduler.jobScheduled', {
+    type: 'trial-reminder',
+    userId: subscription.userId,
+    runAt: new Date(Date.now() + 11 * 24 * 60 * 60 * 1000), // 3 days before end
+  })
+})
+
+// ============================================================================
+// Trial Ending Soon
+// ============================================================================
+
+on('Subscription.trialEndingSoon', async (event) => {
+  const subscription = event.data
+
+  await send('Email.sendRequested', {
+    to: subscription.email,
+    template: 'trial-ending-soon',
+    data: {
+      daysRemaining: 3,
+      upgradeUrl: 'https://app.example.com/subscribe',
+    },
+  })
+})
+
+// ============================================================================
+// Trial Ended
+// ============================================================================
+
+on('Subscription.trialEnded', async (event) => {
+  const subscription = event.data
+
+  await db.update($.Subscription, subscription.id, {
+    status: 'trial-ended',
+  })
+
+  // Send conversion email
+  await send('Email.sendRequested', {
+    to: subscription.email,
+    template: 'trial-ended',
+    data: {
+      upgradeUrl: 'https://app.example.com/subscribe',
+      specialOffer: getTrialEndOffer(subscription),
+    },
+  })
+
+  // Restrict access to paid features
+  await send('Access.restricted', {
+    userId: subscription.userId,
+    features: 'paid-only',
+  })
+})
+
+// ============================================================================
+// Subscription Created
+// ============================================================================
+
+on('Subscription.created', async (event) => {
+  const subscription = event.data
+
+  await db.update($.Subscription, subscription.id, {
+    status: 'active',
+    plan: subscription.plan,
+    billingCycle: subscription.billingCycle,
+    nextBillingDate: calculateNextBillingDate(subscription),
+  })
+
+  // Send welcome email
+  await send('Email.sendRequested', {
+    to: subscription.email,
+    template: 'subscription-welcome',
+    data: {
+      plan: subscription.plan,
+      nextBillingDate: subscription.nextBillingDate,
+    },
+  })
+
+  // Grant access to all features
+  await send('Access.granted', {
+    userId: subscription.userId,
+    features: subscription.plan.features,
+  })
+})
+
+// ============================================================================
+// Payment Due
+// ============================================================================
+
+on('Subscription.paymentDue', async (event) => {
+  const subscription = event.data
+
+  // Attempt to charge
+  await send('Payment.chargeRequested', {
+    subscriptionId: subscription.id,
+    amount: subscription.plan.price,
+    currency: subscription.currency,
+  })
+})
+
+on('Payment.succeeded', async (event) => {
+  const { subscriptionId } = event.data
+
+  await db.update($.Subscription, subscriptionId, {
+    lastPaymentAt: new Date(),
+    nextBillingDate: calculateNextBillingDate(event.data),
+  })
+
+  // Send receipt
+  await send('Email.sendRequested', {
+    template: 'payment-receipt',
+    data: event.data,
+  })
+})
+
+on('Payment.failed', async (event) => {
+  const { subscriptionId, attempt } = event.data
+
+  await db.update($.Subscription, subscriptionId, {
+    status: 'payment-failed',
+    failedPaymentAttempts: attempt,
+  })
+
+  // Send payment failed email
+  await send('Email.sendRequested', {
+    template: 'payment-failed',
+    data: {
+      attempt,
+      updatePaymentUrl: 'https://app.example.com/billing',
+    },
+  })
+
+  // Retry up to 3 times
+  if (attempt < 3) {
+    await send('Scheduler.jobScheduled', {
+      type: 'retry-payment',
+      subscriptionId,
+      runAt: new Date(Date.now() + attempt * 24 * 60 * 60 * 1000),
+    })
+  } else {
+    await send('Subscription.suspended', {
+      subscriptionId,
+      reason: 'payment-failed',
+    })
+  }
+})
+
+// ============================================================================
+// Subscription Cancelled
+// ============================================================================
+
+on('Subscription.cancelled', async (event) => {
+  const subscription = event.data
+
+  await db.update($.Subscription, subscription.id, {
+    status: 'cancelled',
+    cancelledAt: new Date(),
+    accessUntil: subscription.currentPeriodEnd,
+  })
+
+  // Send cancellation confirmation
+  await send('Email.sendRequested', {
+    to: subscription.email,
+    template: 'subscription-cancelled',
+    data: {
+      accessUntil: subscription.currentPeriodEnd,
+      feedbackUrl: 'https://app.example.com/feedback',
+    },
+  })
+
+  // Request cancellation feedback
+  await send('Feedback.requested', {
+    userId: subscription.userId,
+    type: 'cancellation',
+  })
+})
+
+function calculateNextBillingDate(subscription) {
+  const date = new Date()
+  if (subscription.billingCycle === 'monthly') {
+    date.setMonth(date.getMonth() + 1)
+  } else if (subscription.billingCycle === 'yearly') {
+    date.setFullYear(date.getFullYear() + 1)
+  }
+  return date
+}
+
+function getTrialEndOffer(subscription) {
+  return {
+    discount: 20,
+    code: 'TRIAL20',
+    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+  }
+}
+```
+
+## Helper Functions
+
+```typescript
+// Inventory helpers
+async function checkInventory(productId: string, quantity: number) {
+  const product = await db.get($.Product, productId)
+  return product.stock >= quantity
+}
+
+async function reserveInventory(productId: string, quantity: number) {
+  await db.update($.Product, productId, {
+    stock: db.decrement(quantity),
+    reserved: db.increment(quantity),
+  })
+  return { productId, quantity, reservedAt: new Date() }
+}
+
+async function releaseInventory(reservation: any) {
+  await db.update($.Product, reservation.productId, {
+    stock: db.increment(reservation.quantity),
+    reserved: db.decrement(reservation.quantity),
+  })
+}
+
+// Payment helper
+async function processPayment(paymentData: any) {
+  // Simulate payment gateway
+  return {
+    success: true,
+    transactionId: `txn_${Date.now()}`,
+  }
+}
+
+// Utility helpers
+function generateTrackingNumber() {
+  return `TRACK${Date.now()}`
+}
+
+function selectCarrier(address: any) {
+  return 'FedEx'
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+```
+
+## Best Practices for Workflow Listeners
+
+1. **Use correlation IDs**: Track related events across the workflow
+2. **Handle failures gracefully**: Implement compensation logic
+3. **Make handlers idempotent**: Handlers may be called multiple times
+4. **Log workflow progress**: Track each step for debugging
+5. **Set timeouts**: Handle stuck workflows
+6. **Test entire workflows**: Test happy path and error scenarios
+7. **Monitor workflow health**: Track success rates and bottlenecks
+
+## See Also
+
+- [Basic Listeners](./basic-listeners) - Simple examples
+- [Event Patterns](../docs/patterns) - Advanced patterns
+- [API Reference](../api/) - Complete API documentation
+- [events.do](https://events.do) - Full event system documentation
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

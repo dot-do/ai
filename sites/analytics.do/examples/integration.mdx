@@ -1,0 +1,326 @@
+---
+$id: https://analytics.do/examples/integration
+$type: HowTo
+title: Integration - analytics.do
+description: Integrate analytics.do with databases, event systems, agents, and external services
+keywords: [integration, database, events, agents, services, workflows]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Integration
+
+Integrate analytics.do with the .do platform and external services.
+
+## Database Integration
+
+Track database operations automatically:
+
+```typescript
+import $, { analytics, db } from 'sdk.do'
+
+// Track all database creates
+db.on('create', async (record) => {
+  await analytics.track($.Database.record.created, {
+    collection: record.$type,
+    recordId: record.$id,
+    timestamp: new Date(),
+  })
+
+  await analytics.counter(`$.Database.${record.$type}.created`, 1)
+})
+
+// Track updates
+db.on('update', async (record, changes) => {
+  await analytics.track($.Database.record.updated, {
+    collection: record.$type,
+    recordId: record.$id,
+    fields: Object.keys(changes),
+    timestamp: new Date(),
+  })
+})
+
+// Track deletes
+db.on('delete', async (record) => {
+  await analytics.track($.Database.record.deleted, {
+    collection: record.$type,
+    recordId: record.$id,
+    timestamp: new Date(),
+  })
+})
+```
+
+## Event System Integration
+
+Track all platform events:
+
+```typescript
+import $, { analytics, on, send } from 'sdk.do'
+
+// Track all events
+on('*', async (event) => {
+  await analytics.track(event.$type, {
+    ...event,
+    timestamp: new Date()
+  })
+})
+
+// Track specific event patterns
+on($.Order.*, async (event) => {
+  await analytics.track(event.$type, event)
+
+  if (event.$type === $.Order.created) {
+    await analytics.metric($.Revenue, {
+      value: event.amount,
+      dimensions: {
+        product: event.productId,
+        region: event.region
+      }
+    })
+  }
+})
+
+// Send analytics events
+await send($.Analytics.event.tracked, {
+  event: $.Order.created,
+  timestamp: new Date()
+})
+```
+
+## Agent Integration
+
+Track agent performance and activities:
+
+```typescript
+import $, { analytics, agent } from 'sdk.do'
+
+// Create analytics-aware agent
+const createTrackedAgent = async (config) => {
+  const trackedAgent = await agent.create({
+    ...config,
+
+    onTaskStart: async (task) => {
+      await analytics.track($.Agent.started.Task, {
+        agent: config.name,
+        task: task.name,
+        taskId: task.id,
+        timestamp: new Date(),
+      })
+    },
+
+    onTaskComplete: async (task, result) => {
+      await analytics.track($.Agent.completed.Task, {
+        agent: config.name,
+        task: task.name,
+        taskId: task.id,
+        duration: result.duration,
+        success: result.success,
+        timestamp: new Date(),
+      })
+
+      // Record metrics
+      await analytics.metric($.Agent.TaskDuration, {
+        value: result.duration,
+        dimensions: {
+          agent: config.name,
+          task: task.name,
+          success: result.success.toString(),
+        },
+      })
+
+      await analytics.metric($.Agent.TaskSuccessRate, {
+        value: result.success ? 1 : 0,
+        dimensions: {
+          agent: config.name,
+          task: task.name,
+        },
+      })
+    },
+
+    onToolUse: async (tool, params, result) => {
+      await analytics.track($.Agent.used.Tool, {
+        agent: config.name,
+        tool: tool.name,
+        duration: result.duration,
+        timestamp: new Date(),
+      })
+
+      await analytics.counter(`$.Agent.Tool.${tool.name}.used`, 1)
+    },
+  })
+
+  return trackedAgent
+}
+
+// Use tracked agent
+const salesAgent = await createTrackedAgent({
+  name: 'Sales Agent',
+  role: 'SDR',
+  capabilities: ['research', 'outreach'],
+})
+```
+
+## Workflow Integration
+
+Track workflow execution:
+
+```typescript
+import $, { analytics, every } from 'sdk.do'
+
+// Track scheduled workflows
+const trackWorkflow = async (name: string, fn: Function) => {
+  return async (...args) => {
+    const startTime = Date.now()
+    let success = true
+    let error = null
+
+    try {
+      await analytics.track($.Workflow.started, {
+        workflow: name,
+        timestamp: new Date(),
+      })
+
+      const result = await fn(...args)
+      return result
+    } catch (err) {
+      success = false
+      error = err
+      throw err
+    } finally {
+      const duration = Date.now() - startTime
+
+      await analytics.track($.Workflow.completed, {
+        workflow: name,
+        duration,
+        success,
+        error: error?.message,
+        timestamp: new Date(),
+      })
+
+      await analytics.metric($.WorkflowDuration, {
+        value: duration,
+        dimensions: {
+          workflow: name,
+          success: success.toString(),
+        },
+      })
+    }
+  }
+}
+
+// Use with scheduled workflows
+await every(
+  $.Hourly,
+  trackWorkflow('hourly-sync', async () => {
+    // Workflow logic here
+  })
+)
+```
+
+## External Service Integration
+
+Integrate with external analytics services:
+
+```typescript
+// Google Analytics
+import { analytics as ga } from '@google-analytics/analytics'
+
+const trackToMultiple = async (event: string, data: any) => {
+  // Track to analytics.do
+  await analytics.track(event, data)
+
+  // Also track to Google Analytics
+  ga.event({
+    category: event.$type,
+    action: 'tracked',
+    label: data.label,
+    value: data.value,
+  })
+}
+
+// Segment
+import { Analytics as Segment } from '@segment/analytics-node'
+
+const segment = new Segment({ writeKey: process.env.SEGMENT_WRITE_KEY })
+
+const unifiedTrack = async (event: string, data: any) => {
+  await Promise.all([
+    analytics.track(event, data),
+    segment.track({
+      userId: data.userId,
+      event: event,
+      properties: data,
+    }),
+  ])
+}
+
+// Mixpanel
+import Mixpanel from 'mixpanel'
+
+const mixpanel = Mixpanel.init(process.env.MIXPANEL_TOKEN)
+
+const trackEverywhere = async (event: string, data: any) => {
+  await Promise.all([analytics.track(event, data), mixpanel.track(event, data)])
+}
+```
+
+## API Gateway Integration
+
+Track API requests and responses:
+
+```typescript
+import $, { analytics, api } from 'sdk.do'
+
+// Track API requests
+api.use(async (req, res, next) => {
+  const startTime = Date.now()
+
+  // Track request
+  await analytics.track($.API.request.received, {
+    method: req.method,
+    path: req.path,
+    timestamp: new Date(),
+  })
+
+  // Continue request
+  await next()
+
+  // Track response
+  const duration = Date.now() - startTime
+
+  await analytics.track($.API.response.sent, {
+    method: req.method,
+    path: req.path,
+    status: res.statusCode,
+    duration,
+    timestamp: new Date(),
+  })
+
+  // Record metrics
+  await analytics.metric($.API.ResponseTime, {
+    value: duration,
+    dimensions: {
+      method: req.method,
+      path: req.path,
+      status: res.statusCode.toString(),
+    },
+  })
+
+  await analytics.counter($.API.Requests, 1)
+
+  if (res.statusCode >= 400) {
+    await analytics.counter($.API.Errors, 1)
+  }
+})
+```
+
+## See Also
+
+- [Basic Usage](./basic-usage.mdx) - Simple examples
+- [Advanced Patterns](./advanced-patterns.mdx) - Complex scenarios
+- [Real-World Use Case](./real-world-use-case.mdx) - Complete implementation
+
+---
+
+These integration patterns enable comprehensive analytics across your entire platform. For a complete example, see [Real-World Use Case](./real-world-use-case.mdx).

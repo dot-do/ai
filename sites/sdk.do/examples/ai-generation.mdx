@@ -1,0 +1,544 @@
+---
+$id: https://sdk.do/examples/ai-generation
+$type: HowTo
+title: AI Generation Example
+description: AI-powered content generation with structured outputs and batch processing
+keywords: [ai, generation, openai, gpt-5, embeddings, batch]
+---
+
+# AI Generation Example
+
+Generate AI-powered content with structured outputs and batch processing.
+
+## Overview
+
+This example demonstrates:
+
+- Text generation with AI
+- Structured data generation with schemas
+- Semantic embeddings for search
+- Batch processing for cost savings
+- AI-powered data enrichment
+
+## Complete Example
+
+```typescript
+import $, { db, ai } from 'sdk.do'
+
+async function aiGenerationExample() {
+  console.log('=== AI Generation Example ===\n')
+
+  // ==========================================
+  // 1. Simple Text Generation
+  // ==========================================
+
+  console.log('1. Simple text generation...\n')
+
+  const description = await ai.generate('Write a compelling 2-sentence description for a cloud computing platform')
+
+  console.log('Generated description:')
+  console.log(description)
+  console.log()
+
+  // ==========================================
+  // 2. Structured Data Generation
+  // ==========================================
+
+  console.log('2. Structured data generation...\n')
+
+  // Generate product with schema
+  const product = await ai.generate('Create a tech product for developers', { schema: $.Product })
+
+  console.log('Generated product:')
+  console.log(JSON.stringify(product, null, 2))
+  console.log()
+
+  // Generate with custom schema
+  const analysis = await ai.generate('Analyze market trends for cloud computing', {
+    schema: {
+      summary: 'string',
+      trends: 'array',
+      predictions: 'array',
+      riskLevel: 'string',
+    },
+  })
+
+  console.log('Generated analysis:')
+  console.log(JSON.stringify(analysis, null, 2))
+  console.log()
+
+  // ==========================================
+  // 3. Data Enrichment
+  // ==========================================
+
+  console.log('3. AI-powered data enrichment...\n')
+
+  // Create basic product
+  const basicProduct = await db.create($.Product, {
+    name: 'Smart Watch Pro',
+    price: 299.99,
+  })
+
+  console.log('Basic product created:', basicProduct.name)
+
+  // Enrich with AI
+  const enrichedData = await ai.generate(
+    `Generate detailed product information for: ${basicProduct.name}
+     Include: description, features, target audience, category`,
+    {
+      schema: {
+        description: 'string',
+        features: 'array',
+        targetAudience: 'string',
+        category: 'string',
+      },
+    }
+  )
+
+  // Update product with AI data
+  await db.update(basicProduct, enrichedData)
+
+  console.log('Enriched product:')
+  console.log('Description:', enrichedData.description)
+  console.log('Features:', enrichedData.features)
+  console.log('Target:', enrichedData.targetAudience)
+  console.log()
+
+  // ==========================================
+  // 4. Batch Processing
+  // ==========================================
+
+  console.log('4. Batch processing (50% cost savings)...\n')
+
+  // Create multiple products
+  const products = await Promise.all([
+    db.create($.Product, { name: 'Laptop Pro', price: 1299.99 }),
+    db.create($.Product, { name: 'Wireless Earbuds', price: 149.99 }),
+    db.create($.Product, { name: 'Smart Speaker', price: 79.99 }),
+    db.create($.Product, { name: '4K Monitor', price: 399.99 }),
+    db.create($.Product, { name: 'Mechanical Keyboard', price: 129.99 }),
+  ])
+
+  console.log(`Created ${products.length} products`)
+
+  // Batch generate descriptions
+  const descriptions = await ai.batch(
+    products.map((p) => ({
+      prompt: `Write a compelling 2-sentence product description for: ${p.name}`,
+    }))
+  )
+
+  console.log('Generated descriptions:')
+  descriptions.forEach((desc, i) => {
+    console.log(`${products[i].name}:`)
+    console.log(`  ${desc}`)
+  })
+  console.log()
+
+  // Update products with descriptions
+  await Promise.all(products.map((p, i) => db.update(p, { description: descriptions[i] })))
+
+  console.log('✓ Updated all products')
+  console.log()
+
+  // ==========================================
+  // 5. Semantic Search with Embeddings
+  // ==========================================
+
+  console.log('5. Semantic search with embeddings...\n')
+
+  // Create embedding for search query
+  const queryEmbedding = await ai.embed('affordable tech gadgets for students')
+
+  console.log('Created query embedding')
+  console.log('Dimensions:', queryEmbedding.length)
+  console.log('Sample values:', queryEmbedding.slice(0, 5))
+  console.log()
+
+  // In production, you would search using the embedding
+  // const results = await db.list($.Product, {
+  //   where: {
+  //     $semantic: {
+  //       embedding: queryEmbedding,
+  //       threshold: 0.8
+  //     }
+  //   }
+  // })
+
+  // ==========================================
+  // 6. Content Classification
+  // ==========================================
+
+  console.log('6. Content classification...\n')
+
+  const customerFeedback = [
+    'Great product, fast shipping!',
+    'Terrible experience, item arrived broken',
+    'Decent quality for the price',
+    'Customer service was unhelpful',
+    'Exceeded my expectations!',
+  ]
+
+  const classifications = await ai.batch(
+    customerFeedback.map((feedback) => ({
+      prompt: `Classify this feedback as positive, negative, or neutral: "${feedback}"`,
+      schema: {
+        sentiment: 'string',
+        category: 'string',
+        score: 'number',
+      },
+    }))
+  )
+
+  console.log('Feedback classifications:')
+  customerFeedback.forEach((feedback, i) => {
+    console.log(`"${feedback}"`)
+    console.log(`  Sentiment: ${classifications[i].sentiment}`)
+    console.log(`  Category: ${classifications[i].category}`)
+    console.log(`  Score: ${classifications[i].score}`)
+  })
+  console.log()
+
+  // ==========================================
+  // 7. Customer Segmentation
+  // ==========================================
+
+  console.log('7. AI-powered customer segmentation...\n')
+
+  // Create sample customers
+  const customers = await Promise.all([
+    db.create($.Customer, {
+      name: 'Alice Corp',
+      industry: 'Technology',
+      revenue: 10000000,
+      employees: 100,
+    }),
+    db.create($.Customer, {
+      name: 'Bob Store',
+      industry: 'Retail',
+      revenue: 500000,
+      employees: 10,
+    }),
+    db.create($.Customer, {
+      name: 'Carol Consulting',
+      industry: 'Consulting',
+      revenue: 2000000,
+      employees: 25,
+    }),
+  ])
+
+  // Batch segment customers
+  const segments = await ai.batch(
+    customers.map((c) => ({
+      prompt: `Classify this customer as Enterprise, SMB, or Individual:
+               Name: ${c.name}
+               Industry: ${c.industry}
+               Revenue: $${c.revenue}
+               Employees: ${c.employees}`,
+      schema: {
+        segment: 'string',
+        tier: 'string',
+        potentialValue: 'string',
+      },
+    }))
+  )
+
+  console.log('Customer segments:')
+  customers.forEach((c, i) => {
+    console.log(`${c.name}:`)
+    console.log(`  Segment: ${segments[i].segment}`)
+    console.log(`  Tier: ${segments[i].tier}`)
+    console.log(`  Potential: ${segments[i].potentialValue}`)
+  })
+  console.log()
+
+  // Update customers with segments
+  await Promise.all(
+    customers.map((c, i) =>
+      db.update(c, {
+        segment: segments[i].segment,
+        tier: segments[i].tier,
+      })
+    )
+  )
+
+  console.log('✓ Updated customer segments')
+  console.log()
+
+  // ==========================================
+  // 8. Dynamic Content Generation
+  // ==========================================
+
+  console.log('8. Dynamic content generation...\n')
+
+  // Generate personalized emails
+  const emailTemplates = await ai.batch(
+    customers.map((c) => ({
+      prompt: `Write a personalized sales email for ${c.name} in the ${c.industry} industry`,
+      schema: {
+        subject: 'string',
+        body: 'string',
+        cta: 'string',
+      },
+    }))
+  )
+
+  console.log('Generated email templates:')
+  customers.forEach((c, i) => {
+    console.log(`\nFor ${c.name}:`)
+    console.log(`Subject: ${emailTemplates[i].subject}`)
+    console.log(`CTA: ${emailTemplates[i].cta}`)
+  })
+  console.log()
+
+  // ==========================================
+  // 9. Cleanup
+  // ==========================================
+
+  console.log('9. Cleanup...\n')
+
+  await db.delete(basicProduct)
+  for (const product of products) {
+    await db.delete(product)
+  }
+  for (const customer of customers) {
+    await db.delete(customer)
+  }
+
+  console.log('✓ Cleanup complete')
+  console.log()
+
+  console.log('=== Example Complete ===')
+}
+
+// Run the example
+aiGenerationExample().catch(console.error)
+```
+
+## AI Patterns
+
+### Simple Text Generation
+
+```typescript
+const text = await ai.generate('Write a product description')
+console.log(text)
+```
+
+### Structured Generation
+
+```typescript
+// With Schema.org type
+const product = await ai.generate('Create a tech product', { schema: $.Product })
+
+// With custom schema
+const report = await ai.generate('Analyze sales data', {
+  schema: {
+    summary: 'string',
+    metrics: 'object',
+    insights: 'array',
+  },
+})
+```
+
+### Batch Processing
+
+```typescript
+// 50% cost savings with batch API
+const results = await ai.batch([{ prompt: 'Analyze text 1' }, { prompt: 'Analyze text 2' }, { prompt: 'Analyze text 3' }])
+```
+
+### Embeddings
+
+```typescript
+// Create embeddings for semantic search
+const embedding = await ai.embed('Search query text')
+
+// Use in database query
+const results = await db.list($.Product, {
+  where: {
+    $semantic: {
+      embedding,
+      threshold: 0.8,
+    },
+  },
+})
+```
+
+## Common Use Cases
+
+### Product Enrichment
+
+```typescript
+async function enrichProduct(product) {
+  const enrichedData = await ai.generate(`Generate detailed product information for: ${product.name}`, {
+    schema: {
+      description: 'string',
+      features: 'array',
+      benefits: 'array',
+      specifications: 'object',
+    },
+  })
+
+  return await db.update(product, enrichedData)
+}
+```
+
+### Content Classification
+
+```typescript
+async function classifyContent(text) {
+  return await ai.generate(`Classify this content: "${text}"`, {
+    schema: {
+      category: 'string',
+      sentiment: 'string',
+      topics: 'array',
+      confidence: 'number',
+    },
+  })
+}
+```
+
+### Customer Insights
+
+```typescript
+async function analyzeCustomer(customer) {
+  return await ai.generate(`Analyze customer: ${JSON.stringify(customer)}`, {
+    schema: {
+      segment: 'string',
+      valueTier: 'string',
+      churnRisk: 'number',
+      recommendations: 'array',
+    },
+  })
+}
+```
+
+### Personalized Content
+
+```typescript
+async function generatePersonalizedEmail(customer) {
+  return await ai.generate(`Write a personalized email for ${customer.name}`, {
+    schema: {
+      subject: 'string',
+      greeting: 'string',
+      body: 'string',
+      cta: 'string',
+    },
+  })
+}
+```
+
+## Advanced Techniques
+
+### Temperature Control
+
+```typescript
+// Creative output (high temperature)
+const creative = await ai.generate('Write a story', { temperature: 0.9 })
+
+// Deterministic output (low temperature)
+const factual = await ai.generate('Summarize data', { temperature: 0.1 })
+```
+
+### Model Selection
+
+```typescript
+// Use specific model
+const result = await ai.generate('Complex reasoning task', { model: 'gpt-5' })
+
+// Fast, cheap model for simple tasks
+const simple = await ai.generate('Simple classification', { model: 'gpt-5-nano' })
+```
+
+### Token Limits
+
+```typescript
+// Short output
+const summary = await ai.generate('Summarize in 50 words', { maxTokens: 100 })
+
+// Long output
+const article = await ai.generate('Write detailed article', { maxTokens: 2000 })
+```
+
+## Cost Optimization
+
+### Use Batch Processing
+
+```typescript
+// Good - 50% cost savings
+const results = await ai.batch(
+  items.map((item) => ({
+    prompt: `Process: ${item}`,
+  }))
+)
+
+// Expensive - sequential requests
+for (const item of items) {
+  await ai.generate(`Process: ${item}`)
+}
+```
+
+### Choose Right Model
+
+```typescript
+// Expensive - using largest model for simple task
+const result = await ai.generate('Classify sentiment', {
+  model: 'gpt-5',
+})
+
+// Optimized - using smaller model
+const result = await ai.generate('Classify sentiment', {
+  model: 'gpt-5-nano',
+})
+```
+
+### Cache Results
+
+```typescript
+const cache = new Map()
+
+async function generateWithCache(key, prompt) {
+  if (cache.has(key)) {
+    return cache.get(key)
+  }
+
+  const result = await ai.generate(prompt)
+  cache.set(key, result)
+  return result
+}
+```
+
+## Error Handling
+
+```typescript
+try {
+  const result = await ai.generate('Generate content')
+} catch (error) {
+  if (error.code === 'RATE_LIMIT_EXCEEDED') {
+    // Wait and retry
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+    const result = await ai.generate('Generate content')
+  } else {
+    console.error('AI generation failed:', error)
+  }
+}
+```
+
+## Best Practices
+
+1. **Use schemas** for structured outputs
+2. **Batch requests** for cost savings
+3. **Cache results** when possible
+4. **Choose appropriate models** for the task
+5. **Handle errors gracefully**
+6. **Monitor token usage**
+7. **Set temperature** based on use case
+8. **Validate AI outputs** before using
+
+## See Also
+
+- [Basic Example](./basic) - Basic operations
+- [Database Example](./database) - Database patterns
+- [Events Example](./events) - Event handling
+- [API Reference](../docs/api-reference) - AI API docs
+- [ai.do](https://ai.do) - AI services guide

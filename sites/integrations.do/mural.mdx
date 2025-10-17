@@ -1,0 +1,105 @@
+---
+$id: https://integrations.do/mural
+$type: Integration
+name: Mural
+service: mural
+description: Mural is a digital whiteboard platform enabling distributed teams to visually brainstorm, map ideas, and collaborate in real time with sticky notes and diagrams
+category: productivity
+sdkBased: false
+baseUrl: https://api.mural.com
+
+auth:
+  type: oauth2
+  authorizationUrl: https://app.mural.co/api/public/v1/authorization/oauth2
+  tokenUrl: https://app.mural.co/api/public/v1/authorization/oauth2/token
+  scopes:
+    - rooms:write
+    - workspaces:write
+    - murals:write
+    - templates:write
+    - rooms:read
+    - users:read
+    - workspaces:read
+    - murals:read
+    - identity:read
+    - templates:read
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Mural actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: false
+  events: []
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://www.mural.co
+  apiDocs: https://www.mural.co
+---
+
+# Mural Integration
+
+Mural is a digital whiteboard platform enabling distributed teams to visually brainstorm, map ideas, and collaborate in real time with sticky notes and diagrams
+
+## Quick Start
+
+```typescript
+import { MuralClient } from '@dotdo/sdk.do/integrations/mural'
+
+const mural = new MuralClient({
+  apiKey: process.env.MURAL_API_KEY,
+})
+
+const result = await mural.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Mural provides 5 actions through the Composio API.
+
+## License
+
+MIT

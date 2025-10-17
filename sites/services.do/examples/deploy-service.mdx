@@ -1,0 +1,714 @@
+---
+$id: https://services.do/examples/deploy-service
+$type: HowTo
+title: Deploy a Service to Cloudflare Workers
+description: Complete example of deploying a production-ready service to Cloudflare Workers
+keywords: [example, deployment, cloudflare-workers, production, tutorial]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Deploy a Service to Cloudflare Workers
+
+This example demonstrates deploying a complete, production-ready service to Cloudflare Workers using services.do.
+
+## Overview
+
+We'll build and deploy a product catalog service that:
+
+- Manages product inventory
+- Supports CRUD operations
+- Includes authentication
+- Has health checks and monitoring
+- Uses proper error handling
+- Implements caching
+
+## Project Setup
+
+### Initialize Project
+
+```bash
+mkdir product-service
+cd product-service
+pnpm init
+pnpm add sdk.do
+pnpm add -D typescript tsx
+```
+
+### TypeScript Configuration
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true
+  }
+}
+```
+
+## Define Product Schema
+
+Create `src/types.ts`:
+
+```typescript
+import $ from 'sdk.do'
+
+// Product type using Schema.org
+export interface Product extends $.Product {
+  $id: string
+  $type: 'Product'
+  name: string
+  description: string
+  sku: string
+  price: number
+  currency: string
+  inStock: boolean
+  category: string
+  images: string[]
+  createdAt: string
+  updatedAt: string
+}
+
+// Request/Response types
+export interface CreateProductRequest {
+  name: string
+  description: string
+  sku: string
+  price: number
+  currency?: string
+  category: string
+  images?: string[]
+}
+
+export interface UpdateProductRequest {
+  name?: string
+  description?: string
+  price?: number
+  inStock?: boolean
+  category?: string
+  images?: string[]
+}
+
+export interface ProductListQuery {
+  category?: string
+  inStock?: boolean
+  minPrice?: number
+  maxPrice?: number
+  limit?: number
+  offset?: number
+}
+```
+
+## Implement Business Logic
+
+Create `src/handlers.ts`:
+
+```typescript
+import $, { db, cache } from 'sdk.do'
+import { Product, CreateProductRequest, UpdateProductRequest, ProductListQuery } from './types'
+
+// List products with filtering and pagination
+export async function listProducts(query: ProductListQuery) {
+  const cacheKey = `products:${JSON.stringify(query)}`
+
+  // Try cache first
+  const cached = await cache.get(cacheKey)
+  if (cached) {
+    return JSON.parse(cached)
+  }
+
+  // Build filter
+  const filter: any = {}
+  if (query.category) filter.category = query.category
+  if (query.inStock !== undefined) filter.inStock = query.inStock
+  if (query.minPrice) filter.price = { $gte: query.minPrice }
+  if (query.maxPrice) {
+    filter.price = { ...filter.price, $lte: query.maxPrice }
+  }
+
+  // Query database
+  const products = await db.list($.Product, {
+    where: filter,
+    limit: query.limit || 50,
+    offset: query.offset || 0,
+    orderBy: { createdAt: 'desc' },
+  })
+
+  // Cache result
+  await cache.set(cacheKey, JSON.stringify(products), { ttl: 300 })
+
+  return products
+}
+
+// Get single product
+export async function getProduct(id: string) {
+  const cacheKey = `product:${id}`
+
+  // Try cache first
+  const cached = await cache.get(cacheKey)
+  if (cached) {
+    return JSON.parse(cached)
+  }
+
+  // Get from database
+  const product = await db.get($.Product, id)
+  if (!product) {
+    throw new Error('Product not found')
+  }
+
+  // Cache result
+  await cache.set(cacheKey, JSON.stringify(product), { ttl: 600 })
+
+  return product
+}
+
+// Create new product
+export async function createProduct(data: CreateProductRequest): Promise<Product> {
+  // Validate SKU uniqueness
+  const existing = await db.list($.Product, {
+    where: { sku: data.sku },
+    limit: 1,
+  })
+
+  if (existing.length > 0) {
+    throw new Error('Product with this SKU already exists')
+  }
+
+  // Create product
+  const product = await db.create($.Product, {
+    $type: 'Product',
+    name: data.name,
+    description: data.description,
+    sku: data.sku,
+    price: data.price,
+    currency: data.currency || 'USD',
+    inStock: true,
+    category: data.category,
+    images: data.images || [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  })
+
+  // Invalidate cache
+  await cache.delete('products:*')
+
+  return product as Product
+}
+
+// Update product
+export async function updateProduct(id: string, data: UpdateProductRequest): Promise<Product> {
+  const product = await db.update($.Product, id, {
+    ...data,
+    updatedAt: new Date().toISOString(),
+  })
+
+  if (!product) {
+    throw new Error('Product not found')
+  }
+
+  // Invalidate cache
+  await cache.delete(`product:${id}`)
+  await cache.delete('products:*')
+
+  return product as Product
+}
+
+// Delete product
+export async function deleteProduct(id: string) {
+  const deleted = await db.delete($.Product, id)
+
+  if (!deleted) {
+    throw new Error('Product not found')
+  }
+
+  // Invalidate cache
+  await cache.delete(`product:${id}`)
+  await cache.delete('products:*')
+
+  return { success: true }
+}
+
+// Health check
+export async function healthCheck() {
+  const checks = []
+
+  // Database health
+  try {
+    await db.ping()
+    checks.push({ name: 'database', status: 'healthy' })
+  } catch (error) {
+    checks.push({ name: 'database', status: 'unhealthy', error: error.message })
+  }
+
+  // Cache health
+  try {
+    await cache.ping()
+    checks.push({ name: 'cache', status: 'healthy' })
+  } catch (error) {
+    checks.push({ name: 'cache', status: 'unhealthy', error: error.message })
+  }
+
+  const healthy = checks.every((check) => check.status === 'healthy')
+
+  return {
+    status: healthy ? 'healthy' : 'unhealthy',
+    checks,
+    timestamp: new Date().toISOString(),
+  }
+}
+```
+
+## Create Service Definition
+
+Create `src/service.ts`:
+
+```typescript
+import $, { service, middleware } from 'sdk.do'
+import { listProducts, getProduct, createProduct, updateProduct, deleteProduct, healthCheck } from './handlers'
+
+export const productService = service({
+  $type: 'Service',
+  $id: 'https://services.do/ProductService',
+  name: 'ProductService',
+  description: 'Product catalog and inventory management service',
+  version: '1.0.0',
+
+  // Middleware stack
+  middleware: [
+    // CORS
+    middleware.cors({
+      origin: '*',
+      methods: ['GET', 'POST', 'PUT', 'DELETE'],
+      headers: ['Content-Type', 'Authorization'],
+    }),
+
+    // Authentication (except health endpoint)
+    middleware.auth({
+      type: 'bearer',
+      except: ['/health'],
+      verify: async (token) => {
+        // Verify JWT token
+        return await verifyAuthToken(token)
+      },
+    }),
+
+    // Rate limiting
+    middleware.rateLimit({
+      requests: 100,
+      window: 60000, // 1 minute
+      identifier: (request) => {
+        return request.headers.get('x-user-id') || request.headers.get('x-real-ip')
+      },
+    }),
+
+    // Logging
+    middleware.logging({
+      level: 'info',
+      format: 'json',
+      includeHeaders: false,
+      includeBody: false,
+    }),
+
+    // Error handling
+    middleware.errorHandler({
+      includeStack: process.env.ENVIRONMENT !== 'production',
+    }),
+  ],
+
+  // Route definitions
+  routes: {
+    // Health check
+    'GET /health': async (request) => {
+      const health = await healthCheck()
+      const status = health.status === 'healthy' ? 200 : 503
+      return Response.json(health, { status })
+    },
+
+    // List products
+    'GET /products': async (request) => {
+      const url = new URL(request.url)
+      const query = {
+        category: url.searchParams.get('category') || undefined,
+        inStock: url.searchParams.get('inStock') === 'true' ? true : undefined,
+        minPrice: parseFloat(url.searchParams.get('minPrice') || '0') || undefined,
+        maxPrice: parseFloat(url.searchParams.get('maxPrice') || '0') || undefined,
+        limit: parseInt(url.searchParams.get('limit') || '50'),
+        offset: parseInt(url.searchParams.get('offset') || '0'),
+      }
+
+      const products = await listProducts(query)
+      return Response.json(products)
+    },
+
+    // Get product by ID
+    'GET /products/:id': async (request) => {
+      try {
+        const product = await getProduct(request.params.id)
+        return Response.json(product)
+      } catch (error) {
+        return Response.json({ error: error.message }, { status: 404 })
+      }
+    },
+
+    // Create product
+    'POST /products': async (request) => {
+      try {
+        const data = await request.json()
+
+        // Validate required fields
+        if (!data.name || !data.sku || !data.price || !data.category) {
+          return Response.json({ error: 'Missing required fields: name, sku, price, category' }, { status: 400 })
+        }
+
+        const product = await createProduct(data)
+        return Response.json(product, { status: 201 })
+      } catch (error) {
+        return Response.json({ error: error.message }, { status: 400 })
+      }
+    },
+
+    // Update product
+    'PUT /products/:id': async (request) => {
+      try {
+        const data = await request.json()
+        const product = await updateProduct(request.params.id, data)
+        return Response.json(product)
+      } catch (error) {
+        const status = error.message === 'Product not found' ? 404 : 400
+        return Response.json({ error: error.message }, { status })
+      }
+    },
+
+    // Delete product
+    'DELETE /products/:id': async (request) => {
+      try {
+        await deleteProduct(request.params.id)
+        return Response.json({ success: true })
+      } catch (error) {
+        return Response.json({ error: error.message }, { status: 404 })
+      }
+    },
+  },
+
+  // Health check configuration
+  health: {
+    endpoint: '/health',
+    interval: 30000,
+    timeout: 5000,
+  },
+})
+
+// Helper function to verify auth token
+async function verifyAuthToken(token: string) {
+  // Implement your token verification logic
+  // This could verify JWT, check API keys, etc.
+  return true // For demo purposes
+}
+```
+
+## Deployment Script
+
+Create `src/deploy.ts`:
+
+```typescript
+import { productService } from './service'
+
+async function deploy() {
+  console.log('Deploying ProductService to Cloudflare Workers...')
+
+  try {
+    const result = await productService.deploy({
+      // Environment
+      environment: 'production',
+
+      // Cloudflare credentials
+      accountId: process.env.CLOUDFLARE_ACCOUNT_ID,
+      apiToken: process.env.CLOUDFLARE_API_TOKEN,
+
+      // Deployment strategy
+      strategy: 'canary',
+      canary: {
+        percentage: 5,
+        steps: [5, 10, 25, 50, 100],
+        duration: 300,
+        autoPromote: true,
+        metrics: ['error_rate', 'latency_p99'],
+        thresholds: {
+          error_rate: 0.01,
+          latency_p99: 500,
+        },
+      },
+
+      // Resources
+      resources: {
+        cpu: 100,
+        memory: 128,
+      },
+
+      // Scaling
+      scaling: {
+        enabled: true,
+        min: 2,
+        max: 50,
+        metrics: [
+          {
+            type: 'cpu',
+            threshold: 70,
+            scaleUp: { increment: 2, cooldown: 60 },
+            scaleDown: { decrement: 1, cooldown: 300 },
+          },
+        ],
+      },
+
+      // Environment variables
+      vars: {
+        ENVIRONMENT: 'production',
+        LOG_LEVEL: 'info',
+      },
+
+      // Custom domain
+      customDomains: [{ domain: 'api.products.example.com', ssl: true }],
+    })
+
+    console.log('✓ Deployment successful!')
+    console.log('Service URL:', result.url)
+    console.log('Version:', result.version)
+    console.log('Status:', result.status)
+  } catch (error) {
+    console.error('✗ Deployment failed:', error.message)
+    process.exit(1)
+  }
+}
+
+deploy()
+```
+
+## Environment Configuration
+
+Create `.env`:
+
+```bash
+# Cloudflare credentials
+CLOUDFLARE_ACCOUNT_ID=your-account-id
+CLOUDFLARE_API_TOKEN=your-api-token
+
+# Environment
+ENVIRONMENT=production
+LOG_LEVEL=info
+
+# Database
+DATABASE_URL=your-database-url
+
+# Cache
+CACHE_URL=your-cache-url
+```
+
+## Deploy the Service
+
+### Development Deployment
+
+```bash
+# Deploy to development
+ENVIRONMENT=development pnpm tsx src/deploy.ts
+```
+
+### Production Deployment
+
+```bash
+# Deploy to production
+pnpm tsx src/deploy.ts
+```
+
+## Test the Service
+
+### Health Check
+
+```bash
+curl https://product-service.your-account.workers.dev/health
+```
+
+Response:
+
+```json
+{
+  "status": "healthy",
+  "checks": [
+    { "name": "database", "status": "healthy" },
+    { "name": "cache", "status": "healthy" }
+  ],
+  "timestamp": "2025-10-10T12:00:00.000Z"
+}
+```
+
+### Create Product
+
+```bash
+curl -X POST https://product-service.your-account.workers.dev/products \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-token" \
+  -d '{
+    "name": "Laptop",
+    "description": "High-performance laptop",
+    "sku": "LAP-001",
+    "price": 1299.99,
+    "category": "Electronics",
+    "images": ["https://example.com/laptop.jpg"]
+  }'
+```
+
+### List Products
+
+```bash
+# All products
+curl https://product-service.your-account.workers.dev/products \
+  -H "Authorization: Bearer your-token"
+
+# Filter by category
+curl "https://product-service.your-account.workers.dev/products?category=Electronics" \
+  -H "Authorization: Bearer your-token"
+
+# Filter by price range
+curl "https://product-service.your-account.workers.dev/products?minPrice=500&maxPrice=1500" \
+  -H "Authorization: Bearer your-token"
+```
+
+### Get Product
+
+```bash
+curl https://product-service.your-account.workers.dev/products/product-id \
+  -H "Authorization: Bearer your-token"
+```
+
+### Update Product
+
+```bash
+curl -X PUT https://product-service.your-account.workers.dev/products/product-id \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-token" \
+  -d '{
+    "price": 1199.99,
+    "inStock": true
+  }'
+```
+
+### Delete Product
+
+```bash
+curl -X DELETE https://product-service.your-account.workers.dev/products/product-id \
+  -H "Authorization: Bearer your-token"
+```
+
+## Monitor the Service
+
+### Check Service Status
+
+```typescript
+import { service } from 'sdk.do'
+
+const status = await service.status('ProductService')
+console.log('Status:', status)
+```
+
+### View Metrics
+
+```typescript
+import { metrics } from 'sdk.do'
+
+const current = await metrics.current('ProductService')
+console.log('Request rate:', current.request_rate)
+console.log('Error rate:', current.error_rate)
+console.log('P99 latency:', current.latency_p99)
+```
+
+### Monitor Deployment
+
+```typescript
+const deployment = await service.getDeployment('ProductService')
+
+deployment.on('canary.promoted', (event) => {
+  console.log(`Canary promoted to ${event.percentage}%`)
+})
+
+deployment.on('deployment.completed', () => {
+  console.log('Deployment completed successfully')
+})
+```
+
+## Advanced: Load Testing
+
+Create `src/load-test.ts`:
+
+```typescript
+async function loadTest() {
+  const baseUrl = 'https://product-service.your-account.workers.dev'
+  const token = process.env.AUTH_TOKEN
+
+  const results = {
+    requests: 0,
+    success: 0,
+    errors: 0,
+    totalTime: 0,
+  }
+
+  // Run 1000 requests
+  const promises = []
+  for (let i = 0; i < 1000; i++) {
+    promises.push(
+      (async () => {
+        const start = Date.now()
+        try {
+          const response = await fetch(`${baseUrl}/products`, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          results.requests++
+          if (response.ok) {
+            results.success++
+          } else {
+            results.errors++
+          }
+          results.totalTime += Date.now() - start
+        } catch (error) {
+          results.requests++
+          results.errors++
+        }
+      })()
+    )
+  }
+
+  await Promise.all(promises)
+
+  console.log('Load Test Results:')
+  console.log(`  Total Requests: ${results.requests}`)
+  console.log(`  Successful: ${results.success}`)
+  console.log(`  Errors: ${results.errors}`)
+  console.log(`  Success Rate: ${((results.success / results.requests) * 100).toFixed(2)}%`)
+  console.log(`  Average Latency: ${(results.totalTime / results.requests).toFixed(2)}ms`)
+}
+
+loadTest()
+```
+
+## Next Steps
+
+- [Service Communication](./service-communication.mdx) - Inter-service communication patterns
+- [Deployment Strategies](../docs/deployment.mdx) - Advanced deployment options
+- [Service Management](../docs/management.mdx) - Scaling and monitoring
+- [API Reference](../api/) - Complete API documentation
+
+## Complete Example
+
+The complete example is available on GitHub:
+
+- [Product Service Example](https://github.com/dot-do/examples/tree/main/product-service)
+
+## Related Examples
+
+- [User Service](./user-service.mdx) - User authentication and management
+- [Order Service](./order-service.mdx) - Order processing workflow
+- [API Gateway](./api-gateway.mdx) - API gateway pattern

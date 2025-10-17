@@ -1,0 +1,735 @@
+---
+$id: https://api.do/examples/rest-api
+$type: HowTo
+title: REST API Integration Examples
+description: Complete examples of integrating REST APIs with api.do
+keywords: [api, rest, examples, integration, http]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# REST API Integration Examples
+
+Complete examples demonstrating REST API integration with api.do.
+
+## Basic CRUD Operations
+
+Complete CRUD (Create, Read, Update, Delete) example:
+
+```typescript
+import { api } from 'sdk.do'
+
+const BASE_URL = 'https://jsonplaceholder.typicode.com'
+
+// Create
+const newUser = await api.post(`${BASE_URL}/users`, {
+  name: 'John Smith',
+  email: 'john@example.com',
+  username: 'jsmith',
+})
+console.log('Created user:', newUser.id)
+
+// Read (single)
+const user = await api.get(`${BASE_URL}/users/${newUser.id}`)
+console.log('User:', user.name, user.email)
+
+// Read (list)
+const users = await api.get(`${BASE_URL}/users`, {
+  params: {
+    _limit: 10,
+  },
+})
+console.log('Users:', users.length)
+
+// Update
+const updated = await api.put(`${BASE_URL}/users/${newUser.id}`, {
+  name: 'John Smith Updated',
+  email: 'john.updated@example.com',
+})
+console.log('Updated user:', updated.name)
+
+// Patch
+const patched = await api.patch(`${BASE_URL}/users/${newUser.id}`, {
+  email: 'john.final@example.com',
+})
+console.log('Patched email:', patched.email)
+
+// Delete
+await api.delete(`${BASE_URL}/users/${newUser.id}`)
+console.log('User deleted')
+```
+
+## GitHub API Integration
+
+Integrate with GitHub's REST API:
+
+```typescript
+import { $, api } from 'sdk.do'
+
+const GITHUB_API = 'https://api.github.com'
+const token = process.env.GITHUB_TOKEN
+
+// Get authenticated user
+const user = await api.get(`${GITHUB_API}/user`, {
+  auth: {
+    type: 'bearer',
+    token,
+  },
+})
+console.log('User:', user.login, user.name)
+
+// List user repositories
+const repos = await api.get(`${GITHUB_API}/user/repos`, {
+  auth: { type: 'bearer', token },
+  params: {
+    sort: 'updated',
+    per_page: 10,
+    type: 'owner',
+  },
+})
+
+console.log('Repositories:')
+for (const repo of repos) {
+  console.log(`- ${repo.name} (${repo.stargazers_count} stars)`)
+}
+
+// Get repository details
+const repo = await api.get(`${GITHUB_API}/repos/dot-do/platform`, {
+  auth: { type: 'bearer', token },
+})
+
+console.log('Repository:', repo.name)
+console.log('Description:', repo.description)
+console.log('Stars:', repo.stargazers_count)
+console.log('Forks:', repo.forks_count)
+
+// List repository issues
+const issues = await api.get(`${GITHUB_API}/repos/dot-do/platform/issues`, {
+  auth: { type: 'bearer', token },
+  params: {
+    state: 'open',
+    per_page: 5,
+  },
+})
+
+console.log('\nOpen Issues:')
+for (const issue of issues) {
+  console.log(`#${issue.number}: ${issue.title}`)
+}
+
+// Create an issue
+const newIssue = await api.post(
+  `${GITHUB_API}/repos/dot-do/platform/issues`,
+  {
+    title: 'Example Issue from api.do',
+    body: 'This issue was created programmatically using api.do',
+    labels: ['documentation'],
+  },
+  {
+    auth: { type: 'bearer', token },
+  }
+)
+
+console.log('Created issue:', newIssue.number)
+
+// Update issue
+const updatedIssue = await api.patch(
+  `${GITHUB_API}/repos/dot-do/platform/issues/${newIssue.number}`,
+  {
+    state: 'closed',
+    body: 'Updated issue body',
+  },
+  {
+    auth: { type: 'bearer', token },
+  }
+)
+
+console.log('Issue closed:', updatedIssue.state)
+```
+
+## Stripe API Integration
+
+Integrate with Stripe's payment API:
+
+```typescript
+import { $, api, db } from 'sdk.do'
+
+const STRIPE_API = 'https://api.stripe.com/v1'
+const token = process.env.STRIPE_API_KEY
+
+// Create a customer
+const customer = await api.post(
+  `${STRIPE_API}/customers`,
+  {
+    email: 'customer@example.com',
+    name: 'John Smith',
+    metadata: {
+      user_id: '123',
+    },
+  },
+  {
+    auth: { type: 'bearer', token },
+  }
+)
+
+console.log('Customer created:', customer.id)
+
+// Store customer in database
+await db.create($.Customer, {
+  $type: 'Customer',
+  name: customer.name,
+  email: customer.email,
+  stripeCustomerId: customer.id,
+})
+
+// Create a payment method
+const paymentMethod = await api.post(
+  `${STRIPE_API}/payment_methods`,
+  {
+    type: 'card',
+    card: {
+      number: '4242424242424242',
+      exp_month: 12,
+      exp_year: 2025,
+      cvc: '123',
+    },
+  },
+  {
+    auth: { type: 'bearer', token },
+  }
+)
+
+// Attach payment method to customer
+await api.post(
+  `${STRIPE_API}/payment_methods/${paymentMethod.id}/attach`,
+  {
+    customer: customer.id,
+  },
+  {
+    auth: { type: 'bearer', token },
+  }
+)
+
+// Create payment intent
+const paymentIntent = await api.post(
+  `${STRIPE_API}/payment_intents`,
+  {
+    amount: 2000, // $20.00
+    currency: 'usd',
+    customer: customer.id,
+    payment_method: paymentMethod.id,
+    confirm: true,
+    metadata: {
+      order_id: 'order_123',
+    },
+  },
+  {
+    auth: { type: 'bearer', token },
+  }
+)
+
+console.log('Payment status:', paymentIntent.status)
+
+// List customer payments
+const charges = await api.get(`${STRIPE_API}/charges`, {
+  auth: { type: 'bearer', token },
+  params: {
+    customer: customer.id,
+    limit: 10,
+  },
+})
+
+console.log(`Customer has ${charges.data.length} payments`)
+
+// Create subscription
+const subscription = await api.post(
+  `${STRIPE_API}/subscriptions`,
+  {
+    customer: customer.id,
+    items: [{ price: 'price_monthly_plan' }],
+  },
+  {
+    auth: { type: 'bearer', token },
+  }
+)
+
+console.log('Subscription created:', subscription.id)
+console.log('Status:', subscription.status)
+
+// Cancel subscription
+const cancelled = await api.delete(`${STRIPE_API}/subscriptions/${subscription.id}`, {
+  auth: { type: 'bearer', token },
+})
+
+console.log('Subscription cancelled:', cancelled.id)
+```
+
+## SendGrid Email API
+
+Send emails via SendGrid API:
+
+```typescript
+import { api, on } from 'sdk.do'
+
+const SENDGRID_API = 'https://api.sendgrid.com/v3'
+const token = process.env.SENDGRID_API_KEY
+
+// Send simple email
+async function sendEmail(to: string, subject: string, text: string, html?: string) {
+  return await api.post(
+    `${SENDGRID_API}/mail/send`,
+    {
+      personalizations: [
+        {
+          to: [{ email: to }],
+          subject,
+        },
+      ],
+      from: {
+        email: 'noreply@example.com',
+        name: 'Example App',
+      },
+      content: [
+        {
+          type: 'text/plain',
+          value: text,
+        },
+        ...(html
+          ? [
+              {
+                type: 'text/html',
+                value: html,
+              },
+            ]
+          : []),
+      ],
+    },
+    {
+      auth: { type: 'bearer', token },
+    }
+  )
+}
+
+// Send welcome email
+await sendEmail('user@example.com', 'Welcome to Example App', 'Thank you for signing up!', '<h1>Welcome!</h1><p>Thank you for signing up!</p>')
+
+// Send email with template
+const templated = await api.post(
+  `${SENDGRID_API}/mail/send`,
+  {
+    personalizations: [
+      {
+        to: [{ email: 'user@example.com' }],
+        dynamic_template_data: {
+          name: 'John Smith',
+          order_id: '12345',
+          order_total: '$99.99',
+        },
+      },
+    ],
+    from: {
+      email: 'orders@example.com',
+      name: 'Example Shop',
+    },
+    template_id: 'd-xxxxxxxxxxxxx',
+  },
+  {
+    auth: { type: 'bearer', token },
+  }
+)
+
+// Send to multiple recipients
+await api.post(
+  `${SENDGRID_API}/mail/send`,
+  {
+    personalizations: [
+      {
+        to: [{ email: 'user1@example.com' }, { email: 'user2@example.com' }, { email: 'user3@example.com' }],
+        subject: 'Team Update',
+      },
+    ],
+    from: {
+      email: 'team@example.com',
+    },
+    content: [
+      {
+        type: 'text/plain',
+        value: 'Important team update...',
+      },
+    ],
+  },
+  {
+    auth: { type: 'bearer', token },
+  }
+)
+
+// Send email when order is created
+on($.Order.created, async (event) => {
+  const order = event.data
+
+  await sendEmail(
+    order.customer.email,
+    `Order Confirmation #${order.orderNumber}`,
+    `Thank you for your order! Order #${order.orderNumber}`,
+    `<h1>Order Confirmation</h1><p>Order #${order.orderNumber}</p>`
+  )
+})
+```
+
+## Slack API Integration
+
+Post messages to Slack:
+
+```typescript
+import { api, on } from 'sdk.do'
+
+const SLACK_API = 'https://slack.com/api'
+const token = process.env.SLACK_BOT_TOKEN
+
+// Post message to channel
+async function postMessage(channel: string, text: string, blocks?: any[]) {
+  return await api.post(
+    `${SLACK_API}/chat.postMessage`,
+    {
+      channel,
+      text,
+      blocks,
+    },
+    {
+      auth: { type: 'bearer', token },
+    }
+  )
+}
+
+// Simple message
+await postMessage('#general', 'Hello from api.do!')
+
+// Rich message with blocks
+await postMessage('#notifications', 'New order received', [
+  {
+    type: 'section',
+    text: {
+      type: 'mrkdwn',
+      text: '*New Order Received*',
+    },
+  },
+  {
+    type: 'section',
+    fields: [
+      { type: 'mrkdwn', text: '*Order ID:*\n12345' },
+      { type: 'mrkdwn', text: '*Customer:*\nJohn Smith' },
+      { type: 'mrkdwn', text: '*Total:*\n$99.99' },
+      { type: 'mrkdwn', text: '*Status:*\nPending' },
+    ],
+  },
+  {
+    type: 'actions',
+    elements: [
+      {
+        type: 'button',
+        text: { type: 'plain_text', text: 'View Order' },
+        url: 'https://example.com/orders/12345',
+      },
+    ],
+  },
+])
+
+// Upload file
+const file = await api.post(
+  `${SLACK_API}/files.upload`,
+  {
+    channels: '#general',
+    title: 'Report.pdf',
+    file: fileBuffer,
+    filename: 'report.pdf',
+  },
+  {
+    auth: { type: 'bearer', token },
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  }
+)
+
+// Notify Slack when events occur
+on($.Error.occurred, async (event) => {
+  const error = event.data
+
+  await postMessage('#alerts', 'Error Alert', [
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: ':warning: *Error Occurred*',
+      },
+    },
+    {
+      type: 'section',
+      fields: [
+        { type: 'mrkdwn', text: `*Type:*\n${error.type}` },
+        { type: 'mrkdwn', text: `*Message:*\n${error.message}` },
+        { type: 'mrkdwn', text: `*Timestamp:*\n${new Date().toISOString()}` },
+      ],
+    },
+  ])
+})
+```
+
+## Pagination Handling
+
+Handle paginated API responses:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Cursor-based pagination
+async function getAllPagesCursor(url: string, auth: any) {
+  const allItems = []
+  let cursor = null
+
+  do {
+    const response = await api.get(url, {
+      auth,
+      params: {
+        cursor,
+        limit: 100,
+      },
+    })
+
+    allItems.push(...response.data)
+    cursor = response.next_cursor
+  } while (cursor)
+
+  return allItems
+}
+
+// Page-based pagination
+async function getAllPagesNumber(url: string, auth: any) {
+  const allItems = []
+  let page = 1
+  let hasMore = true
+
+  while (hasMore) {
+    const response = await api.get(url, {
+      auth,
+      params: {
+        page,
+        per_page: 100,
+      },
+    })
+
+    allItems.push(...response.data)
+    hasMore = response.data.length === 100
+    page++
+  }
+
+  return allItems
+}
+
+// Offset-based pagination
+async function getAllPagesOffset(url: string, auth: any) {
+  const allItems = []
+  let offset = 0
+  const limit = 100
+
+  while (true) {
+    const response = await api.get(url, {
+      auth,
+      params: {
+        offset,
+        limit,
+      },
+    })
+
+    if (response.data.length === 0) break
+
+    allItems.push(...response.data)
+    offset += limit
+  }
+
+  return allItems
+}
+
+// Link header pagination (GitHub style)
+async function getAllPagesLink(url: string, auth: any) {
+  const allItems = []
+  let nextUrl = url
+
+  while (nextUrl) {
+    const response = await api.get(nextUrl, {
+      auth,
+      fullResponse: true,
+    })
+
+    allItems.push(...response.data)
+
+    // Parse Link header
+    const linkHeader = response.headers['link']
+    if (linkHeader) {
+      const match = linkHeader.match(/<([^>]+)>;\s*rel="next"/)
+      nextUrl = match ? match[1] : null
+    } else {
+      nextUrl = null
+    }
+  }
+
+  return allItems
+}
+
+// Usage
+const allUsers = await getAllPagesCursor('https://api.example.com/users', { type: 'bearer', token: process.env.API_TOKEN })
+
+console.log(`Fetched ${allUsers.length} users`)
+```
+
+## Rate Limiting
+
+Handle API rate limits:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Simple rate limiter
+class RateLimiter {
+  private queue: Array<() => Promise<any>> = []
+  private processing = false
+  private requestsPerMinute: number
+
+  constructor(requestsPerMinute: number) {
+    this.requestsPerMinute = requestsPerMinute
+  }
+
+  async add<T>(fn: () => Promise<T>): Promise<T> {
+    return new Promise((resolve, reject) => {
+      this.queue.push(async () => {
+        try {
+          const result = await fn()
+          resolve(result)
+        } catch (error) {
+          reject(error)
+        }
+      })
+
+      this.process()
+    })
+  }
+
+  private async process() {
+    if (this.processing || this.queue.length === 0) return
+
+    this.processing = true
+
+    while (this.queue.length > 0) {
+      const fn = this.queue.shift()!
+      await fn()
+
+      // Wait between requests
+      const delay = 60000 / this.requestsPerMinute
+      await new Promise((resolve) => setTimeout(resolve, delay))
+    }
+
+    this.processing = false
+  }
+}
+
+// Usage
+const limiter = new RateLimiter(100) // 100 requests per minute
+
+const users = await limiter.add(() =>
+  api.get('https://api.example.com/users', {
+    auth: { type: 'bearer', token: process.env.API_TOKEN },
+  })
+)
+
+// Batch requests with rate limiting
+const userIds = Array.from({ length: 1000 }, (_, i) => i + 1)
+
+const users = await Promise.all(
+  userIds.map((id) =>
+    limiter.add(() =>
+      api.get(`https://api.example.com/users/${id}`, {
+        auth: { type: 'bearer', token: process.env.API_TOKEN },
+      })
+    )
+  )
+)
+
+console.log(`Fetched ${users.length} users with rate limiting`)
+```
+
+## Error Handling and Retry
+
+Robust error handling with retries:
+
+```typescript
+import { api } from 'sdk.do'
+
+async function fetchWithRetry(url: string, options: any, maxRetries = 3) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await api.get(url, options)
+    } catch (error) {
+      console.error(`Attempt ${i + 1} failed:`, error.message)
+
+      if (i === maxRetries - 1) {
+        throw error
+      }
+
+      // Exponential backoff
+      const delay = Math.pow(2, i) * 1000
+      console.log(`Retrying in ${delay}ms...`)
+      await new Promise((resolve) => setTimeout(resolve, delay))
+    }
+  }
+}
+
+// Handle specific error codes
+async function fetchWithErrorHandling(url: string, options: any) {
+  try {
+    return await api.get(url, options)
+  } catch (error) {
+    if (error.code === 'RATE_LIMIT_EXCEEDED') {
+      console.log(`Rate limited. Retry after ${error.retryAfter}ms`)
+      await new Promise((resolve) => setTimeout(resolve, error.retryAfter))
+      return await api.get(url, options)
+    } else if (error.code === 'TIMEOUT') {
+      console.log('Request timed out, retrying...')
+      return await fetchWithRetry(url, options)
+    } else if (error.status === 404) {
+      console.log('Resource not found')
+      return null
+    } else if (error.status >= 500) {
+      console.log('Server error, retrying...')
+      return await fetchWithRetry(url, options)
+    } else {
+      throw error
+    }
+  }
+}
+
+// Usage
+const data = await fetchWithErrorHandling('https://api.example.com/data', {
+  auth: { type: 'bearer', token: process.env.API_TOKEN },
+  timeout: 10000,
+})
+```
+
+## See Also
+
+- [GraphQL API Example](./graphql-api) - GraphQL integration
+- [Webhook Integration](./webhook-integration) - Webhook handling
+- [Making Requests](../docs/making-requests) - HTTP methods guide
+- [Authentication](../docs/authentication) - Auth patterns
+
+## Next Steps
+
+Explore more integration patterns:
+
+- [GraphQL API](./graphql-api) - Query GraphQL endpoints
+- [Webhook Integration](./webhook-integration) - Send and receive webhooks
+- [API Reference](../api/) - Complete API documentation
+
+## License
+
+MIT (Open Source)

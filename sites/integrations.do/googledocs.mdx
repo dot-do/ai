@@ -1,0 +1,106 @@
+---
+$id: https://integrations.do/googledocs
+$type: Integration
+name: Google Docs
+service: googledocs
+description: Google Docs is a cloud-based word processor with real-time collaboration, version history, and integration with other Google Workspace apps
+category: productivity
+sdkBased: false
+baseUrl: https://api.googledocs.com
+
+auth:
+  type: oauth2
+  authorizationUrl: https://accounts.google.com/o/oauth2/v2/auth
+  tokenUrl: https://oauth2.googleapis.com/token
+  scopes:
+    - https://www.googleapis.com/auth/drive
+    - https://www.googleapis.com/auth/documents
+    - https://www.googleapis.com/auth/userinfo.email
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Google Docs actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: true
+  verificationMethod: none
+  events:
+    - name: generic_trigger
+      type: trigger
+      description: Generic webhook trigger
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://docs.google.com
+  apiDocs: https://docs.google.com
+---
+
+# Google Docs Integration
+
+Google Docs is a cloud-based word processor with real-time collaboration, version history, and integration with other Google Workspace apps
+
+## Quick Start
+
+```typescript
+import { GoogleDocsClient } from '@dotdo/sdk.do/integrations/googledocs'
+
+const googledocs = new GoogleDocsClient({
+  apiKey: process.env.GOOGLEDOCS_API_KEY,
+})
+
+const result = await googledocs.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Google Docs provides 33 actions through the Composio API.
+
+## Webhooks
+
+Google Docs supports 3 webhook triggers for real-time event notifications.
+
+## License
+
+MIT

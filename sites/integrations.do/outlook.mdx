@@ -1,0 +1,114 @@
+---
+$id: https://integrations.do/outlook
+$type: Integration
+name: Outlook
+service: outlook
+description: Outlook is Microsoft’s email and calendaring platform integrating contacts, tasks, and scheduling, enabling users to manage communications and events in a unified workspace
+category: communication
+sdkBased: false
+baseUrl: https://api.outlook.com
+
+auth:
+  type: oauth2
+  authorizationUrl: https://login.microsoftonline.com/common/oauth2/v2.0/authorize
+  tokenUrl: https://login.microsoftonline.com/common/oauth2/v2.0/token
+  scopes:
+    - Calendars.Read
+    - Calendars.ReadWrite
+    - Calendars.ReadWrite.Shared
+    - Contacts.ReadWrite
+    - Mail.Read
+    - Mail.ReadWrite
+    - Mail.Send
+    - MailboxSettings.Read
+    - MailboxSettings.ReadWrite
+    - offline_access
+    - User.Read
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Outlook actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: true
+  verificationMethod: none
+  events:
+    - name: generic_trigger
+      type: trigger
+      description: Generic webhook trigger
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://www.microsoft.com/en-in/microsoft-365/outlook/email-and-calendar-software-microsoft-outlook
+  apiDocs: https://www.microsoft.com/en-in/microsoft-365/outlook/email-and-calendar-software-microsoft-outlook
+---
+
+# Outlook Integration
+
+Outlook is Microsoft’s email and calendaring platform integrating contacts, tasks, and scheduling, enabling users to manage communications and events in a unified workspace
+
+## Quick Start
+
+```typescript
+import { OutlookClient } from '@dotdo/sdk.do/integrations/outlook'
+
+const outlook = new OutlookClient({
+  apiKey: process.env.OUTLOOK_API_KEY,
+})
+
+const result = await outlook.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Outlook provides 50 actions through the Composio API.
+
+## Webhooks
+
+Outlook supports 5 webhook triggers for real-time event notifications.
+
+## License
+
+MIT

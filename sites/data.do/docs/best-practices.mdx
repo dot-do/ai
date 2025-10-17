@@ -1,0 +1,877 @@
+---
+$id: https://data.do/docs/best-practices
+$type: https://schema.org/TechArticle
+name: data.do Best Practices
+description: Best practices for data modeling, schema design, performance optimization, and error handling
+author:
+  $type: https://schema.org/Organization
+  name: .do
+  url: https://do.inc
+license:
+  documentation: CC-BY-4.0
+  code: MIT
+---
+
+# data.do Best Practices
+
+This guide covers best practices for working with data.do, including data modeling, schema design, performance optimization, error handling, and testing strategies.
+
+## Data Modeling
+
+### 1. Use Semantic Types
+
+Always use semantic types from Schema.org, GS1, or other vocabularies:
+
+```typescript
+// ✓ Good: Use semantic types
+import { $ } from 'sdk.do'
+
+const customer = await data.create($.Customer, {
+  $type: 'https://schema.org/Customer',
+  name: 'Alice Johnson',
+  email: 'alice@example.com',
+})
+
+// ✗ Bad: Generic types
+const customer = await data.create('customer', {
+  name: 'Alice Johnson',
+  email: 'alice@example.com',
+})
+```
+
+### 2. Normalize Data Structure
+
+Keep data normalized to avoid duplication and maintain consistency:
+
+```typescript
+// ✓ Good: Normalized structure
+const order = {
+  $id: 'order-123',
+  $type: $.Order,
+  customerId: 'customer-456', // Reference
+  items: [
+    { productId: 'product-789', quantity: 2 },
+    { productId: 'product-012', quantity: 1 },
+  ],
+}
+
+// ✗ Bad: Denormalized structure
+const order = {
+  $id: 'order-123',
+  $type: $.Order,
+  customer: {
+    // Duplicated customer data
+    name: 'Alice',
+    email: 'alice@example.com',
+    address: '...',
+  },
+  items: [
+    {
+      product: {
+        // Duplicated product data
+        name: 'Laptop',
+        price: 999.99,
+        description: '...',
+      },
+      quantity: 2,
+    },
+  ],
+}
+```
+
+### 3. Use Relationships Wisely
+
+Define relationships clearly and use appropriate loading strategies:
+
+```typescript
+// ✓ Good: Explicit relationships
+const order = await data.get($.Order, orderId, {
+  include: {
+    customer: true,
+    items: {
+      include: {
+        product: true,
+      },
+    },
+  },
+})
+
+// ✗ Bad: Loading everything
+const order = await data.get($.Order, orderId, {
+  include: {
+    customer: {
+      include: {
+        orders: {
+          include: {
+            items: {
+              include: {
+                product: true,
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+})
+```
+
+### 4. Implement Data Versioning
+
+For important data, implement versioning to track changes:
+
+```typescript
+import { version } from 'sdk.do/data'
+
+// Enable versioning for critical data
+await version.enable($.Customer, {
+  strategy: 'snapshot',
+  retention: '90d',
+  track: ['name', 'email', 'address', 'preferences'],
+})
+
+// Audit trail for compliance
+const history = await version.history('customer-123')
+```
+
+### 5. Use Soft Deletes
+
+Implement soft deletes for data that may need to be recovered:
+
+```typescript
+// ✓ Good: Soft delete
+await data.softDelete('customer-123', {
+  deletedBy: currentUser.$id,
+  deletedAt: new Date(),
+  reason: 'User requested account deletion',
+})
+
+// ✗ Bad: Hard delete for important data
+await data.delete('customer-123')
+```
+
+## Schema Design
+
+### 1. Define Clear Schemas
+
+Always define clear, explicit schemas for your data:
+
+```typescript
+// ✓ Good: Explicit schema
+const CustomerSchema = {
+  $type: $.Customer,
+  required: ['name', 'email'],
+  rules: {
+    name: {
+      type: 'string',
+      minLength: 2,
+      maxLength: 100,
+    },
+    email: {
+      type: 'string',
+      format: 'email',
+      unique: true,
+    },
+    phone: {
+      type: 'string',
+      format: 'e164',
+    },
+    status: {
+      type: 'string',
+      enum: ['active', 'inactive', 'suspended'],
+    },
+  },
+}
+
+await data.create($.Customer, customerData, {
+  validate: true,
+  schema: CustomerSchema,
+})
+```
+
+### 2. Use Schema Validation
+
+Always validate data against schemas:
+
+```typescript
+import { validate } from 'sdk.do/data'
+
+// Validate before creating
+const result = await validate(customerData, $.Customer, {
+  detailed: true,
+})
+
+if (!result.valid) {
+  throw new ValidationError(result.errors)
+}
+
+await data.create($.Customer, customerData)
+```
+
+### 3. Version Your Schemas
+
+Version schemas to handle breaking changes:
+
+```typescript
+// V1 Schema
+const CustomerSchemaV1 = {
+  $type: $.Customer,
+  version: 1,
+  rules: {
+    name: { type: 'string' },
+    email: { type: 'string' },
+  },
+}
+
+// V2 Schema (added phone field)
+const CustomerSchemaV2 = {
+  $type: $.Customer,
+  version: 2,
+  rules: {
+    name: { type: 'string' },
+    email: { type: 'string' },
+    phone: { type: 'string' }, // New field
+  },
+  migrations: {
+    1: async (data) => ({
+      ...data,
+      phone: null, // Add default for existing records
+    }),
+  },
+}
+```
+
+### 4. Use Schema Composition
+
+Compose schemas for reusability:
+
+```typescript
+// Base schemas
+const AddressSchema = {
+  streetAddress: { type: 'string', required: true },
+  addressLocality: { type: 'string', required: true },
+  addressRegion: { type: 'string', required: true },
+  postalCode: { type: 'string', required: true },
+  addressCountry: { type: 'string', required: true },
+}
+
+const ContactSchema = {
+  email: { type: 'string', format: 'email', required: true },
+  phone: { type: 'string', format: 'e164' },
+}
+
+// Composed schema
+const CustomerSchema = {
+  $type: $.Customer,
+  rules: {
+    name: { type: 'string', required: true },
+    ...ContactSchema,
+    address: AddressSchema,
+  },
+}
+```
+
+## Performance Optimization
+
+### 1. Use Indexes
+
+Create indexes for frequently queried fields:
+
+```typescript
+import { index } from 'sdk.do/data'
+
+// Single field index
+await index.create($.Customer, ['email'], {
+  type: 'btree',
+  unique: true,
+})
+
+// Composite index
+await index.create($.Order, ['customerId', 'status', 'createdAt'], {
+  type: 'btree',
+})
+
+// Full-text search index
+await index.create($.Product, ['name', 'description'], {
+  type: 'fulltext',
+})
+```
+
+### 2. Optimize Queries
+
+Write efficient queries with proper filtering and pagination:
+
+```typescript
+// ✓ Good: Optimized query
+const orders = await query($.Order)
+  .where({
+    status: 'pending', // Indexed field
+    customerId: currentUser.$id, // Indexed field
+  })
+  .select(['id', 'total', 'createdAt']) // Only needed fields
+  .orderBy('createdAt', 'desc')
+  .limit(20) // Pagination
+  .execute()
+
+// ✗ Bad: Unoptimized query
+const orders = await query($.Order)
+  .where({
+    // No indexes, full table scan
+    'customer.name': { $like: '%John%' },
+  })
+  .execute() // No limit, returns everything
+```
+
+### 3. Use Batch Operations
+
+For bulk operations, use batch processing:
+
+```typescript
+// ✓ Good: Batch processing
+await batch.create($.User, users, {
+  batchSize: 100,
+  parallel: 4,
+})
+
+// ✗ Bad: Sequential processing
+for (const user of users) {
+  await data.create($.User, user)
+}
+```
+
+### 4. Implement Caching
+
+Cache frequently accessed data:
+
+```typescript
+// Enable caching for reads
+const customer = await data.get($.Customer, customerId, {
+  cache: {
+    ttl: '5m',
+    key: `customer:${customerId}`,
+  },
+})
+
+// Invalidate cache on updates
+await data.update(customerId, changes)
+await cache.invalidate(`customer:${customerId}`)
+```
+
+### 5. Use Connection Pooling
+
+Configure connection pooling for database operations:
+
+```typescript
+import { configure } from 'sdk.do/data'
+
+configure({
+  connection: {
+    pool: {
+      min: 2,
+      max: 10,
+      idleTimeout: 30000,
+    },
+  },
+})
+```
+
+### 6. Optimize Includes
+
+Load only necessary relationships:
+
+```typescript
+// ✓ Good: Load only needed relationships
+const order = await data.get($.Order, orderId, {
+  include: {
+    customer: query($.Customer).select(['name', 'email']),
+    items: query($.OrderItem).select(['productId', 'quantity']),
+  },
+})
+
+// ✗ Bad: Load all relationships
+const order = await data.get($.Order, orderId, {
+  include: {
+    customer: true,
+    items: true,
+    shipping: true,
+    billing: true,
+    payments: true,
+  },
+})
+```
+
+## Error Handling
+
+### 1. Use Try-Catch Blocks
+
+Always handle errors appropriately:
+
+```typescript
+import { data, DataError } from 'sdk.do/data'
+
+try {
+  await data.create($.Customer, customerData)
+} catch (error) {
+  if (error instanceof DataError) {
+    switch (error.code) {
+      case 'VALIDATION_ERROR':
+        // Handle validation errors
+        console.error('Validation failed:', error.details)
+        break
+      case 'DUPLICATE_KEY':
+        // Handle duplicate key errors
+        console.error('Customer already exists')
+        break
+      default:
+        // Handle other data errors
+        console.error('Data error:', error.message)
+    }
+  } else {
+    // Handle unexpected errors
+    console.error('Unexpected error:', error)
+  }
+}
+```
+
+### 2. Validate Before Operations
+
+Validate data before performing operations:
+
+```typescript
+// ✓ Good: Validate first
+const result = await validate(customerData, $.Customer)
+if (!result.valid) {
+  throw new ValidationError(result.errors)
+}
+await data.create($.Customer, customerData)
+
+// ✗ Bad: No validation
+await data.create($.Customer, customerData) // May fail
+```
+
+### 3. Implement Retry Logic
+
+Implement retry logic for transient failures:
+
+```typescript
+async function createWithRetry(type: SemanticType, data: any, maxRetries = 3) {
+  let lastError: Error | null = null
+
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await data.create(type, data)
+    } catch (error) {
+      lastError = error
+
+      // Only retry transient errors
+      if (error.code === 'TIMEOUT' || error.code === 'CONNECTION_ERROR') {
+        await sleep(Math.pow(2, i) * 1000) // Exponential backoff
+        continue
+      }
+
+      // Don't retry other errors
+      throw error
+    }
+  }
+
+  throw lastError
+}
+```
+
+### 4. Use Transactions
+
+Use transactions for operations that must be atomic:
+
+```typescript
+import { transaction } from 'sdk.do/data'
+
+try {
+  await transaction(async (tx) => {
+    // Create order
+    const order = await tx.create($.Order, orderData)
+
+    // Update inventory
+    for (const item of order.items) {
+      await tx.update(item.productId, {
+        inventory: { $increment: -item.quantity },
+      })
+    }
+
+    // Create payment
+    await tx.create($.Payment, paymentData)
+  })
+} catch (error) {
+  // Transaction automatically rolled back
+  console.error('Transaction failed:', error)
+}
+```
+
+### 5. Log Errors Appropriately
+
+Log errors with context for debugging:
+
+```typescript
+import { logger } from 'sdk.do/logger'
+
+try {
+  await data.create($.Customer, customerData)
+} catch (error) {
+  logger.error('Failed to create customer', {
+    error: error.message,
+    code: error.code,
+    data: customerData,
+    userId: currentUser.$id,
+    timestamp: new Date(),
+  })
+
+  throw error
+}
+```
+
+## Testing Strategies
+
+### 1. Unit Tests
+
+Write unit tests for data operations:
+
+```typescript
+import { describe, it, expect } from 'vitest'
+import { data, validate } from 'sdk.do/data'
+
+describe('Customer operations', () => {
+  it('should create a valid customer', async () => {
+    const customer = await data.create($.Customer, {
+      name: 'Alice Johnson',
+      email: 'alice@example.com',
+    })
+
+    expect(customer.$id).toBeDefined()
+    expect(customer.name).toBe('Alice Johnson')
+    expect(customer.email).toBe('alice@example.com')
+  })
+
+  it('should validate customer data', async () => {
+    const result = await validate(
+      {
+        name: 'Alice',
+        email: 'invalid-email',
+      },
+      $.Customer
+    )
+
+    expect(result.valid).toBe(false)
+    expect(result.errors).toContainEqual({
+      path: 'email',
+      message: expect.stringContaining('email'),
+    })
+  })
+})
+```
+
+### 2. Integration Tests
+
+Test integration with databases and APIs:
+
+```typescript
+import { describe, it, beforeAll, afterAll } from 'vitest'
+import { data } from 'sdk.do/data'
+
+describe('Database integration', () => {
+  beforeAll(async () => {
+    // Setup test database
+    await setupTestDatabase()
+  })
+
+  afterAll(async () => {
+    // Cleanup test database
+    await cleanupTestDatabase()
+  })
+
+  it('should persist customer to database', async () => {
+    const customer = await data.create($.Customer, {
+      name: 'Alice Johnson',
+      email: 'alice@example.com',
+    })
+
+    const retrieved = await data.get($.Customer, customer.$id)
+
+    expect(retrieved).toEqual(customer)
+  })
+})
+```
+
+### 3. Test Data Transformations
+
+Test transformation logic:
+
+```typescript
+import { transform } from 'sdk.do/data'
+
+describe('Data transformations', () => {
+  it('should normalize customer data', async () => {
+    const raw = {
+      Name: '  ALICE JOHNSON  ',
+      Email: 'ALICE@EXAMPLE.COM',
+      Phone: '(555) 123-4567',
+    }
+
+    const normalized = await transform(raw, $.Customer.normalize)
+
+    expect(normalized).toEqual({
+      name: 'Alice Johnson',
+      email: 'alice@example.com',
+      phone: '+15551234567',
+    })
+  })
+})
+```
+
+### 4. Test Error Handling
+
+Test error handling paths:
+
+```typescript
+describe('Error handling', () => {
+  it('should throw ValidationError for invalid data', async () => {
+    await expect(
+      data.create(
+        $.Customer,
+        {
+          name: 'A', // Too short
+          email: 'invalid',
+        },
+        { validate: true }
+      )
+    ).rejects.toThrow(ValidationError)
+  })
+
+  it('should throw DuplicateKeyError for duplicate email', async () => {
+    await data.create($.Customer, {
+      name: 'Alice',
+      email: 'alice@example.com',
+    })
+
+    await expect(
+      data.create($.Customer, {
+        name: 'Bob',
+        email: 'alice@example.com',
+      })
+    ).rejects.toThrow(DuplicateKeyError)
+  })
+})
+```
+
+## Security Best Practices
+
+### 1. Validate All Input
+
+Always validate and sanitize user input:
+
+```typescript
+import { validate, sanitize } from 'sdk.do/data'
+
+// Validate input
+const result = await validate(userInput, $.Customer)
+if (!result.valid) {
+  throw new ValidationError(result.errors)
+}
+
+// Sanitize input
+const sanitized = await sanitize(userInput, {
+  trim: true,
+  escape: ['name', 'address'],
+  lowercase: ['email'],
+})
+
+await data.create($.Customer, sanitized)
+```
+
+### 2. Implement Access Control
+
+Check permissions before operations:
+
+```typescript
+import { user } from 'sdk.do'
+
+async function updateCustomer(customerId: string, changes: any) {
+  const customer = await data.get($.Customer, customerId)
+
+  // Check permission
+  if (!user.can('update', customer)) {
+    throw new PermissionError('Not authorized to update customer')
+  }
+
+  await data.update(customerId, changes)
+}
+```
+
+### 3. Audit Sensitive Operations
+
+Log sensitive operations for audit trails:
+
+```typescript
+import { audit } from 'sdk.do/data'
+
+await audit.log('customer.delete', {
+  customerId: customer.$id,
+  deletedBy: currentUser.$id,
+  timestamp: new Date(),
+  reason: 'User requested account deletion',
+})
+
+await data.delete(customer.$id)
+```
+
+### 4. Encrypt Sensitive Data
+
+Encrypt sensitive data at rest:
+
+```typescript
+import { encrypt } from 'sdk.do/crypto'
+
+const customer = await data.create($.Customer, {
+  name: 'Alice Johnson',
+  email: 'alice@example.com',
+  ssn: await encrypt(userInput.ssn), // Encrypt sensitive field
+  creditCard: await encrypt(userInput.creditCard),
+})
+```
+
+## Monitoring and Observability
+
+### 1. Log Performance Metrics
+
+Monitor query performance:
+
+```typescript
+import { monitor } from 'sdk.do/data'
+
+monitor.on('query', ({ query, duration, results }) => {
+  if (duration > 1000) {
+    logger.warn('Slow query detected', {
+      query,
+      duration,
+      resultCount: results.length,
+    })
+  }
+})
+```
+
+### 2. Track Data Quality
+
+Monitor data quality over time:
+
+```typescript
+import { quality } from 'sdk.do/data'
+
+// Regular quality checks
+await every('1h', async () => {
+  const report = await quality.check($.Customer)
+
+  if (report.score < 0.95) {
+    await alert('Data quality below threshold', {
+      score: report.score,
+      issues: report.issues,
+    })
+  }
+})
+```
+
+### 3. Monitor Resource Usage
+
+Track resource usage:
+
+```typescript
+import { metrics } from 'sdk.do/data'
+
+// Monitor cache hit rate
+const cacheHitRate = await metrics.get('cache.hitRate')
+if (cacheHitRate < 0.8) {
+  logger.warn('Low cache hit rate:', cacheHitRate)
+}
+
+// Monitor connection pool
+const poolStats = await metrics.get('connection.pool')
+if (poolStats.available === 0) {
+  logger.warn('Connection pool exhausted')
+}
+```
+
+## Documentation
+
+### 1. Document Schemas
+
+Document your schemas clearly:
+
+```typescript
+/**
+ * Customer schema
+ *
+ * Represents a customer in the system.
+ *
+ * @property {string} name - Customer's full name
+ * @property {string} email - Customer's email address (unique)
+ * @property {string} phone - Customer's phone number in E.164 format
+ * @property {string} status - Customer's account status (active, inactive, suspended)
+ * @property {Address} address - Customer's primary address
+ */
+const CustomerSchema = {
+  $type: $.Customer,
+  required: ['name', 'email'],
+  rules: {
+    // ...
+  },
+}
+```
+
+### 2. Document Transformations
+
+Document transformation logic:
+
+```typescript
+/**
+ * Normalize customer data
+ *
+ * Performs the following normalizations:
+ * - Trims whitespace from name and address
+ * - Converts email to lowercase
+ * - Formats phone number to E.164
+ * - Capitalizes name
+ *
+ * @param {Object} data - Raw customer data
+ * @returns {Object} Normalized customer data
+ */
+async function normalizeCustomer(data: any) {
+  // ...
+}
+```
+
+### 3. Document API Usage
+
+Provide clear examples in documentation:
+
+```typescript
+/**
+ * Create a new customer
+ *
+ * @example
+ * const customer = await data.create($.Customer, {
+ *   name: 'Alice Johnson',
+ *   email: 'alice@example.com',
+ *   phone: '+1-555-0123'
+ * })
+ *
+ * @param {Object} customerData - Customer data
+ * @returns {Promise<Customer>} Created customer
+ * @throws {ValidationError} If customer data is invalid
+ * @throws {DuplicateKeyError} If email already exists
+ */
+async function createCustomer(customerData: any) {
+  // ...
+}
+```
+
+## License
+
+- Documentation: [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/)
+- Code Examples: [MIT](https://opensource.org/licenses/MIT)

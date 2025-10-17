@@ -1,0 +1,627 @@
+---
+$id: https://graphdl.do/docs/semantic-patterns
+$type: TechArticle
+title: Semantic Patterns with $.Subject.predicate.Object
+description: Understanding and using semantic patterns in graphdl for type-safe graph operations
+keywords: [semantic-patterns, subject-predicate-object, rdf, linked-data, graphdl, typescript]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Semantic Patterns with $.Subject.predicate.Object
+
+graphdl uses the `$.Subject.predicate.Object` pattern to create type-safe, intuitive semantic graphs. This pattern mirrors natural language and aligns with RDF and linked data principles.
+
+## Understanding the Pattern
+
+The `$.Subject.predicate.Object` pattern represents a semantic triple - the fundamental unit of knowledge in graph systems:
+
+```typescript
+import $ from 'graphdl'
+
+// Pattern structure:
+$.Subject.predicate.Object
+
+// Concrete example:
+$.Person.worksFor.Organization
+
+// Breaking it down:
+// $           - Semantic context prefix (indicates this is a semantic pattern)
+// Subject     - The entity making the statement (Person)
+// predicate   - The relationship or property (worksFor)
+// Object      - The entity being related to (Organization)
+```
+
+This pattern reads naturally: "Person works for Organization" - just like English!
+
+## The $ Semantic Proxy
+
+The `$` is a JavaScript Proxy that captures property access chains and converts them into semantic paths:
+
+```typescript
+import $ from 'graphdl'
+
+// Access creates a semantic path
+const path = $.Person.worksFor.Organization
+
+// Convert to string representation
+String(path) // "$.Person.worksFor.Organization"
+
+// The proxy maintains the full chain
+path.toString() // "$.Person.worksFor.Organization"
+path.valueOf() // "$.Person.worksFor.Organization"
+
+// Use directly in template literals
+console.log(`Semantic path: ${$.Person.worksFor.Organization}`)
+// Output: "Semantic path: $.Person.worksFor.Organization"
+```
+
+### How the Proxy Works
+
+Under the hood, the `$` proxy captures each property access:
+
+```typescript
+// Each access creates a new proxy with extended path
+$ // path: "$"
+$.Person // path: "$.Person"
+$.Person.worksFor // path: "$.Person.worksFor"
+$.Person.worksFor.Organization // path: "$.Person.worksFor.Organization"
+
+// You can access any depth
+$.Person.worksFor.Organization.locatedIn.City.partOf.State
+```
+
+## Types of Patterns
+
+### Entity Type Patterns
+
+Use capitalized names for entity types:
+
+```typescript
+import $ from 'graphdl'
+
+// Schema.org entity types
+$.Person
+$.Organization
+$.Product
+$.Service
+$.Place
+$.Event
+$.Brand
+$.Review
+
+// Relationships between types
+$.Person.worksFor.Organization
+$.Organization.owns.Brand
+$.Product.manufacturer.Organization
+$.Review.reviewRating.Rating
+```
+
+### Instance Patterns
+
+Use specific identifiers for entity instances:
+
+```typescript
+import $ from 'graphdl'
+
+// Specific entities
+$.John
+$.Acme
+$.Widget
+$.SanFrancisco
+
+// Relationships between instances
+$.John.worksFor.Acme
+$.Acme.sells.Widget
+$.Acme.locatedIn.SanFrancisco
+```
+
+### Mixed Patterns
+
+Combine types and instances:
+
+```typescript
+import $ from 'graphdl'
+
+// Instance to type
+$.John.hasOccupation.Occupation
+$.Acme.owns.Brand
+
+// Type to instance
+$.Person.livesIn.California
+$.Organization.headquarteredIn.NewYork
+```
+
+## Common Predicates
+
+graphdl includes predicates from multiple vocabularies:
+
+### Schema.org Predicates
+
+```typescript
+import $ from 'graphdl'
+
+// Organizational
+$.Person.worksFor.Organization
+$.Organization.owns.Brand
+$.Person.memberOf.Organization
+$.Organization.employs.Person
+
+// Social
+$.Person.knows.Person
+$.Person.follows.Person
+$.Person.friendOf.Person
+
+// Creative
+$.Person.author.CreativeWork
+$.CreativeWork.publisher.Organization
+$.CreativeWork.about.Thing
+
+// Commercial
+$.Product.manufacturer.Organization
+$.Product.brand.Brand
+$.Offer.seller.Organization
+```
+
+### GS1/EPCIS Predicates
+
+Use camelCase for GS1 predicates:
+
+```typescript
+import $ from 'graphdl'
+
+// Location and containment
+$.Product.locatedAt.Location
+$.Product.containedIn.Container
+$.Shipment.inTransit.Warehouse
+
+// Process flow
+$.Product.transformedFrom.Product
+$.Product.receiving.Location
+$.Product.shipping.Location
+
+// Disposition
+$.Product.inProgress.Manufacturing
+$.Product.active.Warehouse
+$.Product.disposed.RecyclingCenter
+```
+
+### O\*NET Predicates
+
+```typescript
+import $ from 'graphdl'
+
+// Skills and abilities
+$.Occupation.requiresSkill.Skill
+$.Occupation.requiresAbility.Ability
+$.Person.hasSkill.Skill
+
+// Activities and tasks
+$.Occupation.performsActivity.Activity
+$.Role.responsibleFor.Task
+$.Person.completedTraining.Course
+```
+
+### Universal Predicates
+
+```typescript
+import $ from 'graphdl'
+
+// Generic relationships
+$.Thing.relatedTo.Thing
+$.Thing.partOf.Thing
+$.Thing.has.Thing
+$.Thing.is.Thing
+
+// Temporal
+$.Event.precedes.Event
+$.Event.follows.Event
+$.Event.during.Period
+
+// Spatial
+$.Thing.near.Thing
+$.Place.contains.Place
+$.Object.within.Boundary
+```
+
+## Pattern Composition
+
+Build complex patterns by composing simple ones:
+
+```typescript
+import $ from 'graphdl'
+
+// Simple patterns
+const employment = $.Person.worksFor.Organization
+const ownership = $.Organization.owns.Brand
+const location = $.Organization.locatedIn.City
+
+// Compose into knowledge graph
+import { graph, node, edge } from 'graphdl'
+
+const knowledgeGraph = graph()
+  .context('https://schema.org')
+  .node(node('john', 'Person', { name: 'John Doe' }))
+  .node(node('acme', 'Organization', { name: 'Acme Corp' }))
+  .node(node('widget-brand', 'Brand', { name: 'Widget' }))
+  .node(node('sf', 'City', { name: 'San Francisco' }))
+  // Employment relationship
+  .edge(edge('john', 'worksFor', 'acme'))
+  // Ownership relationship
+  .edge(edge('acme', 'owns', 'widget-brand'))
+  // Location relationship
+  .edge(edge('acme', 'locatedIn', 'sf'))
+  .build()
+```
+
+## Using Patterns with sdk.do
+
+Semantic patterns integrate seamlessly with the sdk.do platform:
+
+### Database Operations
+
+```typescript
+import $, { db } from 'sdk.do'
+
+// List entities by type
+const businesses = await db.list($.Business, {
+  where: { industry: 'Technology' },
+})
+
+// Get specific entity
+const person = await db.get($.Person, 'john-id')
+
+// Create with semantic type
+const newPerson = await db.create($.Person, {
+  name: 'Jane Smith',
+  email: 'jane@example.com',
+})
+
+// Query using relationships
+const employees = await db.list($.Person, {
+  where: {
+    [$.worksFor]: organization.$id,
+  },
+})
+```
+
+### Relationships
+
+```typescript
+import $, { db } from 'sdk.do'
+
+// Create relationships
+await db.relate(person, $.worksFor, organization)
+await db.relate(organization, $.owns, brand)
+await db.relate(person, $.hasSkill, skill)
+
+// Query relationships
+const brands = await db.related(organization, $.owns, $.Brand)
+const employees = await db.related(organization, $.employs, $.Person)
+const skills = await db.related(person, $.hasSkill, $.Skill)
+```
+
+### Events
+
+```typescript
+import $, { on, send } from 'sdk.do'
+
+// Listen for semantic events
+on($.Order.created, async (order) => {
+  console.log('New order:', order.$id)
+})
+
+on($.Person.worksFor.Organization, async (event) => {
+  console.log('Employment relationship created')
+})
+
+// Publish semantic events
+send($.Order.created, {
+  $type: 'Order',
+  $id: 'order-123',
+  total: 99.99,
+})
+
+send($.Person.worksFor.Organization, {
+  person: 'john-id',
+  organization: 'acme-id',
+})
+```
+
+## Pattern Naming Conventions
+
+graphdl follows consistent naming conventions:
+
+### Collections vs Items
+
+```typescript
+import $ from 'graphdl'
+import { toPlural } from 'graphdl'
+
+// Items (singular)
+$.Order
+$.Person
+$.Product
+
+// Collections (plural)
+$.Orders
+$.People
+$.Products
+
+// Convert programmatically
+toPlural('Order') // 'Orders'
+toPlural('Person') // 'People'
+```
+
+### Actions, Activities, and Events
+
+```typescript
+import $ from 'graphdl'
+import { toActivity, toEvent } from 'graphdl'
+
+// Actions (infinitive) - functions to execute
+$.Order.create
+$.Email.send
+$.Report.generate
+
+// Activities (present continuous) - ongoing processes
+$.Order.creating
+$.Email.sending
+$.Report.generating
+
+// Events (past tense) - completed actions
+$.Order.created
+$.Email.sent
+$.Report.generated
+
+// Convert programmatically
+toActivity('create') // 'creating'
+toEvent('create') // 'created'
+```
+
+## Pattern Parsing
+
+Extract components from semantic paths:
+
+```typescript
+import { parsePath } from 'graphdl'
+
+// Parse a semantic path
+const parsed = parsePath('$.Person.worksFor.Organization')
+
+console.log(parsed)
+// {
+//   subject: 'Person',
+//   predicate: 'worksFor',
+//   object: 'Organization'
+// }
+
+// Use in dynamic operations
+if (parsed) {
+  console.log(`Subject type: ${parsed.subject}`)
+  console.log(`Relationship: ${parsed.predicate}`)
+  console.log(`Object type: ${parsed.object}`)
+}
+```
+
+## Type Safety
+
+graphdl patterns work with TypeScript for type safety:
+
+```typescript
+import $ from 'graphdl'
+import type { Person, Organization } from 'schema.org.ai'
+
+// Type-safe entity creation
+const person: Person = {
+  $type: 'Person',
+  $id: 'john-id',
+  name: 'John Doe',
+  email: 'john@example.com',
+}
+
+const org: Organization = {
+  $type: 'Organization',
+  $id: 'acme-id',
+  name: 'Acme Corp',
+  industry: 'Technology',
+}
+
+// Use with semantic patterns
+const employmentPath = $.Person.worksFor.Organization
+```
+
+## Best Practices
+
+### 1. Use Descriptive Names
+
+Choose clear, unambiguous predicates:
+
+```typescript
+// Good - clear and specific
+$.Person.worksFor.Organization
+$.Product.manufacturedBy.Organization
+$.Order.fulfilledBy.Service
+
+// Avoid - vague or ambiguous
+$.Person.relatedTo.Organization
+$.Product.linkedTo.Organization
+$.Order.connectedTo.Service
+```
+
+### 2. Follow Vocabulary Standards
+
+Use predicates from established vocabularies when possible:
+
+```typescript
+// Good - Schema.org vocabulary
+$.Person.worksFor.Organization
+$.Organization.owns.Brand
+
+// Acceptable - custom predicate when no standard exists
+$.Project.implementedUsing.Technology
+```
+
+### 3. Be Consistent
+
+Use the same predicate for the same relationship:
+
+```typescript
+// Good - consistent
+$.Person.worksFor.Organization
+$.Employee.worksFor.Company
+$.Contractor.worksFor.Client
+
+// Avoid - inconsistent
+$.Person.worksFor.Organization
+$.Employee.employedBy.Company
+$.Contractor.contractsWith.Client
+```
+
+### 4. Consider Inverses
+
+Some relationships have natural inverses:
+
+```typescript
+// Forward relationship
+$.Person.worksFor.Organization
+
+// Inverse relationship
+$.Organization.employs.Person
+
+// Both are valid - choose based on your query patterns
+```
+
+## Advanced Patterns
+
+### Multi-hop Paths
+
+Represent paths through multiple relationships:
+
+```typescript
+import $ from 'graphdl'
+
+// Single hop
+const hop1 = $.Person.worksFor.Organization
+
+// Multi-hop (conceptual - use graph queries in practice)
+// Person -> worksFor -> Organization -> locatedIn -> City
+const person = await db.get($.Person, 'john')
+const org = await db.related(person, $.worksFor, $.Organization)[0]
+const city = await db.related(org, $.locatedIn, $.City)[0]
+```
+
+### Qualified Relationships
+
+Add metadata to relationships:
+
+```typescript
+import { createTriple } from 'graphdl'
+
+// Relationship with metadata
+const employment = createTriple('Person:john', 'worksFor', 'Organization:acme', {
+  metadata: {
+    startDate: '2023-01-01',
+    role: 'Senior Engineer',
+    department: 'Engineering',
+  },
+})
+```
+
+### Temporal Patterns
+
+Represent time-dependent relationships:
+
+```typescript
+import $ from 'graphdl'
+
+// Current state
+$.Person.currentlyWorksFor.Organization
+
+// Historical state
+$.Person.previouslyWorkedFor.Organization
+
+// Future state
+$.Person.willWorkFor.Organization
+
+// Or use metadata on standard predicates
+const employment = createTriple('Person:john', 'worksFor', 'Organization:acme', {
+  metadata: {
+    validFrom: '2023-01-01',
+    validUntil: '2025-12-31',
+  },
+})
+```
+
+## Real-World Examples
+
+### E-commerce
+
+```typescript
+import $ from 'graphdl'
+
+// Product relationships
+$.Product.manufacturedBy.Organization
+$.Product.brand.Brand
+$.Product.category.Category
+$.Product.availableAt.Store
+
+// Customer relationships
+$.Customer.purchases.Product
+$.Customer.reviews.Product
+$.Customer.wishlistContains.Product
+
+// Order relationships
+$.Order.orderedBy.Customer
+$.Order.contains.Product
+$.Order.shippedTo.Address
+$.Order.fulfilledBy.Warehouse
+```
+
+### Healthcare
+
+```typescript
+import $ from 'graphdl'
+
+// Patient relationships
+$.Patient.treatedBy.Physician
+$.Patient.diagnosedWith.Condition
+$.Patient.prescribed.Medication
+$.Patient.admittedTo.Hospital
+
+// Clinical relationships
+$.Physician.specializedIn.Specialty
+$.Medication.treats.Condition
+$.Procedure.performedBy.Physician
+$.Diagnosis.basedOn.Test
+```
+
+### Education
+
+```typescript
+import $ from 'graphdl'
+
+// Student relationships
+$.Student.enrolledIn.Course
+$.Student.taughtBy.Instructor
+$.Student.majorsIn.Program
+$.Student.attendedBy.University
+
+// Course relationships
+$.Course.prerequisiteFor.Course
+$.Course.partOf.Program
+$.Course.teaches.Skill
+$.Course.offeredBy.Department
+```
+
+## See Also
+
+- [Getting Started](./getting-started) - Basic usage and installation
+- [Relationships](./relationships) - Building graph relationships
+- [API Reference](../api/) - Complete API documentation
+- [Basic Semantics Example](../examples/basic-semantics) - Working examples
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

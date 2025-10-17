@@ -1,0 +1,175 @@
+---
+$id: https://verbs.do/docs/best-practices
+$type: TechArticle
+title: verbs.do Best Practices
+description: Recommended patterns for using semantic verbs and operations
+keywords: [best practices, patterns, guidelines, verbs, operations]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# verbs.do Best Practices
+
+Recommended patterns for working with semantic verbs and operations.
+
+## General Principles
+
+### 1. Use Semantic Verbs
+
+```typescript
+// ✓ Good - semantic verb
+await $.assign(person, organization)
+await $.notify(user, notification)
+
+// ✗ Avoid - generic function
+await doOperation('assign', person, organization)
+```
+
+### 2. Compose Operations
+
+```typescript
+// ✓ Good - composed
+async function processOrder(order) {
+  await $.validate(order)
+  await $.processPayment(order)
+  await $.fulfill(order)
+  await $.notify(order.customer)
+}
+
+// ✗ Avoid - monolithic
+async function processOrder(order) {
+  // Everything in one place
+}
+```
+
+### 3. Handle Errors
+
+```typescript
+// ✓ Good - error handling
+try {
+  await $.processPayment(order)
+} catch (error) {
+  await $.refund(order)
+  await $.notify(customer, { error: error.message })
+}
+```
+
+## CRUD Patterns
+
+### Validate Before Create
+
+```typescript
+import { validate } from 'sdk.do'
+
+async function createPerson(data: any) {
+  const result = validate(data, $.Person)
+  if (!result.valid) {
+    throw new Error(`Invalid data: ${result.errors}`)
+  }
+  return await $.create($.Person, data)
+}
+```
+
+### Check Existence Before Update
+
+```typescript
+async function updatePerson(id: string, data: any) {
+  const exists = await $.exists($.Person, id)
+  if (!exists) {
+    throw new Error('Person not found')
+  }
+  return await $.update($.Person, id, data)
+}
+```
+
+## Relationship Patterns
+
+### Use Semantic Predicates
+
+```typescript
+// ✓ Good - semantic predicate
+await db.relate(person, $.worksFor, organization)
+
+// ✗ Avoid - generic string
+await db.relate(person, 'related-to', organization)
+```
+
+### Bi-directional Relationships
+
+```typescript
+// Create both directions
+await db.relate(person, $.worksFor, organization)
+await db.relate(organization, $.employs, person)
+```
+
+## Workflow Patterns
+
+### Step-by-Step Processing
+
+```typescript
+async function processOrder(order: Order) {
+  // Step 1: Validate
+  await $.validate(order)
+
+  // Step 2: Payment
+  const payment = await $.processPayment(order)
+  if (!payment.success) {
+    throw new Error('Payment failed')
+  }
+
+  // Step 3: Fulfill
+  await $.fulfill(order)
+
+  // Step 4: Ship
+  await $.ship(order)
+
+  // Step 5: Notify
+  await $.notify(order.customer, {
+    message: 'Order shipped',
+  })
+}
+```
+
+### Error Recovery
+
+```typescript
+async function processWithRetry(operation: Function, maxRetries = 3) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await operation()
+    } catch (error) {
+      if (i === maxRetries - 1) throw error
+      await delay(1000 * (i + 1)) // Exponential backoff
+    }
+  }
+}
+```
+
+## Testing
+
+### Mock Verbs
+
+```typescript
+import { jest } from '@jest/globals'
+
+describe('Order processing', () => {
+  beforeEach(() => {
+    jest.spyOn($, 'processPayment').mockResolvedValue({ success: true })
+    jest.spyOn($, 'fulfill').mockResolvedValue(true)
+  })
+
+  it('processes order successfully', async () => {
+    await processOrder(testOrder)
+    expect($.processPayment).toHaveBeenCalled()
+    expect($.fulfill).toHaveBeenCalled()
+  })
+})
+```
+
+## Related Documentation
+
+- [Getting Started](./getting-started)
+- [Architecture](./architecture)
+- [Troubleshooting](./troubleshooting)
+- [API Reference](../api/reference)

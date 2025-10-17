@@ -1,0 +1,755 @@
+---
+$id: https://docs.do/docs/best-practices
+$type: TechArticle
+title: docs.do Best Practices
+description: Best practices for building and maintaining documentation with docs.do
+keywords: [best practices, guidelines, standards, documentation, quality]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# docs.do Best Practices
+
+This guide covers best practices for building high-quality documentation systems with docs.do.
+
+## Documentation Structure
+
+### Use Semantic Types
+
+Always use Schema.org semantic types for documentation:
+
+```typescript
+// Good - semantic types
+await docs.create($.TechArticle, {
+  headline: 'Getting Started',
+  articleBody: '...',
+  about: { $type: 'SoftwareApplication', name: 'sdk.do' },
+})
+
+// Avoid - unstructured
+await docs.create({
+  type: 'article',
+  title: 'Getting Started',
+  content: '...',
+})
+```
+
+**Why:** Semantic types enable better search, cross-linking, and AI understanding.
+
+### Organize by Domain
+
+Structure documentation by domain for clarity:
+
+```typescript
+// Domain-based organization
+const structure = {
+  'sdk.do': {
+    guides: ['getting-started', 'advanced-usage'],
+    api: ['functions', 'types'],
+    examples: ['basic', 'advanced'],
+  },
+  'database.do': {
+    guides: ['crud-operations', 'relationships'],
+    api: ['db-functions'],
+    examples: ['queries', 'transactions'],
+  },
+}
+
+// Index by domain
+for (const [domain, docs] of Object.entries(structure)) {
+  await docs.indexDomain(domain, docs)
+}
+```
+
+### Create Clear Hierarchies
+
+Build logical documentation hierarchies:
+
+```typescript
+// Parent document
+const guide = await docs.create($.TechArticle, {
+  headline: 'SDK Guide',
+  domain: 'sdk.do',
+})
+
+// Child documents
+const gettingStarted = await docs.create($.TechArticle, {
+  headline: 'Getting Started',
+  domain: 'sdk.do',
+})
+
+const advanced = await docs.create($.TechArticle, {
+  headline: 'Advanced Usage',
+  domain: 'sdk.do',
+})
+
+// Create hierarchy
+await docs.relate(gettingStarted, $.isPartOf, guide)
+await docs.relate(advanced, $.isPartOf, guide)
+```
+
+## Content Quality
+
+### Write Clear Headlines
+
+Headlines should be descriptive and search-friendly:
+
+```typescript
+// Good - clear and specific
+await docs.create($.TechArticle, {
+  headline: 'How to Create Database Relationships in sdk.do',
+})
+
+// Avoid - vague
+await docs.create($.TechArticle, {
+  headline: 'Relationships',
+})
+```
+
+### Include Code Examples
+
+Every guide should include working code examples:
+
+```typescript
+await docs.create($.HowTo, {
+  name: 'Create a Business Entity',
+  step: [
+    {
+      $type: 'HowToStep',
+      name: 'Import SDK',
+      text: 'Import the necessary functions',
+      code: "import $, { db } from 'sdk.do'",
+    },
+    {
+      $type: 'HowToStep',
+      name: 'Create Entity',
+      text: 'Use db.create to create the entity',
+      code: `const business = await db.create($.Business, {
+  name: 'Acme Corp',
+  industry: 'Technology'
+})`,
+    },
+  ],
+})
+```
+
+### Add Metadata
+
+Rich metadata improves discoverability:
+
+```typescript
+await docs.create($.TechArticle, {
+  headline: 'Getting Started',
+  articleBody: '...',
+
+  // Essential metadata
+  keywords: ['getting-started', 'setup', 'installation', 'quickstart'],
+  about: { $type: 'SoftwareApplication', name: 'sdk.do' },
+  author: { $type: 'Organization', name: '.do Platform' },
+
+  // Additional context
+  learningResourceType: 'Tutorial',
+  timeRequired: 'PT10M', // 10 minutes
+  proficiencyLevel: 'Beginner',
+
+  // Relationships
+  mentions: [
+    { $type: 'SoftwareApplication', name: 'database.do' },
+    { $type: 'SoftwareApplication', name: 'events.do' },
+  ],
+})
+```
+
+## Search Optimization
+
+### Optimize for Semantic Search
+
+Structure content for semantic understanding:
+
+```typescript
+// Include clear problem statements
+await docs.create($.HowTo, {
+  name: 'How to Fix Database Connection Errors',
+  description: 'Solve common database connection issues',
+  abstract: 'If you see "Connection refused" or "Timeout" errors when connecting to the database, this guide will help you diagnose and fix the issue.',
+  step: [
+    /* steps */
+  ],
+})
+
+// Add related terms
+await docs.update(doc, {
+  keywords: ['database', 'connection', 'error', 'connection refused', 'timeout', 'postgres', 'postgresql', 'troubleshooting'],
+})
+```
+
+### Use Embeddings
+
+Generate embeddings for better semantic search:
+
+```typescript
+import { docs, ai } from 'docs.do'
+
+// Generate embedding when creating
+const doc = await docs.create($.TechArticle, {
+  headline: 'Database Operations',
+  articleBody: '...',
+})
+
+// Generate and store embedding
+const embedding = await ai.embed(doc.articleBody)
+await docs.update(doc, { embedding })
+
+// Or use auto-embedding
+await docs.create($.TechArticle, {
+  headline: 'Database Operations',
+  articleBody: '...',
+  autoEmbed: true, // Automatically generate embedding
+})
+```
+
+### Index Frequently
+
+Keep search index up to date:
+
+```typescript
+// Real-time indexing
+async function updateDoc(id: string, updates: Partial<Document>) {
+  // Update document
+  const doc = await docs.update(id, updates)
+
+  // Reindex immediately
+  await docs.reindex(id)
+
+  return doc
+}
+
+// Scheduled bulk reindexing
+import { every } from 'sdk.do'
+
+every($.Daily, async () => {
+  // Reindex modified documents
+  const modified = await docs.list($.TechArticle, {
+    where: {
+      dateModified: {
+        $gte: new Date(Date.now() - 24 * 60 * 60 * 1000),
+      },
+    },
+  })
+
+  await docs.reindex(modified.map((d) => d.$id))
+})
+```
+
+## Version Management
+
+### Use Semantic Versioning
+
+Follow semantic versioning for documentation:
+
+```typescript
+// Major version - breaking changes
+await docs.update(doc, {
+  content: 'Complete rewrite...',
+  version: '2.0.0',
+  changeLog: 'Complete rewrite for new API',
+})
+
+// Minor version - new content
+await docs.update(doc, {
+  content: 'Added new section...',
+  version: '1.1.0',
+  changeLog: 'Added advanced examples section',
+})
+
+// Patch version - fixes
+await docs.update(doc, {
+  content: 'Fixed typo...',
+  version: '1.0.1',
+  changeLog: 'Fixed typos and broken links',
+})
+```
+
+### Maintain Version History
+
+Keep comprehensive version history:
+
+```typescript
+// Create versioned document
+await docs.create($.TechArticle, {
+  headline: 'API Guide',
+  version: '1.0.0',
+  changeLog: 'Initial release',
+})
+
+// Update with full changelog
+await docs.update(doc, {
+  headline: 'API Guide',
+  version: '2.0.0',
+  previousVersion: '1.0.0',
+  changeLog: `
+## Changes in 2.0.0
+
+### Breaking Changes
+- Removed deprecated \`db.find()\` method
+- Changed \`db.list()\` return type
+
+### New Features
+- Added \`db.related()\` for relationship queries
+- Added support for semantic search
+
+### Bug Fixes
+- Fixed pagination issue in \`db.list()\`
+  `,
+})
+```
+
+### Support Multiple Versions
+
+Allow users to access old versions:
+
+```typescript
+// Version selector in docs
+async function showVersions(docId: string) {
+  const versions = await docs.versions(docId)
+
+  return {
+    latest: versions[0],
+    previous: versions.slice(1),
+    deprecated: versions.filter((v) => v.deprecated),
+  }
+}
+
+// Version routing
+app.get('/docs/:domain/:page', async (req, res) => {
+  const { domain, page } = req.params
+  const version = req.query.version || 'latest'
+
+  const doc = await docs.get(`${domain}/${page}`, { version })
+  res.render('doc', { doc, versions: await docs.versions(doc.$id) })
+})
+```
+
+## Cross-Linking
+
+### Link Related Content
+
+Create rich documentation graphs:
+
+```typescript
+// Create relationships when relevant
+await docs.relate(guide, $.mentions, apiReference, {
+  context: 'This guide uses the database API',
+  relevance: 0.9,
+})
+
+// Bidirectional linking
+await docs.relate(howto, $.relatedTo, guide)
+await docs.relate(guide, $.relatedTo, howto)
+
+// Hierarchical linking
+await docs.relate(section, $.isPartOf, chapter)
+await docs.relate(chapter, $.isPartOf, book)
+```
+
+### Auto-Generate Links
+
+Automatically discover and create links:
+
+```typescript
+import { docs, ai } from 'docs.do'
+
+async function autoLink(doc: Document) {
+  // Extract mentioned concepts
+  const concepts = await ai.generate('Extract key concepts and terms from this documentation', { context: doc })
+
+  // Find related documentation
+  for (const concept of concepts) {
+    const related = await docs.search(concept, {
+      limit: 5,
+      excludeSelf: doc.$id,
+    })
+
+    // Create links
+    for (const relatedDoc of related) {
+      if (relatedDoc.score > 0.8) {
+        await docs.relate(doc, $.mentions, relatedDoc)
+      }
+    }
+  }
+}
+```
+
+### Validate Links
+
+Ensure all links are valid:
+
+```typescript
+// Check for broken links
+async function validateLinks(docId: string) {
+  const doc = await docs.get(docId)
+  const links = await docs.extractLinks(doc)
+
+  const results = await Promise.all(
+    links.map(async (link) => {
+      const exists = await docs.exists(link.target)
+      return { link, valid: exists }
+    })
+  )
+
+  const broken = results.filter((r) => !r.valid)
+
+  if (broken.length > 0) {
+    console.warn(`Found ${broken.length} broken links in ${docId}`)
+    return broken
+  }
+
+  return []
+}
+
+// Run link validation regularly
+import { every } from 'sdk.do'
+
+every($.Weekly, async () => {
+  const allDocs = await docs.list($.TechArticle)
+
+  for (const doc of allDocs) {
+    const broken = await validateLinks(doc.$id)
+
+    if (broken.length > 0) {
+      await docs.update(doc, {
+        warnings: [`${broken.length} broken links`],
+      })
+    }
+  }
+})
+```
+
+## Multi-Language Support
+
+### Translate Systematically
+
+Maintain translations for all content:
+
+```typescript
+// Translation workflow
+async function translateDocument(docId: string, languages: string[]) {
+  const doc = await docs.get(docId)
+
+  // Translate to all languages
+  for (const lang of languages) {
+    const translation = await docs.translate(docId, lang)
+
+    // Validate translation quality
+    const quality = await docs.validateTranslation(translation, doc)
+
+    if (quality.score < 0.8) {
+      console.warn(`Low quality translation for ${lang}`)
+      // Queue for human review
+      await docs.queueForReview(translation)
+    }
+  }
+}
+
+// Translate all documentation
+const languages = ['es', 'fr', 'de', 'ja', 'zh']
+const allDocs = await docs.list($.TechArticle)
+
+await Promise.all(allDocs.map((doc) => translateDocument(doc.$id, languages)))
+```
+
+### Keep Translations Synced
+
+Ensure translations stay up to date:
+
+```typescript
+// Sync translations when source changes
+async function updateDocument(docId: string, updates: Partial<Document>) {
+  // Update source
+  await docs.update(docId, updates)
+
+  // Get all translations
+  const translations = await docs.translations(docId)
+
+  // Mark translations as outdated
+  for (const translation of translations) {
+    await docs.update(translation.$id, {
+      outdated: true,
+      lastSyncedVersion: doc.version,
+    })
+  }
+
+  // Queue for re-translation
+  await docs.queueTranslations(docId, {
+    languages: translations.map((t) => t.language),
+    priority: 'high',
+  })
+}
+```
+
+## Analytics and Improvement
+
+### Track Usage
+
+Monitor documentation effectiveness:
+
+```typescript
+// Track page views
+await docs.track('page_view', {
+  documentId: doc.$id,
+  userId: user.$id,
+  referrer: req.headers.referer,
+  timestamp: new Date(),
+})
+
+// Track search queries
+await docs.track('search', {
+  query: searchQuery,
+  resultsCount: results.length,
+  clickedResults: [],
+  userId: user.$id,
+})
+
+// Track feedback
+await docs.track('feedback', {
+  documentId: doc.$id,
+  userId: user.$id,
+  helpful: true,
+  comment: 'Clear and concise',
+})
+```
+
+### Analyze and Improve
+
+Use analytics to improve documentation:
+
+```typescript
+// Identify popular content
+async function getPopularDocs() {
+  const analytics = await docs.analytics({
+    metric: 'views',
+    period: '30d',
+    limit: 20,
+  })
+
+  return analytics.sort((a, b) => b.views - a.views)
+}
+
+// Find gaps in documentation
+async function findGaps() {
+  // Common searches with no clicks
+  const searches = await docs.searchAnalytics({
+    period: '30d',
+    minQueries: 10,
+    maxClicks: 0,
+  })
+
+  // These indicate missing documentation
+  return searches.map((s) => ({
+    query: s.query,
+    count: s.count,
+    suggestion: `Create documentation for: ${s.query}`,
+  }))
+}
+
+// Improve low-performing docs
+async function improveLowPerformers() {
+  const docs = await docs.analytics({
+    metric: 'time_on_page',
+    period: '30d',
+    threshold: 30, // Less than 30 seconds
+    limit: 20,
+  })
+
+  // These may need improvement
+  for (const doc of docs) {
+    console.log(`Low engagement: ${doc.title}`)
+    console.log(`Average time: ${doc.avgTimeOnPage}s`)
+
+    // Suggestions for improvement
+    const suggestions = await ai.generate('Suggest improvements for this documentation', { context: doc, metrics: doc.metrics })
+
+    console.log('Suggestions:', suggestions)
+  }
+}
+```
+
+## Performance Optimization
+
+### Cache Frequently Accessed Content
+
+Implement multi-level caching:
+
+```typescript
+import { docs } from 'docs.do'
+
+class CachedDocs {
+  private cache = new Map<string, any>()
+
+  async get(id: string, options?: GetOptions) {
+    // Check cache
+    const cacheKey = this.getCacheKey(id, options)
+    if (this.cache.has(cacheKey)) {
+      return this.cache.get(cacheKey)
+    }
+
+    // Fetch from database
+    const doc = await docs.get(id, options)
+
+    // Cache for 1 hour
+    this.cache.set(cacheKey, doc)
+    setTimeout(() => this.cache.delete(cacheKey), 3600000)
+
+    return doc
+  }
+}
+```
+
+### Optimize Search Queries
+
+Use efficient search patterns:
+
+```typescript
+// Good - specific filters
+const results = await docs.search('database relationships', {
+  domains: ['database.do', 'sdk.do'],
+  type: 'HowTo',
+  limit: 10,
+})
+
+// Avoid - unfiltered search
+const results = await docs.search('database relationships')
+
+// Good - use pagination
+const page1 = await docs.search(query, { limit: 20, offset: 0 })
+const page2 = await docs.search(query, { limit: 20, offset: 20 })
+
+// Avoid - fetch everything
+const all = await docs.search(query, { limit: 10000 })
+```
+
+### Batch Operations
+
+Group operations for efficiency:
+
+```typescript
+// Good - batch creates
+await docs.batchCreate([
+  { $type: 'TechArticle', headline: 'Guide 1' },
+  { $type: 'TechArticle', headline: 'Guide 2' },
+  { $type: 'TechArticle', headline: 'Guide 3' },
+])
+
+// Avoid - sequential creates
+for (const guide of guides) {
+  await docs.create($.TechArticle, guide)
+}
+
+// Good - batch updates
+await docs.batchUpdate(docs.map((doc) => ({ id: doc.$id, updates: { reviewed: true } })))
+```
+
+## Security
+
+### Control Access
+
+Implement proper access control:
+
+```typescript
+// Document-level permissions
+await docs.create($.TechArticle, {
+  headline: 'Internal API',
+  visibility: 'private',
+  allowedRoles: ['admin', 'developer'],
+  allowedUsers: ['user-123', 'user-456'],
+})
+
+// Check permissions before access
+async function getDoc(id: string, user: User) {
+  const doc = await docs.get(id)
+
+  if (!(await docs.canAccess(doc, user))) {
+    throw new Error('Access denied')
+  }
+
+  return doc
+}
+```
+
+### Audit Changes
+
+Track who changes what:
+
+```typescript
+// Enable audit logging
+await docs.update(doc, {
+  content: 'Updated content',
+  audit: {
+    userId: user.$id,
+    action: 'update',
+    timestamp: new Date(),
+    changes: ['content'],
+    reason: 'Fix typos',
+  },
+})
+
+// Query audit log
+const auditLog = await docs.auditLog(doc.$id, {
+  from: '2025-01-01',
+  to: '2025-01-31',
+})
+```
+
+## Testing
+
+### Test Documentation
+
+Ensure documentation works as described:
+
+```typescript
+// Test code examples
+async function testCodeExamples(doc: Document) {
+  const examples = await docs.extractCodeExamples(doc)
+
+  for (const example of examples) {
+    try {
+      // Execute code
+      await eval(example.code)
+      console.log(`✓ Example works: ${example.title}`)
+    } catch (error) {
+      console.error(`✗ Example failed: ${example.title}`)
+      console.error(error)
+    }
+  }
+}
+
+// Validate links
+async function validateDoc(doc: Document) {
+  const issues = []
+
+  // Check for broken links
+  const brokenLinks = await docs.validateLinks(doc)
+  if (brokenLinks.length > 0) {
+    issues.push({ type: 'broken_links', count: brokenLinks.length })
+  }
+
+  // Check for outdated content
+  if (doc.dateModified < new Date(Date.now() - 365 * 24 * 60 * 60 * 1000)) {
+    issues.push({ type: 'outdated', age: 'over 1 year' })
+  }
+
+  return issues
+}
+```
+
+## See Also
+
+- [Getting Started](./getting-started) - Setup guide
+- [Architecture](./architecture) - System architecture
+- [Troubleshooting](./troubleshooting) - Common issues
+- [API Reference](../api/reference) - Complete API documentation
+
+---
+
+Learn about common issues and solutions in [Troubleshooting](./troubleshooting).

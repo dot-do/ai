@@ -1,0 +1,342 @@
+---
+$id: https://queue.do/docs/getting-started
+$type: TechArticle
+title: Getting Started with queue.do
+description: Learn how to set up and use queue.do for task queue management in your Business-as-Code applications.
+keywords: [queue, getting started, setup, installation, task queue, background jobs]
+---
+
+# Getting Started with queue.do
+
+This guide will help you set up queue.do and create your first task queue.
+
+## Installation
+
+Install sdk.do which includes queue.do:
+
+```bash
+pnpm add sdk.do
+```
+
+## Environment Setup
+
+Configure your queue backend:
+
+```bash
+# Redis backend (recommended for production)
+export QUEUE_BACKEND=redis
+export QUEUE_REDIS_URL=redis://localhost:6379
+
+# Or in-memory backend (development only)
+export QUEUE_BACKEND=memory
+```
+
+## Basic Usage
+
+### 1. Import queue
+
+```typescript
+import { queue } from 'sdk.do'
+```
+
+### 2. Enqueue a Task
+
+```typescript
+// Simple task
+await queue.enqueue($.EmailSendTask, {
+  to: 'user@example.com',
+  subject: 'Welcome',
+  body: 'Welcome to our platform!',
+})
+
+// With options
+await queue.enqueue(
+  $.Task,
+  {
+    action: 'process_order',
+    orderId: 'order-123',
+  },
+  {
+    priority: 'high',
+    retries: 3,
+    delay: 5000, // 5 second delay
+  }
+)
+```
+
+### 3. Create a Worker
+
+```typescript
+// Basic worker
+await queue.worker($.EmailSendTask, async (task) => {
+  const { to, subject, body } = task.data
+  await sendEmail({ to, subject, body })
+  return { sent: true }
+})
+
+// Worker with error handling
+await queue.worker(
+  $.Task,
+  async (task) => {
+    try {
+      const result = await processTask(task.data)
+      return result
+    } catch (error) {
+      console.error('Task failed:', error)
+      throw error // Will trigger retry
+    }
+  },
+  {
+    concurrency: 5,
+    retries: 3,
+  }
+)
+```
+
+## Complete Example
+
+Here's a complete example of an email queue system:
+
+```typescript
+import $, { queue, on } from 'sdk.do'
+
+// Enqueue email when user signs up
+on($.User.created, async (user) => {
+  await queue.enqueue(
+    $.EmailSendTask,
+    {
+      to: user.email,
+      subject: 'Welcome to our platform!',
+      template: 'welcome',
+      data: {
+        name: user.name,
+        verificationUrl: `https://app.example.com/verify/${user.verificationToken}`,
+      },
+    },
+    {
+      priority: 'high',
+    }
+  )
+})
+
+// Process email queue
+await queue.worker(
+  $.EmailSendTask,
+  async (task) => {
+    const { to, subject, template, data } = task.data
+
+    // Render email template
+    const html = await renderTemplate(template, data)
+
+    // Send email
+    await sendEmail({
+      to,
+      subject,
+      html,
+    })
+
+    console.log(`Email sent to ${to}`)
+
+    return {
+      sent: true,
+      timestamp: new Date(),
+    }
+  },
+  {
+    concurrency: 10, // Process 10 emails concurrently
+    retries: 3,
+    retryBackoff: 'exponential',
+    onRetry: (task, attempt, error) => {
+      console.log(`Retrying email to ${task.data.to}, attempt ${attempt}`)
+    },
+  }
+)
+```
+
+## Priority Queues
+
+Handle critical tasks first:
+
+```typescript
+// Critical priority - processed first
+await queue.enqueue($.PaymentTask, paymentData, {
+  priority: 'critical',
+})
+
+// High priority
+await queue.enqueue($.NotificationTask, notificationData, {
+  priority: 'high',
+})
+
+// Normal priority (default)
+await queue.enqueue($.EmailTask, emailData, {
+  priority: 'normal',
+})
+
+// Low priority - processed last
+await queue.enqueue($.AnalyticsTask, analyticsData, {
+  priority: 'low',
+})
+```
+
+## Retry Logic
+
+Configure automatic retries for failed tasks:
+
+```typescript
+await queue.enqueue($.Task, data, {
+  retries: 5,
+  retryDelay: 1000, // 1 second
+  retryBackoff: 'exponential', // 1s, 2s, 4s, 8s, 16s
+})
+
+// Linear backoff
+await queue.enqueue($.Task, data, {
+  retries: 3,
+  retryDelay: 5000, // 5 seconds
+  retryBackoff: 'linear', // 5s, 10s, 15s
+})
+
+// Fixed delay
+await queue.enqueue($.Task, data, {
+  retries: 3,
+  retryDelay: 2000,
+  retryBackoff: 'fixed', // 2s, 2s, 2s
+})
+```
+
+## Task Status
+
+Monitor task progress:
+
+```typescript
+// Enqueue and get task ID
+const taskId = await queue.enqueue($.Task, data)
+
+// Check status
+const status = await queue.status(taskId)
+console.log(status)
+// {
+//   id: 'task-123',
+//   state: 'processing',
+//   attempts: 1,
+//   createdAt: Date,
+//   startedAt: Date
+// }
+
+// Wait for completion
+const result = await queue.wait(taskId, {
+  timeout: 30000, // 30 second timeout
+})
+```
+
+## Dead Letter Queue
+
+Handle permanently failed tasks:
+
+```typescript
+// Configure dead letter queue
+await queue.enqueue($.Task, data, {
+  retries: 3,
+  deadLetterQueue: '$.Task.failed',
+})
+
+// Process failed tasks
+await queue.worker('$.Task.failed', async (task) => {
+  console.error('Task permanently failed:', {
+    id: task.id,
+    attempts: task.attempts,
+    error: task.error,
+  })
+
+  // Log to monitoring system
+  await logError(task)
+
+  // Notify ops team
+  await notify({
+    channel: 'ops',
+    message: `Task ${task.id} failed after ${task.attempts} attempts`,
+  })
+})
+```
+
+## Next Steps
+
+- [Architecture](./architecture) - Learn about queue internals
+- [Best Practices](./best-practices) - Production patterns
+- [API Reference](../api/) - Complete API documentation
+- [Examples](../examples/) - Real-world examples
+
+## Common Patterns
+
+### Batch Processing
+
+```typescript
+// Enqueue multiple tasks
+await queue.enqueueBatch(
+  users.map((user) => ({
+    type: $.EmailTask,
+    data: { to: user.email, subject: 'Newsletter' },
+  }))
+)
+```
+
+### Scheduled Tasks
+
+```typescript
+// Delay execution
+await queue.enqueue($.Task, data, {
+  delay: 3600000, // 1 hour
+})
+
+// Run at specific time
+await queue.enqueue($.Task, data, {
+  runAt: new Date('2025-10-11T09:00:00Z'),
+})
+```
+
+### Task Cancellation
+
+```typescript
+// Cancel task
+await queue.cancel(taskId)
+
+// Cancel all pending tasks
+await queue.cancelAll($.Task, { state: 'pending' })
+```
+
+## Troubleshooting
+
+### Tasks Not Processing
+
+Check that workers are running:
+
+```typescript
+await queue.worker($.Task, handler, {
+  concurrency: 5,
+})
+```
+
+### Tasks Failing
+
+Check error logs and dead letter queue:
+
+```typescript
+const failed = await queue.list({ state: 'failed' })
+console.log('Failed tasks:', failed)
+```
+
+### Connection Issues
+
+Verify Redis connection:
+
+```bash
+export QUEUE_REDIS_URL=redis://localhost:6379
+redis-cli ping
+```
+
+## Support
+
+- [Documentation](https://queue.do)
+- [GitHub Issues](https://github.com/dot-do/ai/issues)
+- [Contributing](https://github.com/dot-do/ai/blob/main/CONTRIBUTING.md)

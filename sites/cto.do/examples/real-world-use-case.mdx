@@ -1,0 +1,162 @@
+---
+$id: https://cto.do/examples/real-world-use-case
+$type: HowTo
+title: Real-world CTO Agent Use Case
+description: Complete CTO agent implementation for a growing startup
+keywords: [real-world, use case, complete example, startup CTO]
+---
+
+# Real-world CTO Agent Use Case
+
+Complete CTO agent implementation for a Series B SaaS startup.
+
+## Scenario
+
+**Company**: Series B SaaS startup, $10M ARR, 50 employees, 35 engineers
+**Challenge**: Scaling technical infrastructure and team to support 3x growth
+**Goal**: Autonomous CTO agent to handle day-to-day technical leadership
+
+## Implementation
+
+### 1. CTO Agent Setup
+
+```typescript
+import $, { agent, db, on, send, every, api } from 'sdk.do'
+
+const cto = await agent.create({
+  $type: 'Agent',
+  $role: $.ChiefTechnologyOfficer,
+  name: 'Alex Chen - CTO Agent',
+  persona: {
+    background: '15 years software engineering, 5 years technical leadership',
+    expertise: ['Distributed systems', 'Cloud architecture', 'Team scaling'],
+    style: 'Data-driven, pragmatic, team-focused',
+  },
+  capabilities: ['architecture_design', 'technology_evaluation', 'team_leadership', 'cost_optimization', 'security_compliance'],
+  tools: {
+    github: api.github,
+    aws: api.aws,
+    datadog: api.datadog,
+    jira: api.jira,
+    slack: api.slack,
+  },
+  model: 'claude-sonnet-4.5',
+})
+```
+
+### 2. Automated Architecture Governance
+
+```typescript
+await on($.ArchitectureProposal.submitted, async (proposal) => {
+  const review = await cto.execute({
+    task: 'Review architecture proposal',
+    proposal: proposal,
+    context: {
+      architecture: await db.get($.SystemArchitecture, 'current'),
+      principles: await db.get($.ArchitecturePrinciples),
+      tech_stack: await db.get($.TechnologyStack),
+    },
+  })
+
+  if (review.decision === 'approved') {
+    await db.update($.ArchitectureProposal, proposal.$id, { status: 'approved' })
+    await db.create($.ArchitectureDecisionRecord, review.adr)
+    await send($.Slack.message, {
+      channel: 'engineering',
+      message: `Architecture proposal approved: ${proposal.title}`,
+    })
+  } else {
+    await db.update($.ArchitectureProposal, proposal.$id, {
+      status: 'needs_revision',
+      feedback: review.feedback,
+    })
+  }
+})
+```
+
+### 3. Weekly Technology Review
+
+```typescript
+await every($.Weekly, async () => {
+  const report = await cto.execute({
+    task: 'Create weekly technology report',
+    data: {
+      deployments: await api.github.getDeployments({ days: 7 }),
+      incidents: await api.datadog.getIncidents({ days: 7 }),
+      costs: await api.aws.getCosts({ days: 7 }),
+      velocity: await api.jira.getVelocity({ sprints: 2 }),
+    },
+  })
+
+  await db.create($.TechnologyReport, report)
+  await send($.Email.send, {
+    to: ['ceo@company.com', 'exec-team@company.com'],
+    subject: 'Weekly Technology Report',
+    body: report.summary,
+  })
+})
+```
+
+### 4. Incident Response
+
+```typescript
+await on($.Incident.critical, async (incident) => {
+  const response = await cto.execute({
+    task: 'Lead incident response',
+    incident: incident,
+    context: {
+      on_call: await api.pagerduty.getOnCall(),
+      similar_incidents: await db.list($.Incident, {
+        where: { type: incident.type, severity: 'critical' },
+      }),
+    },
+  })
+
+  await send($.Team.mobilize, response.action_plan)
+  await send($.Stakeholders.update, response.communication)
+})
+```
+
+### 5. Monthly Cost Optimization
+
+```typescript
+await every($.Monthly, async () => {
+  const optimization = await cto.execute({
+    task: 'Analyze and optimize infrastructure costs',
+    data: {
+      current_costs: await api.aws.getCosts({ months: 1 }),
+      utilization: await api.aws.getUtilization(),
+      forecast: await api.aws.getCostForecast({ months: 3 }),
+    },
+  })
+
+  if (optimization.savings_opportunity > 10000) {
+    await db.create($.CostOptimization, optimization)
+    await send($.Alert.create, {
+      type: 'cost_optimization',
+      savings: optimization.savings_opportunity,
+      recommendations: optimization.recommendations,
+    })
+  }
+})
+```
+
+## Results
+
+**After 6 months:**
+
+- **Decision Speed**: Architecture decisions from 2 weeks → 2 days
+- **Team Velocity**: +40% increase in deployment frequency
+- **Infrastructure Costs**: 25% reduction through automated optimization
+- **Incident Response**: MTTR reduced by 50%
+- **Team Satisfaction**: Engineering team satisfaction +30%
+
+## Lessons Learned
+
+1. **Start with high-value, low-risk tasks** (reporting, analysis)
+2. **Always keep human in the loop** for major decisions
+3. **Provide comprehensive context** for better decisions
+4. **Track outcomes** and continuously improve
+5. **Integrate with existing tools** for maximum leverage
+
+See [API Reference](../api/) for complete API documentation.

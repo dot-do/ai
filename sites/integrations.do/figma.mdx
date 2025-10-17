@@ -1,0 +1,100 @@
+---
+$id: https://integrations.do/figma
+$type: Integration
+name: Figma
+service: figma
+description: A collaborative interface design tool.
+category: productivity
+sdkBased: false
+baseUrl: https://api.figma.com
+
+auth:
+  type: oauth2
+  authorizationUrl: https://www.figma.com/oauth
+  tokenUrl: https://api.figma.com/v1/oauth/token
+  scopes:
+    - file_read
+    - file_comments:write
+    - file_dev_resources:read
+    - file_dev_resources:write
+    - webhooks:write
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Figma actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: false
+  events: []
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://www.figma.com/
+  apiDocs: https://www.figma.com/
+---
+
+# Figma Integration
+
+A collaborative interface design tool.
+
+## Quick Start
+
+```typescript
+import { FigmaClient } from '@dotdo/sdk.do/integrations/figma'
+
+const figma = new FigmaClient({
+  apiKey: process.env.FIGMA_API_KEY,
+})
+
+const result = await figma.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Figma provides 49 actions through the Composio API.
+
+## License
+
+MIT

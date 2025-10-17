@@ -1,0 +1,1045 @@
+---
+$id: https://workflows.do/api
+$type: APIReference
+title: Workflows API Reference
+description: Complete API reference for workflows.do declarative workflow orchestration
+keywords: [api, reference, workflows, functions, types]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Workflows API Reference
+
+Complete API reference for workflows.do declarative workflow orchestration.
+
+## Core Functions
+
+### workflow()
+
+Create a workflow definition.
+
+**Signature:**
+
+```typescript
+function workflow(config: WorkflowConfig): Workflow
+```
+
+**Parameters:**
+
+- `config` - Workflow configuration object
+
+**Returns:** `Workflow` instance
+
+**Example:**
+
+```typescript
+import { workflow } from 'sdk.do'
+
+const myWorkflow = workflow({
+  name: 'MyWorkflow',
+  steps: [$.Step1, $.Step2, $.Step3],
+})
+```
+
+### Workflow.execute()
+
+Execute a workflow.
+
+**Signature:**
+
+```typescript
+async execute(input?: any, context?: ExecutionContext): Promise<any>
+```
+
+**Parameters:**
+
+- `input` - Input data for the workflow (optional)
+- `context` - Execution context (optional)
+
+**Returns:** Promise resolving to workflow result
+
+**Example:**
+
+```typescript
+const result = await myWorkflow.execute({
+  orderId: '12345',
+  customerId: 'cust_789',
+})
+```
+
+### Workflow.pause()
+
+Pause a running workflow.
+
+**Signature:**
+
+```typescript
+async pause(executionId: string): Promise<void>
+```
+
+**Parameters:**
+
+- `executionId` - ID of the workflow execution to pause
+
+**Example:**
+
+```typescript
+await myWorkflow.pause('exec_123')
+```
+
+### Workflow.resume()
+
+Resume a paused workflow.
+
+**Signature:**
+
+```typescript
+async resume(executionId: string, input?: any): Promise<any>
+```
+
+**Parameters:**
+
+- `executionId` - ID of the workflow execution to resume
+- `input` - Optional additional input data
+
+**Returns:** Promise resolving to workflow result
+
+**Example:**
+
+```typescript
+await myWorkflow.resume('exec_123')
+```
+
+### Workflow.cancel()
+
+Cancel a running workflow.
+
+**Signature:**
+
+```typescript
+async cancel(executionId: string, reason?: string): Promise<void>
+```
+
+**Parameters:**
+
+- `executionId` - ID of the workflow execution to cancel
+- `reason` - Optional cancellation reason
+
+**Example:**
+
+```typescript
+await myWorkflow.cancel('exec_123', 'User requested cancellation')
+```
+
+### Workflow.getState()
+
+Get current workflow state.
+
+**Signature:**
+
+```typescript
+async getState(executionId: string): Promise<WorkflowState>
+```
+
+**Parameters:**
+
+- `executionId` - ID of the workflow execution
+
+**Returns:** Promise resolving to current workflow state
+
+**Example:**
+
+```typescript
+const state = await myWorkflow.getState('exec_123')
+console.log(state.currentStep, state.status)
+```
+
+### Workflow.setState()
+
+Update workflow state.
+
+**Signature:**
+
+```typescript
+async setState(executionId: string, state: Partial<WorkflowState>): Promise<void>
+```
+
+**Parameters:**
+
+- `executionId` - ID of the workflow execution
+- `state` - State updates to apply
+
+**Example:**
+
+```typescript
+await myWorkflow.setState('exec_123', {
+  customData: { key: 'value' },
+  progress: 50,
+})
+```
+
+### Workflow.getHistory()
+
+Get workflow execution history.
+
+**Signature:**
+
+```typescript
+async getHistory(executionId: string): Promise<WorkflowHistoryEntry[]>
+```
+
+**Parameters:**
+
+- `executionId` - ID of the workflow execution
+
+**Returns:** Promise resolving to array of history entries
+
+**Example:**
+
+```typescript
+const history = await myWorkflow.getHistory('exec_123')
+history.forEach((entry) => {
+  console.log(entry.step, entry.timestamp, entry.result)
+})
+```
+
+### Workflow.getMetrics()
+
+Get workflow execution metrics.
+
+**Signature:**
+
+```typescript
+async getMetrics(executionId?: string): Promise<WorkflowMetrics>
+```
+
+**Parameters:**
+
+- `executionId` - Optional specific execution ID, or aggregate metrics
+
+**Returns:** Promise resolving to workflow metrics
+
+**Example:**
+
+```typescript
+const metrics = await myWorkflow.getMetrics()
+console.log(metrics.totalExecutions, metrics.successRate, metrics.avgDuration)
+```
+
+### Workflow.on()
+
+Subscribe to workflow events.
+
+**Signature:**
+
+```typescript
+on(event: WorkflowEvent, handler: EventHandler): void
+```
+
+**Parameters:**
+
+- `event` - Event name to subscribe to
+- `handler` - Event handler function
+
+**Events:**
+
+- `step.started` - Step execution started
+- `step.completed` - Step execution completed
+- `step.failed` - Step execution failed
+- `workflow.started` - Workflow started
+- `workflow.completed` - Workflow completed
+- `workflow.failed` - Workflow failed
+- `workflow.paused` - Workflow paused
+- `workflow.resumed` - Workflow resumed
+- `workflow.cancelled` - Workflow cancelled
+- `compensation` - Compensation triggered
+- `error` - Error occurred
+
+**Example:**
+
+```typescript
+myWorkflow.on('step.completed', (step, result) => {
+  console.log(`Step ${step.name} completed:`, result)
+})
+
+myWorkflow.on('error', (error) => {
+  console.error('Workflow error:', error)
+})
+```
+
+## Types
+
+### WorkflowConfig
+
+Configuration object for creating workflows.
+
+```typescript
+interface WorkflowConfig {
+  // Required
+  name: string
+  steps: WorkflowStep[]
+
+  // Optional
+  description?: string
+  version?: string
+  trigger?: Trigger | Trigger[]
+  errorHandling?: ErrorHandlingConfig
+  timeout?: number
+  retryPolicy?: RetryPolicy
+  durable?: boolean
+  priority?: 'high' | 'normal' | 'low'
+  rateLimit?: RateLimitConfig
+  metrics?: MetricsConfig
+  tracing?: TracingConfig
+  audit?: AuditConfig
+  security?: SecurityConfig
+}
+```
+
+### WorkflowStep
+
+A step in a workflow.
+
+```typescript
+interface WorkflowStep {
+  // Required
+  name: string
+  action: string | Function
+
+  // Optional
+  $type?: 'WorkflowStep' | 'ParallelStep' | 'ApprovalStep' | 'SwitchStep'
+  description?: string
+  input?: any | ((context: WorkflowContext) => any)
+  output?: string
+  condition?: string | ((context: WorkflowContext) => boolean)
+  timeout?: number
+  retryPolicy?: RetryPolicy
+  compensation?: Function
+  onSuccess?: string
+  onFailure?: string
+  onTimeout?: string
+  cache?: CacheConfig
+  service?: string
+}
+```
+
+### ParallelStep
+
+Step that executes branches in parallel.
+
+```typescript
+interface ParallelStep extends WorkflowStep {
+  $type: 'ParallelStep'
+  branches: WorkflowStep[] | ((input: any) => WorkflowStep[])
+  waitForAll?: boolean
+  maxConcurrency?: number
+}
+```
+
+### ApprovalStep
+
+Step requiring human approval.
+
+```typescript
+interface ApprovalStep extends WorkflowStep {
+  $type: 'ApprovalStep'
+  approver: string | string[] | ((input: any) => string | string[])
+  timeout: string | number
+  onApprove?: string
+  onReject?: string
+  notificationTemplate?: {
+    subject: string
+    body: string
+  }
+  escalationPolicy?: EscalationPolicy
+}
+```
+
+### ParallelApprovalStep
+
+Step requiring approval from multiple people.
+
+```typescript
+interface ParallelApprovalStep extends ApprovalStep {
+  approvers: string[] | (() => string[] | Promise<string[]>)
+  strategy: 'unanimous' | 'majority' | 'any'
+}
+```
+
+### SwitchStep
+
+Step with multiple conditional branches.
+
+```typescript
+interface SwitchStep extends WorkflowStep {
+  $type: 'SwitchStep'
+  cases: {
+    [key: string]: WorkflowStep[]
+  }
+  default?: WorkflowStep[]
+}
+```
+
+### Trigger
+
+Workflow trigger definition.
+
+```typescript
+interface Trigger {
+  $type: 'Trigger'
+  event?: string
+  schedule?: string
+  condition?: string | Function
+}
+```
+
+### RetryPolicy
+
+Retry configuration for steps.
+
+```typescript
+interface RetryPolicy {
+  maxAttempts: number
+  backoff: 'constant' | 'linear' | 'exponential'
+  initialDelay?: number
+  maxDelay?: number
+  retryableErrors?: string[]
+}
+```
+
+**Example:**
+
+```typescript
+{
+  maxAttempts: 3,
+  backoff: 'exponential',
+  initialDelay: 1000,
+  maxDelay: 60000,
+  retryableErrors: ['TimeoutError', 'NetworkError']
+}
+```
+
+### ErrorHandlingConfig
+
+Error handling configuration.
+
+```typescript
+interface ErrorHandlingConfig {
+  strategy: 'retry' | 'compensate' | 'fallback' | 'saga'
+  compensateInReverse?: boolean
+  compensationSteps?: WorkflowStep[]
+  fallbackWorkflow?: Workflow
+  fallbackSteps?: WorkflowStep[]
+  logCompensations?: boolean
+  onCompensationFailure?: 'continue' | 'manual-intervention' | 'fail'
+}
+```
+
+**Example:**
+
+```typescript
+{
+  strategy: 'compensate',
+  compensateInReverse: true,
+  logCompensations: true,
+  onCompensationFailure: 'manual-intervention'
+}
+```
+
+### WorkflowState
+
+Workflow execution state.
+
+```typescript
+interface WorkflowState {
+  executionId: string
+  workflowName: string
+  status: 'pending' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled'
+  currentStep?: string
+  input: any
+  output?: any
+  error?: Error
+  startedAt: Date
+  completedAt?: Date
+  duration?: number
+  stepHistory: StepHistoryEntry[]
+  customData?: Record<string, any>
+}
+```
+
+### StepHistoryEntry
+
+History entry for a workflow step.
+
+```typescript
+interface StepHistoryEntry {
+  step: string
+  status: 'started' | 'completed' | 'failed' | 'compensated'
+  startedAt: Date
+  completedAt?: Date
+  duration?: number
+  input: any
+  output?: any
+  error?: Error
+  attempts?: number
+}
+```
+
+### WorkflowMetrics
+
+Workflow execution metrics.
+
+```typescript
+interface WorkflowMetrics {
+  totalExecutions: number
+  successfulExecutions: number
+  failedExecutions: number
+  cancelledExecutions: number
+  successRate: number
+  failureRate: number
+  avgDuration: number
+  minDuration: number
+  maxDuration: number
+  p50Duration: number
+  p95Duration: number
+  p99Duration: number
+  stepMetrics: {
+    [stepName: string]: StepMetrics
+  }
+}
+```
+
+### StepMetrics
+
+Metrics for a workflow step.
+
+```typescript
+interface StepMetrics {
+  executions: number
+  successes: number
+  failures: number
+  avgDuration: number
+  retries: number
+}
+```
+
+### RateLimitConfig
+
+Rate limiting configuration.
+
+```typescript
+interface RateLimitConfig {
+  maxConcurrent?: number
+  maxPerSecond?: number
+  maxPerMinute?: number
+  maxPerHour?: number
+}
+```
+
+**Example:**
+
+```typescript
+{
+  maxConcurrent: 10,
+  maxPerSecond: 100,
+  maxPerMinute: 5000
+}
+```
+
+### CacheConfig
+
+Step caching configuration.
+
+```typescript
+interface CacheConfig {
+  enabled: boolean
+  ttl: number
+  key: string | ((input: any) => string)
+}
+```
+
+**Example:**
+
+```typescript
+{
+  enabled: true,
+  ttl: 3600, // 1 hour
+  key: (input) => `compute:${input.id}`
+}
+```
+
+### EscalationPolicy
+
+Approval escalation policy.
+
+```typescript
+interface EscalationPolicy {
+  timeoutMinutes: number
+  escalateTo: string | ((input: any) => string)
+  notificationTemplate?: string
+  maxEscalations?: number
+}
+```
+
+**Example:**
+
+```typescript
+{
+  timeoutMinutes: 1440, // 24 hours
+  escalateTo: (request) => request.requester.managerId,
+  notificationTemplate: 'approval-escalation',
+  maxEscalations: 3
+}
+```
+
+### WorkflowContext
+
+Context available during workflow execution.
+
+```typescript
+interface WorkflowContext {
+  executionId: string
+  workflowName: string
+  input: any
+  state: WorkflowState
+  stepResults: Record<string, any>
+  user?: User
+  metadata?: Record<string, any>
+}
+```
+
+### SecurityConfig
+
+Workflow security configuration.
+
+```typescript
+interface SecurityConfig {
+  authentication?: 'required' | 'optional' | 'none'
+  authorization?: {
+    roles?: string[]
+    permissions?: string[]
+  }
+}
+```
+
+**Example:**
+
+```typescript
+{
+  authentication: 'required',
+  authorization: {
+    roles: ['admin', 'operator'],
+    permissions: ['workflow:execute', 'workflow:manage']
+  }
+}
+```
+
+## Scheduling Functions
+
+### every()
+
+Schedule workflow execution.
+
+**Signature:**
+
+```typescript
+function every(schedule: string | SemanticSchedule, options?: ScheduleOptions, handler: Function): ScheduledWorkflow
+```
+
+**Parameters:**
+
+- `schedule` - Cron expression or semantic schedule ($.Daily, $.Hourly, etc.)
+- `options` - Optional schedule configuration
+- `handler` - Function to execute on schedule
+
+**Returns:** `ScheduledWorkflow` instance
+
+**Example:**
+
+```typescript
+import { every } from 'sdk.do'
+
+// Cron syntax
+every('0 9 * * *', async () => {
+  await myWorkflow.execute()
+})
+
+// Semantic schedule
+every($.Daily, { hour: 9, minute: 0 }, async () => {
+  await myWorkflow.execute()
+})
+
+// Interval
+every.interval(300000, async () => {
+  // Every 5 minutes
+  await myWorkflow.execute()
+})
+```
+
+### SemanticSchedule
+
+Predefined schedule constants.
+
+```typescript
+$.Minutely
+$.Hourly
+$.Daily
+$.Weekly
+$.Monthly
+$.Yearly
+```
+
+### ScheduleOptions
+
+Schedule configuration options.
+
+```typescript
+interface ScheduleOptions {
+  hour?: number
+  minute?: number
+  dayOfWeek?: number
+  dayOfMonth?: number
+  timezone?: string
+  enabled?: boolean
+}
+```
+
+## Queue Functions
+
+### queue()
+
+Create a workflow queue.
+
+**Signature:**
+
+```typescript
+function queue(name: string, config?: QueueConfig): WorkflowQueue
+```
+
+**Parameters:**
+
+- `name` - Queue name
+- `config` - Optional queue configuration
+
+**Returns:** `WorkflowQueue` instance
+
+**Example:**
+
+```typescript
+import { queue } from 'sdk.do'
+
+const orderQueue = queue('orders', {
+  concurrency: 5,
+  maxRetries: 3,
+  timeout: 300000,
+})
+
+// Add to queue
+await orderQueue.add(myWorkflow, { orderId: '12345' })
+
+// Process queue
+orderQueue.process(async (job) => {
+  await myWorkflow.execute(job.data)
+})
+```
+
+### QueueConfig
+
+Queue configuration.
+
+```typescript
+interface QueueConfig {
+  concurrency?: number
+  maxRetries?: number
+  timeout?: number
+  priority?: boolean
+}
+```
+
+### WorkflowQueue
+
+Queue instance methods.
+
+```typescript
+interface WorkflowQueue {
+  add(workflow: Workflow, data: any, options?: JobOptions): Promise<Job>
+  process(handler: JobHandler): void
+  pause(): Promise<void>
+  resume(): Promise<void>
+  clear(): Promise<void>
+  getStats(): Promise<QueueStats>
+}
+```
+
+### JobOptions
+
+Options for adding jobs to queue.
+
+```typescript
+interface JobOptions {
+  priority?: number
+  delay?: number
+  attempts?: number
+  backoff?: number
+  timeout?: number
+}
+```
+
+## Utility Functions
+
+### validate()
+
+Validate workflow definition.
+
+**Signature:**
+
+```typescript
+function validate(workflow: WorkflowConfig): ValidationResult
+```
+
+**Parameters:**
+
+- `workflow` - Workflow configuration to validate
+
+**Returns:** Validation result with errors if any
+
+**Example:**
+
+```typescript
+import { validate } from 'sdk.do'
+
+const result = validate(myWorkflow)
+
+if (!result.valid) {
+  console.error('Validation errors:', result.errors)
+}
+```
+
+### checkpoint()
+
+Create a workflow checkpoint.
+
+**Signature:**
+
+```typescript
+async function checkpoint(executionId: string, state: any): Promise<void>
+```
+
+**Parameters:**
+
+- `executionId` - Workflow execution ID
+- `state` - State to checkpoint
+
+**Example:**
+
+```typescript
+await checkpoint('exec_123', {
+  step: 'ProcessData',
+  progress: 50,
+  data: intermediateResults,
+})
+```
+
+## Constants
+
+### WorkflowStatus
+
+```typescript
+enum WorkflowStatus {
+  Pending = 'pending',
+  Running = 'running',
+  Paused = 'paused',
+  Completed = 'completed',
+  Failed = 'failed',
+  Cancelled = 'cancelled',
+}
+```
+
+### StepStatus
+
+```typescript
+enum StepStatus {
+  Started = 'started',
+  Completed = 'completed',
+  Failed = 'failed',
+  Compensated = 'compensated',
+}
+```
+
+### BackoffStrategy
+
+```typescript
+enum BackoffStrategy {
+  Constant = 'constant',
+  Linear = 'linear',
+  Exponential = 'exponential',
+}
+```
+
+## Error Classes
+
+### WorkflowError
+
+Base error class for workflow errors.
+
+```typescript
+class WorkflowError extends Error {
+  constructor(message: string, code: string, details?: any)
+
+  code: string
+  details?: any
+}
+```
+
+### WorkflowValidationError
+
+Thrown when workflow validation fails.
+
+```typescript
+class WorkflowValidationError extends WorkflowError {
+  constructor(errors: ValidationError[])
+
+  errors: ValidationError[]
+}
+```
+
+### StepExecutionError
+
+Thrown when a step fails to execute.
+
+```typescript
+class StepExecutionError extends WorkflowError {
+  constructor(stepName: string, error: Error)
+
+  stepName: string
+  originalError: Error
+}
+```
+
+### WorkflowTimeoutError
+
+Thrown when a workflow or step times out.
+
+```typescript
+class WorkflowTimeoutError extends WorkflowError {
+  constructor(executionId: string, timeoutMs: number)
+
+  executionId: string
+  timeoutMs: number
+}
+```
+
+## Examples
+
+### Complete Workflow Definition
+
+```typescript
+import { $, workflow } from 'sdk.do'
+
+const completeWorkflow = workflow({
+  name: 'CompleteExample',
+  description: 'Comprehensive workflow example',
+  version: '1.0.0',
+
+  trigger: {
+    $type: 'Trigger',
+    event: '$.Order.created',
+  },
+
+  steps: [
+    {
+      name: 'ValidateOrder',
+      action: $.Order.validate,
+      timeout: 5000,
+      retryPolicy: {
+        maxAttempts: 3,
+        backoff: 'exponential',
+      },
+      onSuccess: 'ProcessPayment',
+    },
+    {
+      name: 'ProcessPayment',
+      action: $.Payment.process,
+      timeout: 30000,
+      compensation: $.Payment.refund,
+      onSuccess: 'FulfillOrder',
+      onFailure: 'NotifyCustomer',
+    },
+    {
+      name: 'FulfillOrder',
+      action: $.Order.fulfill,
+      timeout: 60000,
+    },
+  ],
+
+  errorHandling: {
+    strategy: 'compensate',
+    compensateInReverse: true,
+    logCompensations: true,
+  },
+
+  timeout: 300000,
+  durable: true,
+  priority: 'high',
+
+  rateLimit: {
+    maxConcurrent: 10,
+    maxPerSecond: 100,
+  },
+
+  metrics: {
+    enabled: true,
+    collect: ['duration', 'success-rate', 'error-rate'],
+  },
+
+  audit: {
+    enabled: true,
+    logLevel: 'detailed',
+  },
+})
+```
+
+### Using All Features
+
+```typescript
+// Create and configure workflow
+const workflow = workflow({ name: 'MyWorkflow', steps: [...] })
+
+// Add event listeners
+workflow.on('step.started', (step) => console.log(`Started: ${step.name}`))
+workflow.on('step.completed', (step, result) => console.log('Completed:', result))
+workflow.on('error', (error) => console.error('Error:', error))
+
+// Execute workflow
+const execution = await workflow.execute({ input: 'data' })
+console.log('Execution ID:', execution.executionId)
+
+// Monitor state
+const state = await workflow.getState(execution.executionId)
+console.log('Current step:', state.currentStep)
+
+// Get metrics
+const metrics = await workflow.getMetrics()
+console.log('Success rate:', metrics.successRate)
+
+// Pause/resume
+await workflow.pause(execution.executionId)
+await workflow.resume(execution.executionId)
+
+// Cancel if needed
+await workflow.cancel(execution.executionId, 'User requested')
+```
+
+## See Also
+
+- [Getting Started](../docs/getting-started.mdx) - Basic workflow creation
+- [Workflow Patterns](../docs/workflow-patterns.mdx) - Common patterns
+- [Orchestration](../docs/orchestration.mdx) - Advanced strategies
+- [Examples](../examples/) - Practical examples
+
+## Resources
+
+- [workflows.do](https://workflows.do)
+- [sdk.do](https://sdk.do)
+- [TypeScript Documentation](https://www.typescriptlang.org/docs/)

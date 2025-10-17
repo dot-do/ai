@@ -1,0 +1,102 @@
+---
+$id: https://integrations.do/attio
+$type: Integration
+name: Attio
+service: attio
+description: Attio is a fully customizable workspace for your team's relationships and workflows.
+category: crm
+sdkBased: false
+baseUrl: https://api.attio.com
+
+auth:
+  type: oauth2
+  authorizationUrl: https://app.attio.com/authorize
+  tokenUrl: https://app.attio.com/oauth/token
+  scopes:
+    - task:read-write
+    - object_configuration:read
+    - record_permission:read
+    - user_management:read
+    - list_configuration:read
+    - list_entry:read
+    - comment:read-write
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Attio actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: false
+  events: []
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://attio.com
+  apiDocs: https://attio.com
+---
+
+# Attio Integration
+
+Attio is a fully customizable workspace for your team's relationships and workflows.
+
+## Quick Start
+
+```typescript
+import { AttioClient } from '@dotdo/sdk.do/integrations/attio'
+
+const attio = new AttioClient({
+  apiKey: process.env.ATTIO_API_KEY,
+})
+
+const result = await attio.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Attio provides 11 actions through the Composio API.
+
+## License
+
+MIT

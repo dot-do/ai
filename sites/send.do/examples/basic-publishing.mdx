@@ -1,0 +1,748 @@
+---
+$id: https://send.do/examples/basic-publishing
+$type: HowTo
+title: Basic Event Publishing
+description: Simple examples of publishing business events with the send function
+keywords: [examples, basic, publishing, events, quickstart]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Basic Event Publishing
+
+Simple, practical examples of publishing business events with the `send` function.
+
+## Simple Event
+
+The most basic event publishing:
+
+```typescript
+import { send } from 'sdk.do'
+
+await send('Order.created', {
+  id: '12345',
+  customer: 'acme-corp',
+  total: 1500.0,
+})
+```
+
+## Event with Complete Data
+
+Publishing an event with full context:
+
+```typescript
+import { send } from 'sdk.do'
+
+await send('Order.created', {
+  id: 'order-12345',
+  customer: {
+    id: 'cust-456',
+    name: 'Acme Corporation',
+    email: 'orders@acme.com',
+  },
+  items: [
+    {
+      product: 'widget-pro',
+      quantity: 10,
+      price: 99.99,
+      total: 999.9,
+    },
+    {
+      product: 'gadget-ultra',
+      quantity: 5,
+      price: 199.99,
+      total: 999.95,
+    },
+  ],
+  subtotal: 1999.85,
+  tax: 199.99,
+  total: 2199.84,
+  currency: 'USD',
+  createdAt: new Date(),
+})
+```
+
+## Event with Metadata
+
+Adding metadata for tracing and debugging:
+
+```typescript
+import { send } from 'sdk.do'
+
+await send(
+  'Order.created',
+  {
+    id: '12345',
+    customer: 'acme-corp',
+    total: 1500.0,
+  },
+  {
+    timestamp: new Date(),
+    source: 'order-service',
+    correlationId: 'session-abc-123',
+    userId: 'user-789',
+  }
+)
+```
+
+## Fire and Forget
+
+Publishing without waiting for confirmation:
+
+```typescript
+import { send } from 'sdk.do'
+
+// Publish asynchronously (don't await)
+send('Metrics.updated', {
+  ordersCount: 42,
+  revenue: 15000.0,
+  timestamp: new Date(),
+})
+
+// Continue immediately
+console.log('Event published, continuing...')
+```
+
+## Lifecycle Events
+
+Publishing standard lifecycle events:
+
+```typescript
+import { send } from 'sdk.do'
+
+// Entity created
+await send('User.created', {
+  id: 'user-123',
+  email: 'john@example.com',
+  name: 'John Doe',
+  createdAt: new Date(),
+})
+
+// Entity updated
+await send('User.updated', {
+  id: 'user-123',
+  email: 'john.doe@example.com', // Changed
+  name: 'John Doe',
+  updatedAt: new Date(),
+})
+
+// Entity deleted
+await send('User.deleted', {
+  id: 'user-123',
+  deletedAt: new Date(),
+})
+```
+
+## State Change Events
+
+Publishing events for state transitions:
+
+```typescript
+import { send } from 'sdk.do'
+
+// Order state changes
+await send('Order.submitted', {
+  id: 'order-12345',
+  status: 'submitted',
+  submittedAt: new Date(),
+})
+
+await send('Order.validated', {
+  id: 'order-12345',
+  status: 'validated',
+  validatedAt: new Date(),
+})
+
+await send('Order.shipped', {
+  id: 'order-12345',
+  status: 'shipped',
+  trackingNumber: 'TRACK123',
+  carrier: 'FedEx',
+  shippedAt: new Date(),
+})
+
+await send('Order.delivered', {
+  id: 'order-12345',
+  status: 'delivered',
+  deliveredAt: new Date(),
+})
+```
+
+## User Registration Flow
+
+Complete user registration with events:
+
+```typescript
+import { send } from 'sdk.do'
+
+async function registerUser(email: string, password: string, name: string) {
+  // Create user account
+  const user = await createUserAccount({
+    email,
+    password,
+    name,
+  })
+
+  // Publish registration event
+  await send(
+    'User.registered',
+    {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      registeredAt: new Date(),
+    },
+    {
+      source: 'auth-service',
+      timestamp: new Date(),
+    }
+  )
+
+  // Send verification email
+  await sendVerificationEmail(user.email)
+
+  // Publish email sent event
+  await send('Email.sent', {
+    to: user.email,
+    type: 'verification',
+    userId: user.id,
+  })
+
+  return user
+}
+```
+
+## Order Creation Flow
+
+Publishing events during order creation:
+
+```typescript
+import { send, db } from 'sdk.do'
+
+async function createOrder(customerId: string, items: any[]) {
+  // Calculate totals
+  const subtotal = items.reduce((sum, item) => sum + item.total, 0)
+  const tax = subtotal * 0.1
+  const total = subtotal + tax
+
+  // Create order in database
+  const order = await db.create($.Order, {
+    customerId,
+    items,
+    subtotal,
+    tax,
+    total,
+    status: 'created',
+    createdAt: new Date(),
+  })
+
+  // Publish order created event
+  await send(
+    'Order.created',
+    {
+      id: order.id,
+      customerId: order.customerId,
+      items: order.items,
+      subtotal: order.subtotal,
+      tax: order.tax,
+      total: order.total,
+      currency: 'USD',
+      createdAt: order.createdAt,
+    },
+    {
+      source: 'order-service',
+      userId: customerId,
+      timestamp: new Date(),
+    }
+  )
+
+  return order
+}
+```
+
+## Payment Processing
+
+Publishing payment events:
+
+```typescript
+import { send } from 'sdk.do'
+
+async function processPayment(orderId: string, amount: number) {
+  // Request payment
+  await send('Payment.requested', {
+    orderId,
+    amount,
+    currency: 'USD',
+    requestedAt: new Date(),
+  })
+
+  try {
+    // Process with payment provider
+    const result = await paymentProvider.charge({
+      amount,
+      currency: 'USD',
+    })
+
+    // Publish success event
+    await send('Payment.completed', {
+      id: result.id,
+      orderId,
+      amount,
+      currency: 'USD',
+      completedAt: new Date(),
+    })
+
+    return result
+  } catch (error) {
+    // Publish failure event
+    await send('Payment.failed', {
+      orderId,
+      amount,
+      currency: 'USD',
+      error: error.message,
+      failedAt: new Date(),
+    })
+
+    throw error
+  }
+}
+```
+
+## Product Update
+
+Publishing events when product data changes:
+
+```typescript
+import { send, db } from 'sdk.do'
+
+async function updateProduct(productId: string, updates: any) {
+  // Get current product
+  const oldProduct = await db.get($.Product, productId)
+
+  // Update product
+  const newProduct = await db.update($.Product, productId, updates)
+
+  // Publish update event
+  await send('Product.updated', {
+    id: productId,
+    changes: updates,
+    oldPrice: oldProduct.price,
+    newPrice: newProduct.price,
+    updatedAt: new Date(),
+  })
+
+  // If price changed significantly, publish special event
+  if (Math.abs(newProduct.price - oldProduct.price) / oldProduct.price > 0.1) {
+    await send('Product.priceChanged', {
+      id: productId,
+      oldPrice: oldProduct.price,
+      newPrice: newProduct.price,
+      percentChange: ((newProduct.price - oldProduct.price) / oldProduct.price) * 100,
+    })
+  }
+
+  return newProduct
+}
+```
+
+## Inventory Management
+
+Publishing inventory events:
+
+```typescript
+import { send, db } from 'sdk.do'
+
+async function reserveInventory(productId: string, quantity: number) {
+  const product = await db.get($.Product, productId)
+
+  if (product.inventory < quantity) {
+    // Publish out of stock event
+    await send('Inventory.outOfStock', {
+      productId,
+      requested: quantity,
+      available: product.inventory,
+    })
+
+    throw new Error('Insufficient inventory')
+  }
+
+  // Reserve inventory
+  await db.update($.Product, productId, {
+    inventory: product.inventory - quantity,
+  })
+
+  // Publish reservation event
+  await send('Inventory.reserved', {
+    productId,
+    quantity,
+    remainingInventory: product.inventory - quantity,
+    reservedAt: new Date(),
+  })
+
+  // Check if low stock
+  if (product.inventory - quantity < 10) {
+    await send('Inventory.lowStock', {
+      productId,
+      currentStock: product.inventory - quantity,
+      threshold: 10,
+    })
+  }
+}
+```
+
+## Customer Notifications
+
+Publishing notification events:
+
+```typescript
+import { send } from 'sdk.do'
+
+async function notifyCustomer(customerId: string, type: string, data: any) {
+  // Send notification
+  await sendNotification(customerId, type, data)
+
+  // Publish notification sent event
+  await send('Notification.sent', {
+    customerId,
+    type,
+    channel: 'email',
+    sentAt: new Date(),
+  })
+}
+
+// Usage examples
+await notifyCustomer('cust-123', 'order-shipped', {
+  orderId: 'order-456',
+  trackingNumber: 'TRACK789',
+})
+
+await notifyCustomer('cust-123', 'payment-received', {
+  orderId: 'order-456',
+  amount: 1500.0,
+})
+```
+
+## Error Events
+
+Publishing events when errors occur:
+
+```typescript
+import { send } from 'sdk.do'
+
+async function processOrder(orderId: string) {
+  try {
+    // Process the order
+    const result = await processOrderLogic(orderId)
+
+    // Publish success event
+    await send('Order.processed', {
+      orderId,
+      processedAt: new Date(),
+    })
+
+    return result
+  } catch (error) {
+    // Publish error event
+    await send('Order.processingFailed', {
+      orderId,
+      error: error.message,
+      failedAt: new Date(),
+    })
+
+    throw error
+  }
+}
+```
+
+## Analytics Events
+
+Publishing events for analytics:
+
+```typescript
+import { send } from 'sdk.do'
+
+// Page view
+await send('Page.viewed', {
+  url: '/products/widget-pro',
+  userId: 'user-123',
+  timestamp: new Date(),
+})
+
+// Product view
+await send('Product.viewed', {
+  productId: 'prod-456',
+  userId: 'user-123',
+  timestamp: new Date(),
+})
+
+// Add to cart
+await send('Cart.itemAdded', {
+  productId: 'prod-456',
+  quantity: 1,
+  userId: 'user-123',
+  timestamp: new Date(),
+})
+
+// Purchase
+await send('Purchase.completed', {
+  orderId: 'order-789',
+  userId: 'user-123',
+  total: 1500.0,
+  items: 3,
+  timestamp: new Date(),
+})
+```
+
+## Batch Publishing
+
+Publishing multiple events at once:
+
+```typescript
+import { sendBatch } from 'sdk.do'
+
+async function processOrders(orders: Order[]) {
+  // Process all orders
+  const results = await Promise.all(orders.map((order) => processOrder(order)))
+
+  // Publish all events at once
+  await sendBatch([
+    { type: 'Order.processed', data: { id: orders[0].id } },
+    { type: 'Order.processed', data: { id: orders[1].id } },
+    { type: 'Order.processed', data: { id: orders[2].id } },
+  ])
+}
+```
+
+## API Integration
+
+Publishing events from API endpoints:
+
+```typescript
+import { send } from 'sdk.do'
+import express from 'express'
+
+const app = express()
+
+app.post('/api/orders', async (req, res) => {
+  try {
+    // Create order
+    const order = await createOrder(req.body)
+
+    // Publish event
+    await send('Order.created', order, {
+      source: 'orders-api',
+      userId: req.user.id,
+      correlationId: req.id,
+    })
+
+    res.json({ success: true, order })
+  } catch (error) {
+    // Publish error event
+    await send('Order.creationFailed', {
+      data: req.body,
+      error: error.message,
+    })
+
+    res.status(500).json({ error: error.message })
+  }
+})
+```
+
+## Webhook Integration
+
+Publishing events from webhooks:
+
+```typescript
+import { send } from 'sdk.do'
+import express from 'express'
+
+const app = express()
+
+app.post('/webhooks/stripe', async (req, res) => {
+  const stripeEvent = req.body
+
+  // Publish Stripe webhook as internal event
+  await send(`Stripe.${stripeEvent.type}`, stripeEvent.data, {
+    source: 'stripe-webhook',
+    webhookId: stripeEvent.id,
+    timestamp: new Date(stripeEvent.created * 1000),
+  })
+
+  res.json({ received: true })
+})
+```
+
+## Scheduled Events
+
+Publishing events from scheduled jobs:
+
+```typescript
+import { every, send } from 'sdk.do'
+
+// Daily report generation
+every($.Daily, async () => {
+  const report = await generateDailyReport()
+
+  await send(
+    'Report.generated',
+    {
+      type: 'daily',
+      date: new Date().toISOString().split('T')[0],
+      ...report,
+    },
+    {
+      source: 'scheduled-jobs',
+      timestamp: new Date(),
+    }
+  )
+})
+
+// Hourly metrics
+every($.Hourly, async () => {
+  const metrics = await collectMetrics()
+
+  await send('Metrics.hourly', metrics, {
+    source: 'metrics-collector',
+    timestamp: new Date(),
+  })
+})
+```
+
+## Type-Safe Publishing
+
+Using TypeScript for type safety:
+
+```typescript
+import { send } from 'sdk.do'
+
+// Define event data type
+interface OrderCreatedData {
+  id: string
+  customer: {
+    id: string
+    name: string
+    email: string
+  }
+  items: Array<{
+    product: string
+    quantity: number
+    price: number
+  }>
+  total: number
+  currency: string
+  createdAt: Date
+}
+
+// Type-safe publishing
+await send<OrderCreatedData>('Order.created', {
+  id: 'order-12345',
+  customer: {
+    id: 'cust-456',
+    name: 'Acme Corporation',
+    email: 'orders@acme.com',
+  },
+  items: [{ product: 'widget', quantity: 10, price: 99.99 }],
+  total: 999.9,
+  currency: 'USD',
+  createdAt: new Date(),
+})
+```
+
+## Testing Event Publishing
+
+Testing events in your application:
+
+```typescript
+import { send } from 'sdk.do'
+import { vi, test, expect } from 'vitest'
+
+// Mock the send function
+vi.mock('sdk.do', () => ({
+  send: vi.fn(),
+}))
+
+test('publishes order created event', async () => {
+  // Call function that publishes event
+  await createOrder({
+    customerId: 'cust-123',
+    items: [{ product: 'widget', quantity: 10 }],
+  })
+
+  // Verify event was published
+  expect(send).toHaveBeenCalledWith(
+    'Order.created',
+    expect.objectContaining({
+      customerId: 'cust-123',
+    })
+  )
+})
+```
+
+## Best Practices
+
+### Always Include Timestamps
+
+```typescript
+await send(
+  'Order.created',
+  {
+    id: '12345',
+    createdAt: new Date(), // Include timestamp in data
+  },
+  {
+    timestamp: new Date(), // Also in metadata
+  }
+)
+```
+
+### Use Correlation IDs
+
+```typescript
+const correlationId = generateCorrelationId()
+
+await send('Order.created', orderData, {
+  correlationId,
+})
+
+await send('Payment.requested', paymentData, {
+  correlationId, // Same ID for related events
+})
+```
+
+### Handle Errors Gracefully
+
+```typescript
+try {
+  await send('Order.created', orderData)
+} catch (error) {
+  console.error('Failed to publish event:', error)
+  // Don't let event publishing break your flow
+}
+```
+
+### Keep Payloads Focused
+
+```typescript
+// Good - Essential data
+await send('Order.created', {
+  id: order.id,
+  customerId: order.customerId,
+  total: order.total,
+})
+
+// Bad - Too much data
+await send('Order.created', {
+  ...order,
+  ...customer,
+  ...allRelatedData,
+})
+```
+
+## Next Steps
+
+- [Workflow Events Example](./workflow-events) - Event chains and workflows
+- [Publishing Patterns](../docs/patterns) - Advanced patterns
+- [Event Naming](../docs/event-naming) - Naming conventions
+- [API Reference](../api/) - Complete API documentation
+- [on.do](https://on.do) - Event listeners

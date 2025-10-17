@@ -1,0 +1,669 @@
+---
+$id: https://apis.do/examples/basic
+$type: HowTo
+title: Basic API Gateway Usage
+description: Practical examples of using the apis.do gateway for common tasks
+keywords: [examples, api, gateway, rest, crud, basic]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Basic API Gateway Usage
+
+Practical examples demonstrating common API gateway operations using apis.do.
+
+## Setup
+
+First, ensure you have the necessary environment variables set:
+
+```bash
+export APIS_API_KEY=your-api-key-here
+export APIS_JWT_TOKEN=your-jwt-token-here
+```
+
+Install dependencies:
+
+```bash
+pnpm add sdk.do
+```
+
+## Example 1: List Resources
+
+Retrieve a list of businesses from the platform:
+
+```typescript
+import { api } from 'sdk.do'
+
+async function listBusinesses() {
+  try {
+    const businesses = await api('https://apis.do/businesses', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+    })
+
+    console.log(`Found ${businesses.length} businesses:`)
+    businesses.forEach((b) => {
+      console.log(`- ${b.name} (${b.industry})`)
+    })
+
+    return businesses
+  } catch (error) {
+    console.error('Failed to list businesses:', error.message)
+    throw error
+  }
+}
+
+listBusinesses()
+```
+
+### Output
+
+```
+Found 25 businesses:
+- Acme Corporation (Technology)
+- Global Industries (Manufacturing)
+- Tech Innovations (Technology)
+- Green Energy Co (Energy)
+...
+```
+
+## Example 2: Get Single Resource
+
+Retrieve a specific business by ID:
+
+```typescript
+import { api } from 'sdk.do'
+
+async function getBusiness(businessId: string) {
+  try {
+    const business = await api(`https://apis.do/businesses/${businessId}`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+    })
+
+    console.log('Business Details:')
+    console.log(`ID: ${business.$id}`)
+    console.log(`Name: ${business.name}`)
+    console.log(`Industry: ${business.industry}`)
+    console.log(`Founded: ${business.foundingDate}`)
+    console.log(`Revenue: $${business.revenue?.toLocaleString()}`)
+
+    return business
+  } catch (error) {
+    if (error.status === 404) {
+      console.error(`Business ${businessId} not found`)
+    } else {
+      console.error('Failed to get business:', error.message)
+    }
+    throw error
+  }
+}
+
+getBusiness('business-123')
+```
+
+### Output
+
+```
+Business Details:
+ID: business-123
+Name: Acme Corporation
+Industry: Technology
+Founded: 2020-01-15
+Revenue: $5,000,000
+```
+
+## Example 3: Create Resource
+
+Create a new business:
+
+```typescript
+import { api } from 'sdk.do'
+
+async function createBusiness(businessData: { name: string; industry: string; foundingDate: string; description?: string }) {
+  try {
+    const business = await api('https://apis.do/businesses', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: businessData,
+    })
+
+    console.log('Business created successfully!')
+    console.log(`ID: ${business.$id}`)
+    console.log(`Name: ${business.name}`)
+
+    return business
+  } catch (error) {
+    console.error('Failed to create business:', error.message)
+    throw error
+  }
+}
+
+createBusiness({
+  name: 'Tech Innovations Inc',
+  industry: 'Technology',
+  foundingDate: '2025-01-01',
+  description: 'Leading innovator in AI and machine learning',
+})
+```
+
+### Output
+
+```
+Business created successfully!
+ID: business-456
+Name: Tech Innovations Inc
+```
+
+## Example 4: Update Resource
+
+Update an existing business:
+
+```typescript
+import { api } from 'sdk.do'
+
+async function updateBusiness(businessId: string, updates: any) {
+  try {
+    const business = await api(`https://apis.do/businesses/${businessId}`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: updates,
+    })
+
+    console.log('Business updated successfully!')
+    console.log(`Name: ${business.name}`)
+    console.log(`Revenue: $${business.revenue?.toLocaleString()}`)
+
+    return business
+  } catch (error) {
+    console.error('Failed to update business:', error.message)
+    throw error
+  }
+}
+
+updateBusiness('business-456', {
+  revenue: 2000000,
+  employees: 50,
+  description: 'Leading innovator in AI, machine learning, and robotics',
+})
+```
+
+### Output
+
+```
+Business updated successfully!
+Name: Tech Innovations Inc
+Revenue: $2,000,000
+```
+
+## Example 5: Delete Resource
+
+Delete a business:
+
+```typescript
+import { api } from 'sdk.do'
+
+async function deleteBusiness(businessId: string) {
+  try {
+    await api(`https://apis.do/businesses/${businessId}`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+      },
+    })
+
+    console.log(`Business ${businessId} deleted successfully`)
+  } catch (error) {
+    if (error.status === 404) {
+      console.error(`Business ${businessId} not found`)
+    } else {
+      console.error('Failed to delete business:', error.message)
+    }
+    throw error
+  }
+}
+
+deleteBusiness('business-456')
+```
+
+### Output
+
+```
+Business business-456 deleted successfully
+```
+
+## Example 6: Filter and Paginate
+
+List businesses with filters and pagination:
+
+```typescript
+import { api } from 'sdk.do'
+
+async function searchBusinesses(filters: { industry?: string; minRevenue?: number; limit?: number; offset?: number }) {
+  try {
+    const businesses = await api('https://apis.do/businesses', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      query: {
+        industry: filters.industry,
+        minRevenue: filters.minRevenue,
+        limit: filters.limit || 10,
+        offset: filters.offset || 0,
+        sort: 'revenue',
+        order: 'desc',
+      },
+    })
+
+    console.log(`Found ${businesses.length} businesses matching criteria:`)
+    businesses.forEach((b) => {
+      console.log(`- ${b.name}: $${b.revenue?.toLocaleString()}`)
+    })
+
+    return businesses
+  } catch (error) {
+    console.error('Failed to search businesses:', error.message)
+    throw error
+  }
+}
+
+searchBusinesses({
+  industry: 'Technology',
+  minRevenue: 1000000,
+  limit: 5,
+})
+```
+
+### Output
+
+```
+Found 5 businesses matching criteria:
+- Tech Giant Corp: $50,000,000
+- Innovation Labs: $25,000,000
+- Digital Solutions Inc: $10,000,000
+- Software Factory: $5,000,000
+- Code Masters: $2,500,000
+```
+
+## Example 7: Error Handling
+
+Robust error handling for API requests:
+
+```typescript
+import { api } from 'sdk.do'
+
+async function robustApiRequest(url: string, options: any) {
+  try {
+    const response = await api(url, options)
+    return response
+  } catch (error) {
+    // Handle specific error codes
+    switch (error.status) {
+      case 400:
+        console.error('Bad Request:', error.message)
+        console.error('Check your request data')
+        break
+      case 401:
+        console.error('Unauthorized:', error.message)
+        console.error('Check your API key or token')
+        break
+      case 403:
+        console.error('Forbidden:', error.message)
+        console.error('You do not have permission for this action')
+        break
+      case 404:
+        console.error('Not Found:', error.message)
+        console.error('The requested resource does not exist')
+        break
+      case 429:
+        console.error('Rate Limit Exceeded:', error.message)
+        const resetTime = error.headers?.['x-ratelimit-reset']
+        if (resetTime) {
+          const waitMs = parseInt(resetTime) * 1000 - Date.now()
+          console.error(`Wait ${Math.ceil(waitMs / 1000)} seconds before retrying`)
+        }
+        break
+      case 500:
+        console.error('Server Error:', error.message)
+        console.error('Please try again later or contact support')
+        break
+      default:
+        console.error('API Error:', error.message)
+    }
+
+    throw error
+  }
+}
+
+// Usage
+robustApiRequest('https://apis.do/businesses/invalid-id', {
+  method: 'GET',
+  headers: {
+    Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+  },
+})
+```
+
+## Example 8: Batch Operations
+
+Create multiple resources in parallel:
+
+```typescript
+import { api } from 'sdk.do'
+
+async function batchCreateBusinesses(businessesData: any[]) {
+  try {
+    // Create all businesses in parallel
+    const promises = businessesData.map((data) =>
+      api('https://apis.do/businesses', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: data,
+      })
+    )
+
+    const businesses = await Promise.all(promises)
+
+    console.log(`Created ${businesses.length} businesses:`)
+    businesses.forEach((b) => {
+      console.log(`- ${b.name} (${b.$id})`)
+    })
+
+    return businesses
+  } catch (error) {
+    console.error('Failed to create businesses:', error.message)
+    throw error
+  }
+}
+
+batchCreateBusinesses([
+  {
+    name: 'Tech Startup 1',
+    industry: 'Technology',
+    foundingDate: '2025-01-01',
+  },
+  {
+    name: 'Tech Startup 2',
+    industry: 'Technology',
+    foundingDate: '2025-01-02',
+  },
+  {
+    name: 'Tech Startup 3',
+    industry: 'Technology',
+    foundingDate: '2025-01-03',
+  },
+])
+```
+
+### Output
+
+```
+Created 3 businesses:
+- Tech Startup 1 (business-789)
+- Tech Startup 2 (business-790)
+- Tech Startup 3 (business-791)
+```
+
+## Example 9: Rate Limit Monitoring
+
+Monitor and respect rate limits:
+
+```typescript
+import { api } from 'sdk.do'
+
+class RateLimitedApiClient {
+  private limit: number = 100
+  private remaining: number = 100
+  private resetTime: number = 0
+
+  async request(url: string, options: any) {
+    // Check rate limit before request
+    if (this.remaining <= 0) {
+      const waitMs = this.resetTime - Date.now()
+      if (waitMs > 0) {
+        console.log(`Rate limited. Waiting ${Math.ceil(waitMs / 1000)}s...`)
+        await new Promise((resolve) => setTimeout(resolve, waitMs))
+      }
+    }
+
+    // Make request
+    const response = await api(url, {
+      ...options,
+      headers: {
+        ...options.headers,
+        Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+      },
+    })
+
+    // Update rate limit info
+    this.limit = parseInt(response.headers['x-ratelimit-limit'] || '100')
+    this.remaining = parseInt(response.headers['x-ratelimit-remaining'] || '100')
+    this.resetTime = parseInt(response.headers['x-ratelimit-reset'] || '0') * 1000
+
+    console.log(`Rate limit: ${this.remaining}/${this.limit} remaining`)
+
+    return response
+  }
+}
+
+// Usage
+const client = new RateLimitedApiClient()
+const businesses = await client.request('https://apis.do/businesses', {
+  method: 'GET',
+})
+```
+
+### Output
+
+```
+Rate limit: 99/100 remaining
+```
+
+## Example 10: Complete CRUD Workflow
+
+A complete workflow demonstrating all CRUD operations:
+
+```typescript
+import { api } from 'sdk.do'
+
+async function businessCrudWorkflow() {
+  const apiKey = process.env.APIS_API_KEY
+
+  try {
+    // 1. Create
+    console.log('1. Creating business...')
+    const created = await api('https://apis.do/businesses', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: {
+        name: 'Example Business',
+        industry: 'Technology',
+        foundingDate: '2025-01-01',
+      },
+    })
+    console.log(`   Created: ${created.$id}`)
+
+    // 2. Read (Get)
+    console.log('\n2. Reading business...')
+    const business = await api(`https://apis.do/businesses/${created.$id}`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+      },
+    })
+    console.log(`   Name: ${business.name}`)
+    console.log(`   Industry: ${business.industry}`)
+
+    // 3. Update
+    console.log('\n3. Updating business...')
+    const updated = await api(`https://apis.do/businesses/${created.$id}`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: {
+        revenue: 1000000,
+        employees: 25,
+      },
+    })
+    console.log(`   Revenue: $${updated.revenue.toLocaleString()}`)
+    console.log(`   Employees: ${updated.employees}`)
+
+    // 4. List
+    console.log('\n4. Listing all businesses...')
+    const businesses = await api('https://apis.do/businesses', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+      },
+      query: { limit: 5 },
+    })
+    console.log(`   Found ${businesses.length} businesses`)
+
+    // 5. Delete
+    console.log('\n5. Deleting business...')
+    await api(`https://apis.do/businesses/${created.$id}`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+      },
+    })
+    console.log(`   Deleted: ${created.$id}`)
+
+    console.log('\nWorkflow completed successfully!')
+  } catch (error) {
+    console.error('\nWorkflow failed:', error.message)
+    throw error
+  }
+}
+
+businessCrudWorkflow()
+```
+
+### Output
+
+```
+1. Creating business...
+   Created: business-999
+
+2. Reading business...
+   Name: Example Business
+   Industry: Technology
+
+3. Updating business...
+   Revenue: $1,000,000
+   Employees: 25
+
+4. Listing all businesses...
+   Found 5 businesses
+
+5. Deleting business...
+   Deleted: business-999
+
+Workflow completed successfully!
+```
+
+## Helper Functions
+
+Reusable helper functions for common operations:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Generic list function
+async function listResources(resourceType: string, filters?: any) {
+  return await api(`https://apis.do/${resourceType}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+    },
+    query: filters,
+  })
+}
+
+// Generic get function
+async function getResource(resourceType: string, id: string) {
+  return await api(`https://apis.do/${resourceType}/${id}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+    },
+  })
+}
+
+// Generic create function
+async function createResource(resourceType: string, data: any) {
+  return await api(`https://apis.do/${resourceType}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: data,
+  })
+}
+
+// Generic update function
+async function updateResource(resourceType: string, id: string, data: any) {
+  return await api(`https://apis.do/${resourceType}/${id}`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: data,
+  })
+}
+
+// Generic delete function
+async function deleteResource(resourceType: string, id: string) {
+  return await api(`https://apis.do/${resourceType}/${id}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+    },
+  })
+}
+
+// Usage
+const businesses = await listResources('businesses', { industry: 'Technology' })
+const business = await getResource('businesses', 'business-123')
+const created = await createResource('businesses', { name: 'New Business' })
+const updated = await updateResource('businesses', 'business-123', { revenue: 1000000 })
+await deleteResource('businesses', 'business-123')
+```
+
+## Next Steps
+
+Explore more advanced examples:
+
+- [Advanced Routing](./routing) - Complex routing patterns
+- [Authentication Examples](./authentication) - Different auth methods
+- [API Reference](../api/) - Complete API documentation
+- [Best Practices](../docs/best-practices) - Recommended patterns
+
+---
+
+For more examples, see the [apis.do documentation](https://apis.do).

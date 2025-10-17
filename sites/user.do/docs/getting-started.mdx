@@ -1,0 +1,563 @@
+---
+$id: https://user.do/docs/getting-started
+$type: TechArticle
+title: Getting Started with user.do
+description: Quick start guide for user context and authentication in the .do platform
+keywords: [user, getting started, authentication, permissions, setup]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Getting Started
+
+Get started with user context and authentication in the `.do` platform in under 5 minutes.
+
+## Installation
+
+Install the SDK in your project:
+
+```bash
+pnpm add sdk.do
+```
+
+Or use the CLI:
+
+```bash
+pnpm add -g cli.do
+```
+
+## Basic Setup
+
+Import the user service from the SDK:
+
+```typescript
+import { user } from 'sdk.do'
+```
+
+## Your First User Query
+
+Get the current authenticated user:
+
+```typescript
+import { user } from 'sdk.do'
+
+// Get current user
+const currentUser = await user.current()
+
+console.log(currentUser)
+// {
+//   $id: "user_123",
+//   $type: "Person",
+//   name: "John Smith",
+//   email: "john@example.com",
+//   role: "admin"
+// }
+```
+
+## Check Authentication Status
+
+Verify if a user is authenticated:
+
+```typescript
+import { user } from 'sdk.do'
+
+// Check authentication
+const isAuthenticated = await user.isAuthenticated()
+
+if (isAuthenticated) {
+  console.log('User is logged in')
+  const currentUser = await user.current()
+  console.log(`Welcome, ${currentUser.name}!`)
+} else {
+  console.log('User is not logged in')
+}
+```
+
+## Check Permissions
+
+Verify user permissions before performing actions:
+
+```typescript
+import { $, user } from 'sdk.do'
+
+// Check if user can edit products
+const canEdit = await user.can('edit', $.Product)
+
+if (canEdit) {
+  console.log('User can edit products')
+} else {
+  console.log('User cannot edit products')
+}
+```
+
+## Configuration
+
+### Environment Variables
+
+Configure authentication and session management:
+
+```bash
+# .env file
+
+# Session configuration
+SESSION_SECRET=your-secret-key-here
+SESSION_DURATION=86400000  # 24 hours in milliseconds
+
+# Authentication provider
+AUTH_PROVIDER=oauth
+AUTH_DOMAIN=auth.example.com
+
+# JWT configuration (if using JWT)
+JWT_SECRET=your-jwt-secret-here
+JWT_ALGORITHM=HS256
+JWT_EXPIRES_IN=24h
+```
+
+### Set Up User Context Provider
+
+Configure how user context is extracted from requests:
+
+```typescript
+import { user } from 'sdk.do'
+
+// Configure user provider
+user.setProvider(async (context) => {
+  // Extract token from request
+  const authHeader = context.headers.get('Authorization')
+  const token = authHeader?.replace('Bearer ', '')
+
+  if (!token) {
+    return null // No authenticated user
+  }
+
+  // Validate token and get user ID
+  const decoded = await validateJWT(token)
+
+  // Fetch user from database
+  const currentUser = await db.get($.Person, decoded.userId)
+
+  return currentUser
+})
+```
+
+## Common Patterns
+
+### Protect API Endpoints
+
+Require authentication for specific endpoints:
+
+```typescript
+import { user } from 'sdk.do'
+
+export async function protectedEndpoint(request: Request) {
+  // Check if user is authenticated
+  if (!(await user.isAuthenticated())) {
+    return new Response('Unauthorized', { status: 401 })
+  }
+
+  // Get current user
+  const currentUser = await user.current()
+
+  // Process request with user context
+  return new Response(`Hello, ${currentUser.name}!`)
+}
+```
+
+### Check Permissions Before Actions
+
+Always verify permissions before performing sensitive actions:
+
+```typescript
+import { $, db, user } from 'sdk.do'
+
+export async function deleteProduct(productId: string) {
+  // Check permission
+  if (!(await user.can('delete', $.Product))) {
+    throw new Error('Unauthorized: Cannot delete products')
+  }
+
+  // User has permission, proceed
+  await db.delete($.Product, productId)
+
+  return { success: true }
+}
+```
+
+### Access User Properties
+
+Access user information throughout your application:
+
+```typescript
+import { user } from 'sdk.do'
+
+// Get user and access properties
+const currentUser = await user.current()
+
+console.log(currentUser.name) // "John Smith"
+console.log(currentUser.email) // "john@example.com"
+console.log(currentUser.role) // "admin"
+console.log(currentUser.organization?.name) // "Acme Corp"
+```
+
+### Check User Roles
+
+Verify user roles for role-based access control:
+
+```typescript
+import { user } from 'sdk.do'
+
+// Check if user is admin
+if (await user.hasRole('admin')) {
+  console.log('User is an administrator')
+}
+
+// Check if user is editor
+if (await user.hasRole('editor')) {
+  console.log('User can edit content')
+}
+
+// Check if user is viewer
+if (await user.hasRole('viewer')) {
+  console.log('User can view content')
+}
+```
+
+## Complete Example
+
+Here's a complete example showing user context, authentication, and permissions:
+
+```typescript
+import { $, db, user } from 'sdk.do'
+
+export async function updateProduct(productId: string, updates: any) {
+  // 1. Check if user is authenticated
+  if (!(await user.isAuthenticated())) {
+    throw new Error('Authentication required')
+  }
+
+  // 2. Get current user
+  const currentUser = await user.current()
+  console.log(`User ${currentUser.name} attempting to update product`)
+
+  // 3. Check if user can edit products in general
+  if (!(await user.can('edit', $.Product))) {
+    throw new Error('User does not have edit permission for products')
+  }
+
+  // 4. Get the product
+  const product = await db.get($.Product, productId)
+
+  // 5. Check if user can edit this specific product
+  if (!(await user.can('edit', product))) {
+    throw new Error('User cannot edit this specific product')
+  }
+
+  // 6. Check if user belongs to the same organization
+  if (product.organization?.$id !== currentUser.organization?.$id) {
+    throw new Error('Product belongs to different organization')
+  }
+
+  // 7. User has all necessary permissions, update product
+  const updatedProduct = await db.update($.Product, productId, {
+    ...updates,
+    updatedBy: currentUser.$id,
+    updatedAt: new Date(),
+  })
+
+  // 8. Log the action
+  await db.create($.AuditLog, {
+    action: 'update',
+    resource: productId,
+    performedBy: currentUser.$id,
+    timestamp: new Date(),
+  })
+
+  return updatedProduct
+}
+```
+
+## User Object Structure
+
+The user object follows Schema.org Person type:
+
+```typescript
+interface User {
+  $id: string // Unique identifier
+  $type: 'Person' // Schema.org type
+  name: string // Full name
+  email: string // Email address
+  role?: string // User role (admin, editor, viewer, etc.)
+  organization?: {
+    $id: string
+    name: string
+    $type: 'Organization'
+  }
+  givenName?: string // First name
+  familyName?: string // Last name
+  jobTitle?: string // Job title
+  image?: string // Profile image URL
+  telephone?: string // Phone number
+  address?: {
+    $type: 'PostalAddress'
+    streetAddress?: string
+    addressLocality?: string
+    addressRegion?: string
+    postalCode?: string
+    addressCountry?: string
+  }
+}
+```
+
+## Error Handling
+
+Handle authentication and permission errors gracefully:
+
+```typescript
+import { user } from 'sdk.do'
+
+async function protectedAction() {
+  try {
+    // Check authentication
+    if (!(await user.isAuthenticated())) {
+      throw new Error('UNAUTHENTICATED')
+    }
+
+    // Get current user
+    const currentUser = await user.current()
+
+    // Check permission
+    if (!(await user.can('delete', $.Product))) {
+      throw new Error('UNAUTHORIZED')
+    }
+
+    // Proceed with action
+    await performAction()
+  } catch (error) {
+    if (error.message === 'UNAUTHENTICATED') {
+      // Redirect to login
+      return redirectToLogin()
+    }
+
+    if (error.message === 'UNAUTHORIZED') {
+      // Show permission denied message
+      return showPermissionDenied()
+    }
+
+    // Other errors
+    console.error('Action failed:', error)
+    throw error
+  }
+}
+```
+
+## Session Management
+
+Access and manage user sessions:
+
+```typescript
+import { user } from 'sdk.do'
+
+// Get session details
+const session = await user.session()
+
+console.log(session)
+// {
+//   id: "session_789",
+//   userId: "user_123",
+//   createdAt: "2025-10-10T12:00:00Z",
+//   expiresAt: "2025-10-11T12:00:00Z",
+//   isActive: true
+// }
+
+// Check if session is active
+if (session.isActive) {
+  console.log('Session is active')
+  console.log(`Expires in: ${session.expiresAt}`)
+}
+
+// Refresh session to extend expiration
+await user.refreshSession()
+
+// End session (logout)
+await user.endSession()
+```
+
+## Integration with Other Services
+
+### With Database Operations
+
+```typescript
+import { $, db, user } from 'sdk.do'
+
+// Filter data by current user's organization
+const currentUser = await user.current()
+
+const products = await db.list($.Product, {
+  where: {
+    organization: currentUser.organization.$id,
+  },
+})
+```
+
+### With Event Listeners
+
+```typescript
+import { $, user, on } from 'sdk.do'
+
+// Include user context in event handlers
+on($.Product.created, async (event) => {
+  const currentUser = await user.current()
+
+  console.log(`Product created by ${currentUser.name}`)
+
+  // Send notification to user
+  await notifyUser(currentUser.$id, 'Product created successfully')
+})
+```
+
+### With AI Services
+
+```typescript
+import { $, ai, user } from 'sdk.do'
+
+// Generate content with user context
+const currentUser = await user.current()
+
+const content = await ai.generate('Generate personalized email', {
+  context: {
+    userName: currentUser.name,
+    userRole: currentUser.role,
+    organization: currentUser.organization?.name,
+  },
+})
+```
+
+## Next Steps
+
+Now that you have user.do set up, explore more features:
+
+- [Authentication](./authentication) - User authentication patterns
+- [Permissions](./permissions) - Permission checking with `user.can()`
+- [API Reference](../api/) - Complete API documentation
+
+## Examples
+
+Check out practical examples:
+
+- [Basic User Context](../examples/basic-user) - Accessing current user
+- [Permission Checking](../examples/permissions) - Authorization patterns
+
+## Best Practices
+
+### 1. Always Check Authentication
+
+Never assume a user is authenticated:
+
+```typescript
+// Good: Check authentication
+if (await user.isAuthenticated()) {
+  const currentUser = await user.current()
+  // Proceed
+}
+
+// Bad: Assume authentication
+const currentUser = await user.current() // May throw error
+```
+
+### 2. Cache User Context
+
+Cache user context when making multiple calls:
+
+```typescript
+// Good: Cache user
+const currentUser = await user.current()
+console.log(currentUser.name)
+console.log(currentUser.email)
+
+// Bad: Multiple lookups
+console.log((await user.current()).name)
+console.log((await user.current()).email)
+```
+
+### 3. Check Specific Permissions
+
+Be specific about what action is being checked:
+
+```typescript
+// Good: Specific permission
+await user.can('edit', $.Product)
+
+// Bad: Generic permission
+await user.can('access', $.Product)
+```
+
+### 4. Handle Unauthenticated State
+
+Always handle cases where user is not logged in:
+
+```typescript
+try {
+  const currentUser = await user.current()
+} catch (error) {
+  if (error.code === 'UNAUTHENTICATED') {
+    // Handle unauthenticated state
+    return redirectToLogin()
+  }
+  throw error
+}
+```
+
+## Troubleshooting
+
+### "User not authenticated" Error
+
+Check that authentication is properly configured:
+
+```typescript
+// Verify authentication status
+if (!(await user.isAuthenticated())) {
+  console.log('User is not authenticated')
+  // Redirect to login
+}
+```
+
+### "Permission denied" Error
+
+Verify user has the required permission:
+
+```typescript
+// Check permission
+if (!(await user.can('edit', $.Product))) {
+  console.log('User does not have edit permission')
+  // Show appropriate message
+}
+```
+
+### Session Expired Error
+
+Refresh the session or re-authenticate:
+
+```typescript
+try {
+  const session = await user.session()
+  if (!session.isActive) {
+    // Session expired, refresh or re-authenticate
+    await user.refreshSession()
+  }
+} catch (error) {
+  // Session expired, redirect to login
+  return redirectToLogin()
+}
+```
+
+## Support
+
+- [API Reference](../api/) - Complete API documentation
+- [Examples](../examples/) - Code examples
+- [GitHub Issues](https://github.com/dot-do/ai/issues) - Report bugs
+- [Discord Community](https://discord.gg/dotdo) - Get help
+
+## License
+
+CC-BY-4.0 (Open Source)

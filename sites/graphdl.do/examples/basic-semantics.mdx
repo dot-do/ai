@@ -1,0 +1,513 @@
+---
+$id: https://graphdl.do/examples/basic-semantics
+$type: HowTo
+title: Basic Semantics with the $ Proxy
+description: Learn how to use the $ semantic proxy to create type-safe semantic patterns
+keywords: [graphdl, semantic-proxy, dollar-sign, examples, tutorial]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Basic Semantics with the $ Proxy
+
+The `$` semantic proxy is the core feature of graphdl, enabling natural, type-safe creation of semantic patterns. This example demonstrates the fundamental usage patterns.
+
+## Overview
+
+The `$` proxy captures property access chains and converts them into semantic paths following the `$.Subject.predicate.Object` pattern. This makes working with semantic graphs as intuitive as working with JavaScript objects.
+
+## Simple Semantic Paths
+
+Create semantic paths using property access:
+
+```typescript
+import $ from 'graphdl'
+
+// Create semantic paths
+const path1 = $.Person.worksFor.Organization
+const path2 = $.Product.locatedAt.Warehouse
+const path3 = $.Order.fulfilledBy.Service
+
+// Convert to string
+console.log(String(path1))
+// Output: "$.Person.worksFor.Organization"
+
+console.log(String(path2))
+// Output: "$.Product.locatedAt.Warehouse"
+
+console.log(String(path3))
+// Output: "$.Order.fulfilledBy.Service"
+```
+
+## Using with Instances
+
+Create paths with specific entity instances:
+
+```typescript
+import $ from 'graphdl'
+
+// Paths with specific entities
+const johnWorksForAcme = $.John.worksFor.Acme
+const acmeOwnsWidget = $.Acme.owns.WidgetBrand
+const widgetMadeInSF = $.WidgetBrand.manufacturedIn.SanFrancisco
+
+console.log(String(johnWorksForAcme))
+// Output: "$.John.worksFor.Acme"
+
+console.log(String(acmeOwnsWidget))
+// Output: "$.Acme.owns.WidgetBrand"
+
+console.log(String(widgetMadeInSF))
+// Output: "$.WidgetBrand.manufacturedIn.SanFrancisco"
+```
+
+## Path Conversion
+
+The `$` proxy provides multiple ways to convert to strings:
+
+```typescript
+import $ from 'graphdl'
+
+const path = $.Person.hasOccupation.Occupation
+
+// Method 1: String constructor
+const str1 = String(path)
+console.log(str1) // "$.Person.hasOccupation.Occupation"
+
+// Method 2: toString() method
+const str2 = path.toString()
+console.log(str2) // "$.Person.hasOccupation.Occupation"
+
+// Method 3: valueOf() method
+const str3 = path.valueOf()
+console.log(str3) // "$.Person.hasOccupation.Occupation"
+
+// Method 4: Template literals
+console.log(`Path: ${path}`)
+// Output: "Path: $.Person.hasOccupation.Occupation"
+```
+
+## Common Business Patterns
+
+### Organizational Relationships
+
+```typescript
+import $ from 'graphdl'
+
+// Employment
+const employment = $.Person.worksFor.Organization
+const manages = $.Manager.manages.Employee
+const reports = $.Employee.reportsTo.Manager
+
+// Ownership
+const owns = $.Organization.owns.Brand
+const subsidiary = $.Corporation.owns.Subsidiary
+const parent = $.Subsidiary.partOf.Corporation
+
+console.log(String(employment))
+// Output: "$.Person.worksFor.Organization"
+
+console.log(String(owns))
+// Output: "$.Organization.owns.Brand"
+```
+
+### Product and Inventory
+
+```typescript
+import $ from 'graphdl'
+
+// Product relationships
+const manufacturer = $.Product.manufacturedBy.Organization
+const brand = $.Product.brand.Brand
+const category = $.Product.category.Category
+
+// Location
+const location = $.Product.locatedAt.Warehouse
+const shipping = $.Product.shippingTo.Customer
+const storage = $.Inventory.storedAt.Warehouse
+
+console.log(String(manufacturer))
+// Output: "$.Product.manufacturedBy.Organization"
+
+console.log(String(location))
+// Output: "$.Product.locatedAt.Warehouse"
+```
+
+### Customer and Orders
+
+```typescript
+import $ from 'graphdl'
+
+// Customer relationships
+const purchases = $.Customer.purchases.Product
+const subscribes = $.Customer.subscribedTo.Service
+const reviews = $.Customer.reviews.Product
+
+// Order relationships
+const orderedBy = $.Order.orderedBy.Customer
+const contains = $.Order.contains.Product
+const fulfilled = $.Order.fulfilledBy.Warehouse
+
+console.log(String(purchases))
+// Output: "$.Customer.purchases.Product"
+
+console.log(String(orderedBy))
+// Output: "$.Order.orderedBy.Customer"
+```
+
+## Working with Vocabularies
+
+### Schema.org
+
+```typescript
+import $ from 'graphdl'
+import type { Person, Organization } from 'schema.org.ai'
+
+// Schema.org entity types
+const personType = $.Person
+const orgType = $.Organization
+const productType = $.Product
+
+// Schema.org relationships
+const worksFor = $.Person.worksFor.Organization
+const author = $.Person.author.CreativeWork
+const publisher = $.CreativeWork.publisher.Organization
+
+console.log(String(worksFor))
+// Output: "$.Person.worksFor.Organization"
+```
+
+### GS1 Supply Chain
+
+```typescript
+import $ from 'graphdl'
+
+// GS1 patterns (camelCase)
+const inTransit = $.Shipment.inTransit.Warehouse
+const containedIn = $.Product.containedIn.Container
+const transformedFrom = $.Product.transformedFrom.RawMaterial
+
+// Business steps
+const receiving = $.Product.receiving.Warehouse
+const shipping = $.Product.shipping.Customer
+const commissioning = $.Product.commissioning.Factory
+
+console.log(String(inTransit))
+// Output: "$.Shipment.inTransit.Warehouse"
+
+console.log(String(receiving))
+// Output: "$.Product.receiving.Warehouse"
+```
+
+### O\*NET Occupations
+
+```typescript
+import $ from 'graphdl'
+
+// Occupation relationships
+const hasOccupation = $.Person.hasOccupation.Occupation
+const requiresSkill = $.Occupation.requiresSkill.Skill
+const requiresAbility = $.Occupation.requiresAbility.Ability
+
+// Specific skills
+const hasSkill = $.Person.hasSkill.Skill
+const hasAbility = $.Person.hasAbility.Ability
+const completedTraining = $.Person.completedTraining.Course
+
+console.log(String(hasOccupation))
+// Output: "$.Person.hasOccupation.Occupation"
+
+console.log(String(requiresSkill))
+// Output: "$.Occupation.requiresSkill.Skill"
+```
+
+## Parsing Semantic Paths
+
+Extract components from semantic paths:
+
+```typescript
+import { parsePath } from 'graphdl'
+
+// Parse a semantic path
+const path = '$.Person.worksFor.Organization'
+const parsed = parsePath(path)
+
+console.log(parsed)
+// Output:
+// {
+//   subject: 'Person',
+//   predicate: 'worksFor',
+//   object: 'Organization'
+// }
+
+// Use the components
+if (parsed) {
+  console.log(`Subject: ${parsed.subject}`)
+  // Output: "Subject: Person"
+
+  console.log(`Predicate: ${parsed.predicate}`)
+  // Output: "Predicate: worksFor"
+
+  console.log(`Object: ${parsed.object}`)
+  // Output: "Object: Organization"
+}
+```
+
+## Building Semantic Path Functions
+
+Create reusable semantic path builders:
+
+```typescript
+import $ from 'graphdl'
+
+// Generic path builder
+function buildPath(subject: string, predicate: string, object: string) {
+  // Use dynamic property access
+  return $[subject][predicate][object]
+}
+
+// Use the builder
+const path1 = buildPath('Person', 'worksFor', 'Organization')
+const path2 = buildPath('Product', 'locatedAt', 'Warehouse')
+
+console.log(String(path1))
+// Output: "$.Person.worksFor.Organization"
+
+console.log(String(path2))
+// Output: "$.Product.locatedAt.Warehouse"
+```
+
+## Creating Path Arrays
+
+Generate arrays of related semantic paths:
+
+```typescript
+import $ from 'graphdl'
+
+// Employment relationships
+const employmentPaths = [
+  $.Person.worksFor.Organization,
+  $.Employee.employedBy.Company,
+  $.Contractor.contractsWith.Client,
+  $.Freelancer.providesServicesTo.Business,
+]
+
+// Convert all to strings
+const pathStrings = employmentPaths.map((p) => String(p))
+console.log(pathStrings)
+// Output: [
+//   "$.Person.worksFor.Organization",
+//   "$.Employee.employedBy.Company",
+//   "$.Contractor.contractsWith.Client",
+//   "$.Freelancer.providesServicesTo.Business"
+// ]
+```
+
+## Dynamic Path Construction
+
+Build paths dynamically based on data:
+
+```typescript
+import $ from 'graphdl'
+
+// Data-driven path construction
+const relationships = [
+  { subject: 'Person', predicate: 'worksFor', object: 'Organization' },
+  { subject: 'Product', predicate: 'locatedAt', object: 'Warehouse' },
+  { subject: 'Order', predicate: 'fulfilledBy', object: 'Service' },
+]
+
+// Build paths from data
+const paths = relationships.map((rel) => {
+  const path = $[rel.subject][rel.predicate][rel.object]
+  return String(path)
+})
+
+console.log(paths)
+// Output: [
+//   "$.Person.worksFor.Organization",
+//   "$.Product.locatedAt.Warehouse",
+//   "$.Order.fulfilledBy.Service"
+// ]
+```
+
+## Type-Safe Paths
+
+Use TypeScript for type safety:
+
+```typescript
+import $ from 'graphdl'
+import type { Person, Organization } from 'schema.org.ai'
+
+// Define typed entities
+const person: Person = {
+  $type: 'Person',
+  $id: 'john',
+  name: 'John Doe',
+}
+
+const org: Organization = {
+  $type: 'Organization',
+  $id: 'acme',
+  name: 'Acme Corp',
+}
+
+// Create type-safe paths
+const path = $.Person.worksFor.Organization
+
+// Use with typed entities
+console.log(`${person.name} works for ${org.name}`)
+console.log(`Relationship: ${path}`)
+// Output:
+// "John Doe works for Acme Corp"
+// "Relationship: $.Person.worksFor.Organization"
+```
+
+## Nested Paths (Conceptual)
+
+While graphdl doesn't traverse nested relationships automatically, you can represent multi-hop concepts:
+
+```typescript
+import $ from 'graphdl'
+
+// First hop
+const employmentPath = $.Person.worksFor.Organization
+
+// Second hop
+const ownershipPath = $.Organization.owns.Brand
+
+// Third hop
+const locationPath = $.Brand.manufacturedIn.City
+
+// In practice, you'd query these separately
+console.log(String(employmentPath))
+// Output: "$.Person.worksFor.Organization"
+
+console.log(String(ownershipPath))
+// Output: "$.Organization.owns.Brand"
+
+console.log(String(locationPath))
+// Output: "$.Brand.manufacturedIn.City"
+```
+
+## Best Practices
+
+### Use Descriptive Names
+
+```typescript
+import $ from 'graphdl'
+
+// Good - clear and specific
+const clear1 = $.Person.worksFor.Organization
+const clear2 = $.Product.manufacturedBy.Company
+const clear3 = $.Order.shippedTo.Address
+
+// Avoid - vague or ambiguous
+const vague1 = $.Person.linkedTo.Organization
+const vague2 = $.Product.relatedTo.Company
+const vague3 = $.Order.associatedWith.Address
+```
+
+### Follow Naming Conventions
+
+```typescript
+import $ from 'graphdl'
+
+// Types: PascalCase
+$.Person
+$.Organization
+$.Product
+
+// Predicates: camelCase
+$.worksFor
+$.locatedAt
+$.hasSkill
+
+// Complete pattern
+$.Person.worksFor.Organization
+```
+
+### Convert Explicitly
+
+```typescript
+import $ from 'graphdl'
+
+const path = $.Person.worksFor.Organization
+
+// Good - explicit conversion
+const pathString = String(path)
+console.log(pathString)
+
+// Good - template literal
+console.log(`Path: ${path}`)
+
+// Also works - direct logging (uses toString)
+console.log(path)
+```
+
+## Complete Example
+
+Putting it all together:
+
+```typescript
+import $ from 'graphdl'
+import { parsePath } from 'graphdl'
+
+// Define semantic paths
+const paths = {
+  employment: $.Person.worksFor.Organization,
+  ownership: $.Organization.owns.Brand,
+  location: $.Product.locatedAt.Warehouse,
+  fulfillment: $.Order.fulfilledBy.Service,
+}
+
+// Convert to strings
+const pathStrings = Object.entries(paths).map(([key, path]) => ({
+  name: key,
+  pattern: String(path),
+}))
+
+console.log('Semantic Patterns:')
+pathStrings.forEach(({ name, pattern }) => {
+  console.log(`  ${name}: ${pattern}`)
+})
+
+// Parse a path
+const parsed = parsePath(String(paths.employment))
+if (parsed) {
+  console.log('\nParsed employment path:')
+  console.log(`  Subject: ${parsed.subject}`)
+  console.log(`  Predicate: ${parsed.predicate}`)
+  console.log(`  Object: ${parsed.object}`)
+}
+
+// Output:
+// Semantic Patterns:
+//   employment: $.Person.worksFor.Organization
+//   ownership: $.Organization.owns.Brand
+//   location: $.Product.locatedAt.Warehouse
+//   fulfillment: $.Order.fulfilledBy.Service
+//
+// Parsed employment path:
+//   Subject: Person
+//   Predicate: worksFor
+//   Object: Organization
+```
+
+## Next Steps
+
+- [Semantic Patterns](../docs/semantic-patterns) - Deep dive into patterns
+- [Graph Queries](./graph-queries) - Building and querying graphs
+- [Relationships](../docs/relationships) - Working with graph relationships
+- [API Reference](../api/) - Complete API documentation
+
+## See Also
+
+- [Getting Started](../docs/getting-started) - Installation and setup
+- [schema.org.ai](https://schema.org.ai) - Schema.org vocabulary
+- [sdk.do](https://sdk.do) - Using with the SDK
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

@@ -1,0 +1,731 @@
+---
+$id: https://mcp.do/examples/basic
+$type: HowTo
+title: Basic mcp.do Examples
+description: Common patterns and examples for using mcp.do with Claude Desktop
+keywords: [mcp, examples, patterns, claude, typescript]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Basic mcp.do Examples
+
+Common patterns and examples for using mcp.do with Claude Desktop.
+
+## Database Operations
+
+### List Entities
+
+Query all entities of a specific type:
+
+**Prompt**:
+
+```
+Use the do tool to list all businesses
+```
+
+**Claude executes**:
+
+```typescript
+import $, { db } from 'sdk.do'
+
+const businesses = await db.list($.Business)
+
+return {
+  count: businesses.length,
+  data: businesses,
+}
+```
+
+### Filter Entities
+
+Query entities with filters:
+
+**Prompt**:
+
+```
+Use the do tool to find all businesses in the Technology industry
+```
+
+**Claude executes**:
+
+```typescript
+import $, { db } from 'sdk.do'
+
+const businesses = await db.list($.Business, {
+  where: { industry: 'Technology' },
+})
+
+return businesses
+```
+
+### Get Single Entity
+
+Retrieve a specific entity by ID:
+
+**Prompt**:
+
+```
+Use the do tool to get the business with ID 'business-123'
+```
+
+**Claude executes**:
+
+```typescript
+import $, { db } from 'sdk.do'
+
+const business = await db.get($.Business, 'business-123')
+
+return business
+```
+
+### Create Entity
+
+Create a new entity:
+
+**Prompt**:
+
+```
+Use the do tool to create a new business named "Acme Corp" in the Technology industry
+```
+
+**Claude executes**:
+
+```typescript
+import $, { db } from 'sdk.do'
+
+const business = await db.create($.Business, {
+  name: 'Acme Corp',
+  industry: 'Technology',
+  foundedDate: new Date().toISOString(),
+})
+
+return business
+```
+
+### Update Entity
+
+Update an existing entity:
+
+**Prompt**:
+
+```
+Use the do tool to update business 'business-123' with 50 employees
+```
+
+**Claude executes**:
+
+```typescript
+import $, { db } from 'sdk.do'
+
+const business = await db.update($.Business, 'business-123', {
+  employees: 50,
+  updatedDate: new Date().toISOString(),
+})
+
+return business
+```
+
+### Delete Entity
+
+Delete an entity:
+
+**Prompt**:
+
+```
+Use the do tool to delete business 'business-123'
+```
+
+**Claude executes**:
+
+```typescript
+import $, { db } from 'sdk.do'
+
+await db.delete($.Business, 'business-123')
+
+return { success: true, message: 'Business deleted' }
+```
+
+## AI Operations
+
+### Generate Text
+
+Generate text using AI:
+
+**Prompt**:
+
+```
+Use the do tool to generate a company description for a tech startup
+```
+
+**Claude executes**:
+
+```typescript
+import { ai } from 'sdk.do'
+
+const description = await ai.generate({
+  prompt: 'Write a compelling company description for an innovative tech startup',
+  model: 'gpt-5',
+})
+
+return description
+```
+
+### Generate with Schema
+
+Generate structured content:
+
+**Prompt**:
+
+```
+Use the do tool to generate a product description with title and body
+```
+
+**Claude executes**:
+
+```typescript
+import $, { ai } from 'sdk.do'
+
+const product = await ai.generate({
+  prompt: 'Create a product description for an AI-powered CRM',
+  schema: $.Product,
+  model: 'gpt-5',
+})
+
+return product
+```
+
+### Create Embeddings
+
+Generate embeddings for text:
+
+**Prompt**:
+
+```
+Use the do tool to create embeddings for "AI-powered business automation"
+```
+
+**Claude executes**:
+
+```typescript
+import { ai } from 'sdk.do'
+
+const embeddings = await ai.embed({
+  text: 'AI-powered business automation',
+  model: 'text-embedding-3-small',
+})
+
+return {
+  dimensions: embeddings.length,
+  embeddings,
+}
+```
+
+## Combining Database and AI
+
+### Generate and Store Content
+
+Generate AI content and save to database:
+
+**Prompt**:
+
+```
+Use the do tool to generate a description for business 'business-123' and save it
+```
+
+**Claude executes**:
+
+```typescript
+import $, { db, ai } from 'sdk.do'
+
+// Get the business
+const business = await db.get($.Business, 'business-123')
+
+// Generate description
+const description = await ai.generate({
+  prompt: `Write a compelling description for ${business.name}, a ${business.industry} company`,
+  schema: $.Text,
+  model: 'gpt-5',
+})
+
+// Update business with description
+const updated = await db.update($.Business, business.$id, {
+  description: description.text,
+})
+
+return updated
+```
+
+### Enrich Multiple Entities
+
+Process multiple entities with AI:
+
+**Prompt**:
+
+```
+Use the do tool to generate descriptions for all products without descriptions
+```
+
+**Claude executes**:
+
+```typescript
+import $, { db, ai } from 'sdk.do'
+
+// Get products without descriptions
+const products = await db.list($.Product, {
+  where: { description: null },
+  limit: 10,
+})
+
+// Generate descriptions
+const results = []
+
+for (const product of products) {
+  const description = await ai.generate({
+    prompt: `Write a product description for: ${product.name}`,
+    schema: $.Text,
+    model: 'gpt-5',
+  })
+
+  const updated = await db.update($.Product, product.$id, {
+    description: description.text,
+  })
+
+  results.push(updated)
+}
+
+return {
+  processed: results.length,
+  products: results,
+}
+```
+
+## Raw SQL Queries
+
+### Simple Query
+
+Execute a SQL query:
+
+**Prompt**:
+
+```
+Use the do tool to count total users in the database
+```
+
+**Claude executes**:
+
+```typescript
+import { db } from 'sdk.do'
+
+const result = await db.query(`
+  SELECT COUNT(*) as total
+  FROM users
+`)
+
+return result[0]
+```
+
+### Query with Parameters
+
+Execute a parameterized query:
+
+**Prompt**:
+
+```
+Use the do tool to find users who signed up after January 1, 2025
+```
+
+**Claude executes**:
+
+```typescript
+import { db } from 'sdk.do'
+
+const result = await db.query(
+  `
+  SELECT *
+  FROM users
+  WHERE created_at > ?
+  ORDER BY created_at DESC
+`,
+  ['2025-01-01']
+)
+
+return result
+```
+
+### Aggregation Query
+
+Perform data aggregation:
+
+**Prompt**:
+
+```
+Use the do tool to get sales totals by category
+```
+
+**Claude executes**:
+
+```typescript
+import { db } from 'sdk.do'
+
+const result = await db.query(`
+  SELECT
+    category,
+    COUNT(*) as count,
+    SUM(amount) as total,
+    AVG(amount) as average
+  FROM sales
+  GROUP BY category
+  ORDER BY total DESC
+`)
+
+return result
+```
+
+## Error Handling
+
+### Handle Missing Entity
+
+Handle the case when an entity doesn't exist:
+
+**Prompt**:
+
+```
+Use the do tool to get business 'nonexistent', and handle if it doesn't exist
+```
+
+**Claude executes**:
+
+```typescript
+import $, { db } from 'sdk.do'
+
+try {
+  const business = await db.get($.Business, 'nonexistent')
+  return business
+} catch (error) {
+  return {
+    error: true,
+    message: 'Business not found',
+    id: 'nonexistent',
+  }
+}
+```
+
+### Validate Before Create
+
+Validate data before creating:
+
+**Prompt**:
+
+```
+Use the do tool to create a business, but validate the name is not empty
+```
+
+**Claude executes**:
+
+```typescript
+import $, { db } from 'sdk.do'
+
+const name = ''
+
+if (!name || name.trim().length === 0) {
+  return {
+    error: true,
+    message: 'Business name cannot be empty',
+  }
+}
+
+const business = await db.create($.Business, {
+  name: name.trim(),
+  industry: 'Technology',
+})
+
+return business
+```
+
+### Handle API Errors
+
+Handle AI API errors gracefully:
+
+**Prompt**:
+
+```
+Use the do tool to generate text, and handle API errors
+```
+
+**Claude executes**:
+
+```typescript
+import { ai } from 'sdk.do'
+
+try {
+  const result = await ai.generate({
+    prompt: 'Write a haiku',
+    model: 'gpt-5',
+  })
+  return result
+} catch (error) {
+  return {
+    error: true,
+    message: 'AI generation failed',
+    details: error.message,
+  }
+}
+```
+
+## Semantic Patterns
+
+### Use Semantic Types
+
+Query using semantic `$.Type` patterns:
+
+**Prompt**:
+
+```
+Use the do tool to list all entities of type Organization
+```
+
+**Claude executes**:
+
+```typescript
+import $, { db } from 'sdk.do'
+
+const organizations = await db.list($.Organization)
+
+return organizations
+```
+
+### Query Relationships
+
+Query related entities:
+
+**Prompt**:
+
+```
+Use the do tool to find all brands owned by business 'business-123'
+```
+
+**Claude executes**:
+
+```typescript
+import $, { db } from 'sdk.do'
+
+const business = await db.get($.Business, 'business-123')
+
+const brands = await db.related(business, $.owns, $.Brand)
+
+return brands
+```
+
+### Create with Relationships
+
+Create entities with relationships:
+
+**Prompt**:
+
+```
+Use the do tool to create a brand owned by business 'business-123'
+```
+
+**Claude executes**:
+
+```typescript
+import $, { db } from 'sdk.do'
+
+const brand = await db.create($.Brand, {
+  name: 'Acme Brand',
+  owner: 'business-123',
+})
+
+return brand
+```
+
+## Data Transformation
+
+### Map and Transform
+
+Transform query results:
+
+**Prompt**:
+
+```
+Use the do tool to get all businesses and return just their names and industries
+```
+
+**Claude executes**:
+
+```typescript
+import $, { db } from 'sdk.do'
+
+const businesses = await db.list($.Business)
+
+return businesses.map((b) => ({
+  name: b.name,
+  industry: b.industry,
+}))
+```
+
+### Filter and Sort
+
+Filter and sort results:
+
+**Prompt**:
+
+```
+Use the do tool to get technology businesses sorted by name
+```
+
+**Claude executes**:
+
+```typescript
+import $, { db } from 'sdk.do'
+
+const businesses = await db.list($.Business, {
+  where: { industry: 'Technology' },
+  orderBy: { name: 'asc' },
+})
+
+return businesses
+```
+
+### Pagination
+
+Implement pagination:
+
+**Prompt**:
+
+```
+Use the do tool to get the first 10 businesses
+```
+
+**Claude executes**:
+
+```typescript
+import $, { db } from 'sdk.do'
+
+const businesses = await db.list($.Business, {
+  limit: 10,
+  offset: 0,
+})
+
+return {
+  page: 1,
+  pageSize: 10,
+  data: businesses,
+}
+```
+
+## Returning Results
+
+### Simple Return
+
+Return basic data:
+
+```typescript
+return { message: 'Success' }
+```
+
+### Structured Return
+
+Return structured data:
+
+```typescript
+return {
+  success: true,
+  data: result,
+  count: result.length,
+  timestamp: new Date().toISOString(),
+}
+```
+
+### Error Return
+
+Return error information:
+
+```typescript
+return {
+  error: true,
+  message: 'Operation failed',
+  details: error.message,
+  code: 'OPERATION_FAILED',
+}
+```
+
+## Best Practices
+
+### 1. Always Import What You Need
+
+```typescript
+// Good
+import $, { db, ai } from 'sdk.do'
+
+// Avoid
+import sdk from 'sdk.do'
+```
+
+### 2. Use Semantic Types
+
+```typescript
+// Good
+await db.list($.Business)
+
+// Avoid
+await db.list('businesses')
+```
+
+### 3. Handle Errors
+
+```typescript
+// Good
+try {
+  const result = await db.get($.Business, id)
+  return result
+} catch (error) {
+  return { error: true, message: error.message }
+}
+
+// Avoid
+const result = await db.get($.Business, id)
+return result
+```
+
+### 4. Return Structured Data
+
+```typescript
+// Good
+return {
+  success: true,
+  count: businesses.length,
+  data: businesses,
+}
+
+// Avoid
+return businesses
+```
+
+### 5. Use Meaningful Variable Names
+
+```typescript
+// Good
+const techBusinesses = await db.list($.Business, {
+  where: { industry: 'Technology' },
+})
+
+// Avoid
+const b = await db.list($.Business, {
+  where: { industry: 'Technology' },
+})
+```
+
+## Next Steps
+
+- [Execute TypeScript](./execute-typescript) - Advanced TypeScript patterns
+- [Claude Workflow](./claude-workflow) - Complete workflow examples
+- [API Reference](../api/) - Complete tool reference
+
+## See Also
+
+- [Getting Started](../docs/getting-started) - Setup guide
+- [Claude Integration](../docs/claude-integration) - Claude Desktop configuration
+- [sdk.do](https://sdk.do) - Complete SDK documentation

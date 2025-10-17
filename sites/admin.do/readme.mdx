@@ -1,0 +1,344 @@
+---
+$id: https://admin.do
+$type: WebSite
+name: admin.do
+description: Comprehensive admin interface for managing users, systems, configurations, and monitoring
+keywords: [admin, dashboard, management, monitoring, configuration, users, rbac]
+license: MIT
+---
+
+# admin.do
+
+**Comprehensive admin interface with user management, system configuration, monitoring, and RBAC**
+
+admin.do provides a complete administrative interface for managing the `.do` platform, including user management, role-based access control, system configuration, monitoring dashboards, and operational tools.
+
+## Quick Start
+
+```bash
+pnpm add admin.do
+```
+
+```typescript
+import $, { admin } from 'admin.do'
+
+// User management
+const user = await admin.users.create({
+  email: 'user@example.com',
+  role: 'developer',
+  permissions: ['read', 'write'],
+})
+
+// System configuration
+await admin.config.set('feature_flags', {
+  newUI: true,
+  betaFeatures: false,
+})
+
+// Monitoring
+const metrics = await admin.monitor.getMetrics({
+  period: '24h',
+  metrics: ['cpu', 'memory', 'requests'],
+})
+
+// Audit logging
+await admin.audit.log({
+  action: 'user.created',
+  user: admin.currentUser,
+  details: { userId: user.$id },
+})
+```
+
+## Key Features
+
+### User Management
+
+Complete user lifecycle management:
+
+```typescript
+import { admin } from 'admin.do'
+
+// Create users
+const user = await admin.users.create({
+  email: 'john@acme.com',
+  name: 'John Doe',
+  role: 'developer',
+  department: 'Engineering',
+  permissions: ['platform.read', 'database.write'],
+})
+
+// List users
+const users = await admin.users.list({
+  where: { role: 'developer', active: true },
+  limit: 50,
+})
+
+// Update user
+await admin.users.update(user.$id, {
+  role: 'senior-developer',
+  permissions: ['platform.admin', 'database.admin'],
+})
+
+// Suspend user
+await admin.users.suspend(user.$id, {
+  reason: 'Policy violation',
+  duration: 'PT24H',
+})
+
+// Delete user
+await admin.users.delete(user.$id, {
+  transferData: 'manager@acme.com',
+})
+```
+
+### Role-Based Access Control (RBAC)
+
+Granular permission management:
+
+```typescript
+// Create role
+const role = await admin.rbac.createRole({
+  name: 'content-manager',
+  description: 'Manages content and documentation',
+  permissions: ['docs.read', 'docs.write', 'docs.publish', 'cms.manage'],
+})
+
+// Assign role to user
+await admin.rbac.assignRole(user, role)
+
+// Create custom permission
+await admin.rbac.createPermission({
+  name: 'analytics.view',
+  description: 'View analytics dashboards',
+  resource: 'analytics',
+  action: 'view',
+})
+
+// Check permissions
+const canPublish = await admin.rbac.can(user, 'docs.publish')
+
+// Get user permissions
+const permissions = await admin.rbac.getUserPermissions(user)
+console.log('Permissions:', permissions)
+```
+
+### System Configuration
+
+Manage platform configuration:
+
+```typescript
+// Get configuration
+const config = await admin.config.get('database')
+console.log('Max connections:', config.maxConnections)
+
+// Update configuration
+await admin.config.set('database', {
+  maxConnections: 100,
+  timeout: 30000,
+  ssl: true,
+})
+
+// Feature flags
+await admin.config.setFeatureFlag('new-dashboard', {
+  enabled: true,
+  rollout: 0.1, // 10% rollout
+  allowlist: ['team-alpha'],
+})
+
+// Get all configuration
+const allConfig = await admin.config.getAll()
+
+// Configuration versioning
+await admin.config.createVersion({
+  name: 'v2.0-config',
+  changes: ['Updated database settings', 'Enabled new features'],
+})
+```
+
+### Monitoring & Metrics
+
+Real-time system monitoring:
+
+```typescript
+// Get system metrics
+const metrics = await admin.monitor.getMetrics({
+  period: '24h',
+  interval: '1h',
+  metrics: ['cpu', 'memory', 'disk', 'network'],
+})
+
+// Application metrics
+const appMetrics = await admin.monitor.getAppMetrics({
+  apps: ['sdk.do', 'database.do', 'events.do'],
+  metrics: ['requests', 'latency', 'errors'],
+})
+
+// Real-time monitoring
+admin.monitor.subscribe('system', (data) => {
+  console.log('CPU:', data.cpu)
+  console.log('Memory:', data.memory)
+  console.log('Load:', data.load)
+})
+
+// Alerts
+await admin.monitor.createAlert({
+  name: 'High CPU Usage',
+  condition: 'cpu > 80',
+  duration: 'PT5M',
+  actions: ['email', 'slack'],
+  recipients: ['ops@acme.com'],
+})
+```
+
+### Audit Logging
+
+Complete audit trail:
+
+```typescript
+// Log action
+await admin.audit.log({
+  action: 'config.updated',
+  user: admin.currentUser,
+  resource: 'database',
+  details: {
+    field: 'maxConnections',
+    oldValue: 50,
+    newValue: 100
+  }
+})
+
+// Query audit logs
+const logs = await admin.audit.query({
+  from: '2025-01-01',
+  to: '2025-01-31',
+  actions: ['user.created', 'user.deleted'],
+  users: ['admin@acme.com']
+})
+
+// Export audit logs
+const export = await admin.audit.export({
+  format: 'csv',
+  period: '2025-Q1'
+})
+```
+
+### Dashboard Creation
+
+Custom dashboards:
+
+```typescript
+// Create dashboard
+const dashboard = await admin.dashboards.create({
+  name: 'Operations Overview',
+  layout: 'grid',
+  widgets: [
+    {
+      type: 'metric',
+      title: 'Active Users',
+      query: 'users.active.count',
+    },
+    {
+      type: 'chart',
+      title: 'Request Rate',
+      query: 'requests.rate',
+      chartType: 'line',
+    },
+    {
+      type: 'table',
+      title: 'Recent Errors',
+      query: 'errors.recent',
+      limit: 10,
+    },
+  ],
+})
+
+// Share dashboard
+await admin.dashboards.share(dashboard, {
+  users: ['team@acme.com'],
+  permissions: 'view',
+})
+```
+
+## Use Cases
+
+### Multi-Tenant Administration
+
+```typescript
+import { admin } from 'admin.do'
+
+async function manageTenants() {
+  // Create tenant
+  const tenant = await admin.tenants.create({
+    name: 'Acme Corp',
+    plan: 'enterprise',
+    limits: {
+      users: 100,
+      storage: '100GB',
+      requests: 1000000,
+    },
+  })
+
+  // Configure tenant
+  await admin.tenants.configure(tenant, {
+    features: ['sso', 'audit-logs', 'custom-domain'],
+    branding: {
+      logo: 'https://acme.com/logo.png',
+      primaryColor: '#007bff',
+    },
+  })
+
+  // Monitor tenant usage
+  const usage = await admin.tenants.getUsage(tenant)
+  console.log(`Users: ${usage.users}/${tenant.limits.users}`)
+  console.log(`Storage: ${usage.storage}/${tenant.limits.storage}`)
+}
+```
+
+### Security & Compliance
+
+```typescript
+async function ensureCompliance() {
+  // Security audit
+  const audit = await admin.security.audit({
+    checks: ['passwords', 'mfa', 'sessions', 'permissions'],
+  })
+
+  // Enforce policies
+  await admin.security.enforcePolicy({
+    passwordPolicy: {
+      minLength: 12,
+      requireSpecialChars: true,
+      maxAge: 'P90D',
+    },
+    sessionPolicy: {
+      timeout: 'PT1H',
+      requireMFA: true,
+    },
+  })
+
+  // Generate compliance report
+  const report = await admin.compliance.generateReport({
+    standards: ['SOC2', 'GDPR', 'HIPAA'],
+    period: '2025-Q1',
+  })
+}
+```
+
+## TypeScript Support
+
+```typescript
+import { admin } from 'admin.do'
+import type { User, Role, Permission, Tenant } from 'admin.do'
+
+const user: User = await admin.users.get(userId)
+const role: Role = await admin.rbac.getRole('admin')
+const tenant: Tenant = await admin.tenants.get(tenantId)
+```
+
+## License
+
+MIT (Open Source)
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

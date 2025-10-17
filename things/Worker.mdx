@@ -1,0 +1,373 @@
+---
+$type: Noun
+$id: https://schema.org.ai/Worker
+$context: https://schema.org.ai
+name: Worker
+description: A Cloudflare Worker service definition with configuration and dependencies
+status: public
+license: MIT
+source: platform.do
+category: Infrastructure
+tags:
+  - cloudflare
+  - worker
+  - serverless
+  - mdxld
+created: '2025-10-14T17:13:00Z'
+---
+
+# Worker
+
+A Worker represents a Cloudflare Worker service definition using MDXLD syntax. Workers are serverless functions that run on Cloudflare's edge network.
+
+## Front Matter Structure
+
+Worker files use `$type: Worker` and include Cloudflare Worker configuration in the frontmatter:
+
+```yaml
+---
+$type: Worker
+$id: https://workers.do/my-worker
+$context: https://schema.workers.do/v1
+name: my-worker
+main: src/index.ts
+compatibility_date: 2025-10-04
+compatibility_flags:
+  - nodejs_compat
+observability:
+  enabled: true
+---
+```
+
+## Dependencies
+
+**Critical**: Workers that use external npm packages MUST declare dependencies in the frontmatter using package.json format.
+
+### Declaring Dependencies
+
+Add a `dependencies` field in the frontmatter with package names and versions:
+
+```yaml
+---
+$type: Worker
+$id: https://workers.do/my-worker
+name: my-worker
+main: src/index.ts
+dependencies:
+  hono: ^4.7.11
+  yaml: ^2.6.1
+  zod: ^3.24.1
+---
+```
+
+### Dependency Format
+
+The `dependencies` field follows the same format as `package.json`:
+
+- **Key**: Package name (string)
+- **Value**: Version specifier (string)
+  - Exact: `2.6.1`
+  - Caret (compatible): `^2.6.1` (allows 2.6.x, 2.7.x, but not 3.x)
+  - Tilde (patch): `~2.6.1` (allows 2.6.x only)
+  - Range: `>=2.6.0 <3.0.0`
+  - Latest: `*` or `latest` (not recommended for production)
+
+### Example: Integration Worker with Dependencies
+
+```yaml
+---
+$type: Integration
+$id: https://things.do/Zapier
+$context: https://schema.org.ai
+name: Zapier
+description: Integration source for importing Zapier apps
+status: public
+dependencies:
+  yaml: ^2.6.1
+  zod: ^3.24.1
+---
+```
+
+### Why Dependencies in Frontmatter?
+
+1. **Single Source of Truth**: Worker configuration and dependencies in one place
+2. **MDXLD Compliance**: Semantic metadata about what the worker needs
+3. **Deployment Automation**: Tools can read frontmatter to install dependencies
+4. **Documentation**: Dependencies are visible without opening package.json
+
+### Best Practices
+
+**DO:**
+
+- ✅ Declare ALL npm packages imported in your worker code
+- ✅ Use specific version ranges (caret `^` for most cases)
+- ✅ Keep dependencies minimal (bundle size matters on edge)
+- ✅ Use workspace catalog versions when available
+
+**DON'T:**
+
+- ❌ Import packages without declaring them in `dependencies`
+- ❌ Use `*` or `latest` in production workers
+- ❌ Forget to update versions when changing imports
+- ❌ Include dev dependencies (put those in package.json only)
+
+## Core Fields
+
+### Required Fields
+
+- **`$type`**: Must be `Worker` or a subtype (e.g., `Integration`)
+- **`$id`**: Unique identifier URL (e.g., `https://workers.do/my-worker`)
+- **`$context`**: Schema context (usually `https://schema.workers.do/v1`)
+- **`name`**: Worker name (kebab-case, matches directory name)
+- **`main`**: Entry point file path (e.g., `src/index.ts`)
+
+### Configuration Fields
+
+- **`compatibility_date`**: Cloudflare compatibility date (YYYY-MM-DD)
+- **`compatibility_flags`**: Array of compatibility flags
+  - `nodejs_compat` - Node.js compatibility
+  - `streams_enable_constructors` - Streams API
+- **`node_compat`**: Boolean, enables Node.js polyfills (legacy)
+
+### Service Bindings
+
+Connect to other workers via RPC:
+
+```yaml
+services:
+  - binding: API
+    service: api
+  - binding: DB
+    service: db
+```
+
+Access in code:
+
+```typescript
+interface Env {
+  API: Fetcher
+  DB: Fetcher
+}
+
+const response = await env.API.fetch(new Request('https://api.do/endpoint'))
+```
+
+### KV Namespaces
+
+Bind to Cloudflare KV storage:
+
+```yaml
+kv_namespaces:
+  - binding: CACHE
+    id: abc123
+```
+
+### Environment Variables
+
+Define environment-specific variables:
+
+```yaml
+vars:
+  API_URL: https://api.example.com
+  LOG_LEVEL: info
+```
+
+### Observability
+
+Enable Cloudflare observability features:
+
+```yaml
+observability:
+  enabled: true
+  head_sampling_rate: 1
+```
+
+### Tail Consumers
+
+Stream logs to another worker:
+
+```yaml
+tail_consumers:
+  - service: pipeline
+```
+
+## Complete Example
+
+````yaml
+---
+$type: Worker
+$id: https://workers.do/zapier-importer
+$context: https://schema.workers.do/v1
+name: zapier-importer
+description: Imports Zapier integration data into Things
+main: src/index.ts
+compatibility_date: 2025-10-04
+compatibility_flags:
+  - nodejs_compat
+dependencies:
+  hono: ^4.7.11
+  yaml: ^2.6.1
+  zod: ^3.24.1
+services:
+  - binding: API
+    service: api
+  - binding: DB
+    service: db
+kv_namespaces:
+  - binding: CACHE
+    id: zapier_cache_prod
+vars:
+  ZAPIER_API_URL: https://zapier.com/api/v4
+  RATE_LIMIT_MS: 250
+observability:
+  enabled: true
+  head_sampling_rate: 1
+tail_consumers:
+  - service: pipeline
+status: public
+license: MIT
+created: '2025-10-14T17:00:00Z'
+---
+
+# Zapier Importer Worker
+
+Imports Zapier app data and generates Thing definitions.
+
+## Usage
+
+```typescript
+import { importApps } from './zapier-importer'
+
+const result = await importApps({
+  outputDir: './ai/things',
+  rateLimitMs: 250,
+})
+
+console.log(`Imported ${result.totalImported} apps`)
+````
+
+## Dependencies
+
+- **hono**: Web framework for routing
+- **yaml**: Proper YAML serialization for frontmatter
+- **zod**: Runtime validation for API responses
+
+````
+
+## Related Types
+
+- **Integration**: A Worker that imports external data
+- **Service**: A Worker that provides RPC endpoints
+- **Pipeline**: A Worker that processes events/logs
+
+## Usage in Code
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Reference a worker
+const worker = $.Worker
+
+// Query workers by type
+const workers = await db.list($.Worker)
+
+// Get worker dependencies
+const zapier = await db.get($.Worker, 'https://workers.do/zapier-importer')
+console.log(zapier.dependencies) // { hono: '^4.7.11', yaml: '^2.6.1', ... }
+````
+
+## Migration Guide
+
+### From wrangler.toml to Worker.mdx
+
+Old `wrangler.toml`:
+
+```toml
+name = "my-worker"
+main = "src/index.ts"
+compatibility_date = "2025-10-04"
+
+[observability]
+enabled = true
+```
+
+New `worker.mdx`:
+
+```yaml
+---
+$type: Worker
+$id: https://workers.do/my-worker
+name: my-worker
+main: src/index.ts
+compatibility_date: 2025-10-04
+observability:
+  enabled: true
+---
+```
+
+### Adding Dependencies
+
+1. Identify npm packages used in your worker code
+2. Add `dependencies` field to frontmatter
+3. Use package.json version format (caret `^` recommended)
+4. Install: `pnpm install` (regenerates lockfile)
+
+Example:
+
+```typescript
+// Your worker imports these:
+import { Hono } from 'hono'
+import { stringify } from 'yaml'
+```
+
+Add to frontmatter:
+
+```yaml
+dependencies:
+  hono: ^4.7.11
+  yaml: ^2.6.1
+```
+
+## Troubleshooting
+
+### "Cannot find module" errors
+
+**Problem**: Worker imports a package not declared in `dependencies`
+
+**Solution**: Add the package to `dependencies` in frontmatter:
+
+```yaml
+dependencies:
+  missing-package: ^1.0.0
+```
+
+Then run `pnpm install` to update the lockfile.
+
+### Version conflicts
+
+**Problem**: Different workers need different versions of the same package
+
+**Solution**:
+
+1. Try using caret ranges (`^`) to allow compatible versions
+2. If truly incompatible, consider splitting into separate workers
+3. Use workspace catalog for shared dependencies
+
+### Bundle size issues
+
+**Problem**: Worker exceeds 1MB size limit
+
+**Solution**:
+
+1. Remove unused dependencies from `dependencies`
+2. Use dynamic imports for large packages
+3. Consider splitting functionality into multiple workers
+4. Check for accidental inclusion of dev dependencies
+
+## See Also
+
+- [Workers Documentation](../../workers/CLAUDE.md)
+- [MDXLD Worker Format](../../notes/2025-10-14/worker-mdxld-migration.md)
+- [Platform Architecture](../../ARCHITECTURE.md)
+- [Integration Type](./Integration.mdx)
+- [Thing Base Type](./Thing.mdx)

@@ -1,0 +1,703 @@
+---
+$id: https://every.do/api
+$type: APIReference
+title: API Reference
+description: Complete API reference for every.do scheduled workflows
+keywords: [api, reference, documentation, functions, types]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# API Reference
+
+Complete API reference for every.do scheduled workflows.
+
+## Functions
+
+### every()
+
+Schedule a workflow to run at specified intervals.
+
+**Signature:**
+
+```typescript
+function every(schedule: Schedule | string, handler: ScheduleHandler, options?: ScheduleOptions): ScheduledTask
+```
+
+**Parameters:**
+
+- `schedule` - Schedule pattern (semantic schedule or cron string)
+  - Semantic: `$.Daily`, `$.Hourly`, `$.Weekly`, `$.Monthly`, etc.
+  - Cron: `'0 0 * * *'`, `'*/15 * * * *'`, etc.
+- `handler` - Async function to execute on schedule
+- `options` - Optional configuration (see ScheduleOptions)
+
+**Returns:** `ScheduledTask` - Handle to the scheduled task
+
+**Examples:**
+
+```typescript
+import { $, every } from 'sdk.do'
+
+// Semantic schedule
+every($.Daily, async () => {
+  await generateReport()
+})
+
+// Cron pattern
+every('0 */6 * * *', async () => {
+  await backupData()
+})
+
+// With options
+every(
+  $.Hourly,
+  async () => {
+    await syncData()
+  },
+  {
+    timezone: 'America/New_York',
+    timeout: 300000,
+  }
+)
+```
+
+## Types
+
+### Schedule
+
+Semantic schedule types from the `$` proxy.
+
+**Type Definition:**
+
+```typescript
+type Schedule =
+  // Time-based
+  | '$.Minutely'
+  | '$.Every5Minutes'
+  | '$.Every15Minutes'
+  | '$.Every30Minutes'
+  | '$.Hourly'
+  | '$.Every2Hours'
+  | '$.Every6Hours'
+  | '$.Every12Hours'
+  | '$.Daily'
+  | '$.Weekly'
+  | '$.BiWeekly'
+  | '$.Monthly'
+  | '$.Quarterly'
+  | '$.Yearly'
+  // Business-oriented
+  | '$.BusinessDay'
+  | '$.Weekend'
+  | '$.EndOfMonth'
+  | '$.EndOfQuarter'
+  | '$.EndOfYear'
+```
+
+**Examples:**
+
+```typescript
+import { $, every } from 'sdk.do'
+
+every($.Daily, handler) // Every day at midnight
+every($.Hourly, handler) // Every hour
+every($.BusinessDay, handler) // Weekdays at 9am
+every($.Monthly, handler) // First of month
+```
+
+### ScheduleHandler
+
+Function executed on schedule.
+
+**Type Definition:**
+
+```typescript
+type ScheduleHandler = () => Promise<void> | void
+```
+
+**Examples:**
+
+```typescript
+// Async handler
+const handler: ScheduleHandler = async () => {
+  await performTask()
+}
+
+// Sync handler
+const syncHandler: ScheduleHandler = () => {
+  console.log('Task executed')
+}
+
+every($.Daily, handler)
+```
+
+### ScheduleOptions
+
+Configuration options for scheduled tasks.
+
+**Type Definition:**
+
+```typescript
+interface ScheduleOptions {
+  // Timezone for schedule execution
+  timezone?: string
+
+  // Maximum execution time in milliseconds
+  timeout?: number
+
+  // Maximum concurrent executions
+  maxConcurrent?: number
+
+  // Retry configuration
+  retry?: RetryOptions
+
+  // Enable/disable the schedule
+  enabled?: boolean
+
+  // Task metadata
+  metadata?: Record<string, any>
+}
+```
+
+**Properties:**
+
+- **timezone** (string, optional) - IANA timezone string (e.g., 'America/New_York')
+  - Default: `'UTC'`
+- **timeout** (number, optional) - Maximum execution time in milliseconds
+  - Default: No timeout
+- **maxConcurrent** (number, optional) - Maximum number of concurrent executions
+  - Default: Unlimited
+- **retry** (RetryOptions, optional) - Retry configuration for failed tasks
+- **enabled** (boolean, optional) - Whether the schedule is active
+  - Default: `true`
+- **metadata** (object, optional) - Custom metadata for the task
+
+**Examples:**
+
+```typescript
+import { $, every } from 'sdk.do'
+
+every($.Daily, handler, {
+  timezone: 'America/New_York',
+  timeout: 3600000, // 1 hour
+  maxConcurrent: 1,
+  retry: {
+    attempts: 3,
+    delay: 60000,
+    backoff: 'exponential',
+  },
+})
+```
+
+### RetryOptions
+
+Configuration for retry behavior on task failures.
+
+**Type Definition:**
+
+```typescript
+interface RetryOptions {
+  // Maximum number of retry attempts
+  attempts: number
+
+  // Initial delay between retries in milliseconds
+  delay: number
+
+  // Backoff strategy
+  backoff?: 'linear' | 'exponential'
+
+  // Maximum delay between retries
+  maxDelay?: number
+
+  // Function to determine if error is retryable
+  retryIf?: (error: Error) => boolean
+}
+```
+
+**Properties:**
+
+- **attempts** (number) - Maximum number of retry attempts
+- **delay** (number) - Initial delay in milliseconds
+- **backoff** (string, optional) - Backoff strategy
+  - `'linear'` - delay \* attempt
+  - `'exponential'` - delay \* 2^attempt
+  - Default: `'linear'`
+- **maxDelay** (number, optional) - Maximum delay between retries
+- **retryIf** (function, optional) - Custom function to determine if error should be retried
+
+**Examples:**
+
+```typescript
+import { $, every } from 'sdk.do'
+
+every($.Hourly, handler, {
+  retry: {
+    attempts: 5,
+    delay: 30000, // 30 seconds
+    backoff: 'exponential',
+    maxDelay: 300000, // 5 minutes max
+    retryIf: (error) => {
+      // Only retry on network errors
+      return error.message.includes('network')
+    },
+  },
+})
+```
+
+### ScheduledTask
+
+Handle to a scheduled task, returned by `every()`.
+
+**Type Definition:**
+
+```typescript
+interface ScheduledTask {
+  // Unique task identifier
+  id: string
+
+  // Schedule pattern
+  schedule: string
+
+  // Task status
+  status: 'active' | 'paused' | 'stopped'
+
+  // Next execution time
+  nextRun: Date | null
+
+  // Last execution time
+  lastRun: Date | null
+
+  // Last execution result
+  lastResult?: TaskResult
+
+  // Methods
+  pause(): Promise<void>
+  resume(): Promise<void>
+  stop(): Promise<void>
+  trigger(): Promise<void>
+  getHistory(): Promise<TaskExecution[]>
+}
+```
+
+**Properties:**
+
+- **id** (string) - Unique identifier for the task
+- **schedule** (string) - Schedule pattern
+- **status** (string) - Current status ('active', 'paused', 'stopped')
+- **nextRun** (Date | null) - Next scheduled execution time
+- **lastRun** (Date | null) - Last execution time
+- **lastResult** (TaskResult, optional) - Result of last execution
+
+**Methods:**
+
+- **pause()** - Pause the scheduled task
+- **resume()** - Resume a paused task
+- **stop()** - Permanently stop the task
+- **trigger()** - Manually trigger execution
+- **getHistory()** - Get execution history
+
+**Examples:**
+
+```typescript
+import { $, every } from 'sdk.do'
+
+const task = every($.Daily, handler)
+
+console.log('Task ID:', task.id)
+console.log('Next run:', task.nextRun)
+
+// Pause task
+await task.pause()
+
+// Resume task
+await task.resume()
+
+// Manually trigger
+await task.trigger()
+
+// Get execution history
+const history = await task.getHistory()
+```
+
+### TaskResult
+
+Result of a task execution.
+
+**Type Definition:**
+
+```typescript
+interface TaskResult {
+  // Execution status
+  status: 'success' | 'failed' | 'timeout'
+
+  // Execution duration in milliseconds
+  duration: number
+
+  // Error if execution failed
+  error?: Error
+
+  // Timestamp of execution
+  timestamp: Date
+}
+```
+
+**Properties:**
+
+- **status** (string) - Execution status
+  - `'success'` - Task completed successfully
+  - `'failed'` - Task failed with error
+  - `'timeout'` - Task exceeded timeout
+- **duration** (number) - Execution time in milliseconds
+- **error** (Error, optional) - Error object if failed
+- **timestamp** (Date) - When the execution occurred
+
+### TaskExecution
+
+Record of a task execution from history.
+
+**Type Definition:**
+
+```typescript
+interface TaskExecution {
+  // Execution ID
+  id: string
+
+  // Task ID
+  taskId: string
+
+  // Execution result
+  result: TaskResult
+
+  // Scheduled time
+  scheduledAt: Date
+
+  // Actual start time
+  startedAt: Date
+
+  // End time
+  endedAt: Date
+
+  // Number of retry attempts
+  attempts: number
+}
+```
+
+**Properties:**
+
+- **id** (string) - Unique execution ID
+- **taskId** (string) - ID of the scheduled task
+- **result** (TaskResult) - Execution result
+- **scheduledAt** (Date) - When execution was scheduled
+- **startedAt** (Date) - When execution started
+- **endedAt** (Date) - When execution finished
+- **attempts** (number) - Number of retry attempts
+
+## Semantic Schedules
+
+### Time-Based Schedules
+
+| Schedule           | Frequency          | Time (UTC)                 |
+| ------------------ | ------------------ | -------------------------- |
+| `$.Minutely`       | Every minute       | :00 seconds                |
+| `$.Every5Minutes`  | Every 5 minutes    | :00, :05, :10, etc.        |
+| `$.Every15Minutes` | Every 15 minutes   | :00, :15, :30, :45         |
+| `$.Every30Minutes` | Every 30 minutes   | :00, :30                   |
+| `$.Hourly`         | Every hour         | :00                        |
+| `$.Every2Hours`    | Every 2 hours      | 00:00, 02:00, 04:00, etc.  |
+| `$.Every6Hours`    | Every 6 hours      | 00:00, 06:00, 12:00, 18:00 |
+| `$.Every12Hours`   | Every 12 hours     | 00:00, 12:00               |
+| `$.Daily`          | Every day          | 00:00 (midnight)           |
+| `$.Weekly`         | Every Monday       | 00:00                      |
+| `$.BiWeekly`       | Every other Monday | 00:00                      |
+| `$.Monthly`        | 1st of month       | 00:00                      |
+| `$.Quarterly`      | 1st of quarter     | 00:00                      |
+| `$.Yearly`         | January 1st        | 00:00                      |
+
+### Business-Oriented Schedules
+
+| Schedule         | Frequency         | Time (UTC) |
+| ---------------- | ----------------- | ---------- |
+| `$.BusinessDay`  | Mon-Fri           | 09:00      |
+| `$.Weekend`      | Sat-Sun           | 09:00      |
+| `$.EndOfMonth`   | Last day of month | 23:00      |
+| `$.EndOfQuarter` | Last of quarter   | 23:00      |
+| `$.EndOfYear`    | December 31st     | 23:00      |
+
+## Cron Patterns
+
+### Syntax
+
+```
+ ┌───────────── minute (0 - 59)
+ │ ┌───────────── hour (0 - 23)
+ │ │ ┌───────────── day of month (1 - 31)
+ │ │ │ ┌───────────── month (1 - 12)
+ │ │ │ │ ┌───────────── day of week (0 - 6) (Sunday to Saturday)
+ │ │ │ │ │
+ * * * * *
+```
+
+### Special Characters
+
+- `*` - Any value
+- `,` - Value list separator
+- `-` - Range of values
+- `/` - Step values
+
+### Common Patterns
+
+| Pattern       | Description         |
+| ------------- | ------------------- |
+| `* * * * *`   | Every minute        |
+| `*/5 * * * *` | Every 5 minutes     |
+| `0 * * * *`   | Every hour          |
+| `0 */2 * * *` | Every 2 hours       |
+| `0 0 * * *`   | Daily at midnight   |
+| `30 2 * * *`  | Daily at 2:30am     |
+| `0 9 * * 1-5` | Weekdays at 9am     |
+| `0 0 1 * *`   | First of month      |
+| `0 0 * * 0`   | Sundays at midnight |
+
+## Utility Functions
+
+### validateCronPattern()
+
+Validate a cron pattern.
+
+**Signature:**
+
+```typescript
+function validateCronPattern(pattern: string): boolean
+```
+
+**Parameters:**
+
+- `pattern` (string) - Cron pattern to validate
+
+**Returns:** `boolean` - True if valid, false otherwise
+
+**Example:**
+
+```typescript
+import { validateCronPattern } from 'sdk.do'
+
+if (validateCronPattern('0 0 * * *')) {
+  console.log('Valid cron pattern')
+}
+```
+
+### parseCronPattern()
+
+Parse a cron pattern into schedule details.
+
+**Signature:**
+
+```typescript
+function parseCronPattern(pattern: string): CronSchedule
+```
+
+**Parameters:**
+
+- `pattern` (string) - Cron pattern to parse
+
+**Returns:** `CronSchedule` - Parsed schedule details
+
+**Example:**
+
+```typescript
+import { parseCronPattern } from 'sdk.do'
+
+const schedule = parseCronPattern('0 9 * * 1-5')
+console.log(schedule)
+// {
+//   minute: [0],
+//   hour: [9],
+//   dayOfMonth: [1-31],
+//   month: [1-12],
+//   dayOfWeek: [1,2,3,4,5]
+// }
+```
+
+### getNextRun()
+
+Calculate the next execution time for a schedule.
+
+**Signature:**
+
+```typescript
+function getNextRun(schedule: Schedule | string, from?: Date, timezone?: string): Date
+```
+
+**Parameters:**
+
+- `schedule` (Schedule | string) - Schedule pattern
+- `from` (Date, optional) - Calculate from this time (default: now)
+- `timezone` (string, optional) - Timezone (default: UTC)
+
+**Returns:** `Date` - Next execution time
+
+**Example:**
+
+```typescript
+import { $, getNextRun } from 'sdk.do'
+
+const nextRun = getNextRun($.Daily)
+console.log('Next run:', nextRun)
+
+const nextRunET = getNextRun('0 9 * * *', new Date(), 'America/New_York')
+console.log('Next run (ET):', nextRunET)
+```
+
+## Error Handling
+
+### Task Errors
+
+Errors thrown in task handlers are caught and logged:
+
+```typescript
+every($.Hourly, async () => {
+  throw new Error('Task failed')
+  // Error is caught, logged, and task will retry if configured
+})
+```
+
+### Retry Behavior
+
+Configure retry behavior with `RetryOptions`:
+
+```typescript
+every($.Hourly, handler, {
+  retry: {
+    attempts: 3,
+    delay: 60000,
+    backoff: 'exponential',
+  },
+})
+```
+
+### Error Events
+
+Listen for task failures:
+
+```typescript
+import { on } from 'sdk.do'
+
+on('Task.failed', async (event) => {
+  console.error('Task failed:', event.data)
+  // Send alert, log to monitoring system, etc.
+})
+```
+
+## Environment Variables
+
+Configure defaults via environment variables:
+
+```bash
+# Timezone (optional, defaults to UTC)
+SCHEDULE_TIMEZONE=America/New_York
+
+# Retry configuration (optional)
+SCHEDULE_RETRY_ATTEMPTS=3
+SCHEDULE_RETRY_DELAY=60000
+
+# Logging (optional)
+SCHEDULE_LOG_LEVEL=info
+```
+
+## TypeScript Support
+
+Full TypeScript support with type inference:
+
+```typescript
+import { $, every, type ScheduleHandler, type ScheduleOptions } from 'sdk.do'
+
+const handler: ScheduleHandler = async () => {
+  await generateReport()
+}
+
+const options: ScheduleOptions = {
+  timezone: 'America/New_York',
+  timeout: 3600000,
+}
+
+every($.Daily, handler, options)
+```
+
+## Best Practices
+
+### 1. Handle Errors
+
+Always implement error handling:
+
+```typescript
+every($.Hourly, async () => {
+  try {
+    await task()
+  } catch (error) {
+    console.error('Task failed:', error)
+  }
+})
+```
+
+### 2. Set Timeouts
+
+Prevent runaway tasks:
+
+```typescript
+every($.Daily, handler, {
+  timeout: 3600000, // 1 hour
+})
+```
+
+### 3. Limit Concurrency
+
+Prevent overlapping executions:
+
+```typescript
+every($.Hourly, handler, {
+  maxConcurrent: 1,
+})
+```
+
+### 4. Use Idempotent Operations
+
+Make tasks safe to run multiple times:
+
+```typescript
+every($.Daily, async () => {
+  await db.upsert($.Report, {
+    date: getCurrentDate(),
+    data: reportData,
+  })
+})
+```
+
+### 5. Monitor Execution
+
+Track task execution:
+
+```typescript
+every($.Daily, async () => {
+  const startTime = Date.now()
+
+  await task()
+
+  await db.create($.ExecutionLog, {
+    task: 'daily-report',
+    duration: Date.now() - startTime,
+  })
+})
+```
+
+## See Also
+
+- [Getting Started](../docs/getting-started) - Setup guide
+- [Schedules](../docs/schedules) - All schedule types
+- [Patterns](../docs/patterns) - Common patterns
+- [Examples](../examples/) - Code examples
+
+## License
+
+MIT (Open Source)

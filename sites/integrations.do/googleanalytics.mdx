@@ -1,0 +1,139 @@
+---
+$id: https://integrations.do/googleanalytics
+$type: Integration
+name: Google Analytics
+service: googleanalytics
+description: Web analytics and reporting platform
+category: analytics
+sdkBased: false
+baseUrl: https://analyticsreporting.googleapis.com/v4
+
+auth:
+  type: oauth2
+  authorizationUrl: https://accounts.google.com/o/oauth2/v2/auth
+  tokenUrl: https://oauth2.googleapis.com/token
+  scopes:
+    - https://www.googleapis.com/auth/analytics.readonly
+
+resources:
+  - name: Report
+    plural: Reports
+    description: Access analytics reports
+    operations:
+      - name: get
+        method: POST
+        path: /reports:batchGet
+        params:
+          - name: viewId
+            type: string
+            required: true
+            description: View (Profile) ID
+          - name: dateRanges
+            type: array
+            required: true
+            description: Date ranges
+          - name: metrics
+            type: array
+            required: true
+            description: Metrics to query
+          - name: dimensions
+            type: array
+            required: false
+            description: Dimensions to query
+        returns: Report
+
+  - name: Account
+    plural: Accounts
+    description: Access account information
+    operations:
+      - name: list
+        method: GET
+        path: /management/accounts
+        params: []
+        returns: Account[]
+
+  - name: Property
+    plural: Properties
+    description: Access property information
+    operations:
+      - name: list
+        method: GET
+        path: /management/accounts/{account_id}/webproperties
+        params:
+          - name: account_id
+            type: string
+            required: true
+            description: Account ID
+        returns: Property[]
+
+webhooks:
+  enabled: false
+  events: []
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 403
+      type: authorization
+      statusCode: 403
+      message: Forbidden
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Report Access
+      description: Test report retrieval
+      steps:
+        - action: retrieve
+          resource: Report
+
+    - name: Account Access
+      description: Test account listing
+      steps:
+        - action: list
+          resource: Account
+
+docs:
+  homepage: https://analytics.google.com
+  apiDocs: https://developers.google.com/analytics/devguides/reporting/core/v4
+---
+
+# Google Analytics Integration
+
+Web analytics and reporting platform.
+
+## Quick Start
+
+```typescript
+import { GoogleAnalyticsClient } from '@dotdo/sdk.do/integrations/googleanalytics'
+
+const analytics = new GoogleAnalyticsClient({
+  clientId: process.env.GA_CLIENT_ID,
+  clientSecret: process.env.GA_CLIENT_SECRET,
+  accessToken: process.env.GA_ACCESS_TOKEN,
+})
+
+const report = await analytics.report.get({
+  viewId: '12345678',
+  dateRanges: [{ startDate: '7daysAgo', endDate: 'today' }],
+  metrics: [{ expression: 'ga:sessions' }],
+  dimensions: [{ name: 'ga:country' }],
+})
+```
+
+## License
+
+MIT

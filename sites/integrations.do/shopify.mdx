@@ -1,0 +1,99 @@
+---
+$id: https://integrations.do/shopify
+$type: Integration
+name: Shopify
+service: shopify
+description: Shopify is an e-commerce platform enabling merchants to create online stores, manage products, and process payments with themes, apps, and integrated marketing tools
+category: ecommerce
+sdkBased: false
+baseUrl: https://api.shopify.com
+
+auth:
+  type: oauth2
+  authorizationUrl: https://{{subdomain}}.myshopify.com/admin/oauth/authorize
+  tokenUrl: https://{{subdomain}}.myshopify.com/admin/oauth/access_token
+  scopes:
+    - read_products
+    - write_products
+    - read_orders
+    - write_orders
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Shopify actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: false
+  events: []
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://www.shopify.com
+  apiDocs: https://www.shopify.com
+---
+
+# Shopify Integration
+
+Shopify is an e-commerce platform enabling merchants to create online stores, manage products, and process payments with themes, apps, and integrated marketing tools
+
+## Quick Start
+
+```typescript
+import { ShopifyClient } from '@dotdo/sdk.do/integrations/shopify'
+
+const shopify = new ShopifyClient({
+  apiKey: process.env.SHOPIFY_API_KEY,
+})
+
+const result = await shopify.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Shopify provides 34 actions through the Composio API.
+
+## License
+
+MIT

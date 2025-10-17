@@ -1,0 +1,441 @@
+---
+$id: https://triggers.org.ai
+$type: WebSite
+name: triggers.org.ai
+description: An open-source ontology of triggers in Business-as-Code
+license: CC-BY-4.0
+---
+
+# triggers.org.ai
+
+**An open-source ontology of triggers in Business-as-Code**
+
+triggers.org.ai provides a comprehensive vocabulary for defining event triggers in autonomous business systems, working alongside [actions.org.ai](https://actions.org.ai) and [searches.org.ai](https://searches.org.ai) as part of the [agents.org.ai](https://agents.org.ai) ecosystem.
+
+## Overview
+
+Triggers are the foundational event patterns that initiate workflows and processes in Business-as-Code systems. This ontology defines a structured vocabulary for describing when, how, and under what conditions business processes should be activated.
+
+## Key Features
+
+### 🎯 Event-Driven Architecture
+
+triggers.org.ai defines triggers across multiple categories:
+
+- **Time-based Triggers**: Scheduled events, intervals, and temporal patterns
+- **Data Triggers**: Changes in data state, thresholds, and conditions
+- **User Triggers**: User actions, interactions, and behaviors
+- **System Triggers**: Application events, webhooks, and API calls
+- **Business Triggers**: Business rules, KPIs, and domain-specific events
+
+### 🔗 MDXLD Integration
+
+Like other `.do` platform ontologies, triggers.org.ai uses the `$` prefix for linked data properties:
+
+```mdx
+---
+$type: Trigger
+$id: https://example.com/triggers/daily-report
+name: Daily Report Generation
+schedule:
+  $type: CronSchedule
+  expression: '0 9 * * *'
+  timezone: America/New_York
+action:
+  $type: Action
+  $id: https://example.com/actions/generate-report
+---
+
+# Daily Report Trigger
+
+Generates a daily business report every morning at 9 AM EST.
+```
+
+### 🤖 AI-Native Design
+
+- **Type-safe**: Full TypeScript definitions for all trigger types
+- **Composable**: Combine triggers with logical operators (AND, OR, NOT)
+- **Contextual**: Rich metadata for AI systems to understand trigger intent
+- **Extensible**: Easy to define custom domain-specific triggers
+
+## Core Trigger Types
+
+### ScheduleTrigger
+
+Time-based triggers for recurring and one-time scheduled events.
+
+```typescript
+import type { ScheduleTrigger } from 'triggers.org.ai/types'
+
+const dailyTrigger: ScheduleTrigger = {
+  $type: 'ScheduleTrigger',
+  $id: 'https://example.com/triggers/daily-backup',
+  name: 'Daily Backup',
+  schedule: {
+    $type: 'CronSchedule',
+    expression: '0 2 * * *',
+  },
+}
+```
+
+### DataChangeTrigger
+
+Triggers based on changes to data state or values.
+
+```typescript
+import type { DataChangeTrigger } from 'triggers.org.ai/types'
+
+const inventoryTrigger: DataChangeTrigger = {
+  $type: 'DataChangeTrigger',
+  $id: 'https://example.com/triggers/low-inventory',
+  name: 'Low Inventory Alert',
+  dataSource: 'inventory',
+  condition: {
+    $type: 'Condition',
+    property: 'quantity',
+    operator: 'lessThan',
+    value: 10,
+  },
+}
+```
+
+### WebhookTrigger
+
+Triggers activated by incoming HTTP requests or webhooks.
+
+```typescript
+import type { WebhookTrigger } from 'triggers.org.ai/types'
+
+const paymentTrigger: WebhookTrigger = {
+  $type: 'WebhookTrigger',
+  $id: 'https://example.com/triggers/payment-received',
+  name: 'Payment Received',
+  endpoint: '/webhooks/payment',
+  method: 'POST',
+  authentication: {
+    $type: 'WebhookAuthentication',
+    scheme: 'hmac-sha256',
+  },
+}
+```
+
+### UserActionTrigger
+
+Triggers based on user interactions and behaviors.
+
+```typescript
+import type { UserActionTrigger } from 'triggers.org.ai/types'
+
+const onboardingTrigger: UserActionTrigger = {
+  $type: 'UserActionTrigger',
+  $id: 'https://example.com/triggers/user-signup',
+  name: 'User Signup',
+  actionType: 'signup',
+  properties: {
+    plan: 'premium',
+  },
+}
+```
+
+### CompositeTrigger
+
+Combine multiple triggers with logical operators.
+
+```typescript
+import type { CompositeTrigger } from 'triggers.org.ai/types'
+
+const complexTrigger: CompositeTrigger = {
+  $type: 'CompositeTrigger',
+  $id: 'https://example.com/triggers/complex-alert',
+  name: 'Complex Alert',
+  operator: 'AND',
+  triggers: [
+    {
+      $type: 'DataChangeTrigger',
+      property: 'temperature',
+      operator: 'greaterThan',
+      value: 80,
+    },
+    {
+      $type: 'ScheduleTrigger',
+      schedule: {
+        $type: 'TimeWindow',
+        start: '09:00',
+        end: '17:00',
+      },
+    },
+  ],
+}
+```
+
+## Integration with agents.org.ai
+
+triggers.org.ai is part of the autonomous Business-as-Code ecosystem:
+
+- **triggers.org.ai**: Defines WHEN processes should run (this ontology)
+- **actions.org.ai**: Defines WHAT should be done
+- **searches.org.ai**: Defines HOW to find information
+- **agents.org.ai**: Orchestrates triggers, actions, and searches into autonomous workflows
+
+### Example Agent Workflow
+
+```mdx
+---
+$type: Agent
+$id: https://example.com/agents/inventory-manager
+name: Inventory Management Agent
+trigger:
+  $type: DataChangeTrigger
+  $id: https://example.com/triggers/low-inventory
+  dataSource: inventory
+  condition:
+    property: quantity
+    operator: lessThan
+    value: 10
+search:
+  $type: Search
+  $id: https://example.com/searches/find-supplier
+  query: preferred suppliers for {product}
+action:
+  $type: Action
+  $id: https://example.com/actions/reorder-stock
+  workflow:
+    - notify supplier
+    - create purchase order
+    - update inventory forecast
+---
+
+# Inventory Management Agent
+
+Automatically monitors inventory levels and initiates reordering when stock falls below threshold.
+```
+
+## API Reference
+
+### Trigger Creation
+
+```typescript
+import { createTrigger, validateTrigger } from 'triggers.org.ai'
+
+const trigger = createTrigger({
+  $type: 'ScheduleTrigger',
+  name: 'Weekly Report',
+  schedule: {
+    $type: 'CronSchedule',
+    expression: '0 9 * * 1',
+  },
+})
+
+const validation = validateTrigger(trigger)
+```
+
+### Trigger Evaluation
+
+```typescript
+import { evaluateTrigger, shouldFire } from 'triggers.org.ai'
+
+const context = {
+  timestamp: new Date(),
+  data: { temperature: 85 },
+}
+
+const result = evaluateTrigger(trigger, context)
+if (shouldFire(result)) {
+  // Execute associated action
+}
+```
+
+### Trigger Registry
+
+```typescript
+import { registerTrigger, getTrigger, getAllTriggers } from 'triggers.org.ai'
+
+// Register custom trigger
+registerTrigger(customTrigger)
+
+// Retrieve trigger
+const trigger = getTrigger('https://example.com/triggers/custom')
+
+// List all triggers
+const allTriggers = getAllTriggers()
+```
+
+## Trigger Categories
+
+### Temporal Triggers
+
+- `ScheduleTrigger`: Cron expressions, intervals, specific dates
+- `TimeWindowTrigger`: Triggers within specific time ranges
+- `DurationTrigger`: After a duration has elapsed
+- `DeadlineTrigger`: Before a deadline is reached
+
+### Data Triggers
+
+- `DataChangeTrigger`: When data changes
+- `ThresholdTrigger`: When values cross thresholds
+- `PatternTrigger`: When data matches patterns
+- `AnomalyTrigger`: When anomalies are detected
+
+### Event Triggers
+
+- `WebhookTrigger`: HTTP webhooks
+- `MessageTrigger`: Message queue events
+- `StreamTrigger`: Real-time stream events
+- `APITrigger`: External API events
+
+### Business Triggers
+
+- `KPITrigger`: Key performance indicators
+- `SLATrigger`: Service level agreements
+- `ComplianceTrigger`: Regulatory compliance events
+- `WorkflowTrigger`: Business process states
+
+## Use Cases
+
+### Automated Reporting
+
+```mdx
+---
+$type: Trigger
+$id: https://example.com/triggers/monthly-report
+name: Monthly Financial Report
+schedule:
+  $type: CronSchedule
+  expression: '0 0 1 * *'
+  description: First day of every month at midnight
+notification:
+  channels: [email, slack]
+  recipients: [finance-team]
+---
+```
+
+### Real-time Monitoring
+
+```mdx
+---
+$type: CompositeTrigger
+$id: https://example.com/triggers/system-alert
+name: Critical System Alert
+operator: OR
+triggers:
+  - $type: ThresholdTrigger
+    metric: cpu_usage
+    operator: greaterThan
+    value: 90
+  - $type: ThresholdTrigger
+    metric: error_rate
+    operator: greaterThan
+    value: 5
+priority: critical
+---
+```
+
+### Customer Journey
+
+```mdx
+---
+$type: UserActionTrigger
+$id: https://example.com/triggers/onboarding-complete
+name: Onboarding Completed
+actionType: complete_onboarding
+followUp:
+  $type: ScheduleTrigger
+  delay: 24h
+  action: send_welcome_email
+---
+```
+
+## Best Practices
+
+### 1. Descriptive Names
+
+Use clear, descriptive names that explain the trigger's purpose:
+
+```typescript
+// Good
+name: 'Low Inventory Alert for Critical Items'
+
+// Bad
+name: 'trigger1'
+```
+
+### 2. Documented Conditions
+
+Always document the business logic behind trigger conditions:
+
+```mdx
+---
+$type: Trigger
+name: High-Value Customer Alert
+description: |
+  Triggers when a customer's lifetime value exceeds $10,000
+  to initiate premium support tier upgrade process
+---
+```
+
+### 3. Error Handling
+
+Define fallback behavior for trigger evaluation failures:
+
+```typescript
+const trigger = {
+  $type: 'DataChangeTrigger',
+  errorHandling: {
+    retryAttempts: 3,
+    backoffStrategy: 'exponential',
+    fallbackAction: 'log-and-notify',
+  },
+}
+```
+
+### 4. Testing Triggers
+
+Always test triggers in development before deploying:
+
+```typescript
+import { testTrigger, mockContext } from 'triggers.org.ai/testing'
+
+const context = mockContext({
+  timestamp: new Date('2024-01-15T09:00:00Z'),
+  data: { inventory: 5 },
+})
+
+const result = testTrigger(lowInventoryTrigger, context)
+expect(result.shouldFire).toBe(true)
+```
+
+## License
+
+triggers.org.ai is released under the [Creative Commons Attribution 4.0 International License (CC-BY-4.0)](https://creativecommons.org/licenses/by/4.0/).
+
+This means you are free to:
+
+- **Share**: Copy and redistribute the material in any medium or format
+- **Adapt**: Remix, transform, and build upon the material for any purpose, even commercially
+
+Under the following terms:
+
+- **Attribution**: You must give appropriate credit, provide a link to the license, and indicate if changes were made
+
+## Resources
+
+- [agents.org.ai](https://agents.org.ai) - Autonomous agent orchestration
+- [actions.org.ai](https://actions.org.ai) - Business action ontology
+- [searches.org.ai](https://searches.org.ai) - Search and query patterns
+- [schema.org.ai](/ai/sites/schema.org.ai) - AI-native schema.org superset
+- [MDXLD documentation](/mdxld) - Linked data in MDX
+
+## Contributing
+
+triggers.org.ai is part of the [`.do` platform](https://do) ecosystem. Contributions are welcome!
+
+To propose new trigger types or enhancements:
+
+1. Review existing trigger types to avoid duplication
+2. Ensure the trigger pattern is broadly applicable
+3. Provide clear documentation and examples
+4. Include TypeScript type definitions
+
+## Acknowledgments
+
+triggers.org.ai builds upon concepts from event-driven architectures, reactive programming, and business process management. The ontology is designed to be accessible to both technical and business users while maintaining the rigor needed for autonomous AI systems.

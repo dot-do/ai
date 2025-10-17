@@ -1,0 +1,636 @@
+---
+$id: https://auth.do/docs/best-practices
+$type: TechArticle
+title: Authentication Best Practices
+description: Security best practices for authentication in auth.do
+keywords: [auth, best practices, security, jwt, passwords]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Authentication Best Practices
+
+Security best practices for authentication in auth.do.
+
+## Token Management
+
+### 1. Use Short-Lived Access Tokens
+
+Always use short-lived access tokens with refresh tokens:
+
+```typescript
+// Good: 15-minute access token
+const token = await auth.generateToken({
+  userId: 'user_123',
+  expiresIn: '15m',
+})
+
+const refreshToken = await auth.generateRefreshToken('user_123', '7d')
+
+// Bad: Long-lived access token
+const token = await auth.generateToken({
+  userId: 'user_123',
+  expiresIn: '30d', // Too long!
+})
+```
+
+### 2. Rotate Refresh Tokens
+
+Rotate refresh tokens on every use:
+
+```typescript
+export async function refreshAccessToken(refreshToken: string) {
+  const payload = await auth.verifyRefreshToken(refreshToken)
+
+  // Generate new tokens
+  const newToken = await auth.generateToken({ userId: payload.userId })
+  const newRefreshToken = await auth.generateRefreshToken(payload.userId)
+
+  // Revoke old refresh token
+  await auth.revokeToken(refreshToken)
+
+  return { token: newToken, refreshToken: newRefreshToken }
+}
+```
+
+### 3. Store Tokens Securely
+
+Use HttpOnly cookies or secure storage:
+
+```typescript
+// Good: HttpOnly cookie
+response.headers.set('Set-Cookie', `token=${token}; HttpOnly; Secure; SameSite=Strict; Max-Age=900`)
+
+// Bad: LocalStorage (vulnerable to XSS)
+// localStorage.setItem('token', token)
+```
+
+### 4. Implement Token Revocation
+
+Maintain a revocation list for compromised tokens:
+
+```typescript
+import { $, db } from 'sdk.do'
+
+export async function revokeToken(token: string) {
+  await db.create($.RevokedToken, {
+    token,
+    revokedAt: new Date(),
+  })
+}
+
+export async function isTokenRevoked(token: string): Promise<boolean> {
+  const revoked = await db.list($.RevokedToken, { where: { token } })
+  return revoked.length > 0
+}
+```
+
+## Password Security
+
+### 1. Enforce Strong Passwords
+
+Require minimum complexity:
+
+```typescript
+export function validatePassword(password: string): boolean {
+  const minLength = 8
+  const hasUppercase = /[A-Z]/.test(password)
+  const hasLowercase = /[a-z]/.test(password)
+  const hasNumber = /\d/.test(password)
+  const hasSymbol = /[!@#$%^&*(),.?":{}|<>]/.test(password)
+
+  return password.length >= minLength && hasUppercase && hasLowercase && hasNumber && hasSymbol
+}
+```
+
+### 2. Hash Passwords Properly
+
+Always use bcrypt with sufficient rounds:
+
+```typescript
+import { auth } from 'sdk.do'
+
+// Good: Use bcrypt
+const hashedPassword = await auth.hashPassword(password) // 12 rounds default
+
+// Bad: Weak hashing
+// const hashedPassword = sha256(password) // Vulnerable!
+```
+
+### 3. Never Log Passwords
+
+Sanitize logs to remove sensitive data:
+
+```typescript
+// Good: Sanitized logging
+console.log('User login attempt:', { email: user.email })
+
+// Bad: Logging passwords
+// console.log('User login attempt:', { email, password }) // NEVER!
+```
+
+### 4. Implement Rate Limiting
+
+Prevent brute force attacks:
+
+```typescript
+const loginAttempts = new Map<string, { count: number; firstAttempt: number }>()
+
+export async function rateLimit(email: string): Promise<boolean> {
+  const key = email
+  const now = Date.now()
+  const windowMs = 15 * 60 * 1000 // 15 minutes
+  const maxAttempts = 5
+
+  const attempts = loginAttempts.get(key)
+
+  if (!attempts) {
+    loginAttempts.set(key, { count: 1, firstAttempt: now })
+    return true
+  }
+
+  if (now - attempts.firstAttempt > windowMs) {
+    loginAttempts.set(key, { count: 1, firstAttempt: now })
+    return true
+  }
+
+  if (attempts.count >= maxAttempts) {
+    return false
+  }
+
+  attempts.count++
+  return true
+}
+
+export async function login(email: string, password: string) {
+  if (!(await rateLimit(email))) {
+    throw new Error('Too many login attempts. Try again later.')
+  }
+
+  // Proceed with login
+}
+```
+
+## API Key Security
+
+### 1. Use Prefixes
+
+Identify key types with prefixes:
+
+```typescript
+// Generate with prefix
+const apiKey = `sk_live_${generateRandomHex(32)}`
+
+// Different environments
+const testKey = `sk_test_${generateRandomHex(32)}`
+const prodKey = `sk_live_${generateRandomHex(32)}`
+```
+
+### 2. Hash API Keys
+
+Never store unhashed keys:
+
+```typescript
+// Good: Hash before storing
+const hashedKey = await auth.hashApiKey(apiKey)
+await db.create($.ApiKey, { keyHash: hashedKey })
+
+// Bad: Store plain key
+// await db.create($.ApiKey, { key: apiKey }) // Vulnerable!
+```
+
+### 3. Limit Scopes
+
+Use scopes to limit permissions:
+
+```typescript
+const apiKey = await auth.createApiKey({
+  userId: 'user_123',
+  name: 'Read-only API',
+  scopes: ['read:products', 'read:orders'], // Limited scopes
+})
+```
+
+### 4. Rotate Keys Regularly
+
+Implement key rotation:
+
+```typescript
+export async function rotateApiKey(oldKeyId: string) {
+  const oldKey = await db.get($.ApiKey, oldKeyId)
+
+  // Create new key
+  const newKey = await auth.createApiKey({
+    userId: oldKey.userId,
+    name: `${oldKey.name} (Rotated)`,
+    scopes: oldKey.scopes,
+  })
+
+  // Grace period for migration
+  await scheduleKeyRevocation(oldKeyId, 30) // 30 days
+
+  return newKey
+}
+```
+
+## MFA Best Practices
+
+### 1. Offer Multiple MFA Methods
+
+Support TOTP, SMS, and backup codes:
+
+```typescript
+export async function enableMFA(userId: string, method: 'totp' | 'sms') {
+  const setup = await auth.enableMFA({
+    method,
+    userId,
+  })
+
+  // Generate backup codes
+  const backupCodes = generateBackupCodes(10)
+
+  await db.create($.MFAConfig, {
+    userId,
+    method,
+    secret: setup.secret,
+    backupCodes: backupCodes.map((code) => auth.hashPassword(code)),
+  })
+
+  return { ...setup, backupCodes }
+}
+```
+
+### 2. Implement Backup Codes
+
+Provide recovery mechanism:
+
+```typescript
+export async function verifyBackupCode(userId: string, code: string): Promise<boolean> {
+  const mfaConfig = await db.list($.MFAConfig, { where: { userId } })
+
+  if (mfaConfig.length === 0) return false
+
+  for (const hashedCode of mfaConfig[0].backupCodes) {
+    if (await auth.verifyPassword(code, hashedCode)) {
+      // Remove used code
+      const newCodes = mfaConfig[0].backupCodes.filter((c) => c !== hashedCode)
+      await db.update($.MFAConfig, mfaConfig[0].$id, { backupCodes: newCodes })
+      return true
+    }
+  }
+
+  return false
+}
+```
+
+### 3. Rate Limit MFA Attempts
+
+Prevent brute force:
+
+```typescript
+const mfaAttempts = new Map<string, number>()
+
+export async function verifyMFAWithRateLimit(userId: string, code: string): Promise<boolean> {
+  const attempts = mfaAttempts.get(userId) || 0
+
+  if (attempts >= 5) {
+    throw new Error('Too many MFA attempts. Account locked.')
+  }
+
+  const isValid = await auth.verifyMFA({ userId, code })
+
+  if (!isValid) {
+    mfaAttempts.set(userId, attempts + 1)
+    return false
+  }
+
+  mfaAttempts.delete(userId)
+  return true
+}
+```
+
+## OAuth Security
+
+### 1. Use State Parameter
+
+Prevent CSRF attacks:
+
+```typescript
+export async function initiateOAuth(provider: string) {
+  const state = generateRandomState()
+
+  // Store state in session
+  await storeState(state)
+
+  const authUrl = await auth.oauth({
+    provider,
+    redirectUri: 'https://app.example.com/auth/callback',
+    state,
+  })
+
+  return { authUrl, state }
+}
+
+export async function handleOAuthCallback(code: string, state: string) {
+  // Verify state
+  if (!(await verifyState(state))) {
+    throw new Error('Invalid state parameter')
+  }
+
+  // Continue with OAuth
+}
+```
+
+### 2. Validate Redirect URIs
+
+Whitelist allowed redirect URIs:
+
+```typescript
+const allowedRedirectUris = ['https://app.example.com/auth/callback', 'https://staging.example.com/auth/callback']
+
+export function validateRedirectUri(uri: string): boolean {
+  return allowedRedirectUris.includes(uri)
+}
+```
+
+### 3. Use PKCE
+
+Implement Proof Key for Code Exchange:
+
+```typescript
+export async function initiateOAuthWithPKCE(provider: string) {
+  const codeVerifier = generateRandomString(128)
+  const codeChallenge = await sha256(codeVerifier)
+
+  const authUrl = await auth.oauth({
+    provider,
+    redirectUri: 'https://app.example.com/auth/callback',
+    codeChallenge,
+    codeChallengeMethod: 'S256',
+  })
+
+  return { authUrl, codeVerifier }
+}
+```
+
+## Session Management
+
+### 1. Implement Session Timeouts
+
+Set idle and absolute timeouts:
+
+```typescript
+interface Session {
+  id: string
+  userId: string
+  createdAt: Date
+  lastActivity: Date
+  expiresAt: Date
+}
+
+export async function validateSession(sessionId: string): Promise<boolean> {
+  const session = await db.get($.Session, sessionId)
+
+  const idleTimeout = 30 * 60 * 1000 // 30 minutes
+  const absoluteTimeout = 24 * 60 * 60 * 1000 // 24 hours
+
+  // Check idle timeout
+  if (Date.now() - session.lastActivity.getTime() > idleTimeout) {
+    await db.delete($.Session, sessionId)
+    return false
+  }
+
+  // Check absolute timeout
+  if (Date.now() - session.createdAt.getTime() > absoluteTimeout) {
+    await db.delete($.Session, sessionId)
+    return false
+  }
+
+  // Update last activity
+  await db.update($.Session, sessionId, {
+    lastActivity: new Date(),
+  })
+
+  return true
+}
+```
+
+### 2. Single Sign-Out
+
+Implement global logout:
+
+```typescript
+export async function logoutAllSessions(userId: string) {
+  // Delete all sessions
+  const sessions = await db.list($.Session, { where: { userId } })
+
+  for (const session of sessions) {
+    await db.delete($.Session, session.$id)
+  }
+
+  // Revoke all refresh tokens
+  const refreshTokens = await db.list($.RefreshToken, { where: { userId } })
+
+  for (const token of refreshTokens) {
+    await auth.revokeToken(token.token)
+  }
+}
+```
+
+## Logging and Monitoring
+
+### 1. Audit All Authentication Events
+
+```typescript
+export async function logAuthEvent(event: {
+  type: 'login' | 'logout' | 'register' | 'password_reset'
+  userId?: string
+  success: boolean
+  ip?: string
+  userAgent?: string
+  reason?: string
+}) {
+  await db.create($.AuditLog, {
+    eventType: event.type,
+    userId: event.userId,
+    success: event.success,
+    ip: event.ip,
+    userAgent: event.userAgent,
+    reason: event.reason,
+    timestamp: new Date(),
+  })
+}
+```
+
+### 2. Monitor for Suspicious Activity
+
+```typescript
+export async function detectSuspiciousActivity(userId: string): Promise<boolean> {
+  const recentLogins = await db.list($.AuditLog, {
+    where: {
+      userId,
+      eventType: 'login',
+      timestamp: { $gte: new Date(Date.now() - 60 * 60 * 1000) },
+    },
+  })
+
+  // Check for multiple failed attempts
+  const failedAttempts = recentLogins.filter((log) => !log.success)
+  if (failedAttempts.length >= 5) {
+    await lockAccount(userId)
+    return true
+  }
+
+  // Check for logins from different IPs
+  const uniqueIps = new Set(recentLogins.map((log) => log.ip))
+  if (uniqueIps.size >= 3) {
+    await notifyUser(userId, 'Multiple login locations detected')
+    return true
+  }
+
+  return false
+}
+```
+
+## Error Handling
+
+### 1. Generic Error Messages
+
+Don't leak information:
+
+```typescript
+// Good: Generic message
+try {
+  await auth.login({ email, password })
+} catch (error) {
+  return { error: 'Invalid credentials' }
+}
+
+// Bad: Specific message
+// return { error: 'Password is incorrect' } // Confirms email exists!
+```
+
+### 2. Consistent Timing
+
+Prevent timing attacks:
+
+```typescript
+export async function constantTimeLogin(email: string, password: string) {
+  const user = await db.list($.Person, { where: { email } })
+
+  let isValid = false
+
+  if (user.length > 0) {
+    const creds = await db.list($.Credentials, { where: { userId: user[0].$id } })
+    if (creds.length > 0) {
+      isValid = await auth.verifyPassword(password, creds[0].passwordHash)
+    } else {
+      // Still hash to maintain constant time
+      await auth.verifyPassword(password, await auth.hashPassword('dummy'))
+    }
+  } else {
+    // Hash dummy password to maintain constant time
+    await auth.verifyPassword(password, await auth.hashPassword('dummy'))
+  }
+
+  if (!isValid) {
+    throw new Error('Invalid credentials')
+  }
+
+  return user[0]
+}
+```
+
+## Testing
+
+### 1. Test Authentication Flows
+
+```typescript
+import { auth } from 'sdk.do'
+
+describe('Authentication', () => {
+  it('should register new user', async () => {
+    const result = await register('test@example.com', 'password123', 'Test User')
+    expect(result.userId).toBeDefined()
+  })
+
+  it('should login with valid credentials', async () => {
+    const session = await auth.login({
+      email: 'test@example.com',
+      password: 'password123',
+    })
+    expect(session.token).toBeDefined()
+  })
+
+  it('should fail with invalid credentials', async () => {
+    await expect(auth.login({ email: 'test@example.com', password: 'wrong' })).rejects.toThrow('Invalid credentials')
+  })
+
+  it('should verify valid token', async () => {
+    const token = await auth.generateToken({ userId: 'user_123' })
+    const payload = await auth.verifyToken(token)
+    expect(payload.userId).toBe('user_123')
+  })
+})
+```
+
+## Compliance
+
+### 1. GDPR Compliance
+
+Implement data deletion:
+
+```typescript
+export async function deleteUserData(userId: string) {
+  // Delete user
+  await db.delete($.Person, userId)
+
+  // Delete credentials
+  const creds = await db.list($.Credentials, { where: { userId } })
+  for (const cred of creds) {
+    await db.delete($.Credentials, cred.$id)
+  }
+
+  // Delete sessions
+  const sessions = await db.list($.Session, { where: { userId } })
+  for (const session of sessions) {
+    await db.delete($.Session, session.$id)
+  }
+
+  // Delete API keys
+  const apiKeys = await db.list($.ApiKey, { where: { userId } })
+  for (const apiKey of apiKeys) {
+    await db.delete($.ApiKey, apiKey.$id)
+  }
+}
+```
+
+### 2. Data Export
+
+Enable users to export their data:
+
+```typescript
+export async function exportUserData(userId: string) {
+  const user = await db.get($.Person, userId)
+  const sessions = await db.list($.Session, { where: { userId } })
+  const apiKeys = await db.list($.ApiKey, { where: { userId } })
+
+  return {
+    user,
+    sessions,
+    apiKeys: apiKeys.map((key) => ({ name: key.name, scopes: key.scopes })),
+  }
+}
+```
+
+## Related Documentation
+
+- [Getting Started](./getting-started) - Quick start guide
+- [Architecture](./architecture) - Auth architecture
+- [Troubleshooting](./troubleshooting) - Common issues
+- [API Reference](../api/) - Complete API
+
+## License
+
+CC-BY-4.0 (Open Source)

@@ -1,0 +1,102 @@
+---
+$id: https://integrations.do/slack
+$type: Integration
+name: Slack
+service: slack
+description: Slack is a channel-based messaging platform. With Slack, people can work together more effectively, connect all their software tools and services, and find the information they need to do their best work — all within a secure, enterprise-grade environment.
+category: productivity
+sdkBased: false
+baseUrl: https://api.slack.com
+
+auth:
+  type: oauth2
+  authorizationUrl: https://slack.com/oauth/v2/authorize
+  tokenUrl: https://slack.com/api/oauth.v2.access
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Slack actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: true
+  verificationMethod: none
+  events:
+    - name: generic_trigger
+      type: trigger
+      description: Generic webhook trigger
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://slack.com/intl/en-in//
+  apiDocs: https://slack.com/intl/en-in//
+---
+
+# Slack Integration
+
+Slack is a channel-based messaging platform. With Slack, people can work together more effectively, connect all their software tools and services, and find the information they need to do their best work — all within a secure, enterprise-grade environment.
+
+## Quick Start
+
+```typescript
+import { SlackClient } from '@dotdo/sdk.do/integrations/slack'
+
+const slack = new SlackClient({
+  apiKey: process.env.SLACK_API_KEY,
+})
+
+const result = await slack.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Slack provides 141 actions through the Composio API.
+
+## Webhooks
+
+Slack supports 9 webhook triggers for real-time event notifications.
+
+## License
+
+MIT

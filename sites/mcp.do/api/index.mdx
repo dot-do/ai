@@ -1,0 +1,852 @@
+---
+$id: https://mcp.do/api
+$type: APIReference
+title: mcp.do API Reference
+description: Complete API reference for the mcp.do Model Context Protocol server
+keywords: [api, reference, mcp, tools, methods]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# mcp.do API Reference
+
+Complete API reference for the mcp.do Model Context Protocol server.
+
+## Overview
+
+mcp.do exposes a single MCP tool called `do` that accepts TypeScript code and executes it with access to the full `sdk.do` API. This page documents the tool interface, available imports, execution environment, and return values.
+
+## The `do` Tool
+
+### Tool Definition
+
+```json
+{
+  "name": "do",
+  "description": "Execute TypeScript code using sdk.do",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "code": {
+        "type": "string",
+        "description": "TypeScript code to execute"
+      }
+    },
+    "required": ["code"]
+  }
+}
+```
+
+### Usage
+
+```typescript
+// Tool invocation format
+{
+  "tool": "do",
+  "arguments": {
+    "code": "import { db } from 'sdk.do'\nconst result = await db.list('users')\nreturn result"
+  }
+}
+```
+
+### Parameters
+
+**`code`** (string, required)
+
+- TypeScript code to execute
+- Must include proper imports from `sdk.do`
+- Must return a value (any JSON-serializable data)
+- Maximum length: 50KB
+
+### Returns
+
+Returns a JSON object with the execution result:
+
+```typescript
+{
+  "success": true,
+  "result": any, // The return value from the code
+  "executionTime": number, // Milliseconds
+  "logs": string[] // Console logs (if enabled)
+}
+```
+
+Or on error:
+
+```typescript
+{
+  "success": false,
+  "error": {
+    "message": string,
+    "code": string,
+    "stack": string // (if available)
+  }
+}
+```
+
+## Available Imports
+
+### sdk.do Exports
+
+All exports from `sdk.do` are available:
+
+```typescript
+// Semantic context proxy
+import $ from 'sdk.do'
+
+// Core functions
+import { ai, api, db, on, send, every, user } from 'sdk.do'
+
+// All at once
+import $, { ai, api, db, on, send, every, user } from 'sdk.do'
+```
+
+### Standard Library
+
+Limited Node.js standard library access:
+
+```typescript
+// Available
+import crypto from 'crypto'
+import util from 'util'
+import url from 'url'
+import querystring from 'querystring'
+
+// Not available (for security)
+import fs from 'fs' // ❌
+import child_process from 'child_process' // ❌
+import net from 'net' // ❌
+```
+
+## SDK Functions Reference
+
+### $ (Semantic Context Proxy)
+
+Access semantic types and relationships:
+
+```typescript
+import $ from 'sdk.do'
+
+// Types
+$.Business
+$.Product
+$.Customer
+$.Order
+$.Invoice
+
+// Relationships
+$.owns
+$.sells
+$.buys
+$.contains
+
+// Events
+$.Order.created
+$.Customer.signedUp
+$.Invoice.paid
+```
+
+### db (Database Operations)
+
+#### db.list()
+
+List entities of a type:
+
+```typescript
+db.list(type: Type, options?: ListOptions): Promise<Entity[]>
+```
+
+**Parameters**:
+
+- `type` - Semantic type (e.g., `$.Business`)
+- `options` - Optional query options
+
+**Options**:
+
+```typescript
+{
+  where?: Record<string, any>
+  orderBy?: Record<string, 'asc' | 'desc'>
+  limit?: number
+  offset?: number
+}
+```
+
+**Example**:
+
+```typescript
+const businesses = await db.list($.Business, {
+  where: { industry: 'Technology' },
+  orderBy: { name: 'asc' },
+  limit: 10,
+})
+```
+
+#### db.get()
+
+Get a single entity by ID:
+
+```typescript
+db.get(type: Type, id: string): Promise<Entity>
+```
+
+**Parameters**:
+
+- `type` - Semantic type
+- `id` - Entity ID
+
+**Example**:
+
+```typescript
+const business = await db.get($.Business, 'business-123')
+```
+
+#### db.create()
+
+Create a new entity:
+
+```typescript
+db.create(type: Type, data: Record<string, any>): Promise<Entity>
+```
+
+**Parameters**:
+
+- `type` - Semantic type
+- `data` - Entity data
+
+**Example**:
+
+```typescript
+const business = await db.create($.Business, {
+  name: 'Acme Corp',
+  industry: 'Technology',
+})
+```
+
+#### db.update()
+
+Update an existing entity:
+
+```typescript
+db.update(type: Type, id: string, data: Record<string, any>): Promise<Entity>
+```
+
+**Parameters**:
+
+- `type` - Semantic type
+- `id` - Entity ID
+- `data` - Updated fields
+
+**Example**:
+
+```typescript
+const updated = await db.update($.Business, 'business-123', {
+  employees: 50,
+})
+```
+
+#### db.delete()
+
+Delete an entity:
+
+```typescript
+db.delete(type: Type, id: string): Promise<void>
+```
+
+**Parameters**:
+
+- `type` - Semantic type
+- `id` - Entity ID
+
+**Example**:
+
+```typescript
+await db.delete($.Business, 'business-123')
+```
+
+#### db.query()
+
+Execute raw SQL query:
+
+```typescript
+db.query(sql: string, params?: any[]): Promise<any[]>
+```
+
+**Parameters**:
+
+- `sql` - SQL query string
+- `params` - Query parameters
+
+**Example**:
+
+```typescript
+const result = await db.query(
+  `
+  SELECT * FROM businesses WHERE industry = ?
+`,
+  ['Technology']
+)
+```
+
+#### db.related()
+
+Query related entities:
+
+```typescript
+db.related(entity: Entity, relationship: Relationship, type: Type): Promise<Entity[]>
+```
+
+**Parameters**:
+
+- `entity` - Source entity
+- `relationship` - Relationship type (e.g., `$.owns`)
+- `type` - Target type
+
+**Example**:
+
+```typescript
+const brands = await db.related(business, $.owns, $.Brand)
+```
+
+#### db.vectorSearch()
+
+Semantic vector search:
+
+```typescript
+db.vectorSearch(type: Type, options: VectorSearchOptions): Promise<Entity[]>
+```
+
+**Parameters**:
+
+- `type` - Semantic type
+- `options` - Search options
+
+**Options**:
+
+```typescript
+{
+  embedding: number[]
+  limit?: number
+  threshold?: number
+}
+```
+
+**Example**:
+
+```typescript
+const embedding = await ai.embed({ text: 'project management' })
+const similar = await db.vectorSearch($.Product, {
+  embedding,
+  limit: 10,
+  threshold: 0.7,
+})
+```
+
+### ai (AI Operations)
+
+#### ai.generate()
+
+Generate text or structured content:
+
+```typescript
+ai.generate(options: GenerateOptions): Promise<GenerateResult>
+```
+
+**Parameters**:
+
+```typescript
+{
+  prompt: string
+  schema?: Type
+  model?: string
+  temperature?: number
+  maxTokens?: number
+}
+```
+
+**Example**:
+
+```typescript
+const result = await ai.generate({
+  prompt: 'Write a product description',
+  schema: $.Text,
+  model: 'gpt-5',
+})
+```
+
+#### ai.embed()
+
+Create text embeddings:
+
+```typescript
+ai.embed(options: EmbedOptions): Promise<number[]>
+```
+
+**Parameters**:
+
+```typescript
+{
+  text: string
+  model?: string
+}
+```
+
+**Example**:
+
+```typescript
+const embedding = await ai.embed({
+  text: 'AI-powered automation',
+  model: 'text-embedding-3-small',
+})
+```
+
+#### ai.batch()
+
+Batch process multiple prompts:
+
+```typescript
+ai.batch(options: BatchOptions): Promise<BatchResult>
+```
+
+**Parameters**:
+
+```typescript
+{
+  prompts: string[]
+  schema?: Type
+  model?: string
+}
+```
+
+**Example**:
+
+```typescript
+const results = await ai.batch({
+  prompts: ['Describe product A', 'Describe product B'],
+  schema: $.Text,
+  model: 'gpt-5',
+})
+```
+
+### api (External API Integration)
+
+#### api.fetch()
+
+Fetch from external APIs:
+
+```typescript
+api.fetch(url: string, options?: FetchOptions): Promise<any>
+```
+
+**Parameters**:
+
+- `url` - API endpoint URL
+- `options` - Fetch options (headers, method, body, etc.)
+
+**Example**:
+
+```typescript
+const data = await api.fetch('https://api.example.com/data', {
+  headers: { Authorization: 'Bearer token' },
+})
+```
+
+### on (Event Listeners)
+
+#### on()
+
+Register event listener:
+
+```typescript
+on(event: Event, handler: (data: any) => Promise<void>): void
+```
+
+**Parameters**:
+
+- `event` - Semantic event (e.g., `$.Order.created`)
+- `handler` - Async handler function
+
+**Example**:
+
+```typescript
+on($.Order.created, async (order) => {
+  await db.create($.Invoice, {
+    order: order.$id,
+    amount: order.total,
+  })
+})
+```
+
+### send (Event Publishing)
+
+#### send()
+
+Publish an event:
+
+```typescript
+send(event: Event, data: any): Promise<void>
+```
+
+**Parameters**:
+
+- `event` - Semantic event
+- `data` - Event payload
+
+**Example**:
+
+```typescript
+await send($.Order.created, {
+  orderId: order.$id,
+  amount: order.total,
+})
+```
+
+### every (Scheduled Tasks)
+
+#### every()
+
+Schedule recurring task:
+
+```typescript
+every(schedule: string | Duration, handler: () => Promise<void>): void
+```
+
+**Parameters**:
+
+- `schedule` - Cron expression or duration
+- `handler` - Async handler function
+
+**Cron Examples**:
+
+```typescript
+every('0 9 * * *', handler) // Daily at 9 AM
+every('*/15 * * * *', handler) // Every 15 minutes
+every('0 0 * * 0', handler) // Weekly on Sunday
+```
+
+**Duration Examples**:
+
+```typescript
+every($.Hourly, handler)
+every($.Daily, handler)
+every($.Weekly, handler)
+```
+
+**Example**:
+
+```typescript
+every('0 9 * * *', async () => {
+  const report = await generateDailyReport()
+  await send($.DailyReport.created, report)
+})
+```
+
+### user (User Context)
+
+#### user.current()
+
+Get current user:
+
+```typescript
+user.current(): Promise<User>
+```
+
+**Example**:
+
+```typescript
+const currentUser = await user.current()
+```
+
+#### user.hasPermission()
+
+Check user permission:
+
+```typescript
+user.hasPermission(permission: string): Promise<boolean>
+```
+
+**Example**:
+
+```typescript
+const canEdit = await user.hasPermission('db:write')
+```
+
+## Execution Environment
+
+### Sandbox
+
+Code executes in a secure sandbox with:
+
+- **Isolated V8 context**: No access to parent process
+- **Memory limit**: 128 MB (configurable)
+- **Execution timeout**: 30 seconds (configurable)
+- **CPU quota**: Fair scheduling across executions
+
+### Environment Variables
+
+Access via `process.env`:
+
+```typescript
+const apiKey = process.env.DO_API_KEY
+const env = process.env.NODE_ENV
+```
+
+### Console Logging
+
+Standard console methods available:
+
+```typescript
+console.log('Info message')
+console.error('Error message')
+console.warn('Warning message')
+console.debug('Debug message')
+```
+
+Logs are captured and returned in the response (if enabled).
+
+## Error Handling
+
+### Error Types
+
+**Syntax Error**:
+
+```typescript
+{
+  "error": {
+    "code": "SYNTAX_ERROR",
+    "message": "Unexpected token",
+    "line": 5,
+    "column": 10
+  }
+}
+```
+
+**Runtime Error**:
+
+```typescript
+{
+  "error": {
+    "code": "RUNTIME_ERROR",
+    "message": "Cannot read property 'id' of undefined",
+    "stack": "..."
+  }
+}
+```
+
+**Timeout Error**:
+
+```typescript
+{
+  "error": {
+    "code": "TIMEOUT",
+    "message": "Execution exceeded maximum time of 30000ms"
+  }
+}
+```
+
+**Permission Error**:
+
+```typescript
+{
+  "error": {
+    "code": "PERMISSION_DENIED",
+    "message": "User does not have permission: db:write"
+  }
+}
+```
+
+### Handling Errors in Code
+
+Use try/catch:
+
+```typescript
+try {
+  const result = await db.get($.Business, 'nonexistent')
+  return result
+} catch (error) {
+  return {
+    error: true,
+    message: error.message,
+  }
+}
+```
+
+## Rate Limits
+
+Default rate limits:
+
+- **Requests per minute**: 60
+- **Requests per hour**: 1000
+- **Max execution time**: 30 seconds
+- **Max concurrent executions**: 5
+- **Max code size**: 50 KB
+
+Configurable via environment variables.
+
+## Security
+
+### Permissions
+
+Control access with permissions:
+
+```typescript
+{
+  "permissions": {
+    "db": ["read", "write"],
+    "ai": ["generate", "embed"],
+    "api": ["fetch"],
+    "events": ["listen", "send"]
+  }
+}
+```
+
+### Network Access
+
+Restricted to allowed domains:
+
+```typescript
+{
+  "network": {
+    "allowedDomains": [
+      "apis.do",
+      "api.openai.com"
+    ]
+  }
+}
+```
+
+### Audit Logging
+
+All executions are logged:
+
+- Code executed
+- User/session
+- Execution time
+- Resources used
+- Results/errors
+
+## Configuration
+
+### Server Configuration
+
+Configure via environment variables:
+
+```bash
+# API Configuration
+DO_API_KEY=sk_your_api_key
+DO_BASE_URL=https://apis.do
+
+# Execution Configuration
+DO_MAX_EXECUTION_TIME=30000
+DO_MAX_MEMORY=128
+DO_MAX_CODE_SIZE=51200
+
+# Logging
+DO_LOG_LEVEL=info
+DO_ENABLE_LOGS=true
+
+# Caching
+DO_ENABLE_CACHE=true
+DO_CACHE_TTL=3600
+
+# Rate Limiting
+DO_MAX_REQUESTS_PER_MINUTE=60
+DO_MAX_REQUESTS_PER_HOUR=1000
+```
+
+### Client Configuration
+
+Configure in Claude Desktop config:
+
+```json
+{
+  "mcpServers": {
+    "do": {
+      "command": "npx",
+      "args": ["-y", "mcp.do"],
+      "env": {
+        "DO_API_KEY": "sk_your_key",
+        "DO_BASE_URL": "https://apis.do"
+      }
+    }
+  }
+}
+```
+
+## Best Practices
+
+### 1. Always Return Results
+
+```typescript
+// Good
+const result = await db.list($.Business)
+return result
+
+// Avoid
+await db.list($.Business)
+```
+
+### 2. Use Semantic Types
+
+```typescript
+// Good
+await db.list($.Business)
+
+// Avoid
+await db.list('businesses')
+```
+
+### 3. Handle Errors
+
+```typescript
+try {
+  const result = await someOperation()
+  return result
+} catch (error) {
+  return { error: true, message: error.message }
+}
+```
+
+### 4. Limit Query Results
+
+```typescript
+// Good
+await db.list($.Business, { limit: 100 })
+
+// Avoid
+await db.list($.Business) // Could return thousands
+```
+
+### 5. Use Batching
+
+```typescript
+// Good
+const results = await Promise.all(ids.map((id) => db.get($.Business, id)))
+
+// Avoid
+const results = []
+for (const id of ids) {
+  results.push(await db.get($.Business, id))
+}
+```
+
+## Examples
+
+See detailed examples in:
+
+- [Basic Examples](../examples/basic)
+- [Execute TypeScript](../examples/execute-typescript)
+- [Claude Workflow](../examples/claude-workflow)
+
+## Next Steps
+
+- [Getting Started](../docs/getting-started) - Quick start guide
+- [Installation](../docs/installation) - Installation options
+- [Claude Integration](../docs/claude-integration) - Claude Desktop setup
+
+## Support
+
+- **Documentation**: [mcp.do](https://mcp.do)
+- **Issues**: [GitHub Issues](https://github.com/dot-do/platform/issues)
+- **Community**: [Discord](https://discord.gg/dotdo)

@@ -1,0 +1,913 @@
+---
+$id: https://api.do/examples/graphql-api
+$type: HowTo
+title: GraphQL API Integration Examples
+description: Complete examples of integrating GraphQL APIs with api.do
+keywords: [api, graphql, examples, integration, queries, mutations]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# GraphQL API Integration Examples
+
+Complete examples demonstrating GraphQL API integration with api.do.
+
+## Basic GraphQL Query
+
+Simple GraphQL query example:
+
+```typescript
+import { api } from 'sdk.do'
+
+const data = await api.graphql('https://api.example.com/graphql', {
+  query: `
+    query {
+      users {
+        id
+        name
+        email
+      }
+    }
+  `,
+})
+
+console.log(data.users)
+```
+
+## Query with Variables
+
+Use variables in GraphQL queries:
+
+```typescript
+import { api } from 'sdk.do'
+
+const data = await api.graphql('https://api.example.com/graphql', {
+  query: `
+    query GetUser($id: ID!) {
+      user(id: $id) {
+        id
+        name
+        email
+        posts {
+          id
+          title
+        }
+      }
+    }
+  `,
+  variables: {
+    id: '123',
+  },
+})
+
+console.log(data.user)
+```
+
+## GraphQL Mutations
+
+Create, update, and delete with mutations:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Create user
+const created = await api.graphql('https://api.example.com/graphql', {
+  query: `
+    mutation CreateUser($input: CreateUserInput!) {
+      createUser(input: $input) {
+        id
+        name
+        email
+      }
+    }
+  `,
+  variables: {
+    input: {
+      name: 'John Smith',
+      email: 'john@example.com',
+    },
+  },
+})
+
+console.log('Created user:', created.createUser.id)
+
+// Update user
+const updated = await api.graphql('https://api.example.com/graphql', {
+  query: `
+    mutation UpdateUser($id: ID!, $input: UpdateUserInput!) {
+      updateUser(id: $id, input: $input) {
+        id
+        name
+        email
+      }
+    }
+  `,
+  variables: {
+    id: created.createUser.id,
+    input: {
+      name: 'John Smith Updated',
+    },
+  },
+})
+
+console.log('Updated user:', updated.updateUser.name)
+
+// Delete user
+const deleted = await api.graphql('https://api.example.com/graphql', {
+  query: `
+    mutation DeleteUser($id: ID!) {
+      deleteUser(id: $id) {
+        success
+      }
+    }
+  `,
+  variables: {
+    id: created.createUser.id,
+  },
+})
+
+console.log('Deleted:', deleted.deleteUser.success)
+```
+
+## GitHub GraphQL API
+
+Integrate with GitHub's GraphQL API:
+
+```typescript
+import { $, api } from 'sdk.do'
+
+const GITHUB_GRAPHQL = 'https://api.github.com/graphql'
+const token = process.env.GITHUB_TOKEN
+
+// Get user information
+const user = await api.graphql(GITHUB_GRAPHQL, {
+  query: `
+    query {
+      viewer {
+        login
+        name
+        email
+        bio
+        avatarUrl
+        repositories(first: 10, orderBy: {field: UPDATED_AT, direction: DESC}) {
+          nodes {
+            name
+            description
+            stargazerCount
+            forkCount
+            url
+          }
+        }
+      }
+    }
+  `,
+  auth: {
+    type: 'bearer',
+    token,
+  },
+})
+
+console.log('User:', user.viewer.login)
+console.log('Repositories:')
+for (const repo of user.viewer.repositories.nodes) {
+  console.log(`- ${repo.name} (${repo.stargazerCount} stars)`)
+}
+
+// Get repository details
+const repo = await api.graphql(GITHUB_GRAPHQL, {
+  query: `
+    query($owner: String!, $name: String!) {
+      repository(owner: $owner, name: $name) {
+        name
+        description
+        stargazerCount
+        forkCount
+        issues(first: 10, states: OPEN) {
+          totalCount
+          nodes {
+            number
+            title
+            author {
+              login
+            }
+            createdAt
+          }
+        }
+        pullRequests(first: 10, states: OPEN) {
+          totalCount
+          nodes {
+            number
+            title
+            author {
+              login
+            }
+            createdAt
+          }
+        }
+      }
+    }
+  `,
+  variables: {
+    owner: 'dot-do',
+    name: 'platform',
+  },
+  auth: {
+    type: 'bearer',
+    token,
+  },
+})
+
+console.log('\nRepository:', repo.repository.name)
+console.log('Stars:', repo.repository.stargazerCount)
+console.log('Open Issues:', repo.repository.issues.totalCount)
+console.log('Open PRs:', repo.repository.pullRequests.totalCount)
+
+// Create an issue
+const newIssue = await api.graphql(GITHUB_GRAPHQL, {
+  query: `
+    mutation($input: CreateIssueInput!) {
+      createIssue(input: $input) {
+        issue {
+          number
+          title
+          url
+        }
+      }
+    }
+  `,
+  variables: {
+    input: {
+      repositoryId: 'repo_id_here',
+      title: 'Example Issue from api.do',
+      body: 'This issue was created via GraphQL API',
+    },
+  },
+  auth: {
+    type: 'bearer',
+    token,
+  },
+})
+
+console.log('Created issue:', newIssue.createIssue.issue.number)
+
+// Add comment to issue
+const comment = await api.graphql(GITHUB_GRAPHQL, {
+  query: `
+    mutation($input: AddCommentInput!) {
+      addComment(input: $input) {
+        commentEdge {
+          node {
+            id
+            body
+          }
+        }
+      }
+    }
+  `,
+  variables: {
+    input: {
+      subjectId: 'issue_id_here',
+      body: 'Comment added via GraphQL API',
+    },
+  },
+  auth: {
+    type: 'bearer',
+    token,
+  },
+})
+
+console.log('Comment added:', comment.addComment.commentEdge.node.id)
+```
+
+## Shopify GraphQL API
+
+Integrate with Shopify's Admin API:
+
+```typescript
+import { $, api, db } from 'sdk.do'
+
+const SHOPIFY_API = `https://${process.env.SHOPIFY_STORE}.myshopify.com/admin/api/2024-01/graphql.json`
+const token = process.env.SHOPIFY_ACCESS_TOKEN
+
+// Get products
+const products = await api.graphql(SHOPIFY_API, {
+  query: `
+    query {
+      products(first: 10) {
+        edges {
+          node {
+            id
+            title
+            description
+            handle
+            variants(first: 5) {
+              edges {
+                node {
+                  id
+                  title
+                  price
+                  sku
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  `,
+  auth: {
+    type: 'custom',
+    header: 'X-Shopify-Access-Token',
+    value: token,
+  },
+})
+
+console.log('Products:')
+for (const edge of products.products.edges) {
+  const product = edge.node
+  console.log(`- ${product.title}`)
+
+  // Store in database
+  await db.create($.Product, {
+    $type: 'Product',
+    name: product.title,
+    description: product.description,
+    shopifyId: product.id,
+    url: `https://${process.env.SHOPIFY_STORE}.myshopify.com/products/${product.handle}`,
+  })
+}
+
+// Create product
+const newProduct = await api.graphql(SHOPIFY_API, {
+  query: `
+    mutation productCreate($input: ProductInput!) {
+      productCreate(input: $input) {
+        product {
+          id
+          title
+          handle
+        }
+        userErrors {
+          field
+          message
+        }
+      }
+    }
+  `,
+  variables: {
+    input: {
+      title: 'New Product',
+      descriptionHtml: '<p>Product description</p>',
+      vendor: 'Example Vendor',
+      productType: 'Electronics',
+      variants: [
+        {
+          price: '99.99',
+          sku: 'PROD-001',
+        },
+      ],
+    },
+  },
+  auth: {
+    type: 'custom',
+    header: 'X-Shopify-Access-Token',
+    value: token,
+  },
+})
+
+if (newProduct.productCreate.userErrors.length > 0) {
+  console.error('Errors:', newProduct.productCreate.userErrors)
+} else {
+  console.log('Created product:', newProduct.productCreate.product.id)
+}
+
+// Get orders
+const orders = await api.graphql(SHOPIFY_API, {
+  query: `
+    query {
+      orders(first: 10) {
+        edges {
+          node {
+            id
+            name
+            email
+            totalPriceSet {
+              shopMoney {
+                amount
+                currencyCode
+              }
+            }
+            lineItems(first: 10) {
+              edges {
+                node {
+                  title
+                  quantity
+                  variant {
+                    price
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  `,
+  auth: {
+    type: 'custom',
+    header: 'X-Shopify-Access-Token',
+    value: token,
+  },
+})
+
+console.log('\nOrders:')
+for (const edge of orders.orders.edges) {
+  const order = edge.node
+  console.log(`- ${order.name}: ${order.totalPriceSet.shopMoney.amount} ${order.totalPriceSet.shopMoney.currencyCode}`)
+}
+
+// Update product
+const updated = await api.graphql(SHOPIFY_API, {
+  query: `
+    mutation productUpdate($input: ProductInput!) {
+      productUpdate(input: $input) {
+        product {
+          id
+          title
+        }
+        userErrors {
+          field
+          message
+        }
+      }
+    }
+  `,
+  variables: {
+    input: {
+      id: newProduct.productCreate.product.id,
+      title: 'Updated Product Title',
+    },
+  },
+  auth: {
+    type: 'custom',
+    header: 'X-Shopify-Access-Token',
+    value: token,
+  },
+})
+
+console.log('Updated product:', updated.productUpdate.product.title)
+```
+
+## Hasura GraphQL API
+
+Integrate with Hasura GraphQL Engine:
+
+```typescript
+import { $, api } from 'sdk.do'
+
+const HASURA_API = 'https://your-hasura-instance.hasura.app/v1/graphql'
+const adminSecret = process.env.HASURA_ADMIN_SECRET
+
+// Query data
+const users = await api.graphql(HASURA_API, {
+  query: `
+    query {
+      users {
+        id
+        name
+        email
+        posts {
+          id
+          title
+          created_at
+        }
+      }
+    }
+  `,
+  auth: {
+    type: 'custom',
+    header: 'x-hasura-admin-secret',
+    value: adminSecret,
+  },
+})
+
+console.log('Users:', users.users.length)
+
+// Insert data
+const inserted = await api.graphql(HASURA_API, {
+  query: `
+    mutation InsertUser($object: users_insert_input!) {
+      insert_users_one(object: $object) {
+        id
+        name
+        email
+      }
+    }
+  `,
+  variables: {
+    object: {
+      name: 'John Smith',
+      email: 'john@example.com',
+    },
+  },
+  auth: {
+    type: 'custom',
+    header: 'x-hasura-admin-secret',
+    value: adminSecret,
+  },
+})
+
+console.log('Inserted user:', inserted.insert_users_one.id)
+
+// Update data
+const updated = await api.graphql(HASURA_API, {
+  query: `
+    mutation UpdateUser($id: Int!, $changes: users_set_input!) {
+      update_users_by_pk(pk_columns: {id: $id}, _set: $changes) {
+        id
+        name
+        email
+      }
+    }
+  `,
+  variables: {
+    id: inserted.insert_users_one.id,
+    changes: {
+      name: 'John Smith Updated',
+    },
+  },
+  auth: {
+    type: 'custom',
+    header: 'x-hasura-admin-secret',
+    value: adminSecret,
+  },
+})
+
+console.log('Updated user:', updated.update_users_by_pk.name)
+
+// Delete data
+const deleted = await api.graphql(HASURA_API, {
+  query: `
+    mutation DeleteUser($id: Int!) {
+      delete_users_by_pk(id: $id) {
+        id
+      }
+    }
+  `,
+  variables: {
+    id: inserted.insert_users_one.id,
+  },
+  auth: {
+    type: 'custom',
+    header: 'x-hasura-admin-secret',
+    value: adminSecret,
+  },
+})
+
+console.log('Deleted user:', deleted.delete_users_by_pk.id)
+
+// Query with filters
+const filtered = await api.graphql(HASURA_API, {
+  query: `
+    query FilteredUsers($where: users_bool_exp!) {
+      users(where: $where, order_by: {created_at: desc}, limit: 10) {
+        id
+        name
+        email
+        created_at
+      }
+    }
+  `,
+  variables: {
+    where: {
+      _and: [{ email: { _ilike: '%@example.com' } }, { created_at: { _gte: '2024-01-01' } }],
+    },
+  },
+  auth: {
+    type: 'custom',
+    header: 'x-hasura-admin-secret',
+    value: adminSecret,
+  },
+})
+
+console.log('Filtered users:', filtered.users.length)
+```
+
+## Contentful GraphQL API
+
+Query Contentful CMS content:
+
+```typescript
+import { $, api, db } from 'sdk.do'
+
+const CONTENTFUL_API = `https://graphql.contentful.com/content/v1/spaces/${process.env.CONTENTFUL_SPACE_ID}`
+const token = process.env.CONTENTFUL_ACCESS_TOKEN
+
+// Get blog posts
+const posts = await api.graphql(CONTENTFUL_API, {
+  query: `
+    query {
+      blogPostCollection(limit: 10, order: publishDate_DESC) {
+        items {
+          sys {
+            id
+            publishedAt
+          }
+          title
+          slug
+          excerpt
+          publishDate
+          author {
+            name
+            bio
+            photo {
+              url
+            }
+          }
+          content {
+            json
+          }
+          featuredImage {
+            url
+            title
+            width
+            height
+          }
+        }
+      }
+    }
+  `,
+  auth: {
+    type: 'bearer',
+    token,
+  },
+})
+
+console.log('Blog Posts:')
+for (const post of posts.blogPostCollection.items) {
+  console.log(`- ${post.title} by ${post.author.name}`)
+
+  // Store in database
+  await db.create($.BlogPost, {
+    $type: 'BlogPost',
+    headline: post.title,
+    text: JSON.stringify(post.content.json),
+    datePublished: post.publishDate,
+    author: {
+      $type: 'Person',
+      name: post.author.name,
+      description: post.author.bio,
+    },
+    image: post.featuredImage.url,
+  })
+}
+
+// Get single post by slug
+const post = await api.graphql(CONTENTFUL_API, {
+  query: `
+    query($slug: String!) {
+      blogPostCollection(where: { slug: $slug }, limit: 1) {
+        items {
+          title
+          slug
+          content {
+            json
+          }
+          author {
+            name
+          }
+        }
+      }
+    }
+  `,
+  variables: {
+    slug: 'example-post',
+  },
+  auth: {
+    type: 'bearer',
+    token,
+  },
+})
+
+if (post.blogPostCollection.items.length > 0) {
+  const item = post.blogPostCollection.items[0]
+  console.log('\nPost:', item.title)
+  console.log('Author:', item.author.name)
+}
+
+// Query with filters
+const filtered = await api.graphql(CONTENTFUL_API, {
+  query: `
+    query($where: BlogPostFilter!) {
+      blogPostCollection(where: $where, limit: 10) {
+        items {
+          title
+          publishDate
+        }
+      }
+    }
+  `,
+  variables: {
+    where: {
+      publishDate_gte: '2024-01-01',
+      publishDate_lte: '2024-12-31',
+    },
+  },
+  auth: {
+    type: 'bearer',
+    token,
+  },
+})
+
+console.log('\nPosts in 2024:', filtered.blogPostCollection.items.length)
+```
+
+## Schema Mapping
+
+Map GraphQL responses to Schema.org types:
+
+```typescript
+import { $, api } from 'sdk.do'
+
+// Map product from GraphQL to Schema.org Product
+const product = await api.graphql('https://api.example.com/graphql', {
+  query: `
+    query($id: ID!) {
+      product(id: $id) {
+        id
+        name
+        description
+        price
+        currency
+        images
+        brand {
+          name
+        }
+        manufacturer {
+          name
+        }
+      }
+    }
+  `,
+  variables: { id: '123' },
+  schema: $.Product,
+  mapping: {
+    name: 'name',
+    description: 'description',
+    price: 'offers.price',
+    currency: 'offers.priceCurrency',
+    'images[0]': 'image',
+    'brand.name': 'brand.name',
+    'manufacturer.name': 'manufacturer.name',
+  },
+})
+
+console.log(product.$type) // "Product"
+console.log(product.name)
+console.log(product.offers.price)
+console.log(product.brand.name)
+```
+
+## Pagination
+
+Handle GraphQL pagination patterns:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Cursor-based pagination (Relay-style)
+async function getAllPagesCursor(endpoint: string, query: string, auth: any) {
+  const allItems = []
+  let hasNextPage = true
+  let cursor = null
+
+  while (hasNextPage) {
+    const result = await api.graphql(endpoint, {
+      query,
+      variables: {
+        first: 100,
+        after: cursor,
+      },
+      auth,
+    })
+
+    const edges = result.data.edges
+    allItems.push(...edges.map((edge) => edge.node))
+
+    hasNextPage = result.data.pageInfo.hasNextPage
+    cursor = result.data.pageInfo.endCursor
+  }
+
+  return allItems
+}
+
+// Offset-based pagination
+async function getAllPagesOffset(endpoint: string, query: string, auth: any) {
+  const allItems = []
+  let offset = 0
+  const limit = 100
+
+  while (true) {
+    const result = await api.graphql(endpoint, {
+      query,
+      variables: {
+        limit,
+        offset,
+      },
+      auth,
+    })
+
+    if (result.data.length === 0) break
+
+    allItems.push(...result.data)
+    offset += limit
+  }
+
+  return allItems
+}
+
+// Usage
+const allProducts = await getAllPagesCursor(
+  'https://api.example.com/graphql',
+  `
+    query($first: Int!, $after: String) {
+      products(first: $first, after: $after) {
+        edges {
+          node {
+            id
+            name
+            price
+          }
+        }
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+      }
+    }
+  `,
+  { type: 'bearer', token: process.env.API_TOKEN }
+)
+
+console.log(`Fetched ${allProducts.length} products`)
+```
+
+## Error Handling
+
+Handle GraphQL errors:
+
+```typescript
+import { api } from 'sdk.do'
+
+try {
+  const data = await api.graphql('https://api.example.com/graphql', {
+    query: `
+      query {
+        user(id: "invalid") {
+          id
+          name
+        }
+      }
+    `,
+    auth: {
+      type: 'bearer',
+      token: process.env.API_TOKEN,
+    },
+  })
+} catch (error) {
+  if (error.graphQLErrors) {
+    console.error('GraphQL Errors:')
+    for (const err of error.graphQLErrors) {
+      console.error(`- ${err.message}`)
+      console.error(`  Path: ${err.path?.join('.')}`)
+      console.error(`  Extensions:`, err.extensions)
+    }
+  }
+
+  if (error.networkError) {
+    console.error('Network Error:', error.networkError.message)
+  }
+
+  throw error
+}
+```
+
+## See Also
+
+- [REST API Example](./rest-api) - REST integration patterns
+- [Webhook Integration](./webhook-integration) - Webhook handling
+- [Making Requests](../docs/making-requests) - HTTP methods guide
+- [Authentication](../docs/authentication) - Auth patterns
+
+## Next Steps
+
+Explore more integration patterns:
+
+- [REST API Integration](./rest-api) - REST API patterns
+- [Webhook Integration](./webhook-integration) - Send and receive webhooks
+- [API Reference](../api/) - Complete API documentation
+
+## License
+
+MIT (Open Source)

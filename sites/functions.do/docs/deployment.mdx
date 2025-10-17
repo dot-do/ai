@@ -1,0 +1,720 @@
+---
+$id: https://functions.do/docs/deployment
+$type: TechArticle
+title: Function Deployment Guide
+description: Learn how to deploy, version, and manage functions in production
+keywords: [deployment, versioning, production, registry, management]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Function Deployment Guide
+
+Learn how to register, deploy, version, and manage functions in the functions.do platform.
+
+## Overview
+
+Function deployment involves several stages:
+
+1. **Register** - Add function to registry with metadata and source code
+2. **Deploy** - Mark function as deployed with an endpoint URL
+3. **Version** - Update function code with new versions
+4. **Monitor** - Track deployment status and health
+5. **Archive** - Retire old versions while preserving history
+
+## Quick Start
+
+```typescript
+import { registerFunction, deployFunction } from 'ai-functions'
+
+// 1. Register the function
+const func = await registerFunction({
+  metadata: {
+    id: 'hello-world',
+    name: 'Hello World',
+    version: '1.0.0',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  source: {
+    code: `export default function handler(input) {
+      return { message: \`Hello, \${input.params.name}!\` }
+    }`,
+    language: 'typescript',
+    handler: 'handler',
+  },
+})
+
+// 2. Deploy the function
+const deployed = await deployFunction('hello-world', 'https://functions.do/hello-world')
+
+console.log('Function deployed:', deployed?.endpoint)
+```
+
+## Registering Functions
+
+### Basic Registration
+
+Register a function with minimal metadata:
+
+```typescript
+import { registerFunction } from 'ai-functions'
+
+const func = await registerFunction({
+  metadata: {
+    id: 'calculate-tax',
+    name: 'Calculate Tax',
+    version: '1.0.0',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  source: {
+    code: `
+      export default function calculateTax(input) {
+        const { amount, rate } = input.params
+        return { tax: amount * rate, total: amount * (1 + rate) }
+      }
+    `,
+    language: 'typescript',
+  },
+})
+```
+
+### With Full Metadata
+
+Include all optional metadata for better discovery and management:
+
+```typescript
+const func = await registerFunction({
+  metadata: {
+    id: 'process-payment',
+    name: 'Process Payment',
+    description: 'Process credit card payments via Stripe',
+    version: '1.0.0',
+    author: 'payments-team@example.com',
+    tags: ['payments', 'stripe', 'critical'],
+    runtime: 'typescript',
+    memory: 256,
+    timeout: 30,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  source: {
+    code: paymentHandlerCode,
+    handler: 'processPayment',
+    language: 'typescript',
+    dependencies: {
+      stripe: '^14.0.0',
+      zod: '^3.22.0',
+    },
+  },
+})
+```
+
+### Using TypeScript
+
+For TypeScript functions, include type definitions:
+
+```typescript
+const typeScriptCode = `
+  interface PaymentInput {
+    amount: number
+    currency: string
+    source: string
+  }
+
+  interface PaymentResult {
+    transactionId: string
+    status: 'success' | 'failed'
+    amount: number
+  }
+
+  export default async function processPayment(
+    input: { params: PaymentInput }
+  ): Promise<PaymentResult> {
+    // Implementation
+    return {
+      transactionId: 'txn_123',
+      status: 'success',
+      amount: input.params.amount,
+    }
+  }
+`
+
+const func = await registerFunction({
+  metadata: {
+    id: 'process-payment',
+    name: 'Process Payment',
+    version: '1.0.0',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  source: {
+    code: typeScriptCode,
+    language: 'typescript',
+    handler: 'processPayment',
+  },
+})
+```
+
+### With Dependencies
+
+Specify NPM dependencies required by your function:
+
+```typescript
+const func = await registerFunction({
+  metadata: {
+    id: 'validate-data',
+    name: 'Validate Data',
+    version: '1.0.0',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  source: {
+    code: `
+      import { z } from 'zod'
+
+      const UserSchema = z.object({
+        email: z.string().email(),
+        age: z.number().min(18),
+      })
+
+      export default function validate(input) {
+        return UserSchema.parse(input.params.user)
+      }
+    `,
+    language: 'typescript',
+    dependencies: {
+      zod: '^3.22.0',
+    },
+  },
+})
+```
+
+## Deploying Functions
+
+### Mark as Deployed
+
+After deploying your function to production, mark it as deployed:
+
+```typescript
+import { deployFunction } from 'ai-functions'
+
+const deployed = await deployFunction('process-payment', 'https://api.example.com/functions/process-payment')
+
+console.log('Deployed at:', deployed?.deployedAt)
+console.log('Endpoint:', deployed?.endpoint)
+console.log('Status:', deployed?.status) // 'deployed'
+```
+
+### Deployment Workflow
+
+A typical deployment workflow:
+
+```typescript
+import { registerFunction, deployFunction, executeFunction } from 'ai-functions'
+
+// 1. Register the function
+const func = await registerFunction(definition)
+console.log('Registered:', func.definition.metadata.id)
+
+// 2. Test the function locally
+const testResult = await executeFunction(func.definition.metadata.id, {
+  params: { test: 'data' },
+})
+
+if (!testResult.success) {
+  throw new Error(`Test failed: ${testResult.error?.message}`)
+}
+
+// 3. Deploy to production
+const deployed = await deployFunction(func.definition.metadata.id, productionEndpoint)
+
+// 4. Smoke test in production
+const prodResult = await fetch(deployed!.endpoint, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ test: 'data' }),
+})
+
+if (!prodResult.ok) {
+  throw new Error('Production smoke test failed')
+}
+
+console.log('Deployment successful!')
+```
+
+## Versioning
+
+### Semantic Versioning
+
+functions.do uses [semantic versioning](https://semver.org/):
+
+- **Major** (1.x.x) - Breaking changes
+- **Minor** (x.1.x) - New features, backwards compatible
+- **Patch** (x.x.1) - Bug fixes, backwards compatible
+
+```typescript
+// Version 1.0.0 - Initial release
+await registerFunction({
+  metadata: {
+    id: 'calculate-price',
+    name: 'Calculate Price',
+    version: '1.0.0',
+    // ...
+  },
+  source: {
+    /* ... */
+  },
+})
+
+// Version 1.1.0 - Add discount feature (backwards compatible)
+await registerFunction({
+  metadata: {
+    id: 'calculate-price',
+    name: 'Calculate Price',
+    version: '1.1.0',
+    // ...
+  },
+  source: {
+    /* ... */
+  },
+})
+
+// Version 2.0.0 - Change return format (breaking change)
+await registerFunction({
+  metadata: {
+    id: 'calculate-price',
+    name: 'Calculate Price',
+    version: '2.0.0',
+    // ...
+  },
+  source: {
+    /* ... */
+  },
+})
+```
+
+### Updating Functions
+
+To update a function, re-register it with a new version:
+
+```typescript
+import { getFunction, registerFunction } from 'ai-functions'
+
+// Get current version
+const current = await getFunction('calculate-price')
+console.log('Current version:', current?.definition.metadata.version)
+
+// Register new version
+const updated = await registerFunction({
+  metadata: {
+    ...current!.definition.metadata,
+    version: '1.1.0',
+    updatedAt: new Date().toISOString(),
+  },
+  source: {
+    // Updated source code
+    code: newImplementation,
+    language: 'typescript',
+  },
+})
+
+console.log('Updated to version:', updated.definition.metadata.version)
+```
+
+### Version Management
+
+Manage versions manually using semantic versioning:
+
+```typescript
+import { getFunction, registerFunction } from 'ai-functions'
+
+// Get current version
+const current = await getFunction('my-function')
+const currentVersion = current?.definition.metadata.version // "1.2.3"
+
+// Increment version manually
+function incrementVersion(version: string, type: 'major' | 'minor' | 'patch'): string {
+  const [major, minor, patch] = version.split('.').map(Number)
+
+  if (type === 'major') return `${major + 1}.0.0`
+  if (type === 'minor') return `${major}.${minor + 1}.0`
+  return `${major}.${minor}.${patch + 1}`
+}
+
+// Use helper to increment
+const nextPatch = incrementVersion(currentVersion, 'patch') // "1.2.4"
+const nextMinor = incrementVersion(currentVersion, 'minor') // "1.3.0"
+const nextMajor = incrementVersion(currentVersion, 'major') // "2.0.0"
+```
+
+## Managing Functions
+
+### Listing Functions
+
+List all functions or filter by criteria:
+
+```typescript
+import { listFunctions } from 'ai-functions'
+
+// List all deployed functions
+const deployed = await listFunctions({ status: 'deployed' })
+
+// List functions by author
+const myFunctions = await listFunctions({ author: 'me@example.com' })
+
+// List functions by tags
+const paymentFunctions = await listFunctions({ tags: ['payments'] })
+
+// Paginate results
+const page1 = await listFunctions({ limit: 10, offset: 0 })
+const page2 = await listFunctions({ limit: 10, offset: 10 })
+```
+
+### Searching Functions
+
+Search for functions by name or metadata:
+
+```typescript
+import { searchFunctions } from 'ai-functions'
+
+const results = await searchFunctions({
+  name: 'payment',
+  tags: ['stripe'],
+  status: 'deployed',
+  limit: 20,
+})
+
+console.log(`Found ${results.total} functions`)
+results.functions.forEach((func) => {
+  console.log(`- ${func.definition.metadata.name} v${func.definition.metadata.version}`)
+})
+```
+
+### Updating Metadata
+
+Update function metadata without changing code:
+
+```typescript
+import { updateFunction } from 'ai-functions'
+
+await updateFunction('process-payment', {
+  description: 'Updated description',
+  tags: ['payments', 'stripe', 'production'],
+  memory: 512,
+  timeout: 60,
+})
+```
+
+### Archiving Functions
+
+Archive old versions while preserving history:
+
+```typescript
+import { archiveFunction } from 'ai-functions'
+
+// Archive old version
+const archived = await archiveFunction('calculate-price-v1')
+
+console.log('Archived:', archived?.status) // 'archived'
+```
+
+Archived functions:
+
+- Remain in registry
+- Are not returned by default in searches
+- Can still be retrieved by ID
+- Preserve execution history
+
+### Deleting Functions
+
+Permanently delete a function:
+
+```typescript
+import { deleteFunction } from 'ai-functions'
+
+const deleted = await deleteFunction('old-function')
+
+if (deleted) {
+  console.log('Function permanently deleted')
+}
+```
+
+**Warning:** Deletion is permanent and cannot be undone. Consider archiving instead.
+
+## Resource Configuration
+
+### Memory Limits
+
+Configure memory limits for function execution:
+
+```typescript
+const func = await registerFunction({
+  metadata: {
+    id: 'large-data-processor',
+    name: 'Process Large Dataset',
+    version: '1.0.0',
+    memory: 1024, // 1GB
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  source: {
+    /* ... */
+  },
+})
+```
+
+**Memory recommendations:**
+
+- **128MB** - Simple calculations, string operations
+- **256MB** - JSON processing, small API calls
+- **512MB** - Medium data processing, image manipulation
+- **1024MB** - Large data processing, video processing
+- **2048MB+** - Very large datasets, machine learning inference
+
+### Timeout Configuration
+
+Set execution timeout limits:
+
+```typescript
+const func = await registerFunction({
+  metadata: {
+    id: 'batch-processor',
+    name: 'Process Batch',
+    version: '1.0.0',
+    timeout: 300, // 5 minutes
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  source: {
+    /* ... */
+  },
+})
+```
+
+**Timeout recommendations:**
+
+- **10s** - Fast API calls, simple calculations
+- **30s** - Database queries, external API calls
+- **60s** - Complex processing, multiple API calls
+- **300s** - Batch processing, large data operations
+- **900s** (max) - Very long-running operations
+
+## Production Best Practices
+
+### 1. Always Version Functions
+
+```typescript
+// Good - Includes version
+await registerFunction({
+  metadata: {
+    id: 'process-order',
+    version: '1.0.0',
+    // ...
+  },
+  // ...
+})
+
+// Bad - No version
+await registerFunction({
+  metadata: {
+    id: 'process-order',
+    // Missing version
+  },
+  // ...
+})
+```
+
+### 2. Use Descriptive IDs
+
+```typescript
+// Good - Clear, descriptive ID
+id: 'process-stripe-payment'
+
+// Bad - Vague ID
+id: 'payment'
+```
+
+### 3. Tag Functions Appropriately
+
+```typescript
+tags: ['payments', 'stripe', 'critical', 'production']
+```
+
+Useful tag categories:
+
+- **Domain**: `orders`, `payments`, `customers`
+- **Integration**: `stripe`, `aws`, `slack`
+- **Priority**: `critical`, `high-priority`, `background`
+- **Environment**: `production`, `staging`, `development`
+
+### 4. Set Appropriate Limits
+
+```typescript
+// Consider function's actual needs
+memory: 256,  // Don't over-allocate
+timeout: 30,  // Allow enough time but not excessive
+```
+
+### 5. Test Before Deploying
+
+```typescript
+// Always test before marking as deployed
+const testResult = await executeFunction(func.definition.metadata.id, testInput)
+
+if (testResult.success) {
+  await deployFunction(func.definition.metadata.id, endpoint)
+}
+```
+
+### 6. Monitor Deployments
+
+```typescript
+// Track deployment status
+const func = await getFunction('process-payment')
+
+console.log('Status:', func?.status)
+console.log('Deployed:', func?.deployedAt)
+console.log('Endpoint:', func?.endpoint)
+```
+
+### 7. Use Metadata
+
+Include all relevant metadata for team visibility:
+
+```typescript
+metadata: {
+  id: 'process-payment',
+  name: 'Process Payment',
+  description: 'Processes credit card payments via Stripe',
+  version: '2.1.0',
+  author: 'payments-team@example.com',
+  tags: ['payments', 'stripe', 'critical'],
+  runtime: 'typescript',
+  memory: 256,
+  timeout: 30,
+  createdAt: '2024-01-15T10:00:00Z',
+  updatedAt: '2024-03-20T14:30:00Z',
+}
+```
+
+## CI/CD Integration
+
+### GitHub Actions
+
+```yaml
+name: Deploy Function
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: pnpm/action-setup@v2
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build function
+        run: pnpm build
+
+      - name: Deploy function
+        run: |
+          pnpm ts-node scripts/deploy-function.ts
+        env:
+          FUNCTIONS_API_KEY: ${{ secrets.FUNCTIONS_API_KEY }}
+```
+
+### Deployment Script
+
+```typescript
+// scripts/deploy-function.ts
+import { registerFunction, deployFunction } from 'ai-functions'
+import { readFileSync } from 'fs'
+import { version } from '../package.json'
+
+async function deploy() {
+  const code = readFileSync('./dist/index.js', 'utf-8')
+
+  // Register function
+  const func = await registerFunction({
+    metadata: {
+      id: 'my-function',
+      name: 'My Function',
+      version,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+    source: {
+      code,
+      language: 'javascript',
+    },
+  })
+
+  // Deploy to production
+  const deployed = await deployFunction(func.definition.metadata.id, process.env.PRODUCTION_ENDPOINT!)
+
+  console.log('Deployed:', deployed?.endpoint)
+}
+
+deploy().catch(console.error)
+```
+
+## Troubleshooting
+
+### Function Not Found
+
+```typescript
+const func = await getFunction('my-function')
+if (!func) {
+  console.error('Function not found - check ID spelling')
+}
+```
+
+### Deployment Failed
+
+```typescript
+try {
+  await deployFunction('my-function', endpoint)
+} catch (error) {
+  console.error('Deployment failed:', error.message)
+  // Check endpoint URL format
+  // Verify function exists
+  // Check network connectivity
+}
+```
+
+### Version Conflict
+
+```typescript
+// Get current version before updating
+const current = await getFunction('my-function')
+const currentVersion = current?.definition.metadata.version // "1.2.3"
+
+// Increment properly (manually)
+const [major, minor, patch] = currentVersion.split('.').map(Number)
+const nextVersion = `${major}.${minor + 1}.0` // "1.3.0"
+```
+
+### Registry Out of Sync
+
+```typescript
+// Force re-registration
+await deleteFunction('my-function')
+await registerFunction(definition)
+```
+
+## Next Steps
+
+- [Execution Guide](./execution) - Learn how to execute functions
+- [Scheduling](./scheduling) - Schedule function execution
+- [Monitoring](./monitoring) - Monitor function health and performance
+- [Best Practices](./best-practices) - Production deployment patterns
+- [API Reference](./api-reference) - Complete API documentation

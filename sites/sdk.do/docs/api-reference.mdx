@@ -1,0 +1,862 @@
+---
+$id: https://sdk.do/docs/api-reference
+$type: APIReference
+title: API Reference
+description: Complete API reference for all sdk.do functions and types
+keywords: [api, reference, documentation, functions, types]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# API Reference
+
+Complete reference documentation for all sdk.do functions and types.
+
+## Overview
+
+sdk.do exports the following modules:
+
+```typescript
+import $, { db, ai, api, on, send, every, user } from 'sdk.do'
+```
+
+## $ (Semantic Proxy)
+
+The semantic proxy provides access to 800+ Schema.org types for type-safe operations.
+
+### Usage
+
+```typescript
+import $ from 'sdk.do'
+
+// Access Schema.org types
+$.Business
+$.Person
+$.Product
+$.Order
+$.Organization
+
+// Access predicates
+$.worksFor
+$.owns
+$.employs
+$.sells
+```
+
+### Type Reference
+
+The `$` proxy includes all types from [schema.org.ai](https://schema.org.ai):
+
+| Type             | Description         | Example                      |
+| ---------------- | ------------------- | ---------------------------- |
+| `$.Business`     | Business entity     | Local business, organization |
+| `$.Person`       | Person entity       | Customer, employee           |
+| `$.Product`      | Product entity      | Physical or digital product  |
+| `$.Order`        | Order entity        | Purchase order               |
+| `$.Organization` | Organization entity | Company, non-profit          |
+| `$.Brand`        | Brand entity        | Product brand                |
+| `$.Offer`        | Offer entity        | Price, availability          |
+| `$.Invoice`      | Invoice entity      | Payment invoice              |
+| `$.Customer`     | Customer entity     | Business customer            |
+
+See [schema.org.ai](https://schema.org.ai) for complete type reference.
+
+---
+
+## db (Database)
+
+Database operations for CRUD and relationships.
+
+### db.list()
+
+List entities with optional filters.
+
+**Signature**:
+
+```typescript
+function list<T>(
+  type: Type<T>,
+  options?: {
+    where?: WhereClause
+    limit?: number
+    offset?: number
+    orderBy?: OrderBy
+  }
+): Promise<T[]>
+```
+
+**Parameters**:
+
+- `type` - Entity type from `$` proxy (e.g., `$.Business`)
+- `options.where` - Filter conditions
+- `options.limit` - Maximum results (default: 100)
+- `options.offset` - Skip results (for pagination)
+- `options.orderBy` - Sort order
+
+**Returns**: Array of entities
+
+**Example**:
+
+```typescript
+import { db } from 'sdk.do'
+
+// Basic list
+const businesses = await db.list($.Business)
+
+// With filters
+const techBusinesses = await db.list($.Business, {
+  where: { industry: 'Technology' },
+  limit: 10,
+  orderBy: { name: 'asc' },
+})
+
+// Complex query
+const activeCustomers = await db.list($.Customer, {
+  where: {
+    status: 'Active',
+    createdAt: { $gte: new Date('2025-01-01') },
+    revenue: { $gt: 10000 },
+  },
+  limit: 50,
+})
+```
+
+### db.get()
+
+Get a single entity by ID.
+
+**Signature**:
+
+```typescript
+function get<T>(type: Type<T>, id: string): Promise<T | null>
+```
+
+**Parameters**:
+
+- `type` - Entity type from `$` proxy
+- `id` - Entity ID
+
+**Returns**: Entity or null if not found
+
+**Example**:
+
+```typescript
+const business = await db.get($.Business, 'business-123')
+
+if (business) {
+  console.log('Found:', business.name)
+} else {
+  console.log('Not found')
+}
+```
+
+### db.create()
+
+Create a new entity.
+
+**Signature**:
+
+```typescript
+function create<T>(type: Type<T>, data: Partial<T>): Promise<T>
+```
+
+**Parameters**:
+
+- `type` - Entity type from `$` proxy
+- `data` - Entity data
+
+**Returns**: Created entity with `$id`
+
+**Example**:
+
+```typescript
+const business = await db.create($.Business, {
+  name: 'Acme Corp',
+  industry: 'Technology',
+  foundingDate: '2025-01-01',
+  description: 'Leading tech company',
+})
+
+console.log('Created:', business.$id)
+```
+
+### db.update()
+
+Update an existing entity.
+
+**Signature**:
+
+```typescript
+function update<T>(entity: T & { $id: string }, data: Partial<T>): Promise<T>
+```
+
+**Parameters**:
+
+- `entity` - Entity to update (must have `$id`)
+- `data` - Fields to update
+
+**Returns**: Updated entity
+
+**Example**:
+
+```typescript
+const business = await db.get($.Business, 'business-123')
+
+const updated = await db.update(business, {
+  revenue: 1000000,
+  employees: 50,
+})
+
+console.log('Updated:', updated.revenue)
+```
+
+### db.delete()
+
+Delete an entity.
+
+**Signature**:
+
+```typescript
+function delete<T>(
+  entity: T & { $id: string }
+): Promise<void>
+```
+
+**Parameters**:
+
+- `entity` - Entity to delete (must have `$id`)
+
+**Returns**: Promise that resolves when deleted
+
+**Example**:
+
+```typescript
+const business = await db.get($.Business, 'business-123')
+await db.delete(business)
+console.log('Deleted')
+```
+
+### db.relate()
+
+Create a relationship between entities.
+
+**Signature**:
+
+```typescript
+function relate<S, O>(subject: S & { $id: string }, predicate: Predicate, object: O & { $id: string }): Promise<void>
+```
+
+**Parameters**:
+
+- `subject` - Subject entity
+- `predicate` - Relationship predicate (e.g., `$.worksFor`)
+- `object` - Object entity
+
+**Returns**: Promise that resolves when relationship created
+
+**Example**:
+
+```typescript
+const person = await db.get($.Person, 'person-123')
+const organization = await db.get($.Organization, 'org-456')
+
+// Create relationship
+await db.relate(person, $.worksFor, organization)
+
+// Multiple relationships
+await db.relate(organization, $.owns, brand)
+await db.relate(business, $.sells, product)
+```
+
+### db.related()
+
+Query related entities.
+
+**Signature**:
+
+```typescript
+function related<S, O>(subject: S & { $id: string }, predicate: Predicate, objectType: Type<O>): Promise<O[]>
+```
+
+**Parameters**:
+
+- `subject` - Subject entity
+- `predicate` - Relationship predicate
+- `objectType` - Expected object type
+
+**Returns**: Array of related entities
+
+**Example**:
+
+```typescript
+const organization = await db.get($.Organization, 'org-123')
+
+// Find all employees
+const employees = await db.related(organization, $.employs, $.Person)
+
+// Find brands owned by business
+const brands = await db.related(business, $.owns, $.Brand)
+```
+
+---
+
+## ai (AI Services)
+
+AI operations for generation, embedding, and batch processing.
+
+### ai.generate()
+
+Generate content with AI.
+
+**Signature**:
+
+```typescript
+function generate(
+  prompt: string,
+  options?: {
+    schema?: Schema
+    model?: string
+    temperature?: number
+    maxTokens?: number
+  }
+): Promise<any>
+```
+
+**Parameters**:
+
+- `prompt` - Generation prompt
+- `options.schema` - Expected output schema (for structured data)
+- `options.model` - AI model (default: from env)
+- `options.temperature` - Randomness 0-1 (default: 0.7)
+- `options.maxTokens` - Max output tokens
+
+**Returns**: Generated content (string or structured object)
+
+**Example**:
+
+```typescript
+import { ai } from 'sdk.do'
+
+// Text generation
+const text = await ai.generate('Write a product description')
+
+// Structured generation
+const product = await ai.generate('Create a tech product', { schema: $.Product })
+
+// Custom parameters
+const creative = await ai.generate('Write a story', { temperature: 0.9, maxTokens: 1000 })
+```
+
+### ai.embed()
+
+Create embeddings for semantic search.
+
+**Signature**:
+
+```typescript
+function embed(
+  text: string,
+  options?: {
+    model?: string
+  }
+): Promise<number[]>
+```
+
+**Parameters**:
+
+- `text` - Text to embed
+- `options.model` - Embedding model (default: text-embedding-3-small)
+
+**Returns**: Embedding vector (array of numbers)
+
+**Example**:
+
+```typescript
+// Create embedding
+const embedding = await ai.embed('Find tech startups in San Francisco')
+
+// Use in semantic search
+const results = await db.list($.Business, {
+  where: {
+    $semantic: {
+      embedding,
+      threshold: 0.8,
+    },
+  },
+})
+```
+
+### ai.batch()
+
+Batch process multiple AI requests (50% cost savings).
+
+**Signature**:
+
+```typescript
+function batch(
+  requests: Array<{
+    prompt: string
+    schema?: Schema
+  }>,
+  options?: {
+    model?: string
+    temperature?: number
+  }
+): Promise<any[]>
+```
+
+**Parameters**:
+
+- `requests` - Array of generation requests
+- `options` - Shared generation options
+
+**Returns**: Array of results matching request order
+
+**Example**:
+
+```typescript
+// Batch process multiple items
+const products = await db.list($.Product, {
+  where: { description: null },
+})
+
+const descriptions = await ai.batch(
+  products.map((p) => ({
+    prompt: `Write description for: ${p.name}`,
+    schema: { description: 'string' },
+  }))
+)
+
+// Update products with descriptions
+for (let i = 0; i < products.length; i++) {
+  await db.update(products[i], {
+    description: descriptions[i].description,
+  })
+}
+```
+
+---
+
+## api (External API)
+
+Call external APIs with semantic context.
+
+### api()
+
+Make HTTP requests to external APIs.
+
+**Signature**:
+
+```typescript
+function api(
+  url: string,
+  options?: {
+    method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
+    headers?: Record<string, string>
+    body?: any
+    schema?: Schema
+    transform?: (data: any) => any
+  }
+): Promise<any>
+```
+
+**Parameters**:
+
+- `url` - API endpoint URL
+- `options.method` - HTTP method (default: GET)
+- `options.headers` - Request headers
+- `options.body` - Request body (auto-serialized)
+- `options.schema` - Expected response schema
+- `options.transform` - Response transformation function
+
+**Returns**: API response data
+
+**Example**:
+
+```typescript
+import { api } from 'sdk.do'
+
+// GET request
+const products = await api('https://api.example.com/products')
+
+// POST request
+const newProduct = await api('https://api.example.com/products', {
+  method: 'POST',
+  body: { name: 'New Product', price: 99.99 },
+})
+
+// With authentication
+const data = await api('https://api.example.com/data', {
+  headers: {
+    Authorization: `Bearer ${process.env.API_TOKEN}`,
+  },
+})
+
+// With schema validation
+const typedProducts = await api('https://api.example.com/products', {
+  schema: $.Product,
+  transform: (data) => data.items, // Extract items array
+})
+```
+
+---
+
+## on (Event Listeners)
+
+Listen for semantic events.
+
+### on()
+
+Register event listener.
+
+**Signature**:
+
+```typescript
+function on(event: EventPattern, handler: (data: any) => Promise<void> | void): void
+```
+
+**Parameters**:
+
+- `event` - Event pattern (e.g., `$.Order.created`)
+- `handler` - Async handler function
+
+**Returns**: void
+
+**Example**:
+
+```typescript
+import { on } from 'sdk.do'
+
+// Listen for events
+on($.Order.created, async (order) => {
+  console.log('New order:', order.$id)
+  await processOrder(order)
+})
+
+on($.Customer.upgraded, async (customer) => {
+  console.log('Customer upgraded:', customer.name)
+  await sendUpgradeConfirmation(customer)
+})
+
+on($.Payment.received, async (payment) => {
+  console.log('Payment received:', payment.amount)
+  await updateAccountBalance(payment)
+})
+
+// Error handling
+on($.Order.created, async (order) => {
+  try {
+    await processOrder(order)
+  } catch (error) {
+    console.error('Failed to process order:', error)
+    send($.Order.failed, { orderId: order.$id, error })
+  }
+})
+```
+
+---
+
+## send (Event Publishing)
+
+Publish semantic events.
+
+### send()
+
+Publish an event.
+
+**Signature**:
+
+```typescript
+function send(event: EventPattern, data: any): void
+```
+
+**Parameters**:
+
+- `event` - Event pattern (e.g., `$.Order.created`)
+- `data` - Event data
+
+**Returns**: void
+
+**Example**:
+
+```typescript
+import { send } from 'sdk.do'
+
+// Publish events
+send($.Order.created, {
+  $type: 'Order',
+  $id: 'order-123',
+  customer: 'customer-456',
+  total: 99.99,
+})
+
+send($.Email.send, {
+  to: 'user@example.com',
+  subject: 'Welcome',
+  body: 'Welcome to our platform!',
+})
+
+send($.Task.created, {
+  title: 'Follow up with customer',
+  assignee: 'user-789',
+  dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+})
+```
+
+---
+
+## every (Scheduled Workflows)
+
+Execute functions on a schedule.
+
+### every()
+
+Schedule recurring function execution.
+
+**Signature**:
+
+```typescript
+function every(schedule: SchedulePattern | string, handler: () => Promise<void> | void): void
+```
+
+**Parameters**:
+
+- `schedule` - Schedule pattern (e.g., `$.Daily`) or cron expression
+- `handler` - Async handler function
+
+**Returns**: void
+
+**Schedule Patterns**:
+
+- `$.Minutely` - Every minute
+- `$.Hourly` - Every hour
+- `$.Daily` - Every day at midnight
+- `$.Weekly` - Every week on Sunday
+- `$.Monthly` - Every month on the 1st
+- Custom cron expression (e.g., `'0 */6 * * *'`)
+
+**Example**:
+
+```typescript
+import { every } from 'sdk.do'
+
+// Daily reports
+every($.Daily, async () => {
+  const orders = await db.list($.Order, {
+    where: {
+      createdAt: {
+        $gte: new Date(Date.now() - 24 * 60 * 60 * 1000),
+      },
+    },
+  })
+  console.log(`Daily orders: ${orders.length}`)
+})
+
+// Hourly sync
+every($.Hourly, async () => {
+  await syncExternalData()
+})
+
+// Every 6 hours
+every('0 */6 * * *', async () => {
+  await performMaintenance()
+})
+
+// Weekly reports
+every($.Weekly, async () => {
+  await generateWeeklyReport()
+})
+```
+
+---
+
+## user (User Context)
+
+Access current user and session data.
+
+### user.current()
+
+Get current user.
+
+**Signature**:
+
+```typescript
+function current(): Promise<User>
+```
+
+**Returns**: Current user object
+
+**Example**:
+
+```typescript
+import { user } from 'sdk.do'
+
+const currentUser = await user.current()
+console.log('User:', currentUser.email)
+```
+
+### user.can()
+
+Check user permissions.
+
+**Signature**:
+
+```typescript
+function can(permission: string): Promise<boolean>
+```
+
+**Parameters**:
+
+- `permission` - Permission to check
+
+**Returns**: Boolean indicating if user has permission
+
+**Example**:
+
+```typescript
+if (await user.can('admin')) {
+  // Admin operations
+}
+
+if (await user.can('edit:products')) {
+  // Edit products
+}
+```
+
+### user.get()
+
+Get user property.
+
+**Signature**:
+
+```typescript
+function get(key: string): Promise<any>
+```
+
+**Parameters**:
+
+- `key` - Property key
+
+**Returns**: Property value
+
+**Example**:
+
+```typescript
+const email = await user.get('email')
+const role = await user.get('role')
+const preferences = await user.get('preferences')
+```
+
+---
+
+## Types
+
+### WhereClause
+
+Filter conditions for database queries.
+
+```typescript
+type WhereClause = {
+  [key: string]:
+    | any
+    | {
+        $eq?: any
+        $ne?: any
+        $gt?: any
+        $gte?: any
+        $lt?: any
+        $lte?: any
+        $in?: any[]
+        $nin?: any[]
+        $semantic?: {
+          embedding: number[]
+          threshold: number
+        }
+      }
+}
+```
+
+### OrderBy
+
+Sort order for queries.
+
+```typescript
+type OrderBy = {
+  [key: string]: 'asc' | 'desc'
+}
+```
+
+### Schema
+
+Schema definition for AI generation.
+
+```typescript
+type Schema =
+  | Type
+  | {
+      [key: string]: string | Schema
+    }
+```
+
+### Type
+
+Semantic type from `$` proxy.
+
+```typescript
+type Type<T = any> = {
+  $type: string
+  [key: string]: any
+}
+```
+
+---
+
+## Error Handling
+
+All async functions can throw errors. Always use try-catch:
+
+```typescript
+try {
+  const business = await db.create($.Business, data)
+} catch (error) {
+  if (error.code === 'DUPLICATE_KEY') {
+    console.error('Business already exists')
+  } else {
+    console.error('Failed to create business:', error)
+  }
+}
+```
+
+## Rate Limiting
+
+AI operations are rate-limited. Use batch processing for multiple requests:
+
+```typescript
+// Good - batch processing
+const results = await ai.batch(requests)
+
+// Avoid - sequential requests
+for (const request of requests) {
+  await ai.generate(request.prompt)
+}
+```
+
+## Best Practices
+
+1. **Use semantic patterns** for type safety
+2. **Batch AI operations** for cost savings
+3. **Handle errors gracefully** with try-catch
+4. **Use relationships** instead of joins
+5. **Type your data** with TypeScript
+
+---
+
+## See Also
+
+- [Getting Started](./getting-started)
+- [Quick Start](./quickstart)
+- [Examples](../examples/)
+- [schema.org.ai](https://schema.org.ai)
+- [database.do](https://database.do)
+- [events.do](https://events.do)

@@ -1,0 +1,717 @@
+---
+$id: https://benchmarks.do/docs/best-practices
+$type: TechArticle
+title: Benchmarks.do Best Practices
+description: Best practices for designing reliable benchmarks, ensuring statistical significance, and implementing continuous benchmarking
+keywords: [best practices, benchmark design, statistical significance, baseline management, continuous benchmarking]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Best Practices
+
+Learn how to design effective benchmarks, ensure statistical validity, and implement continuous performance monitoring.
+
+## Benchmark Design Principles
+
+### 1. Define Clear Objectives
+
+Start with clear, measurable goals:
+
+```typescript
+import { $, benchmarks } from 'sdk.do'
+
+// ✓ Good: Clear objective
+const benchmark = await benchmarks.create({
+  name: 'API Latency SLA Validation',
+  objective: 'Verify p95 latency < 500ms under 100 concurrent users',
+
+  target: { url: 'https://api.example.com/users' },
+
+  load: { users: 100, duration: '5m' },
+
+  assertions: [{ metric: 'p95_latency', operator: 'lt', value: 500 }],
+})
+
+// ✗ Bad: Vague objective
+const vaguerBench = await benchmarks.create({
+  name: 'Test API',
+  // No clear objective or assertions
+})
+```
+
+### 2. Use Realistic Workloads
+
+Model production traffic patterns:
+
+```typescript
+import { $, benchmarks } from 'sdk.do'
+
+// ✓ Good: Realistic traffic pattern
+const realisticBench = await benchmarks.create({
+  name: 'Production Traffic Simulation',
+
+  scenarios: [
+    {
+      name: 'Read Operations',
+      weight: 0.7, // 70% reads (typical read-heavy pattern)
+      steps: [
+        { request: 'GET /api/products' },
+        { think: 2000 }, // User think time
+        { request: 'GET /api/products/:id' },
+      ],
+    },
+    {
+      name: 'Write Operations',
+      weight: 0.3, // 30% writes
+      steps: [{ request: 'POST /api/orders' }, { request: 'GET /api/orders/:id' }],
+    },
+  ],
+
+  load: {
+    type: 'gradual',
+    stages: [
+      { duration: '2m', target: 50 }, // Gradual ramp-up
+      { duration: '5m', target: 100 }, // Steady state
+      { duration: '2m', target: 0 }, // Ramp-down
+    ],
+  },
+})
+
+// ✗ Bad: Unrealistic constant hammering
+const unrealisticBench = await benchmarks.create({
+  name: 'Constant Load',
+  target: { url: 'https://api.example.com' },
+  load: { users: 1000, duration: '1m' }, // No ramp-up, no think time
+})
+```
+
+### 3. Include Warmup and Cooldown
+
+Allow JIT compilation and connection pooling:
+
+```typescript
+import { $, benchmarks } from 'sdk.do'
+
+// ✓ Good: Warmup period
+const withWarmup = await benchmarks.create({
+  name: 'Function Performance',
+
+  target: async () => {
+    return await expensiveOperation()
+  },
+
+  warmup: 100, // 100 iterations to warm up JIT
+  iterations: 1000,
+  cooldown: 50, // 50 iterations cooldown
+})
+
+// Results more stable after warmup
+```
+
+### 4. Test Under Various Conditions
+
+Test multiple scenarios:
+
+```typescript
+import { $, benchmarks } from 'sdk.do'
+
+// Test suite covering multiple conditions
+const conditions = [
+  { name: 'Low Load', users: 10 },
+  { name: 'Normal Load', users: 50 },
+  { name: 'High Load', users: 100 },
+  { name: 'Peak Load', users: 200 },
+  { name: 'Stress Load', users: 500 },
+]
+
+for (const condition of conditions) {
+  const bench = await benchmarks.create({
+    name: `API Performance - ${condition.name}`,
+    target: { url: 'https://api.example.com' },
+    load: { users: condition.users, duration: '5m' },
+  })
+
+  const results = await benchmarks.run(bench.id)
+
+  console.log(`${condition.name}:`, {
+    p95: results.p95Latency,
+    throughput: results.throughput,
+    errorRate: results.errorRate,
+  })
+}
+```
+
+## Statistical Significance
+
+### 1. Adequate Sample Size
+
+Ensure sufficient samples for statistical validity:
+
+```typescript
+import { $, benchmarks } from 'sdk.do'
+
+// ✓ Good: Large sample size
+const largeSample = await benchmarks.create({
+  name: 'Latency Analysis',
+
+  target: async () => await db.query('SELECT * FROM users'),
+
+  iterations: 10000, // Large sample for statistical validity
+  warmup: 1000,
+
+  statistics: {
+    enabled: true,
+    confidence_level: 0.95, // 95% confidence intervals
+  },
+})
+
+// ✗ Bad: Too few samples
+const smallSample = await benchmarks.create({
+  name: 'Quick Test',
+  iterations: 10, // Not enough for statistical validity
+})
+```
+
+### 2. Multiple Runs
+
+Run benchmarks multiple times:
+
+```typescript
+import { $, benchmarks } from 'sdk.do'
+
+// Run benchmark 5 times and aggregate
+const runs = []
+for (let i = 0; i < 5; i++) {
+  const result = await benchmarks.run(benchId)
+  runs.push(result)
+}
+
+// Calculate aggregate statistics
+const aggregated = {
+  avgLatency: runs.reduce((sum, r) => sum + r.avgLatency, 0) / runs.length,
+  p95Latency: runs.reduce((sum, r) => sum + r.p95Latency, 0) / runs.length,
+  throughput: runs.reduce((sum, r) => sum + r.throughput, 0) / runs.length,
+}
+
+// Check consistency
+const stdDev = Math.sqrt(runs.map((r) => Math.pow(r.avgLatency - aggregated.avgLatency, 2)).reduce((a, b) => a + b) / runs.length)
+
+const coefficientOfVariation = (stdDev / aggregated.avgLatency) * 100
+
+if (coefficientOfVariation > 10) {
+  console.warn('High variability detected:', coefficientOfVariation, '%')
+}
+```
+
+### 3. Outlier Detection
+
+Identify and handle outliers:
+
+```typescript
+import { $, benchmarks } from 'sdk.do'
+
+const bench = await benchmarks.create({
+  name: 'Query Performance',
+
+  target: async () => await db.query('SELECT * FROM orders'),
+
+  iterations: 10000,
+
+  statistics: {
+    enabled: true,
+    outlier_detection: 'iqr', // Interquartile range method
+    outlier_handling: 'report', // 'remove' or 'report'
+  },
+})
+
+const results = await benchmarks.run(bench.id)
+
+// Review outliers
+console.log('Outliers detected:', results.statistics.outliers.count)
+console.log('Outlier percentage:', results.statistics.outliers.percentage, '%')
+
+if (results.statistics.outliers.percentage > 5) {
+  console.warn('High outlier percentage - investigate system behavior')
+}
+```
+
+### 4. Statistical Tests
+
+Use appropriate statistical tests:
+
+```typescript
+import { $, benchmarks } from 'sdk.do'
+
+// Compare two benchmarks with statistical test
+const comparison = await benchmarks.compare({
+  baseline: baselineId,
+  current: currentId,
+
+  statistical_test: 'mann_whitney', // Non-parametric test (no normal distribution assumption)
+  significance_level: 0.05, // p-value threshold
+
+  metrics: ['latency', 'throughput', 'error_rate'],
+})
+
+// Check statistical significance
+comparison.metrics.forEach((metric) => {
+  if (metric.significant) {
+    console.log(`${metric.name}: Statistically significant difference detected`)
+    console.log('- p-value:', metric.pValue)
+    console.log('- Change:', metric.change, '%')
+  }
+})
+```
+
+## Baseline Management
+
+### 1. Establish Performance Baselines
+
+Create stable baselines:
+
+```typescript
+import { $, benchmarks, db } from 'sdk.do'
+
+// Establish baseline with multiple runs
+async function establishBaseline(benchmarkId: string): Promise<string> {
+  console.log('Establishing baseline with 10 runs...')
+
+  const runs = []
+  for (let i = 0; i < 10; i++) {
+    const result = await benchmarks.run(benchmarkId)
+    runs.push(result)
+    await new Promise((resolve) => setTimeout(resolve, 60000)) // 1 minute between runs
+  }
+
+  // Calculate median result (more robust than mean)
+  const median = runs.sort((a, b) => a.avgLatency - b.avgLatency)[Math.floor(runs.length / 2)]
+
+  // Mark as baseline
+  await db.update($.BenchmarkResult, median.id, {
+    baseline: true,
+    baselineDate: new Date().toISOString(),
+  })
+
+  return median.id
+}
+
+// Use baseline
+const baselineId = await establishBaseline(benchId)
+```
+
+### 2. Regular Baseline Updates
+
+Update baselines periodically:
+
+```typescript
+import { $, benchmarks, db, every } from 'sdk.do'
+
+// Update baseline monthly
+every($.Monthly, async () => {
+  const benchmarks = await db.list($.Benchmark, {
+    where: { continuous: true },
+  })
+
+  for (const bench of benchmarks) {
+    // Run new baseline
+    const newBaseline = await establishBaseline(bench.id)
+
+    // Compare to old baseline
+    const oldBaseline = await db.get($.BenchmarkResult, {
+      benchmarkId: bench.id,
+      baseline: true,
+    })
+
+    const comparison = await benchmarks.compare({
+      baseline: oldBaseline.id,
+      current: newBaseline,
+    })
+
+    // Log baseline drift
+    console.log(`Baseline drift for ${bench.name}:`)
+    console.log('- Latency change:', comparison.metrics.latency.change, '%')
+    console.log('- Throughput change:', comparison.metrics.throughput.change, '%')
+  }
+})
+```
+
+### 3. Version-Specific Baselines
+
+Track baselines per version:
+
+```typescript
+import { $, benchmarks, db } from 'sdk.do'
+
+// Store baseline per version
+async function storeVersionBaseline(version: string, benchId: string): Promise<void> {
+  const result = await benchmarks.run(benchId)
+
+  await db.create($.VersionBaseline, {
+    version,
+    benchmarkId: benchId,
+    resultId: result.id,
+    metrics: {
+      avgLatency: result.avgLatency,
+      p95Latency: result.p95Latency,
+      throughput: result.throughput,
+    },
+    timestamp: new Date().toISOString(),
+  })
+}
+
+// Compare to version baseline
+async function compareToVersion(version: string, benchId: string): Promise<void> {
+  const versionBaseline = await db.get($.VersionBaseline, {
+    version,
+    benchmarkId: benchId,
+  })
+
+  const current = await benchmarks.run(benchId)
+
+  const comparison = await benchmarks.compare({
+    baseline: versionBaseline.resultId,
+    current: current.id,
+  })
+
+  console.log(`Comparison to v${version}:`, comparison)
+}
+```
+
+## Regression Detection
+
+### 1. Define Regression Thresholds
+
+Set appropriate thresholds:
+
+```typescript
+import { $, benchmarks } from 'sdk.do'
+
+// Define thresholds based on business requirements
+const regressionThresholds = {
+  // Latency degradation
+  latency_increase: 0.1, // 10% increase is regression
+  p95_latency_increase: 0.15, // 15% for p95
+  p99_latency_increase: 0.2, // 20% for p99
+
+  // Throughput degradation
+  throughput_decrease: 0.1, // 10% decrease is regression
+
+  // Error rate increase
+  error_rate_increase: 0.01, // 1% absolute increase
+
+  // Resource usage increase
+  memory_increase: 0.2, // 20% memory increase
+  cpu_increase: 0.15, // 15% CPU increase
+}
+
+const comparison = await benchmarks.compare({
+  baseline: baselineId,
+  current: currentId,
+  regression_thresholds: regressionThresholds,
+})
+
+if (comparison.regression) {
+  console.error('Regression detected!')
+  comparison.regressions.forEach((reg) => {
+    console.error(`- ${reg.metric}: ${reg.change}% ${reg.direction}`)
+  })
+}
+```
+
+### 2. Automated Regression Alerts
+
+Alert on regressions:
+
+```typescript
+import { $, benchmarks, on, send } from 'sdk.do'
+
+// Detect and alert on regressions
+on($.Benchmark.completed, async (result) => {
+  // Get baseline
+  const baseline = await db.get($.BenchmarkResult, {
+    benchmarkId: result.benchmarkId,
+    baseline: true,
+  })
+
+  // Compare
+  const comparison = await benchmarks.compare({
+    baseline: baseline.id,
+    current: result.id,
+    regression_thresholds: regressionThresholds,
+  })
+
+  if (comparison.regression) {
+    // Send alert
+    await send($.Alert.created, {
+      severity: 'high',
+      title: 'Performance Regression Detected',
+      benchmark: result.name,
+      regressions: comparison.regressions,
+      comparisonUrl: `https://benchmarks.do/compare/${baseline.id}/${result.id}`,
+    })
+
+    // Create incident
+    await db.create($.Incident, {
+      type: 'performance_regression',
+      severity: 'high',
+      benchmarkId: result.benchmarkId,
+      details: comparison,
+    })
+  }
+})
+```
+
+### 3. Regression Confirmation
+
+Confirm regressions before alerting:
+
+```typescript
+import { $, benchmarks } from 'sdk.do'
+
+async function confirmRegression(benchId: string, baselineId: string): Promise<boolean> {
+  console.log('Confirming regression with 3 additional runs...')
+
+  const runs = []
+  for (let i = 0; i < 3; i++) {
+    const result = await benchmarks.run(benchId)
+    runs.push(result)
+  }
+
+  // Check if all runs show regression
+  const regressions = await Promise.all(
+    runs.map(async (run) => {
+      const comparison = await benchmarks.compare({
+        baseline: baselineId,
+        current: run.id,
+        regression_thresholds: regressionThresholds,
+      })
+      return comparison.regression
+    })
+  )
+
+  // Regression confirmed if 2 out of 3 runs show it
+  const confirmed = regressions.filter((r) => r).length >= 2
+
+  console.log('Regression confirmed:', confirmed)
+  return confirmed
+}
+```
+
+## Continuous Benchmarking
+
+### 1. CI/CD Integration
+
+Integrate benchmarks into deployment pipeline:
+
+```typescript
+import { $, benchmarks, on, send } from 'sdk.do'
+
+// Run benchmarks on every deployment
+on($.Deployment.started, async (deployment) => {
+  // Pre-deployment benchmark
+  const preBench = await benchmarks.run(benchmarkId)
+
+  // Store as reference
+  await db.update($.Deployment, deployment.id, {
+    preBenchmarkId: preBench.id,
+  })
+})
+
+on($.Deployment.completed, async (deployment) => {
+  // Post-deployment benchmark
+  const postBench = await benchmarks.run(benchmarkId)
+
+  // Compare
+  const comparison = await benchmarks.compare({
+    baseline: deployment.preBenchmarkId,
+    current: postBench.id,
+  })
+
+  if (comparison.regression) {
+    // Rollback deployment
+    await send($.Deployment.rollback, {
+      deploymentId: deployment.id,
+      reason: 'Performance regression detected',
+      details: comparison,
+    })
+  } else {
+    // Mark deployment successful
+    await send($.Deployment.verified, {
+      deploymentId: deployment.id,
+      benchmarkResults: postBench,
+    })
+  }
+})
+```
+
+### 2. Scheduled Benchmarks
+
+Run benchmarks on schedule:
+
+```typescript
+import { $, benchmarks, db, every } from 'sdk.do'
+
+// Run benchmarks every 6 hours
+every('0 */6 * * *', async () => {
+  const benchmarks = await db.list($.Benchmark, {
+    where: { schedule: 'regular' },
+  })
+
+  for (const bench of benchmarks) {
+    const result = await benchmarks.run(bench.id)
+
+    // Store result
+    await db.create($.BenchmarkResult, result)
+
+    // Check trends
+    const history = await db.list($.BenchmarkResult, {
+      benchmarkId: bench.id,
+      limit: 100,
+      orderBy: 'timestamp DESC',
+    })
+
+    const trend = analyzeTrend(history, 'avgLatency')
+
+    if (trend.direction === 'degrading') {
+      await send($.Alert.created, {
+        severity: 'medium',
+        title: 'Performance Degradation Trend',
+        benchmark: bench.name,
+        trend: trend,
+      })
+    }
+  }
+})
+
+function analyzeTrend(history: BenchmarkResult[], metric: string) {
+  // Linear regression on recent results
+  const values = history.map((r) => r.metrics[metric])
+  const { slope, direction } = linearRegression(values)
+
+  return {
+    direction: slope > 0.05 ? 'degrading' : slope < -0.05 ? 'improving' : 'stable',
+    slope,
+    values,
+  }
+}
+```
+
+### 3. Performance Budgets
+
+Enforce performance budgets:
+
+```typescript
+import { $, benchmarks, db } from 'sdk.do'
+
+// Define performance budget
+const performanceBudget = {
+  homepage: {
+    p95_latency: 500, // 500ms max
+    p99_latency: 1000,
+    throughput: 100, // 100 rps min
+  },
+  api: {
+    p95_latency: 200,
+    p99_latency: 500,
+    throughput: 1000,
+  },
+}
+
+// Check budget compliance
+async function checkPerformanceBudget(service: string, result: BenchmarkResult): Promise<boolean> {
+  const budget = performanceBudget[service]
+  if (!budget) return true
+
+  const violations = []
+
+  if (result.p95Latency > budget.p95_latency) {
+    violations.push(`p95 latency exceeded: ${result.p95Latency}ms > ${budget.p95_latency}ms`)
+  }
+
+  if (result.p99Latency > budget.p99_latency) {
+    violations.push(`p99 latency exceeded: ${result.p99Latency}ms > ${budget.p99_latency}ms`)
+  }
+
+  if (result.throughput < budget.throughput) {
+    violations.push(`throughput below target: ${result.throughput} < ${budget.throughput} rps`)
+  }
+
+  if (violations.length > 0) {
+    console.error(`Performance budget violated for ${service}:`)
+    violations.forEach((v) => console.error(`- ${v}`))
+    return false
+  }
+
+  return true
+}
+```
+
+## Resource Optimization
+
+### 1. Minimize Benchmark Overhead
+
+Keep benchmark code lightweight:
+
+```typescript
+// ✓ Good: Minimal overhead
+const bench = await benchmarks.create({
+  name: 'Low Overhead Benchmark',
+
+  target: async () => {
+    // Direct function call
+    return await myFunction()
+  },
+
+  metrics: ['latency', 'throughput'], // Only essential metrics
+})
+
+// ✗ Bad: Heavy overhead
+const heavyBench = await benchmarks.create({
+  name: 'Heavy Benchmark',
+
+  target: async () => {
+    // Lots of logging and data collection in hot path
+    console.log('Starting iteration...')
+    const start = Date.now()
+    const result = await myFunction()
+    const duration = Date.now() - start
+    await db.create($.Log, { duration, result })
+    return result
+  },
+})
+```
+
+### 2. Control Resource Usage
+
+Limit resource consumption:
+
+```typescript
+import { $, benchmarks } from 'sdk.do'
+
+const bench = await benchmarks.create({
+  name: 'Controlled Resource Benchmark',
+
+  resources: {
+    maxMemory: '512MB', // Limit memory usage
+    maxCPU: 2, // Use 2 CPUs max
+    timeout: '10m', // Kill after 10 minutes
+  },
+
+  load: {
+    users: 100,
+    duration: '5m',
+  },
+})
+```
+
+## Next Steps
+
+- **[Troubleshooting](./troubleshooting.mdx)** - Debug common issues
+- **[Examples](../examples/basic-usage.mdx)** - See practical examples
+- **[API Reference](../api/reference.mdx)** - Complete API documentation
+
+---
+
+Continue with [Troubleshooting](./troubleshooting.mdx) to learn how to debug common benchmarking issues.

@@ -1,0 +1,182 @@
+---
+$id: https://gateway.do/examples/advanced-patterns
+$type: HowTo
+title: Advanced API Gateway Patterns
+description: Advanced patterns for production use
+keywords: [gateway, advanced, patterns, production, integration]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Advanced Patterns
+
+## Pattern 1: Circuit Breaker
+
+```typescript
+import { gateway } from 'sdk.do'
+
+const data = await gateway.get(url, {
+  retry: {
+    max: 5,
+    circuitBreaker: {
+      enabled: true,
+      threshold: 5,
+      timeout: 60000,
+    },
+  },
+})
+```
+
+## Pattern 2: Adaptive Rate Limiting
+
+```typescript
+class AdaptiveRateLimiter {
+  private limit = 100
+
+  async request(url: string) {
+    try {
+      return await gateway.get(url, {
+        rateLimit: { requests: this.limit, window: 60000 },
+      })
+    } catch (error) {
+      if (error.status === 429) {
+        this.limit = Math.max(10, this.limit * 0.8)
+        throw error
+      }
+    }
+  }
+}
+```
+
+## Pattern 3: Response Aggregation
+
+```typescript
+async function aggregateData(userId: string) {
+  const [profile, orders, activity] = await Promise.all([
+    gateway.get(`/users/${userId}`, { cache: { ttl: 3600 } }),
+    gateway.get(`/orders?user=${userId}`, { cache: { ttl: 300 } }),
+    gateway.get(`/activity/${userId}`, { cache: { ttl: 60 } }),
+  ])
+
+  return { profile, orders, activity }
+}
+```
+
+## Pattern 4: Webhook Forwarding
+
+```typescript
+import { gateway, on } from 'sdk.do'
+
+on($.Webhook.received, async (event) => {
+  const { source, payload } = event.data
+
+  await gateway.post('https://internal-api.example.com/webhooks', {
+    data: { source, payload, receivedAt: new Date() },
+    retry: { max: 3 },
+  })
+})
+```
+
+## Pattern 5: Smart Caching
+
+```typescript
+class SmartCache {
+  async get(url: string, options = {}) {
+    const cached = await cache.get(url)
+
+    if (cached && !this.isStale(cached)) {
+      return cached.data
+    }
+
+    const data = await gateway.get(url, options)
+
+    await cache.set(url, {
+      data,
+      cachedAt: new Date(),
+      expiresAt: this.getExpiry(url),
+    })
+
+    return data
+  }
+
+  private isStale(cached: any): boolean {
+    return new Date() > new Date(cached.expiresAt)
+  }
+
+  private getExpiry(url: string): Date {
+    const ttl = url.includes('/static/') ? 86400 : 300
+    return new Date(Date.now() + ttl * 1000)
+  }
+}
+```
+
+## Pattern 6: Request Batching
+
+```typescript
+class RequestBatcher {
+  private batch: any[] = []
+  private timeout: any = null
+
+  async add(url: string, options = {}) {
+    this.batch.push({ url, options })
+
+    if (!this.timeout) {
+      this.timeout = setTimeout(() => this.flush(), 100)
+    }
+  }
+
+  private async flush() {
+    const requests = this.batch.splice(0)
+
+    const results = await Promise.all(requests.map(({ url, options }) => gateway.get(url, options).catch((err) => ({ error: err }))))
+
+    this.timeout = null
+    return results
+  }
+}
+```
+
+## Pattern 7: OAuth Token Management
+
+```typescript
+class OAuthManager {
+  private token: string | null = null
+  private expiresAt: number = 0
+
+  async getToken() {
+    if (this.token && Date.now() < this.expiresAt) {
+      return this.token
+    }
+
+    const response = await gateway.post('https://oauth.example.com/token', {
+      data: {
+        grant_type: 'client_credentials',
+        client_id: process.env.CLIENT_ID,
+        client_secret: process.env.CLIENT_SECRET,
+      },
+    })
+
+    this.token = response.access_token
+    this.expiresAt = Date.now() + response.expires_in * 1000
+
+    return this.token
+  }
+}
+```
+
+## Pattern 8: GraphQL Integration
+
+```typescript
+async function graphqlQuery(query: string, variables = {}) {
+  return await gateway.post('https://api.example.com/graphql', {
+    data: { query, variables },
+    auth: { type: 'bearer', token: process.env.GRAPHQL_TOKEN },
+    cache: { enabled: true, ttl: 300 },
+  })
+}
+```
+
+## License
+
+MIT (Open Source)

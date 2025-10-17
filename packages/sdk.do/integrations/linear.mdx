@@ -1,0 +1,1261 @@
+---
+$id: https://integrations.do/linear
+$type: Integration
+name: Linear
+service: linear
+description: Issue tracking and project management for high-performance teams
+category: developer-tools
+sdkBased: true
+sdkPackage: '@linear/sdk'
+sdkVersion: ^28.0.0
+sdkImport: LinearClient
+
+auth:
+  type: api-key
+  location: header
+  headerName: Authorization
+  scheme: Bearer
+  oauth2:
+    authorizationUrl: https://linear.app/oauth/authorize
+    tokenUrl: https://api.linear.app/oauth/token
+    scopes:
+      - read
+      - write
+      - admin
+    grantType: authorization_code
+
+resources:
+  - name: Issue
+    plural: Issues
+    sdkPath: issues
+    description: Issues are the core work items in Linear
+    operations:
+      - name: create
+        method: createIssue
+        description: Create a new issue
+        params:
+          - name: input
+            type: CreateIssueInput
+            required: true
+            description: Issue creation parameters including teamId, title, description, priority, assigneeId
+        returns: Issue
+
+      - name: get
+        method: issue
+        description: Get an issue by ID
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Issue ID
+        returns: Issue
+
+      - name: update
+        method: updateIssue
+        description: Update an issue
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Issue ID
+          - name: input
+            type: UpdateIssueInput
+            required: true
+            description: Issue update parameters
+        returns: Issue
+
+      - name: delete
+        method: deleteIssue
+        description: Delete (archive) an issue
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Issue ID
+        returns: boolean
+
+      - name: list
+        method: issues
+        description: List issues with optional filters
+        params:
+          - name: options
+            type: ListOptions
+            required: false
+            description: Pagination and filter options
+        returns: PaginatedResponse<Issue>
+        pagination:
+          type: cursor
+          cursorField: after
+          limitField: first
+          hasMoreField: hasNextPage
+
+      - name: search
+        method: issues
+        description: Search issues with query and filters
+        params:
+          - name: options
+            type: SearchIssuesOptions
+            required: true
+            description: Search query and filter options
+        returns: PaginatedResponse<Issue>
+        pagination:
+          type: cursor
+          cursorField: after
+          limitField: first
+          hasMoreField: hasNextPage
+
+  - name: Project
+    plural: Projects
+    sdkPath: projects
+    description: Projects group issues and track progress toward goals
+    operations:
+      - name: create
+        method: createProject
+        description: Create a new project
+        params:
+          - name: input
+            type: CreateProjectInput
+            required: true
+            description: Project creation parameters including name, teamIds, description
+        returns: Project
+
+      - name: get
+        method: project
+        description: Get a project by ID
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Project ID
+        returns: Project
+
+      - name: update
+        method: updateProject
+        description: Update a project
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Project ID
+          - name: input
+            type: UpdateProjectInput
+            required: true
+            description: Project update parameters
+        returns: Project
+
+      - name: delete
+        method: deleteProject
+        description: Delete (archive) a project
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Project ID
+        returns: boolean
+
+      - name: list
+        method: projects
+        description: List projects
+        params:
+          - name: options
+            type: ListOptions
+            required: false
+            description: Pagination options
+        returns: PaginatedResponse<Project>
+        pagination:
+          type: cursor
+          cursorField: after
+          limitField: first
+          hasMoreField: hasNextPage
+
+  - name: Team
+    plural: Teams
+    sdkPath: teams
+    description: Teams organize work and members in Linear
+    operations:
+      - name: get
+        method: team
+        description: Get a team by ID
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Team ID
+        returns: Team
+
+      - name: list
+        method: teams
+        description: List all teams
+        params:
+          - name: options
+            type: ListOptions
+            required: false
+            description: Pagination options
+        returns: PaginatedResponse<Team>
+        pagination:
+          type: cursor
+          cursorField: after
+          limitField: first
+          hasMoreField: hasNextPage
+
+      - name: getMembers
+        method: team.members
+        description: Get team members
+        params:
+          - name: teamId
+            type: string
+            required: true
+            description: Team ID
+        returns: TeamMember[]
+
+  - name: User
+    plural: Users
+    sdkPath: users
+    description: Users are members of the organization
+    operations:
+      - name: get
+        method: user
+        description: Get a user by ID
+        params:
+          - name: id
+            type: string
+            required: true
+            description: User ID
+        returns: User
+
+      - name: list
+        method: users
+        description: List all users
+        params:
+          - name: options
+            type: ListOptions
+            required: false
+            description: Pagination options
+        returns: PaginatedResponse<User>
+        pagination:
+          type: cursor
+          cursorField: after
+          limitField: first
+          hasMoreField: hasNextPage
+
+      - name: me
+        method: viewer
+        description: Get the authenticated user
+        params: []
+        returns: User
+
+  - name: Comment
+    plural: Comments
+    sdkPath: comments
+    description: Comments on issues
+    operations:
+      - name: create
+        method: createComment
+        description: Create a new comment
+        params:
+          - name: input
+            type: CreateCommentInput
+            required: true
+            description: Comment creation parameters including issueId and body
+        returns: Comment
+
+      - name: get
+        method: comment
+        description: Get a comment by ID
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Comment ID
+        returns: Comment
+
+      - name: update
+        method: updateComment
+        description: Update a comment
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Comment ID
+          - name: input
+            type: UpdateCommentInput
+            required: true
+            description: Comment update parameters
+        returns: Comment
+
+      - name: delete
+        method: deleteComment
+        description: Delete a comment
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Comment ID
+        returns: boolean
+
+  - name: Label
+    plural: Labels
+    sdkPath: issueLabels
+    description: Labels categorize and organize issues
+    operations:
+      - name: create
+        method: createIssueLabel
+        description: Create a new label
+        params:
+          - name: input
+            type: CreateLabelInput
+            required: true
+            description: Label creation parameters including teamId, name, color
+        returns: IssueLabel
+
+      - name: get
+        method: issueLabel
+        description: Get a label by ID
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Label ID
+        returns: IssueLabel
+
+      - name: update
+        method: updateIssueLabel
+        description: Update a label
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Label ID
+          - name: input
+            type: UpdateLabelInput
+            required: true
+            description: Label update parameters
+        returns: IssueLabel
+
+      - name: delete
+        method: deleteIssueLabel
+        description: Delete a label
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Label ID
+        returns: boolean
+
+      - name: list
+        method: issueLabels
+        description: List labels
+        params:
+          - name: teamId
+            type: string
+            required: false
+            description: Team ID to filter by
+          - name: options
+            type: ListOptions
+            required: false
+            description: Pagination options
+        returns: PaginatedResponse<IssueLabel>
+        pagination:
+          type: cursor
+          cursorField: after
+          limitField: first
+          hasMoreField: hasNextPage
+
+  - name: WorkflowState
+    plural: WorkflowStates
+    sdkPath: workflowStates
+    description: Workflow states define the stages of issue progress
+    operations:
+      - name: get
+        method: workflowState
+        description: Get a workflow state by ID
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Workflow state ID
+        returns: WorkflowState
+
+      - name: list
+        method: workflowStates
+        description: List workflow states
+        params:
+          - name: teamId
+            type: string
+            required: false
+            description: Team ID to filter by
+          - name: options
+            type: ListOptions
+            required: false
+            description: Pagination options
+        returns: PaginatedResponse<WorkflowState>
+        pagination:
+          type: cursor
+          cursorField: after
+          limitField: first
+          hasMoreField: hasNextPage
+
+  - name: Cycle
+    plural: Cycles
+    sdkPath: cycles
+    description: Cycles are time-boxed iterations for planning work
+    operations:
+      - name: get
+        method: cycle
+        description: Get a cycle by ID
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Cycle ID
+        returns: Cycle
+
+      - name: list
+        method: cycles
+        description: List cycles
+        params:
+          - name: filter
+            type: CycleFilter
+            required: false
+            description: Cycle filter options
+          - name: options
+            type: ListOptions
+            required: false
+            description: Pagination options
+        returns: PaginatedResponse<Cycle>
+        pagination:
+          type: cursor
+          cursorField: after
+          limitField: first
+          hasMoreField: hasNextPage
+
+      - name: active
+        method: cycles
+        description: Get the active cycle for a team
+        params:
+          - name: teamId
+            type: string
+            required: true
+            description: Team ID
+        returns: Cycle
+
+  - name: Milestone
+    plural: Milestones
+    sdkPath: projectMilestones
+    description: Milestones mark significant points in project timelines
+    operations:
+      - name: create
+        method: createProjectMilestone
+        description: Create a new milestone
+        params:
+          - name: input
+            type: CreateMilestoneInput
+            required: true
+            description: Milestone creation parameters
+        returns: Milestone
+
+      - name: get
+        method: projectMilestone
+        description: Get a milestone by ID
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Milestone ID
+        returns: Milestone
+
+      - name: update
+        method: updateProjectMilestone
+        description: Update a milestone
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Milestone ID
+          - name: input
+            type: UpdateMilestoneInput
+            required: true
+            description: Milestone update parameters
+        returns: Milestone
+
+      - name: delete
+        method: deleteProjectMilestone
+        description: Delete a milestone
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Milestone ID
+        returns: boolean
+
+webhooks:
+  enabled: true
+  signatureHeader: linear-signature
+  signatureAlgorithm: sha256
+  verificationMethod: signature
+  events:
+    - name: issue.created
+      type: Issue.create
+      description: Occurs when a new issue is created
+    - name: issue.updated
+      type: Issue.update
+      description: Occurs when an issue is updated
+    - name: issue.removed
+      type: Issue.remove
+      description: Occurs when an issue is deleted
+    - name: comment.created
+      type: Comment.create
+      description: Occurs when a comment is created
+    - name: comment.updated
+      type: Comment.update
+      description: Occurs when a comment is updated
+    - name: comment.removed
+      type: Comment.remove
+      description: Occurs when a comment is deleted
+    - name: project.created
+      type: Project.create
+      description: Occurs when a project is created
+    - name: project.updated
+      type: Project.update
+      description: Occurs when a project is updated
+    - name: project.removed
+      type: Project.remove
+      description: Occurs when a project is deleted
+    - name: cycle.created
+      type: Cycle.create
+      description: Occurs when a cycle is created
+    - name: cycle.updated
+      type: Cycle.update
+      description: Occurs when a cycle is updated
+    - name: cycle.removed
+      type: Cycle.remove
+      description: Occurs when a cycle is deleted
+    - name: label.created
+      type: IssueLabel.create
+      description: Occurs when a label is created
+    - name: label.updated
+      type: IssueLabel.update
+      description: Occurs when a label is updated
+    - name: label.removed
+      type: IssueLabel.remove
+      description: Occurs when a label is deleted
+    - name: user.created
+      type: User.create
+      description: Occurs when a user is added to the organization
+    - name: user.updated
+      type: User.update
+      description: Occurs when a user is updated
+    - name: user.removed
+      type: User.remove
+      description: Occurs when a user is removed from the organization
+
+errors:
+  mapping:
+    - code: AUTHENTICATION_FAILED
+      type: authentication
+      statusCode: 401
+      message: Invalid or missing API key
+      retryable: false
+    - code: FORBIDDEN
+      type: authorization
+      statusCode: 403
+      message: Insufficient permissions for this operation
+      retryable: false
+    - code: RESOURCE_NOT_FOUND
+      type: not_found
+      statusCode: 404
+      message: The requested resource does not exist
+      retryable: false
+    - code: VALIDATION_ERROR
+      type: validation
+      statusCode: 400
+      message: Invalid request parameters
+      retryable: false
+    - code: BAD_USER_INPUT
+      type: validation
+      statusCode: 400
+      message: Invalid input provided
+      retryable: false
+    - code: GRAPHQL_VALIDATION_FAILED
+      type: validation
+      statusCode: 400
+      message: GraphQL query validation failed
+      retryable: false
+    - code: RATE_LIMIT_EXCEEDED
+      type: rate_limit
+      statusCode: 429
+      message: API rate limit exceeded - please retry after waiting
+      retryable: true
+    - code: SERVER_ERROR
+      type: server
+      statusCode: 500
+      message: Linear API server error
+      retryable: true
+    - code: CONNECTION_ERROR
+      type: network
+      message: Network connection failed
+      retryable: true
+    - code: UNKNOWN_ERROR
+      type: unknown
+      message: An unknown error occurred
+      retryable: false
+  retryable: [RATE_LIMIT_EXCEEDED, SERVER_ERROR, CONNECTION_ERROR]
+  nonRetryable: [AUTHENTICATION_FAILED, FORBIDDEN, RESOURCE_NOT_FOUND, VALIDATION_ERROR, BAD_USER_INPUT, GRAPHQL_VALIDATION_FAILED]
+
+tests:
+  enabled: true
+  cleanup: true
+  scenarios:
+    - name: Issue Operations
+      description: Test issue CRUD operations and workflows
+      steps:
+        - action: create
+          resource: Issue
+          params:
+            teamId: ${LINEAR_TEAM_ID}
+            title: Test Issue
+            description: Test description
+            priority: 3
+        - action: retrieve
+          resource: Issue
+        - action: update
+          resource: Issue
+          params:
+            title: Updated Title
+            priority: 1
+        - action: delete
+          resource: Issue
+        - action: list
+          resource: Issue
+          params:
+            first: 50
+
+    - name: Project Management
+      description: Test project lifecycle operations
+      steps:
+        - action: create
+          resource: Project
+          params:
+            name: Test Project
+            teamIds: ['${LINEAR_TEAM_ID}']
+        - action: retrieve
+          resource: Project
+        - action: update
+          resource: Project
+          params:
+            name: Updated Project Name
+        - action: list
+          resource: Project
+        - action: delete
+          resource: Project
+
+    - name: Team Operations
+      description: Test team and member operations
+      steps:
+        - action: retrieve
+          resource: Team
+        - action: list
+          resource: Team
+        - action: assert
+          resource: Team
+          expects:
+            fields:
+              name: string
+              key: string
+
+    - name: Comment Management
+      description: Test comment CRUD operations
+      steps:
+        - action: create
+          resource: Issue
+        - action: create
+          resource: Comment
+          params:
+            issueId: ${issue.id}
+            body: Test comment
+        - action: retrieve
+          resource: Comment
+        - action: update
+          resource: Comment
+          params:
+            body: Updated comment
+        - action: delete
+          resource: Comment
+
+    - name: Label Operations
+      description: Test label management
+      steps:
+        - action: create
+          resource: Label
+          params:
+            teamId: ${LINEAR_TEAM_ID}
+            name: test-label
+            color: '#FF5733'
+        - action: retrieve
+          resource: Label
+        - action: update
+          resource: Label
+          params:
+            name: updated-label
+            color: '#33FF57'
+        - action: list
+          resource: Label
+        - action: delete
+          resource: Label
+
+    - name: Workflow States
+      description: Test workflow state operations
+      steps:
+        - action: list
+          resource: WorkflowState
+          params:
+            teamId: ${LINEAR_TEAM_ID}
+          expects:
+            count: 1
+
+    - name: Error Handling
+      description: Test various error scenarios
+      steps:
+        - action: retrieve
+          resource: Issue
+          params:
+            id: '00000000-0000-0000-0000-000000000000'
+          expects:
+            status: 404
+
+docs:
+  homepage: https://linear.app
+  apiDocs: https://developers.linear.app/docs
+  sdkDocs: https://github.com/linear/linear/tree/master/packages/sdk
+  guides:
+    quickstart: https://developers.linear.app/docs/getting-started
+    authentication: https://developers.linear.app/docs/authentication
+    webhooks: https://developers.linear.app/docs/webhooks
+    graphql: https://studio.apollographql.com/public/Linear-API/home
+---
+
+# Linear Issue Tracking & Project Management
+
+Linear is a modern issue tracking and project management tool built for high-performance software teams. It provides fast, focused workflows for managing issues, projects, cycles, and team collaboration.
+
+## Features
+
+- **Fast Issue Tracking**: Streamlined issue creation and management with keyboard shortcuts
+- **Projects & Roadmaps**: Track progress toward goals with projects and milestones
+- **Sprint Planning**: Plan work in time-boxed cycles with automatic scheduling
+- **Team Collaboration**: Comments, mentions, and notifications for seamless teamwork
+- **Workflow Automation**: Customizable workflows and states for your team's process
+- **GraphQL API**: Powerful, flexible API built on GraphQL
+- **Webhooks**: Real-time event notifications for integrations
+- **Native Apps**: Desktop and mobile apps with offline support
+
+## Quick Start
+
+```typescript
+import { LinearClient } from '@dotdo/sdk.do/integrations/linear'
+
+const linear = new LinearClient({
+  apiKey: process.env.LINEAR_API_KEY,
+})
+
+// Create an issue
+const issue = await linear.createIssue({
+  teamId: 'team_abc123',
+  title: 'Bug: Application crashes on startup',
+  description: 'Detailed description...',
+  priority: 1, // Urgent
+  labelIds: ['label_bug', 'label_critical'],
+})
+
+// Search issues
+const { nodes: issues } = await linear.searchIssues({
+  filter: {
+    team: { id: { eq: 'team_abc123' } },
+    state: { type: { eq: 'started' } },
+  },
+  first: 50,
+})
+```
+
+## Authentication
+
+### Personal API Key
+
+For personal integrations and scripts:
+
+1. Go to Linear Settings → API → Personal API keys
+2. Click "Create key"
+3. Copy the key (starts with `lin_api_`)
+4. Use in your application:
+
+```typescript
+const linear = new LinearClient({
+  apiKey: 'lin_api_xxxxxxxxxxxxx',
+})
+```
+
+### OAuth 2.0
+
+For public applications requiring user authorization:
+
+1. Create an OAuth application in Linear settings
+2. Implement OAuth 2.0 authorization code flow:
+
+```typescript
+// Step 1: Redirect user to authorization URL
+const authUrl = `https://linear.app/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=read,write&response_type=code`
+
+// Step 2: Exchange authorization code for access token
+const tokenResponse = await fetch('https://api.linear.app/oauth/token', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    grant_type: 'authorization_code',
+    client_id: clientId,
+    client_secret: clientSecret,
+    redirect_uri: redirectUri,
+    code: authorizationCode,
+  }),
+})
+
+const { access_token } = await tokenResponse.json()
+
+// Step 3: Use access token with Linear client
+const linear = new LinearClient({
+  apiKey: access_token,
+})
+```
+
+**OAuth Scopes:**
+
+- `read` - Read access to all resources
+- `write` - Create, update, and delete resources
+- `admin` - Administrative access (manage team settings, users)
+
+## Resources
+
+### Issues
+
+Issues are the core work items in Linear. They can represent bugs, features, tasks, or any unit of work.
+
+```typescript
+// Create an issue
+const issue = await linear.createIssue({
+  teamId: 'team_abc123',
+  title: 'Implement user authentication',
+  description: 'Add OAuth 2.0 support with GitHub and Google providers',
+  priority: 2, // High: 0=None, 1=Urgent, 2=High, 3=Medium, 4=Low
+  estimate: 5, // Story points or complexity estimate
+  assigneeId: 'user_xyz789',
+  stateId: 'state_backlog',
+  labelIds: ['label_feature', 'label_backend'],
+  dueDate: '2025-12-31',
+})
+
+// Get an issue
+const issue = await linear.getIssue('issue_def456')
+console.log(issue.title, issue.identifier, issue.url)
+
+// Update an issue
+await linear.updateIssue('issue_def456', {
+  title: 'Updated title',
+  stateId: 'state_in_progress',
+  priority: 1,
+  assigneeId: 'user_new_assignee',
+})
+
+// List issues with pagination
+const { nodes: issues, pageInfo } = await linear.listIssues({
+  first: 100,
+  after: cursor,
+  includeArchived: false,
+})
+
+// Search with filters
+const { nodes: bugs } = await linear.searchIssues({
+  filter: {
+    team: { id: { eq: 'team_abc123' } },
+    labels: { some: { id: { eq: 'label_bug' } } },
+    state: { type: { eq: 'started' } },
+    priority: { eq: 1 },
+  },
+  first: 50,
+})
+
+// Delete (archive) an issue
+await linear.deleteIssue('issue_def456')
+```
+
+### Projects
+
+Projects group related issues and track progress toward goals.
+
+```typescript
+// Create a project
+const project = await linear.createProject({
+  name: 'Q1 2025 Roadmap',
+  description: 'Key initiatives for Q1',
+  teamIds: ['team_abc123', 'team_def456'],
+  leadId: 'user_xyz789',
+  startDate: '2025-01-01',
+  targetDate: '2025-03-31',
+  icon: '🚀',
+  color: '#4287f5',
+})
+
+// Update project
+await linear.updateProject('project_ghi789', {
+  name: 'Updated Project Name',
+  state: 'started',
+  targetDate: '2025-04-15',
+})
+
+// List projects
+const { nodes: projects } = await linear.listProjects({
+  first: 50,
+  includeArchived: false,
+})
+```
+
+### Teams
+
+Teams organize work and members in your Linear workspace.
+
+```typescript
+// Get a team
+const team = await linear.getTeam('team_abc123')
+console.log(team.name, team.key, team.cyclesEnabled)
+
+// List all teams
+const { nodes: teams } = await linear.listTeams()
+
+// Get team members
+const members = await linear.getTeamMembers('team_abc123')
+for (const member of members) {
+  console.log(member.name, member.email, member.admin)
+}
+```
+
+### Users
+
+Users are members of your Linear organization.
+
+```typescript
+// Get current user
+const me = await linear.getMe()
+console.log(me.name, me.email, me.admin)
+
+// Get a specific user
+const user = await linear.getUser('user_xyz789')
+
+// List all users
+const { nodes: users } = await linear.listUsers({
+  first: 100,
+})
+```
+
+### Comments
+
+Comments enable team collaboration on issues.
+
+```typescript
+// Create a comment
+const comment = await linear.createComment({
+  issueId: 'issue_def456',
+  body: 'This is a comment with **markdown** support!',
+})
+
+// Update a comment
+await linear.updateComment('comment_jkl012', {
+  body: 'Updated comment text',
+})
+
+// Delete a comment
+await linear.deleteComment('comment_jkl012')
+```
+
+### Labels
+
+Labels categorize and organize issues.
+
+```typescript
+// Create a label
+const label = await linear.createLabel({
+  teamId: 'team_abc123',
+  name: 'bug',
+  description: "Something isn't working",
+  color: '#d73a4a',
+})
+
+// Update a label
+await linear.updateLabel('label_mno345', {
+  name: 'critical-bug',
+  color: '#b60205',
+})
+
+// List labels
+const { nodes: labels } = await linear.listLabels('team_abc123')
+```
+
+### Workflow States
+
+Workflow states define the stages of issue progress.
+
+```typescript
+// Get workflow states for a team
+const { nodes: states } = await linear.listWorkflowStates('team_abc123')
+
+// Find specific state
+const inProgressState = states.find((s) => s.type === 'started' || s.name.toLowerCase().includes('progress'))
+
+// Move issue to state
+await linear.updateIssue('issue_def456', {
+  stateId: inProgressState.id,
+})
+```
+
+### Cycles
+
+Cycles are time-boxed iterations for planning work (sprints).
+
+```typescript
+// Get active cycle
+const cycle = await linear.activeCycle('team_abc123')
+if (cycle) {
+  console.log('Current cycle:', cycle.name)
+  console.log('Progress:', cycle.progress)
+}
+
+// List cycles
+const { nodes: cycles } = await linear.listCycles({ team: { id: { eq: 'team_abc123' } } }, { first: 10 })
+```
+
+### Milestones
+
+Milestones mark significant points in project timelines.
+
+```typescript
+// Create a milestone
+const milestone = await linear.createMilestone({
+  name: 'Beta Release',
+  description: 'Launch beta version',
+  targetDate: '2025-06-30',
+})
+
+// Update milestone
+await linear.updateMilestone('milestone_pqr678', {
+  name: 'Beta Release v2',
+  targetDate: '2025-07-15',
+})
+```
+
+## Webhooks
+
+Linear sends webhooks for real-time event notifications.
+
+### Webhook Setup
+
+1. Go to Settings → API → Webhooks
+2. Click "Create webhook"
+3. Enter your webhook URL
+4. Select events to subscribe to
+5. Copy the webhook secret
+
+### Webhook Verification
+
+Always verify webhook signatures to ensure authenticity:
+
+```typescript
+import { LinearWebhooks } from '@dotdo/sdk.do/integrations/linear'
+
+// In your webhook handler (e.g., Cloudflare Worker)
+export default {
+  async fetch(request: Request, env: Env) {
+    const signature = request.headers.get('linear-signature')
+    const payload = await request.text()
+
+    try {
+      // Verify and parse webhook
+      const event = LinearWebhooks.verifyAndParse(payload, signature, env.LINEAR_WEBHOOK_SECRET)
+
+      // Handle event
+      console.log('Event:', event.type, event.action)
+      console.log('Data:', event.data)
+
+      return new Response('OK', { status: 200 })
+    } catch (error) {
+      console.error('Webhook error:', error)
+      return new Response('Webhook Error', { status: 400 })
+    }
+  },
+}
+```
+
+### Event Router
+
+Use the event router for clean webhook handling:
+
+```typescript
+import { EventRouter, LinearWebhooks } from '@dotdo/sdk.do/integrations/linear'
+
+const router = new EventRouter()
+
+// Handle specific events
+router.on('Issue', 'create', async (event, data) => {
+  console.log('New issue created:', data.title)
+  // Auto-label, assign, notify team, etc.
+})
+
+router.on('Issue', 'update', async (event, data) => {
+  console.log('Issue updated:', data.id)
+  console.log('Changed fields:', event.updatedFrom)
+})
+
+router.on('Comment', 'create', async (event, data) => {
+  console.log('New comment:', data.body)
+  // Trigger notifications, integrations
+})
+
+// Route incoming webhook
+await router.handle(event)
+```
+
+### Common Webhook Events
+
+- **Issue Events**: `Issue.create`, `Issue.update`, `Issue.remove`
+- **Comment Events**: `Comment.create`, `Comment.update`, `Comment.remove`
+- **Project Events**: `Project.create`, `Project.update`, `Project.remove`
+- **Cycle Events**: `Cycle.create`, `Cycle.update`, `Cycle.remove`
+- **Label Events**: `IssueLabel.create`, `IssueLabel.update`, `IssueLabel.remove`
+
+## Error Handling
+
+All methods throw `LinearIntegrationError` on failure:
+
+```typescript
+import { LinearIntegrationError } from '@dotdo/sdk.do/integrations/linear'
+
+try {
+  const issue = await linear.getIssue('nonexistent_issue')
+} catch (error) {
+  if (error instanceof LinearIntegrationError) {
+    console.error('Error:', error.code, error.message)
+
+    // Check error type
+    if (error.isAuthenticationError()) {
+      console.log('Invalid API key')
+    } else if (error.isNotFoundError()) {
+      console.log('Issue not found')
+    } else if (error.isRateLimitError()) {
+      console.log('Rate limit exceeded')
+    }
+
+    // Retry if possible
+    if (error.isRetriable()) {
+      // Implement exponential backoff
+    }
+  }
+}
+```
+
+## Rate Limits
+
+Linear enforces rate limits:
+
+- **100 requests/second** (burst)
+- **1,000 requests/hour**
+
+Always implement retry logic with exponential backoff for production systems.
+
+## Best Practices
+
+1. **Use OAuth for public apps** - Personal API keys are for personal use only
+2. **Always verify webhook signatures** - Prevent unauthorized webhook calls
+3. **Implement retry logic** - Handle rate limits and transient failures gracefully
+4. **Use pagination** - Don't fetch all data at once for large result sets
+5. **Cache workflow states and labels** - These rarely change, reduce API calls
+6. **Filter server-side** - Use GraphQL filters instead of client-side filtering
+7. **Handle errors properly** - Check error types and implement appropriate handling
+8. **Store API keys securely** - Never expose API keys in client-side code
+
+## Common Use Cases
+
+### Auto-triage Issues
+
+```typescript
+router.on('Issue', 'create', async (event, data) => {
+  if (data.labels?.some((l) => l.name === 'bug')) {
+    // Assign bugs to bug team lead
+    const members = await linear.getTeamMembers(data.teamId)
+    const bugLead = members.find((m) => m.admin)
+
+    if (bugLead) {
+      await linear.updateIssue(data.id, {
+        assigneeId: bugLead.id,
+        priority: 2, // High priority
+      })
+    }
+  }
+})
+```
+
+### Sync to External System
+
+```typescript
+router.on('Issue', async (event, data) => {
+  // Sync to your database
+  await db.issues.upsert({
+    where: { linearId: data.id },
+    create: {
+      linearId: data.id,
+      title: data.title,
+      status: data.state?.name,
+      priority: data.priority,
+    },
+    update: {
+      title: data.title,
+      status: data.state?.name,
+      priority: data.priority,
+    },
+  })
+})
+```
+
+### Generate Sprint Reports
+
+```typescript
+async function generateSprintReport(teamId: string) {
+  const cycle = await linear.activeCycle(teamId)
+
+  if (!cycle) {
+    console.log('No active cycle')
+    return
+  }
+
+  const { nodes: issues } = await linear.searchIssues({
+    filter: { cycle: { id: { eq: cycle.id } } },
+    first: 1000,
+  })
+
+  const completed = issues.filter((i) => i.completedAt)
+  const inProgress = issues.filter((i) => i.startedAt && !i.completedAt)
+
+  console.log(`Sprint: ${cycle.name}`)
+  console.log(`Progress: ${cycle.progress}%`)
+  console.log(`Completed: ${completed.length}/${issues.length}`)
+}
+```
+
+## API Reference
+
+- **API Documentation**: https://developers.linear.app/docs
+- **GraphQL Reference**: https://studio.apollographql.com/public/Linear-API/home
+- **SDK Documentation**: https://github.com/linear/linear/tree/master/packages/sdk
+- **Webhook Guide**: https://developers.linear.app/docs/webhooks
+
+## Support
+
+- **Documentation**: https://developers.linear.app
+- **Community**: https://linear.app/community
+- **Support**: support@linear.app
+- **Status**: https://status.linear.app

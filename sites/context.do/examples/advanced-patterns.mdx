@@ -1,0 +1,743 @@
+---
+$id: https://context.do/examples/advanced-patterns
+$type: https://schema.org/TechArticle
+name: Advanced Context Management Patterns
+description: Complex compression strategies and advanced patterns for context.do
+version: 1.0.0
+license: MIT
+author:
+  $type: https://schema.org/Organization
+  name: .do
+  url: https://do.inc
+keywords:
+  - advanced patterns
+  - hierarchical compression
+  - semantic memory
+  - multi-agent context
+  - sliding window
+---
+
+# Advanced Context Management Patterns
+
+This guide demonstrates complex compression strategies and advanced patterns for production applications.
+
+## Hierarchical Context Compression
+
+Maintain multiple compression levels based on message recency:
+
+```typescript
+import { $ } from 'sdk.do'
+
+async function hierarchicalCompression() {
+  const longConversation = await $.db.get('Conversation', conversationId)
+
+  // Apply hierarchical compression
+  const compressed = await $.Context.compress({
+    messages: longConversation.messages,
+    strategy: 'hierarchical',
+    levels: {
+      recent: 5, // Last 5 messages: full detail
+      medium: 10, // Next 10 messages: 50% compressed
+      old: 'summary', // Older messages: summarized
+    },
+    targetTokens: 8000,
+  })
+
+  console.log('Compression levels:')
+  console.log(`- Recent (full): ${compressed.levels.recent} messages`)
+  console.log(`- Medium (50%): ${compressed.levels.medium} messages`)
+  console.log(`- Old (summary): ${compressed.levels.old} messages`)
+  console.log(`- Total tokens: ${compressed.tokens}`)
+
+  // Use compressed context
+  const response = await $.ai.generate({
+    model: 'gpt-5',
+    messages: compressed.messages,
+  })
+
+  return response.content
+}
+```
+
+**Benefits:**
+
+- Balances detail and compression
+- Preserves recent context in full
+- Maintains historical awareness through summaries
+- Configurable compression ratios
+
+## Semantic Memory Extraction
+
+Extract and preserve structured facts from conversations:
+
+```typescript
+import { $ } from 'sdk.do'
+
+class SemanticMemoryManager {
+  private facts: Map<string, any> = new Map()
+  private messages: Message[] = []
+
+  async addTurn(role: 'user' | 'assistant', content: string): Promise<void> {
+    this.messages.push({ role, content })
+
+    // Extract facts from user messages
+    if (role === 'user') {
+      await this.extractAndStoreFacts(content)
+    }
+
+    // Compress when threshold exceeded
+    if (this.messages.length > 15) {
+      await this.compressWithMemory()
+    }
+  }
+
+  private async extractAndStoreFacts(content: string): Promise<void> {
+    // Define fact schema
+    const schema = {
+      $type: '$.CustomerSupport.Facts',
+      properties: {
+        customerName: '$.Customer.Name',
+        customerEmail: '$.Customer.Email',
+        orderId: '$.Order.ID',
+        issueType: '$.Issue.Type',
+        productName: '$.Product.Name',
+        resolutionStatus: '$.Resolution.Status',
+      },
+    }
+
+    // Extract facts using AI
+    const extraction = await $.ai.generate({
+      model: 'gpt-5',
+      messages: [
+        {
+          role: 'system',
+          content: `Extract structured facts from the message. Return as JSON matching this schema: ${JSON.stringify(schema, null, 2)}`,
+        },
+        {
+          role: 'user',
+          content: content,
+        },
+      ],
+      responseFormat: { type: 'json_object' },
+      temperature: 0.1,
+    })
+
+    const extractedFacts = JSON.parse(extraction.content)
+
+    // Store facts
+    for (const [key, value] of Object.entries(extractedFacts)) {
+      if (value) {
+        this.facts.set(key, value)
+      }
+    }
+  }
+
+  private async compressWithMemory(): Promise<void> {
+    // Keep recent messages
+    const recentMessages = this.messages.slice(-5)
+
+    // Create facts context message
+    const factsMessage: Message = {
+      role: 'system',
+      content: this.formatFacts(),
+    }
+
+    // Replace old messages with facts + recent
+    this.messages = [factsMessage, ...recentMessages]
+  }
+
+  private formatFacts(): string {
+    const lines = ['Conversation context (extracted facts):']
+
+    for (const [key, value] of this.facts) {
+      lines.push(`- ${key}: ${JSON.stringify(value)}`)
+    }
+
+    return lines.join('\n')
+  }
+
+  async getContext(): Promise<Message[]> {
+    return this.messages
+  }
+
+  getFacts(): Record<string, any> {
+    return Object.fromEntries(this.facts)
+  }
+}
+
+// Usage
+const memory = new SemanticMemoryManager()
+
+await memory.addTurn('user', 'Hi, my name is John Smith and my email is john@example.com')
+await memory.addTurn('assistant', 'Hello John! How can I help you today?')
+await memory.addTurn('user', 'I have an issue with order ORD-12345')
+await memory.addTurn('assistant', 'I can help with that. What seems to be the problem?')
+
+// Facts are preserved even after compression
+console.log('Extracted facts:', memory.getFacts())
+// {
+//   customerName: 'John Smith',
+//   customerEmail: 'john@example.com',
+//   orderId: 'ORD-12345'
+// }
+```
+
+## Sliding Window with Fact Preservation
+
+Combine sliding window compression with fact extraction:
+
+```typescript
+import { $ } from 'sdk.do'
+
+class SlidingWindowWithFacts {
+  private messages: Message[] = []
+  private facts: Record<string, any> = {}
+  private windowSize = 10
+  private factTypes = ['$.Customer.Name', '$.Order.ID', '$.Issue.Type', '$.Product.Name']
+
+  async addMessage(message: Message): Promise<void> {
+    this.messages.push(message)
+
+    // Extract facts from user messages
+    if (message.role === 'user') {
+      const newFacts = await this.extractFacts(message.content)
+      this.facts = { ...this.facts, ...newFacts }
+    }
+
+    // Apply sliding window
+    if (this.messages.length > this.windowSize) {
+      this.messages = this.messages.slice(-this.windowSize)
+    }
+  }
+
+  private async extractFacts(content: string): Promise<Record<string, any>> {
+    const compression = await $.Context.compress({
+      messages: [{ role: 'user', content }],
+      strategy: 'semantic',
+      extractFacts: true,
+      factTypes: this.factTypes,
+    })
+
+    return compression.facts ?? {}
+  }
+
+  async getContext(): Promise<Message[]> {
+    // Build context with facts + sliding window
+    const context: Message[] = []
+
+    // Add facts as system message
+    if (Object.keys(this.facts).length > 0) {
+      context.push({
+        role: 'system',
+        content: `Key facts:\n${JSON.stringify(this.facts, null, 2)}`,
+      })
+    }
+
+    // Add recent messages
+    context.push(...this.messages)
+
+    return context
+  }
+
+  getStats(): {
+    messageCount: number
+    factCount: number
+    totalTokens: number
+  } {
+    return {
+      messageCount: this.messages.length,
+      factCount: Object.keys(this.facts).length,
+      totalTokens: 0, // Calculate if needed
+    }
+  }
+}
+
+// Usage
+const conversation = new SlidingWindowWithFacts()
+
+// Add 50 messages - only last 10 kept in sliding window
+for (let i = 0; i < 50; i++) {
+  await conversation.addMessage({
+    role: i % 2 === 0 ? 'user' : 'assistant',
+    content: `Message ${i + 1}`,
+  })
+}
+
+const stats = conversation.getStats()
+console.log(`Messages in window: ${stats.messageCount}`) // 10
+console.log(`Facts preserved: ${stats.factCount}`) // All extracted facts
+```
+
+## Adaptive Compression Strategy
+
+Dynamically choose compression strategy based on context characteristics:
+
+```typescript
+import { $ } from 'sdk.do'
+
+class AdaptiveCompressor {
+  async compress(messages: Message[], targetTokens: number): Promise<CompressedContext> {
+    // Analyze conversation characteristics
+    const characteristics = await this.analyzeConversation(messages)
+
+    // Choose optimal strategy
+    let strategy: CompressionStrategy
+
+    if (characteristics.factDensity > 0.7) {
+      // High fact density -> use semantic memory
+      strategy = 'semantic'
+      console.log('Using semantic memory (high fact density)')
+    } else if (characteristics.topicShifts > 5) {
+      // Multiple topics -> use hierarchical
+      strategy = 'hierarchical'
+      console.log('Using hierarchical (multiple topics)')
+    } else if (characteristics.recencyImportance > 0.8) {
+      // Recent context critical -> use sliding window
+      strategy = 'sliding'
+      console.log('Using sliding window (recency important)')
+    } else {
+      // Default to semantic summarization
+      strategy = 'summarize'
+      console.log('Using summarization (default)')
+    }
+
+    // Apply chosen strategy
+    return await this.applyStrategy(messages, strategy, targetTokens, characteristics)
+  }
+
+  private async analyzeConversation(messages: Message[]): Promise<ConversationCharacteristics> {
+    // Use AI to analyze conversation
+    const analysis = await $.ai.generate({
+      model: 'gpt-5',
+      messages: [
+        {
+          role: 'system',
+          content: `Analyze this conversation and return JSON with:
+- factDensity (0-1): How fact-heavy is the conversation
+- topicShifts (number): How many topic changes
+- recencyImportance (0-1): How important are recent messages
+- avgMessageLength (number): Average message length in tokens`,
+        },
+        {
+          role: 'user',
+          content: messages.map((m) => `${m.role}: ${m.content}`).join('\n\n'),
+        },
+      ],
+      responseFormat: { type: 'json_object' },
+      temperature: 0.1,
+    })
+
+    return JSON.parse(analysis.content)
+  }
+
+  private async applyStrategy(
+    messages: Message[],
+    strategy: CompressionStrategy,
+    targetTokens: number,
+    characteristics: ConversationCharacteristics
+  ): Promise<CompressedContext> {
+    switch (strategy) {
+      case 'semantic':
+        return $.Context.compress({
+          messages,
+          strategy: 'semantic',
+          extractFacts: true,
+          targetTokens,
+        })
+
+      case 'hierarchical':
+        return $.Context.compress({
+          messages,
+          strategy: 'hierarchical',
+          levels: {
+            recent: Math.ceil(messages.length * 0.2),
+            medium: Math.ceil(messages.length * 0.3),
+            old: 'summary',
+          },
+          targetTokens,
+        })
+
+      case 'sliding':
+        return $.Context.compress({
+          messages,
+          strategy: 'sliding',
+          windowSize: Math.min(10, Math.ceil(messages.length * 0.5)),
+        })
+
+      case 'summarize':
+      default:
+        return $.Context.compress({
+          messages,
+          strategy: 'summarize',
+          targetTokens,
+          preserveRecent: Math.min(5, Math.ceil(messages.length * 0.3)),
+        })
+    }
+  }
+}
+
+// Usage
+const compressor = new AdaptiveCompressor()
+
+const compressed = await compressor.compress(conversationMessages, 5000)
+console.log(`Compressed to ${compressed.tokens} tokens using ${compressed.strategy}`)
+```
+
+## Multi-Agent Context Sharing
+
+Share context efficiently between autonomous agents:
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Agent 1: Research Agent
+class ResearchAgent {
+  async processQuery(query: string): Promise<void> {
+    // Conduct research
+    const sources = await $.api.search({ query })
+
+    // Create rich context
+    const context = await $.WorkflowContext.create({
+      $type: '$.Research.Context',
+      query: query,
+      sources: sources,
+      findings: await this.analyzeSources(sources),
+      timestamp: new Date().toISOString(),
+      metadata: {
+        sourceCount: sources.length,
+        confidence: 0.85,
+      },
+    })
+
+    console.log(`Research context: ${await this.countTokens(context)} tokens`)
+
+    // Compress for efficient transfer
+    const compressed = await context.compress({
+      targetTokens: 2000,
+      strategy: 'hierarchical',
+      preserveFields: ['query', 'findings', 'metadata'],
+    })
+
+    console.log(`Compressed to: ${compressed.tokens} tokens`)
+
+    // Send to writing agent
+    await $.send({
+      event: '$.Research.completed',
+      context: compressed.toJSON(),
+    })
+  }
+
+  private async analyzeSources(sources: any[]): Promise<any> {
+    return { summary: 'Key findings from research...' }
+  }
+
+  private async countTokens(context: any): Promise<number> {
+    return $.Context.countTokens({
+      text: JSON.stringify(context),
+      model: 'gpt-5',
+    })
+  }
+}
+
+// Agent 2: Writing Agent
+class WritingAgent {
+  constructor() {
+    // Listen for research completion
+    $.on('$.Research.completed', async ({ context }) => {
+      await this.writeArticle(context)
+    })
+  }
+
+  async writeArticle(compressedContext: any): Promise<void> {
+    // Expand context
+    const context = await $.WorkflowContext.fromJSON(compressedContext)
+    const expanded = await context.expand()
+
+    console.log('Received context:', expanded)
+
+    // Generate article with context
+    const article = await $.ai.generate({
+      model: 'gpt-5',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a technical writer creating comprehensive articles',
+        },
+        {
+          role: 'user',
+          content: `Write an article based on this research:\n${JSON.stringify(expanded, null, 2)}`,
+        },
+      ],
+    })
+
+    // Send to editing agent
+    await $.send({
+      event: '$.Article.drafted',
+      context: {
+        article: article.content,
+        originalContext: compressedContext,
+      },
+    })
+  }
+}
+
+// Usage
+const researcher = new ResearchAgent()
+const writer = new WritingAgent()
+
+await researcher.processQuery('AI context management best practices')
+```
+
+## Progressive Context Compression
+
+Gradually compress context as conversation grows:
+
+```typescript
+import { $ } from 'sdk.do'
+
+class ProgressiveCompressor {
+  private messages: Message[] = []
+  private compressionStages = [
+    { threshold: 10, action: 'none' },
+    { threshold: 20, action: 'sliding', windowSize: 15 },
+    { threshold: 30, action: 'summarize', preserveRecent: 10 },
+    { threshold: 50, action: 'hierarchical', aggressive: true },
+  ]
+
+  async addMessage(message: Message): Promise<void> {
+    this.messages.push(message)
+
+    // Check if compression needed
+    const stage = this.getCompressionStage(this.messages.length)
+
+    if (stage.action !== 'none') {
+      await this.applyCompression(stage)
+    }
+  }
+
+  private getCompressionStage(messageCount: number): CompressionStage {
+    for (let i = this.compressionStages.length - 1; i >= 0; i--) {
+      if (messageCount >= this.compressionStages[i].threshold) {
+        return this.compressionStages[i]
+      }
+    }
+
+    return this.compressionStages[0]
+  }
+
+  private async applyCompression(stage: CompressionStage): Promise<void> {
+    console.log(`Applying compression: ${stage.action}`)
+
+    switch (stage.action) {
+      case 'sliding':
+        this.messages = (
+          await $.Context.compress({
+            messages: this.messages,
+            strategy: 'sliding',
+            windowSize: stage.windowSize,
+          })
+        ).messages
+        break
+
+      case 'summarize':
+        this.messages = (
+          await $.Context.compress({
+            messages: this.messages,
+            strategy: 'summarize',
+            preserveRecent: stage.preserveRecent,
+          })
+        ).messages
+        break
+
+      case 'hierarchical':
+        this.messages = (
+          await $.Context.compress({
+            messages: this.messages,
+            strategy: 'hierarchical',
+            levels: {
+              recent: 5,
+              medium: 8,
+              old: 'summary',
+            },
+          })
+        ).messages
+        break
+    }
+  }
+
+  async getContext(): Promise<Message[]> {
+    return this.messages
+  }
+
+  getStats(): {
+    messageCount: number
+    compressionLevel: string
+    estimatedTokens: number
+  } {
+    const stage = this.getCompressionStage(this.messages.length)
+
+    return {
+      messageCount: this.messages.length,
+      compressionLevel: stage.action,
+      estimatedTokens: this.messages.length * 50, // Rough estimate
+    }
+  }
+}
+
+// Usage
+const compressor = new ProgressiveCompressor()
+
+// Add 60 messages - compression progressively applied
+for (let i = 0; i < 60; i++) {
+  await compressor.addMessage({
+    role: i % 2 === 0 ? 'user' : 'assistant',
+    content: `Message ${i + 1}`,
+  })
+
+  if (i % 10 === 0) {
+    const stats = compressor.getStats()
+    console.log(`After ${i} messages: ${stats.compressionLevel} compression`)
+  }
+}
+```
+
+## Context Merging
+
+Merge contexts from multiple sources:
+
+```typescript
+import { $ } from 'sdk.do'
+
+async function mergeContexts() {
+  // Context from different sources
+  const conversationContext = await $.db.get('Conversation', conversationId)
+  const documentContext = await $.db.get('Document', documentId)
+  const userContext = await $.db.get('UserProfile', userId)
+
+  // Merge with priorities
+  const merged = await $.Context.merge({
+    contexts: [
+      {
+        name: 'conversation',
+        content: conversationContext.messages,
+        priority: 'high',
+        maxTokens: 4000,
+      },
+      {
+        name: 'document',
+        content: [{ role: 'system', content: documentContext.content }],
+        priority: 'medium',
+        maxTokens: 2000,
+      },
+      {
+        name: 'user',
+        content: [{ role: 'system', content: JSON.stringify(userContext) }],
+        priority: 'critical',
+        maxTokens: 500,
+      },
+    ],
+    totalMaxTokens: 6000,
+    strategy: 'prioritized',
+  })
+
+  console.log('Merged context:')
+  console.log(`- Conversation: ${merged.contexts.conversation.tokens} tokens`)
+  console.log(`- Document: ${merged.contexts.document.tokens} tokens`)
+  console.log(`- User: ${merged.contexts.user.tokens} tokens`)
+  console.log(`- Total: ${merged.totalTokens} tokens`)
+
+  // Use merged context
+  const response = await $.ai.generate({
+    model: 'gpt-5',
+    messages: merged.messages,
+  })
+
+  return response.content
+}
+```
+
+## Context Snapshot and Restore
+
+Save and restore context state:
+
+```typescript
+import { $ } from 'sdk.do'
+
+class ContextManager {
+  private contexts: Map<string, ContextSnapshot> = new Map()
+
+  async saveSnapshot(id: string, messages: Message[]): Promise<string> {
+    const snapshot: ContextSnapshot = {
+      id: id,
+      messages: messages,
+      tokenCount: await $.Context.countTokens({ messages, model: 'gpt-5' }),
+      timestamp: new Date().toISOString(),
+    }
+
+    // Save to database
+    await $.db.create('ContextSnapshot', snapshot)
+
+    // Cache in memory
+    this.contexts.set(id, snapshot)
+
+    console.log(`Snapshot saved: ${id} (${snapshot.tokenCount} tokens)`)
+
+    return id
+  }
+
+  async restoreSnapshot(id: string): Promise<Message[]> {
+    // Try memory cache first
+    let snapshot = this.contexts.get(id)
+
+    // Fall back to database
+    if (!snapshot) {
+      snapshot = await $.db.get('ContextSnapshot', id)
+
+      if (!snapshot) {
+        throw new Error(`Snapshot not found: ${id}`)
+      }
+
+      this.contexts.set(id, snapshot)
+    }
+
+    console.log(`Snapshot restored: ${id} (${snapshot.tokenCount} tokens)`)
+
+    return snapshot.messages
+  }
+
+  async listSnapshots(filter?: any): Promise<ContextSnapshot[]> {
+    return $.db.list('ContextSnapshot', { where: filter })
+  }
+
+  async deleteSnapshot(id: string): Promise<void> {
+    await $.db.delete('ContextSnapshot', id)
+    this.contexts.delete(id)
+  }
+}
+
+// Usage
+const manager = new ContextManager()
+
+// Save snapshot
+const snapshotId = await manager.saveSnapshot('conversation-1', messages)
+
+// Later... restore snapshot
+const restoredMessages = await manager.restoreSnapshot(snapshotId)
+
+// Continue conversation from snapshot
+const response = await $.ai.generate({
+  model: 'gpt-5',
+  messages: restoredMessages,
+})
+```
+
+## Related Resources
+
+- [Basic Usage](./basic-usage.mdx) - Fundamental examples
+- [Integration Examples](./integration.mdx) - Platform integration
+- [Real-World Use Case](./real-world-use-case.mdx) - Production implementation
+- [API Reference](../api/reference.mdx) - Complete API documentation
+
+---
+
+Built with [sdk.do](https://sdk.do) - The semantic SDK for Business-as-Code

@@ -1,0 +1,627 @@
+---
+$id: https://integrations.do/front
+$type: Integration
+name: Front
+service: front
+description: Customer communication hub for teams managing shared inboxes
+category: communication
+sdkBased: false
+baseUrl: https://api2.frontapp.com
+
+auth:
+  type: api-key
+  location: header
+  headerName: Authorization
+  scheme: Bearer
+
+resources:
+  - name: Message
+    plural: Messages
+    description: Send and manage messages in conversations
+    operations:
+      - name: send
+        method: POST
+        path: /channels/{channel_id}/messages
+        params:
+          - name: channel_id
+            type: string
+            required: true
+            description: Channel ID
+          - name: to
+            type: array
+            required: true
+            description: Recipient email addresses
+          - name: subject
+            type: string
+            required: false
+            description: Email subject
+          - name: body
+            type: string
+            required: true
+            description: Message body (plain text or HTML)
+          - name: text
+            type: string
+            required: false
+            description: Plain text version
+          - name: attachments
+            type: array
+            required: false
+            description: File attachments
+        returns: Message
+
+      - name: get
+        method: GET
+        path: /messages/{message_id}
+        params:
+          - name: message_id
+            type: string
+            required: true
+            description: Message ID
+        returns: Message
+
+      - name: list
+        method: GET
+        path: /conversations/{conversation_id}/messages
+        params:
+          - name: conversation_id
+            type: string
+            required: true
+            description: Conversation ID
+        returns: Message[]
+        pagination:
+          type: cursor
+          cursorField: page_token
+          limitField: limit
+          defaultLimit: 50
+
+  - name: Conversation
+    plural: Conversations
+    description: Manage customer conversations
+    operations:
+      - name: get
+        method: GET
+        path: /conversations/{conversation_id}
+        params:
+          - name: conversation_id
+            type: string
+            required: true
+            description: Conversation ID
+        returns: Conversation
+
+      - name: list
+        method: GET
+        path: /conversations
+        params:
+          - name: q
+            type: string
+            required: false
+            description: Search query
+          - name: limit
+            type: number
+            required: false
+            description: Results per page
+        returns: Conversation[]
+        pagination:
+          type: cursor
+          cursorField: page_token
+          limitField: limit
+          defaultLimit: 50
+
+      - name: update
+        method: PATCH
+        path: /conversations/{conversation_id}
+        params:
+          - name: conversation_id
+            type: string
+            required: true
+            description: Conversation ID
+          - name: assignee_id
+            type: string
+            required: false
+            description: Teammate ID to assign
+          - name: status
+            type: string
+            required: false
+            description: Conversation status (archived, deleted, open, spam)
+          - name: tag_ids
+            type: array
+            required: false
+            description: Tag IDs to apply
+        returns: Conversation
+
+  - name: Contact
+    plural: Contacts
+    description: Manage customer contacts
+    operations:
+      - name: create
+        method: POST
+        path: /contacts
+        params:
+          - name: name
+            type: string
+            required: false
+            description: Contact name
+          - name: handles
+            type: array
+            required: true
+            description: Contact handles (email, phone, etc.)
+          - name: custom_fields
+            type: object
+            required: false
+            description: Custom field values
+        returns: Contact
+
+      - name: get
+        method: GET
+        path: /contacts/{contact_id}
+        params:
+          - name: contact_id
+            type: string
+            required: true
+            description: Contact ID
+        returns: Contact
+
+      - name: update
+        method: PATCH
+        path: /contacts/{contact_id}
+        params:
+          - name: contact_id
+            type: string
+            required: true
+            description: Contact ID
+          - name: name
+            type: string
+            required: false
+            description: Updated name
+          - name: custom_fields
+            type: object
+            required: false
+            description: Updated custom fields
+        returns: Contact
+
+      - name: list
+        method: GET
+        path: /contacts
+        params:
+          - name: q
+            type: string
+            required: false
+            description: Search query
+          - name: limit
+            type: number
+            required: false
+            description: Results per page
+        returns: Contact[]
+        pagination:
+          type: cursor
+          cursorField: page_token
+          limitField: limit
+          defaultLimit: 50
+
+  - name: Tag
+    plural: Tags
+    description: Manage conversation tags
+    operations:
+      - name: create
+        method: POST
+        path: /tags
+        params:
+          - name: name
+            type: string
+            required: true
+            description: Tag name
+          - name: description
+            type: string
+            required: false
+            description: Tag description
+        returns: Tag
+
+      - name: get
+        method: GET
+        path: /tags/{tag_id}
+        params:
+          - name: tag_id
+            type: string
+            required: true
+            description: Tag ID
+        returns: Tag
+
+      - name: list
+        method: GET
+        path: /tags
+        params: []
+        returns: Tag[]
+
+      - name: delete
+        method: DELETE
+        path: /tags/{tag_id}
+        params:
+          - name: tag_id
+            type: string
+            required: true
+            description: Tag ID
+        returns: boolean
+
+  - name: Comment
+    plural: Comments
+    description: Add comments to conversations
+    operations:
+      - name: create
+        method: POST
+        path: /conversations/{conversation_id}/comments
+        params:
+          - name: conversation_id
+            type: string
+            required: true
+            description: Conversation ID
+          - name: body
+            type: string
+            required: true
+            description: Comment body
+          - name: author_id
+            type: string
+            required: true
+            description: Teammate ID
+        returns: Comment
+
+      - name: list
+        method: GET
+        path: /conversations/{conversation_id}/comments
+        params:
+          - name: conversation_id
+            type: string
+            required: true
+            description: Conversation ID
+        returns: Comment[]
+
+webhooks:
+  enabled: true
+  signatureHeader: X-Front-Signature
+  signatureAlgorithm: sha256
+  verificationMethod: signature
+  events:
+    - name: conversation.created
+      type: conversation.created
+      description: New conversation created
+    - name: conversation.updated
+      type: conversation.updated
+      description: Conversation was updated
+    - name: conversation.archived
+      type: conversation.archived
+      description: Conversation was archived
+    - name: conversation.assigned
+      type: conversation.assigned
+      description: Conversation was assigned
+    - name: conversation.tag.added
+      type: conversation.tag.added
+      description: Tag added to conversation
+    - name: conversation.tag.removed
+      type: conversation.tag.removed
+      description: Tag removed from conversation
+    - name: message.received
+      type: message.received
+      description: New message received
+    - name: message.sent
+      type: message.sent
+      description: Message was sent
+    - name: comment.created
+      type: comment.created
+      description: Comment was added
+
+errors:
+  mapping:
+    - code: invalid_token
+      type: authentication
+      statusCode: 401
+      message: Invalid or expired API token
+      retryable: false
+    - code: forbidden
+      type: authorization
+      statusCode: 403
+      message: Insufficient permissions
+      retryable: false
+    - code: not_found
+      type: not_found
+      statusCode: 404
+      message: Resource not found
+      retryable: false
+    - code: too_many_requests
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+    - code: internal_error
+      type: server
+      statusCode: 500
+      message: Internal server error
+      retryable: true
+  retryable: [too_many_requests, internal_error, 429, 500]
+  nonRetryable: [invalid_token, forbidden, not_found, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: true
+  scenarios:
+    - name: Message Operations
+      description: Test message sending and retrieval
+      steps:
+        - action: custom
+          resource: Message
+        - action: retrieve
+          resource: Message
+        - action: list
+          resource: Message
+
+    - name: Conversation Management
+      description: Test conversation operations
+      steps:
+        - action: retrieve
+          resource: Conversation
+        - action: list
+          resource: Conversation
+        - action: update
+          resource: Conversation
+
+    - name: Contact Management
+      description: Test contact CRUD operations
+      steps:
+        - action: create
+          resource: Contact
+        - action: retrieve
+          resource: Contact
+        - action: update
+          resource: Contact
+        - action: list
+          resource: Contact
+
+    - name: Tag Management
+      description: Test tag operations
+      steps:
+        - action: create
+          resource: Tag
+        - action: retrieve
+          resource: Tag
+        - action: list
+          resource: Tag
+        - action: delete
+          resource: Tag
+
+    - name: Comment Operations
+      description: Test conversation comments
+      steps:
+        - action: create
+          resource: Comment
+        - action: list
+          resource: Comment
+
+    - name: Webhook Verification
+      description: Test webhook signature verification
+      steps:
+        - action: assert
+          expects:
+            status: 200
+
+docs:
+  homepage: https://front.com
+  apiDocs: https://dev.frontapp.com/reference/introduction
+  guides:
+    quickstart: https://dev.frontapp.com/docs/getting-started
+    webhooks: https://dev.frontapp.com/docs/webhooks
+    authentication: https://dev.frontapp.com/docs/authentication
+---
+
+# Front Integration
+
+Front is a customer communication hub that combines email, chat, SMS, and other channels into shared team inboxes for collaborative customer support.
+
+## Features
+
+- **Messages**: Send and manage messages across channels
+- **Conversations**: Handle customer conversations collaboratively
+- **Contacts**: Manage customer contact information
+- **Tags**: Organize conversations with tags
+- **Comments**: Add internal team comments to conversations
+- **Webhooks**: Real-time event notifications
+- **API Key Auth**: Simple authentication
+
+## Quick Start
+
+```typescript
+import { FrontClient } from '@dotdo/sdk.do/integrations/front'
+
+const front = new FrontClient({
+  apiKey: process.env.FRONT_API_TOKEN,
+})
+
+// Send a message
+const message = await front.message.send({
+  channel_id: 'cha_123',
+  to: ['customer@example.com'],
+  subject: 'Re: Your inquiry',
+  body: 'Thanks for reaching out...',
+})
+
+// Update conversation
+await front.conversation.update({
+  conversation_id: 'cnv_123',
+  status: 'open',
+  assignee_id: 'tea_456',
+})
+```
+
+## Authentication
+
+Front uses API token authentication:
+
+```bash
+export FRONT_API_TOKEN=your_api_token
+```
+
+## Resources
+
+### Messages
+
+Send and retrieve messages:
+
+```typescript
+// Send message
+const message = await front.message.send({
+  channel_id: 'cha_123',
+  to: ['customer@example.com'],
+  subject: 'Welcome!',
+  body: '<p>Welcome to our service!</p>',
+  text: 'Welcome to our service!',
+})
+
+// Get message
+const msg = await front.message.get({ message_id: 'msg_123' })
+
+// List conversation messages
+const messages = await front.message.list({
+  conversation_id: 'cnv_123',
+})
+```
+
+### Conversations
+
+Manage conversations:
+
+```typescript
+// Get conversation
+const conversation = await front.conversation.get({
+  conversation_id: 'cnv_123',
+})
+
+// List conversations
+const conversations = await front.conversation.list({
+  q: 'status:open',
+})
+
+// Update conversation
+await front.conversation.update({
+  conversation_id: 'cnv_123',
+  status: 'archived',
+  assignee_id: 'tea_456',
+  tag_ids: ['tag_123', 'tag_456'],
+})
+```
+
+### Contacts
+
+Manage customer contacts:
+
+```typescript
+// Create contact
+const contact = await front.contact.create({
+  name: 'John Doe',
+  handles: [
+    { handle: 'john@example.com', source: 'email' },
+    { handle: '+15551234567', source: 'phone' },
+  ],
+  custom_fields: {
+    company: 'Acme Inc',
+    plan: 'pro',
+  },
+})
+
+// Update contact
+await front.contact.update({
+  contact_id: contact.id,
+  custom_fields: {
+    plan: 'enterprise',
+  },
+})
+
+// List contacts
+const contacts = await front.contact.list({ q: 'acme' })
+```
+
+### Tags
+
+Organize with tags:
+
+```typescript
+// Create tag
+const tag = await front.tag.create({
+  name: 'urgent',
+  description: 'Urgent customer issues',
+})
+
+// List tags
+const tags = await front.tag.list()
+
+// Delete tag
+await front.tag.delete({ tag_id: tag.id })
+```
+
+### Comments
+
+Add internal comments:
+
+```typescript
+// Add comment
+const comment = await front.comment.create({
+  conversation_id: 'cnv_123',
+  body: 'Customer called, follow up tomorrow',
+  author_id: 'tea_456',
+})
+
+// List comments
+const comments = await front.comment.list({
+  conversation_id: 'cnv_123',
+})
+```
+
+## Webhooks
+
+Front supports webhooks for real-time notifications:
+
+```typescript
+import { FrontWebhookHandler, WebhookEventRouter } from '@dotdo/sdk.do/integrations/front'
+
+const handler = new FrontWebhookHandler(process.env.FRONT_WEBHOOK_SECRET)
+const event = await handler.handleRequest(request)
+
+const router = new WebhookEventRouter()
+router.onConversationCreated(async (event) => {
+  console.log('New conversation:', event.data)
+})
+
+await router.route(event)
+```
+
+## Error Handling
+
+```typescript
+import { FrontError } from '@dotdo/sdk.do/integrations/front'
+
+try {
+  await front.message.send({
+    /* ... */
+  })
+} catch (error) {
+  if (error instanceof FrontError) {
+    console.error('Front Error:', error.code, error.message)
+    if (error.isRetriable()) {
+      // Retry logic
+    }
+  }
+}
+```
+
+## Best Practices
+
+1. **Rate Limits**: Front enforces rate limits - implement exponential backoff
+2. **Shared Inboxes**: Use team assignments for collaborative support
+3. **Tags**: Use tags for workflow and prioritization
+4. **Custom Fields**: Store additional contact data in custom fields
+5. **Webhooks**: Subscribe to relevant events only
+6. **Pagination**: Use cursor-based pagination for large datasets
+
+## API Reference
+
+Full API documentation: https://dev.frontapp.com/reference/introduction
+
+## License
+
+MIT

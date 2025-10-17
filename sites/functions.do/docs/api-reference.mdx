@@ -1,0 +1,1042 @@
+---
+$id: https://functions.do/docs/api-reference
+$type: TechArticle
+title: functions.do API Reference
+description: Complete API reference for functions.do SDK - registry, execution, and management
+keywords: [api, reference, functions, registry, execution, types]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# functions.do API Reference
+
+Complete API reference for the functions.do SDK, covering function registry, execution, types, and utilities.
+
+## Installation
+
+```bash
+pnpm add ai-functions
+```
+
+Or when using the full SDK:
+
+```bash
+pnpm add sdk.do
+```
+
+## Core Imports
+
+```typescript
+import {
+  // Registry functions
+  registerFunction,
+  getFunction,
+  listFunctions,
+  searchFunctions,
+  updateFunction,
+  deleteFunction,
+  deployFunction,
+  archiveFunction,
+
+  // Execution functions
+  executeFunction,
+  executeFunctionAsync,
+  getExecutionStatus,
+  cancelExecution,
+
+  // Utility functions
+  generateFunctionId,
+  generateExecutionId,
+  validateFunctionDefinition,
+  parseFunctionCode,
+
+  // Types
+  FunctionDefinition,
+  FunctionMetadata,
+  FunctionSource,
+  FunctionInput,
+  FunctionResult,
+  FunctionContext,
+  FunctionRegistryEntry,
+  FunctionSearchQuery,
+  FunctionSearchResult,
+} from 'ai-functions'
+```
+
+## Registry Functions
+
+### registerFunction()
+
+Register a new function or update an existing function in the registry.
+
+**Signature:**
+
+```typescript
+async function registerFunction(definition: FunctionDefinition): Promise<FunctionRegistryEntry>
+```
+
+**Parameters:**
+
+- `definition` - Complete function definition with metadata and source
+
+**Returns:**
+
+- `Promise<FunctionRegistryEntry>` - Registry entry with deployment status
+
+**Example:**
+
+```typescript
+import { registerFunction } from 'ai-functions'
+
+const func = await registerFunction({
+  metadata: {
+    id: 'process-order',
+    name: 'Process Order',
+    description: 'Validates and processes customer orders',
+    version: '1.0.0',
+    author: 'you@example.com',
+    tags: ['orders', 'payments'],
+    runtime: 'typescript',
+    memory: 256,
+    timeout: 30,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  source: {
+    code: `
+      export default async function handler(input) {
+        const { order } = input.params
+        // Process order logic
+        return { success: true, orderId: order.id }
+      }
+    `,
+    handler: 'handler',
+    language: 'typescript',
+    dependencies: {
+      zod: '^3.22.0',
+    },
+  },
+})
+
+console.log('Function registered:', func.definition.metadata.id)
+```
+
+**Notes:**
+
+- If a function with the same ID exists, it will be updated
+- Version must follow semantic versioning (e.g., "1.0.0")
+- Function definition is validated against schema before registration
+
+---
+
+### getFunction()
+
+Retrieve a function from the registry by ID.
+
+**Signature:**
+
+```typescript
+async function getFunction(id: string): Promise<FunctionRegistryEntry | null>
+```
+
+**Parameters:**
+
+- `id` - Function identifier
+
+**Returns:**
+
+- `Promise<FunctionRegistryEntry | null>` - Registry entry or null if not found
+
+**Example:**
+
+```typescript
+import { getFunction } from 'ai-functions'
+
+const func = await getFunction('process-order')
+
+if (func) {
+  console.log('Function:', func.definition.metadata.name)
+  console.log('Status:', func.status)
+  console.log('Version:', func.definition.metadata.version)
+} else {
+  console.log('Function not found')
+}
+```
+
+---
+
+### listFunctions()
+
+List all functions with optional filters.
+
+**Signature:**
+
+```typescript
+async function listFunctions(filters?: Partial<FunctionSearchQuery>): Promise<FunctionRegistryEntry[]>
+```
+
+**Parameters:**
+
+- `filters` (optional) - Search query filters:
+  - `status` - Filter by deployment status ('draft', 'deployed', 'archived')
+  - `author` - Filter by author
+  - `runtime` - Filter by runtime environment
+  - `tags` - Filter by tags (matches any)
+  - `limit` - Maximum number of results (default: 100)
+  - `offset` - Pagination offset (default: 0)
+
+**Returns:**
+
+- `Promise<FunctionRegistryEntry[]>` - Array of matching functions
+
+**Example:**
+
+```typescript
+import { listFunctions } from 'ai-functions'
+
+// Get all deployed functions
+const deployed = await listFunctions({ status: 'deployed' })
+
+// Get functions by author
+const myFunctions = await listFunctions({ author: 'you@example.com' })
+
+// Get functions with specific tags
+const orderFunctions = await listFunctions({ tags: ['orders'] })
+
+// Paginated results
+const page1 = await listFunctions({ limit: 10, offset: 0 })
+const page2 = await listFunctions({ limit: 10, offset: 10 })
+```
+
+---
+
+### searchFunctions()
+
+Search functions by name, tags, or other criteria with full result metadata.
+
+**Signature:**
+
+```typescript
+async function searchFunctions(query: FunctionSearchQuery): Promise<FunctionSearchResult>
+```
+
+**Parameters:**
+
+- `query` - Search query with filters:
+  - `name` - Search by function name (case-insensitive partial match)
+  - `tags` - Filter by tags (matches any)
+  - `author` - Filter by author (exact match)
+  - `runtime` - Filter by runtime environment
+  - `status` - Filter by deployment status
+  - `limit` - Maximum results per page (default: 100)
+  - `offset` - Pagination offset (default: 0)
+
+**Returns:**
+
+- `Promise<FunctionSearchResult>` - Search result with:
+  - `functions` - Array of matching functions
+  - `total` - Total number of matches
+  - `limit` - Query limit
+  - `offset` - Query offset
+
+**Example:**
+
+```typescript
+import { searchFunctions } from 'ai-functions'
+
+// Search by name
+const results = await searchFunctions({
+  name: 'process',
+  limit: 10,
+})
+
+console.log(`Found ${results.total} functions`)
+results.functions.forEach((func) => {
+  console.log(`- ${func.definition.metadata.name}`)
+})
+
+// Search by multiple criteria
+const orderFunctions = await searchFunctions({
+  tags: ['orders', 'payments'],
+  status: 'deployed',
+  runtime: 'typescript',
+})
+```
+
+---
+
+### updateFunction()
+
+Update function metadata (does not update source code).
+
+**Signature:**
+
+```typescript
+async function updateFunction(id: string, updates: Partial<FunctionMetadata>): Promise<FunctionRegistryEntry | null>
+```
+
+**Parameters:**
+
+- `id` - Function identifier
+- `updates` - Partial metadata updates
+
+**Returns:**
+
+- `Promise<FunctionRegistryEntry | null>` - Updated entry or null if not found
+
+**Example:**
+
+```typescript
+import { updateFunction } from 'ai-functions'
+
+const updated = await updateFunction('process-order', {
+  description: 'Updated description',
+  tags: ['orders', 'payments', 'stripe'],
+  memory: 512,
+  timeout: 60,
+})
+
+if (updated) {
+  console.log('Function updated')
+}
+```
+
+**Notes:**
+
+- `updatedAt` is automatically set to current timestamp
+- Cannot change function ID
+- To update source code, re-register the function with a new version
+
+---
+
+### deleteFunction()
+
+Delete a function from the registry.
+
+**Signature:**
+
+```typescript
+async function deleteFunction(id: string): Promise<boolean>
+```
+
+**Parameters:**
+
+- `id` - Function identifier
+
+**Returns:**
+
+- `Promise<boolean>` - True if deleted, false if not found
+
+**Example:**
+
+```typescript
+import { deleteFunction } from 'ai-functions'
+
+const deleted = await deleteFunction('old-function')
+
+if (deleted) {
+  console.log('Function deleted')
+} else {
+  console.log('Function not found')
+}
+```
+
+**Warning:**
+
+- Deletion is permanent
+- Consider using `archiveFunction()` instead to preserve history
+
+---
+
+### deployFunction()
+
+Mark a function as deployed with an endpoint URL.
+
+**Signature:**
+
+```typescript
+async function deployFunction(id: string, endpoint: string): Promise<FunctionRegistryEntry | null>
+```
+
+**Parameters:**
+
+- `id` - Function identifier
+- `endpoint` - Deployment endpoint URL
+
+**Returns:**
+
+- `Promise<FunctionRegistryEntry | null>` - Updated entry or null if not found
+
+**Example:**
+
+```typescript
+import { deployFunction } from 'ai-functions'
+
+const deployed = await deployFunction('process-order', 'https://functions.do/process-order')
+
+if (deployed) {
+  console.log('Function deployed:', deployed.endpoint)
+  console.log('Deployed at:', deployed.deployedAt)
+}
+```
+
+**Notes:**
+
+- Sets status to 'deployed'
+- Sets `deployedAt` to current timestamp
+- Endpoint URL should be the public URL where function is accessible
+
+---
+
+### archiveFunction()
+
+Archive a function (keeps in registry but marks as archived).
+
+**Signature:**
+
+```typescript
+async function archiveFunction(id: string): Promise<FunctionRegistryEntry | null>
+```
+
+**Parameters:**
+
+- `id` - Function identifier
+
+**Returns:**
+
+- `Promise<FunctionRegistryEntry | null>` - Updated entry or null if not found
+
+**Example:**
+
+```typescript
+import { archiveFunction } from 'ai-functions'
+
+const archived = await archiveFunction('old-function')
+
+if (archived) {
+  console.log('Function archived (preserved in registry)')
+}
+```
+
+**Notes:**
+
+- Archived functions are not included in search results by default
+- Preserves function history and code
+- Can be un-archived by updating status to 'draft' or redeploying
+
+---
+
+## Execution Functions
+
+### executeFunction()
+
+Execute a function by ID with given input parameters.
+
+**Signature:**
+
+```typescript
+async function executeFunction<T = unknown>(functionId: string, input: FunctionInput): Promise<FunctionResult<T>>
+```
+
+**Type Parameters:**
+
+- `T` - Expected result data type (default: unknown)
+
+**Parameters:**
+
+- `functionId` - Function identifier
+- `input` - Function input with:
+  - `params` - Input parameters as key-value pairs
+  - `context` (optional) - Execution context overrides
+  - `options` (optional) - Execution options
+
+**Returns:**
+
+- `Promise<FunctionResult<T>>` - Execution result with:
+  - `success` - Execution success status
+  - `data` - Result data (if successful)
+  - `error` - Error information (if failed)
+  - `execution` - Execution metadata (ID, duration, memory)
+  - `logs` - Execution logs (if available)
+
+**Example:**
+
+```typescript
+import { executeFunction } from 'ai-functions'
+
+const result = await executeFunction('process-order', {
+  params: {
+    order: {
+      id: 'order-123',
+      items: [{ id: 'item-1', price: 99.99 }],
+    },
+  },
+  options: {
+    sandbox: true,
+    timeout: 30,
+  },
+})
+
+if (result.success) {
+  console.log('Result:', result.data)
+  console.log('Duration:', result.execution.duration, 'ms')
+} else {
+  console.error('Error:', result.error?.message)
+  console.error('Stack:', result.error?.stack)
+}
+```
+
+**Execution Options:**
+
+- `sandbox` - Execute in isolated sandbox (default: false)
+- `timeout` - Timeout override in seconds
+- `memory` - Memory limit override in MB
+- `async` - Execute asynchronously (use `executeFunctionAsync` instead)
+
+---
+
+### executeFunctionAsync()
+
+Execute a function asynchronously (fire and forget).
+
+**Signature:**
+
+```typescript
+async function executeFunctionAsync(functionId: string, input: FunctionInput): Promise<string>
+```
+
+**Parameters:**
+
+- `functionId` - Function identifier
+- `input` - Function input (same as `executeFunction`)
+
+**Returns:**
+
+- `Promise<string>` - Execution ID for tracking
+
+**Example:**
+
+```typescript
+import { executeFunctionAsync, getExecutionStatus } from 'ai-functions'
+
+// Start async execution
+const executionId = await executeFunctionAsync('process-large-batch', {
+  params: {
+    batchSize: 10000,
+  },
+})
+
+console.log('Started execution:', executionId)
+
+// Check status later
+setTimeout(async () => {
+  const result = await getExecutionStatus(executionId)
+  if (result) {
+    console.log('Execution completed:', result.success)
+  }
+}, 5000)
+```
+
+**Notes:**
+
+- Returns immediately with execution ID
+- Function executes in background
+- Use `getExecutionStatus()` to check completion
+- Errors are logged but not thrown
+
+---
+
+### getExecutionStatus()
+
+Get the status of an async execution.
+
+**Signature:**
+
+```typescript
+async function getExecutionStatus(executionId: string): Promise<FunctionResult | null>
+```
+
+**Parameters:**
+
+- `executionId` - Execution identifier returned from `executeFunctionAsync`
+
+**Returns:**
+
+- `Promise<FunctionResult | null>` - Execution result or null if not found/not complete
+
+**Example:**
+
+```typescript
+import { getExecutionStatus } from 'ai-functions'
+
+const result = await getExecutionStatus('exec-abc123')
+
+if (result) {
+  if (result.success) {
+    console.log('Execution completed successfully')
+    console.log('Data:', result.data)
+  } else {
+    console.log('Execution failed:', result.error?.message)
+  }
+} else {
+  console.log('Execution not found or still running')
+}
+```
+
+**Notes:**
+
+- Returns null if execution is not found or still running
+- In production, execution results are stored in database
+- Current implementation returns null (not yet implemented)
+
+---
+
+### cancelExecution()
+
+Cancel a running execution.
+
+**Signature:**
+
+```typescript
+async function cancelExecution(executionId: string): Promise<boolean>
+```
+
+**Parameters:**
+
+- `executionId` - Execution identifier
+
+**Returns:**
+
+- `Promise<boolean>` - True if cancelled, false if not found or already completed
+
+**Example:**
+
+```typescript
+import { cancelExecution } from 'ai-functions'
+
+const cancelled = await cancelExecution('exec-abc123')
+
+if (cancelled) {
+  console.log('Execution cancelled')
+} else {
+  console.log('Could not cancel (not found or already completed)')
+}
+```
+
+**Notes:**
+
+- Cancellation is best-effort
+- Function may complete before cancellation takes effect
+- Current implementation returns false (not yet implemented)
+
+---
+
+## Utility Functions
+
+### generateFunctionId()
+
+Generate a unique function ID from a name.
+
+**Signature:**
+
+```typescript
+function generateFunctionId(name?: string): string
+```
+
+**Parameters:**
+
+- `name` (optional) - Function name to base ID on
+
+**Returns:**
+
+- `string` - Unique function ID
+
+**Example:**
+
+```typescript
+import { generateFunctionId } from 'ai-functions'
+
+const id = generateFunctionId('Process Order')
+console.log(id) // "process-order-abc123"
+
+const randomId = generateFunctionId()
+console.log(randomId) // "func-xyz789"
+```
+
+---
+
+### generateExecutionId()
+
+Generate a unique execution ID.
+
+**Signature:**
+
+```typescript
+function generateExecutionId(): string
+```
+
+**Returns:**
+
+- `string` - Unique execution ID
+
+**Example:**
+
+```typescript
+import { generateExecutionId } from 'ai-functions'
+
+const executionId = generateExecutionId()
+console.log(executionId) // "exec-abc123def456"
+```
+
+---
+
+### validateFunctionDefinition()
+
+Validate a function definition against the schema.
+
+**Signature:**
+
+```typescript
+async function validateFunctionDefinition(definition: FunctionDefinition): Promise<FunctionDefinition>
+```
+
+**Parameters:**
+
+- `definition` - Function definition to validate
+
+**Returns:**
+
+- `Promise<FunctionDefinition>` - Validated definition (throws if invalid)
+
+**Example:**
+
+```typescript
+import { validateFunctionDefinition } from 'ai-functions'
+
+try {
+  const validated = await validateFunctionDefinition({
+    metadata: {
+      id: 'my-func',
+      name: 'My Function',
+      version: '1.0.0',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+    source: {
+      code: 'export default function() {}',
+      language: 'typescript',
+    },
+  })
+  console.log('Valid function definition')
+} catch (error) {
+  console.error('Invalid definition:', error.message)
+}
+```
+
+---
+
+### parseFunctionCode()
+
+Parse function code to extract metadata.
+
+**Signature:**
+
+```typescript
+function parseFunctionCode(code: string): { handler?: string; exports: string[] }
+```
+
+**Parameters:**
+
+- `code` - Function source code
+
+**Returns:**
+
+- Object with:
+  - `handler` - Detected handler function name
+  - `exports` - Array of exported names
+
+**Example:**
+
+```typescript
+import { parseFunctionCode } from 'ai-functions'
+
+const code = `
+  export default function myHandler(input) {
+    return input
+  }
+
+  export const helper = () => {}
+`
+
+const parsed = parseFunctionCode(code)
+console.log(parsed.handler) // "myHandler"
+console.log(parsed.exports) // ["default", "helper"]
+```
+
+---
+
+## Types
+
+### FunctionDefinition
+
+Complete function definition with metadata and source.
+
+```typescript
+interface FunctionDefinition {
+  metadata: FunctionMetadata
+  source: FunctionSource
+}
+```
+
+---
+
+### FunctionMetadata
+
+Function metadata following Schema.org SoftwareSourceCode pattern.
+
+```typescript
+interface FunctionMetadata {
+  /** Unique function identifier */
+  id: string
+  /** Function name */
+  name: string
+  /** Function description */
+  description?: string
+  /** Semantic version (e.g., "1.0.0") */
+  version: string
+  /** Function author */
+  author?: string
+  /** Function tags for discovery */
+  tags?: string[]
+  /** Runtime environment */
+  runtime?: string
+  /** Memory limit in MB */
+  memory?: number
+  /** Timeout in seconds */
+  timeout?: number
+  /** Created timestamp (ISO 8601) */
+  createdAt: string
+  /** Updated timestamp (ISO 8601) */
+  updatedAt: string
+}
+```
+
+---
+
+### FunctionSource
+
+Function source code and dependencies.
+
+```typescript
+interface FunctionSource {
+  /** Function code as string */
+  code: string
+  /** Entry point function name */
+  handler?: string
+  /** Source language */
+  language: 'typescript' | 'javascript' | 'python'
+  /** Dependencies (package name -> version) */
+  dependencies?: Record<string, string>
+}
+```
+
+---
+
+### FunctionInput
+
+Function execution input with parameters and context.
+
+```typescript
+interface FunctionInput {
+  /** Input parameters */
+  params: Record<string, unknown>
+  /** Execution context overrides */
+  context?: Partial<FunctionContext>
+  /** Execution options */
+  options?: ExecutionOptions
+}
+```
+
+---
+
+### FunctionResult
+
+Function execution result with success status and metadata.
+
+```typescript
+interface FunctionResult<T = unknown> {
+  /** Execution success status */
+  success: boolean
+  /** Result data (if successful) */
+  data?: T
+  /** Error information (if failed) */
+  error?: {
+    message: string
+    code?: string
+    stack?: string
+  }
+  /** Execution metadata */
+  execution: {
+    executionId: string
+    functionId: string
+    startedAt: string
+    completedAt: string
+    duration: number
+    memory: number
+  }
+  /** Execution logs */
+  logs?: string[]
+}
+```
+
+---
+
+### FunctionContext
+
+Function execution context with environment and limits.
+
+```typescript
+interface FunctionContext {
+  /** Function ID being executed */
+  functionId: string
+  /** Execution ID for this invocation */
+  executionId: string
+  /** Request ID for tracing */
+  requestId?: string
+  /** Environment variables */
+  env?: Record<string, string>
+  /** Execution timeout in seconds */
+  timeout: number
+  /** Memory limit in MB */
+  memory: number
+}
+```
+
+---
+
+### ExecutionOptions
+
+Options for function execution.
+
+```typescript
+interface ExecutionOptions {
+  /** Execute in sandbox */
+  sandbox?: boolean
+  /** Timeout override in seconds */
+  timeout?: number
+  /** Memory override in MB */
+  memory?: number
+  /** Async execution */
+  async?: boolean
+}
+```
+
+---
+
+### FunctionRegistryEntry
+
+Registry entry with function definition and deployment status.
+
+```typescript
+interface FunctionRegistryEntry {
+  /** Function definition */
+  definition: FunctionDefinition
+  /** Deployment status */
+  status: 'draft' | 'deployed' | 'archived'
+  /** Deployment timestamp (ISO 8601) */
+  deployedAt?: string
+  /** Deployment endpoint URL */
+  endpoint?: string
+}
+```
+
+---
+
+### FunctionSearchQuery
+
+Search query with filters and pagination.
+
+```typescript
+interface FunctionSearchQuery {
+  /** Search by name (partial match) */
+  name?: string
+  /** Filter by tags */
+  tags?: string[]
+  /** Filter by author */
+  author?: string
+  /** Filter by runtime */
+  runtime?: string
+  /** Filter by status */
+  status?: 'draft' | 'deployed' | 'archived'
+  /** Maximum results */
+  limit?: number
+  /** Pagination offset */
+  offset?: number
+}
+```
+
+---
+
+### FunctionSearchResult
+
+Search result with matching functions and pagination metadata.
+
+```typescript
+interface FunctionSearchResult {
+  /** Matching functions */
+  functions: FunctionRegistryEntry[]
+  /** Total number of matches */
+  total: number
+  /** Query limit */
+  limit: number
+  /** Query offset */
+  offset: number
+}
+```
+
+---
+
+## Error Handling
+
+All async functions can throw errors. Always use try-catch:
+
+```typescript
+import { registerFunction } from 'ai-functions'
+
+try {
+  const func = await registerFunction(definition)
+  console.log('Success:', func.definition.metadata.id)
+} catch (error) {
+  if (error instanceof ZodError) {
+    console.error('Validation error:', error.errors)
+  } else {
+    console.error('Error:', error.message)
+  }
+}
+```
+
+## Zod Schemas
+
+For runtime validation, Zod schemas are exported:
+
+```typescript
+import { FunctionMetadataSchema, FunctionSourceSchema, FunctionDefinitionSchema, FunctionInputSchema, ExecutionOptionsSchema } from 'ai-functions'
+
+// Validate at runtime
+const result = FunctionDefinitionSchema.safeParse(definition)
+if (result.success) {
+  console.log('Valid:', result.data)
+} else {
+  console.error('Invalid:', result.error)
+}
+```
+
+## Next Steps
+
+- [Deployment Guide](./deployment) - Learn how to deploy functions
+- [Execution Guide](./execution) - Execute functions synchronously and asynchronously
+- [Scheduling](./scheduling) - Schedule function execution with cron
+- [Monitoring](./monitoring) - Track execution and debug issues
+- [Integration](./integration) - Integrate with SDK primitives
+- [Best Practices](./best-practices) - Performance and security recommendations

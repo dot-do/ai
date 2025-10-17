@@ -1,0 +1,479 @@
+---
+$id: https://queue.do/examples/real-world-use-case
+$type: HowTo
+title: Real-World Queue Use Cases
+description: Complete real-world examples of using queue.do in production applications.
+keywords: [queue, real-world, production, use cases, examples]
+---
+
+# Real-World Queue Use Cases
+
+## E-commerce Order Processing
+
+Complete order processing system with queues:
+
+```typescript
+import $, { queue, db, on, send } from 'sdk.do'
+
+// 1. Order created event triggers processing
+on($.Order.created, async (order) => {
+  await queue.enqueue(
+    $.OrderValidateTask,
+    {
+      orderId: order.$id,
+    },
+    {
+      priority: 'high',
+    }
+  )
+})
+
+// 2. Validate order
+await queue.worker($.OrderValidateTask, async (task) => {
+  const { orderId } = task.data
+  const order = await db.get($.Order, orderId)
+
+  // Validate inventory
+  const inventoryAvailable = await checkInventory(order.items)
+
+  if (!inventoryAvailable) {
+    await db.update(order, { status: 'out_of_stock' })
+    send($.Order.outOfStock, order)
+    return { valid: false, reason: 'inventory' }
+  }
+
+  // Validate payment
+  const paymentValid = await validatePayment(order.payment)
+
+  if (!paymentValid) {
+    await db.update(order, { status: 'payment_failed' })
+    send($.Order.paymentFailed, order)
+    return { valid: false, reason: 'payment' }
+  }
+
+  // Valid - queue next step
+  await queue.enqueue(
+    $.OrderProcessPaymentTask,
+    {
+      orderId: order.$id,
+    },
+    {
+      priority: 'critical',
+      retries: 3,
+    }
+  )
+
+  return { valid: true }
+})
+
+// 3. Process payment
+await queue.worker(
+  $.OrderProcessPaymentTask,
+  async (task) => {
+    const { orderId } = task.data
+    const order = await db.get($.Order, orderId)
+
+    try {
+      const payment = await chargePayment({
+        amount: order.total,
+        paymentMethod: order.paymentMethod,
+      })
+
+      await db.update(order, {
+        status: 'paid',
+        paymentId: payment.id,
+      })
+
+      // Queue fulfillment
+      await queue.enqueue($.OrderFulfillTask, {
+        orderId: order.$id,
+      })
+
+      send($.Order.paid, order)
+
+      return { paid: true, paymentId: payment.id }
+    } catch (error) {
+      await db.update(order, { status: 'payment_failed' })
+      send($.Order.paymentFailed, { orderId, error: error.message })
+      throw error
+    }
+  },
+  {
+    retries: 3,
+    retryBackoff: 'exponential',
+    deadLetterQueue: '$.Payment.failed',
+  }
+)
+
+// 4. Fulfill order
+await queue.worker($.OrderFulfillTask, async (task) => {
+  const { orderId } = task.data
+  const order = await db.get($.Order, orderId)
+
+  // Reserve inventory
+  await reserveInventory(order.items)
+
+  // Create shipment
+  const shipment = await createShipment({
+    orderId: order.$id,
+    address: order.shippingAddress,
+    items: order.items,
+  })
+
+  await db.update(order, {
+    status: 'fulfilled',
+    shipmentId: shipment.id,
+  })
+
+  // Queue notification
+  await queue.enqueue($.NotificationTask, {
+    type: 'order_shipped',
+    userId: order.customer,
+    orderId: order.$id,
+    tracking: shipment.trackingNumber,
+  })
+
+  send($.Order.fulfilled, order)
+
+  return { fulfilled: true, shipmentId: shipment.id }
+})
+
+// 5. Send notifications
+await queue.worker(
+  $.NotificationTask,
+  async (task) => {
+    const { type, userId, orderId, tracking } = task.data
+    const user = await db.get($.User, userId)
+
+    await sendEmail({
+      to: user.email,
+      template: type,
+      data: { orderId, tracking },
+    })
+
+    await sendPushNotification({
+      userId,
+      title: 'Order Shipped',
+      body: `Your order ${orderId} has shipped!`,
+    })
+
+    return { notified: true }
+  },
+  {
+    retries: 3,
+  }
+)
+```
+
+## Video Processing Pipeline
+
+```typescript
+import { queue, db, on } from 'sdk.do'
+
+// Video uploaded
+on($.Video.uploaded, async (video) => {
+  await queue.enqueue($.VideoProcessTask, {
+    videoId: video.$id,
+    url: video.url,
+  })
+})
+
+// Main processing task
+await queue.worker($.VideoProcessTask, async (task) => {
+  const { videoId, url } = task.data
+
+  // Download video
+  const localPath = await downloadVideo(url)
+
+  // Extract metadata
+  const metadata = await extractMetadata(localPath)
+
+  await db.update($.Video, videoId, {
+    duration: metadata.duration,
+    resolution: metadata.resolution,
+    codec: metadata.codec,
+  })
+
+  // Queue transcoding tasks for different resolutions
+  const resolutions = ['1080p', '720p', '480p', '360p']
+
+  for (const resolution of resolutions) {
+    await queue.enqueue($.VideoTranscodeTask, {
+      videoId,
+      localPath,
+      resolution,
+    })
+  }
+
+  // Queue thumbnail generation
+  await queue.enqueue($.VideoThumbnailTask, {
+    videoId,
+    localPath,
+    timestamps: [0, metadata.duration / 2, metadata.duration],
+  })
+
+  return { metadata, queuedTasks: resolutions.length + 1 }
+})
+
+// Transcode videos
+await queue.worker(
+  $.VideoTranscodeTask,
+  async (task) => {
+    const { videoId, localPath, resolution } = task.data
+
+    const outputPath = await transcodeVideo({
+      input: localPath,
+      resolution,
+      codec: 'h264',
+      bitrate: getOptimalBitrate(resolution),
+    })
+
+    // Upload to CDN
+    const cdnUrl = await uploadToCDN(outputPath, {
+      path: `videos/${videoId}/${resolution}.mp4`,
+    })
+
+    // Store URL
+    await db.create($.VideoVariant, {
+      videoId,
+      resolution,
+      url: cdnUrl,
+      size: await getFileSize(outputPath),
+    })
+
+    // Cleanup
+    await fs.unlink(outputPath)
+
+    return { resolution, url: cdnUrl }
+  },
+  {
+    concurrency: os.cpus().length, // CPU-intensive
+    timeout: 600000, // 10 minute timeout
+  }
+)
+
+// Generate thumbnails
+await queue.worker($.VideoThumbnailTask, async (task) => {
+  const { videoId, localPath, timestamps } = task.data
+
+  const thumbnails = []
+
+  for (const timestamp of timestamps) {
+    const thumbPath = await generateThumbnail(localPath, timestamp)
+    const thumbUrl = await uploadToCDN(thumbPath, {
+      path: `videos/${videoId}/thumb_${timestamp}.jpg`,
+    })
+
+    thumbnails.push({ timestamp, url: thumbUrl })
+
+    await fs.unlink(thumbPath)
+  }
+
+  await db.update($.Video, videoId, {
+    thumbnails,
+    status: 'ready',
+  })
+
+  send($.Video.ready, { videoId })
+
+  return { thumbnails: thumbnails.length }
+})
+```
+
+## Newsletter Campaign System
+
+```typescript
+import { queue, db, every } from 'sdk.do'
+
+// Create campaign
+async function createCampaign(campaign) {
+  const campaignId = await db.create($.Campaign, campaign)
+
+  // Queue campaign processing
+  await queue.enqueue($.CampaignProcessTask, {
+    campaignId,
+  })
+
+  return campaignId
+}
+
+// Process campaign
+await queue.worker($.CampaignProcessTask, async (task) => {
+  const { campaignId } = task.data
+  const campaign = await db.get($.Campaign, campaignId)
+
+  // Get recipients
+  const recipients = await db.list($.User, {
+    where: campaign.targetingCriteria,
+    limit: 100000,
+  })
+
+  // Create batches (1000 per batch for rate limiting)
+  const batchSize = 1000
+  const batches = []
+
+  for (let i = 0; i < recipients.length; i += batchSize) {
+    const batch = recipients.slice(i, i + batchSize)
+    batches.push(batch)
+  }
+
+  // Enqueue batch processing
+  for (let i = 0; i < batches.length; i++) {
+    await queue.enqueue(
+      $.CampaignBatchTask,
+      {
+        campaignId,
+        batchIndex: i,
+        recipients: batches[i].map((u) => ({
+          id: u.$id,
+          email: u.email,
+          name: u.name,
+        })),
+      },
+      {
+        delay: i * 60000, // 1 minute between batches for rate limiting
+      }
+    )
+  }
+
+  await db.update(campaign, {
+    status: 'sending',
+    totalRecipients: recipients.length,
+    totalBatches: batches.length,
+  })
+
+  return {
+    recipients: recipients.length,
+    batches: batches.length,
+  }
+})
+
+// Process batch
+await queue.worker(
+  $.CampaignBatchTask,
+  async (task) => {
+    const { campaignId, batchIndex, recipients } = task.data
+    const campaign = await db.get($.Campaign, campaignId)
+
+    const results = {
+      sent: 0,
+      failed: 0,
+      errors: [],
+    }
+
+    for (const recipient of recipients) {
+      try {
+        // Personalize content
+        const content = await personalizeEmail({
+          template: campaign.template,
+          data: {
+            name: recipient.name,
+            unsubscribeUrl: `https://app.example.com/unsubscribe/${recipient.id}`,
+          },
+        })
+
+        // Send email
+        await sendEmail({
+          to: recipient.email,
+          subject: campaign.subject,
+          html: content,
+        })
+
+        // Track
+        await db.create($.CampaignDelivery, {
+          campaignId,
+          recipientId: recipient.id,
+          status: 'sent',
+          sentAt: new Date(),
+        })
+
+        results.sent++
+
+        // Rate limit
+        await sleep(100) // 10 emails per second
+      } catch (error) {
+        results.failed++
+        results.errors.push({
+          recipient: recipient.email,
+          error: error.message,
+        })
+
+        await db.create($.CampaignDelivery, {
+          campaignId,
+          recipientId: recipient.id,
+          status: 'failed',
+          error: error.message,
+        })
+      }
+    }
+
+    // Update campaign stats
+    const campaign = await db.get($.Campaign, campaignId)
+    await db.update(campaign, {
+      sent: (campaign.sent || 0) + results.sent,
+      failed: (campaign.failed || 0) + results.failed,
+    })
+
+    return results
+  },
+  {
+    concurrency: 3, // Process 3 batches concurrently
+    retries: 2,
+  }
+)
+
+// Track opens/clicks
+on($.Email.opened, async (event) => {
+  await db.update($.CampaignDelivery, event.deliveryId, {
+    opened: true,
+    openedAt: new Date(),
+  })
+})
+
+on($.Link.clicked, async (event) => {
+  await db.update($.CampaignDelivery, event.deliveryId, {
+    clicked: true,
+    clickedAt: new Date(),
+  })
+})
+
+// Generate campaign report
+every($.Daily, async () => {
+  const campaigns = await db.list($.Campaign, {
+    where: { status: 'completed', reportGenerated: false },
+  })
+
+  for (const campaign of campaigns) {
+    await queue.enqueue($.CampaignReportTask, {
+      campaignId: campaign.$id,
+    })
+  }
+})
+
+await queue.worker($.CampaignReportTask, async (task) => {
+  const { campaignId } = task.data
+
+  const deliveries = await db.list($.CampaignDelivery, {
+    where: { campaignId },
+  })
+
+  const stats = {
+    total: deliveries.length,
+    sent: deliveries.filter((d) => d.status === 'sent').length,
+    opened: deliveries.filter((d) => d.opened).length,
+    clicked: deliveries.filter((d) => d.clicked).length,
+    failed: deliveries.filter((d) => d.status === 'failed').length,
+  }
+
+  stats.openRate = stats.opened / stats.sent
+  stats.clickRate = stats.clicked / stats.sent
+
+  await db.update($.Campaign, campaignId, {
+    stats,
+    reportGenerated: true,
+    completedAt: new Date(),
+  })
+
+  return stats
+})
+```

@@ -1,0 +1,108 @@
+---
+$id: https://integrations.do/linear
+$type: Integration
+name: Linear
+service: linear
+description: Linear is a streamlined issue tracking and project planning tool for modern teams, featuring fast workflows, keyboard shortcuts, and GitHub integrations
+category: productivity
+sdkBased: false
+baseUrl: https://api.linear.com
+
+auth:
+  type: oauth2
+  authorizationUrl: https://linear.app/oauth/authorize
+  tokenUrl: https://api.linear.app/oauth/token
+  scopes:
+    - admin
+    - read
+    - write
+    - issues:create
+    - comments:create
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Linear actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: true
+  verificationMethod: none
+  events:
+    - name: generic_trigger
+      type: trigger
+      description: Generic webhook trigger
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://linear.app
+  apiDocs: https://linear.app
+---
+
+# Linear Integration
+
+Linear is a streamlined issue tracking and project planning tool for modern teams, featuring fast workflows, keyboard shortcuts, and GitHub integrations
+
+## Quick Start
+
+```typescript
+import { LinearClient } from '@dotdo/sdk.do/integrations/linear'
+
+const linear = new LinearClient({
+  apiKey: process.env.LINEAR_API_KEY,
+})
+
+const result = await linear.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Linear provides 22 actions through the Composio API.
+
+## Webhooks
+
+Linear supports 3 webhook triggers for real-time event notifications.
+
+## License
+
+MIT

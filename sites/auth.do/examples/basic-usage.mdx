@@ -1,0 +1,330 @@
+---
+$id: https://auth.do/examples/basic-usage
+$type: HowTo
+title: Basic Authentication Usage
+description: Simple authentication flow with auth.do
+keywords: [auth, example, basic, login, register]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Basic Authentication Usage
+
+Simple authentication flow with auth.do.
+
+## Security Best Practices
+
+**⚠️ IMPORTANT: Authentication Security**
+
+- **Never** store passwords in plain text - always use hashing (bcrypt, argon2)
+- **Always** use HTTPS in production to protect credentials in transit
+- **Implement** rate limiting on auth endpoints to prevent brute force attacks
+- **Use** secure session management:
+  - HttpOnly cookies to prevent XSS
+  - Secure flag for HTTPS-only transmission
+  - SameSite attribute to prevent CSRF
+- **Rotate** JWT secrets regularly
+- **Set** appropriate token expiration times (15 minutes for access, 7 days for refresh)
+- **Validate** all user input to prevent injection attacks
+- **Never** log sensitive data (passwords, tokens)
+
+## Overview
+
+This example demonstrates a complete authentication flow including user registration, login, token verification, and protected endpoints.
+
+## Complete Example
+
+```typescript
+import { $, auth, db } from 'sdk.do'
+
+// 1. User Registration
+export async function registerUser(email: string, password: string, name: string) {
+  // Validate input
+  if (!email || !password || !name) {
+    throw new Error('All fields required')
+  }
+
+  // Check if email exists
+  const existing = await db.list($.Person, {
+    where: { email: email.toLowerCase() },
+  })
+
+  if (existing.length > 0) {
+    throw new Error('Email already registered')
+  }
+
+  // Create user
+  const user = await db.create($.Person, {
+    email: email.toLowerCase(),
+    name,
+    emailVerified: false,
+  })
+
+  // Hash password
+  const hashedPassword = await auth.hashPassword(password)
+
+  // Store credentials
+  await db.create($.Credentials, {
+    userId: user.$id,
+    passwordHash: hashedPassword,
+  })
+
+  return {
+    userId: user.$id,
+    message: 'User registered successfully',
+  }
+}
+
+// 2. User Login
+export async function loginUser(email: string, password: string) {
+  // Get user by email
+  const users = await db.list($.Person, {
+    where: { email: email.toLowerCase() },
+  })
+
+  if (users.length === 0) {
+    throw new Error('Invalid credentials')
+  }
+
+  const user = users[0]
+
+  // Get credentials
+  const credentials = await db.list($.Credentials, {
+    where: { userId: user.$id },
+  })
+
+  if (credentials.length === 0) {
+    throw new Error('Invalid credentials')
+  }
+
+  // Verify password
+  const isValid = await auth.verifyPassword(password, credentials[0].passwordHash)
+
+  if (!isValid) {
+    throw new Error('Invalid credentials')
+  }
+
+  // Generate JWT token
+  const token = await auth.generateToken({
+    userId: user.$id,
+    email: user.email,
+    role: user.role || 'user',
+    expiresIn: '15m',
+  })
+
+  // Generate refresh token
+  const refreshToken = await auth.generateRefreshToken(user.$id)
+
+  return {
+    token,
+    refreshToken,
+    userId: user.$id,
+    expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+  }
+}
+
+// 3. Verify Token
+export async function verifyUserToken(token: string) {
+  try {
+    const payload = await auth.verifyToken(token)
+    return {
+      valid: true,
+      userId: payload.userId,
+      email: payload.email,
+      role: payload.role,
+    }
+  } catch (error) {
+    return {
+      valid: false,
+      error: error.message,
+    }
+  }
+}
+
+// 4. Protected Endpoint
+export async function protectedEndpoint(request: Request) {
+  // Extract token from Authorization header
+  const authHeader = request.headers.get('Authorization')
+  const token = authHeader?.replace('Bearer ', '')
+
+  if (!token) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 })
+  }
+
+  try {
+    // Verify token
+    const payload = await auth.verifyToken(token)
+
+    // Process authenticated request
+    return new Response(
+      JSON.stringify({
+        message: 'Access granted',
+        userId: payload.userId,
+        role: payload.role,
+      }),
+      { status: 200 }
+    )
+  } catch (error) {
+    return new Response(JSON.stringify({ error: 'Invalid token' }), { status: 401 })
+  }
+}
+
+// 5. Refresh Token
+export async function refreshAccessToken(refreshToken: string) {
+  try {
+    // Verify refresh token
+    const payload = await auth.verifyRefreshToken(refreshToken)
+
+    // Generate new access token
+    const newToken = await auth.generateToken({
+      userId: payload.userId,
+      email: payload.email,
+      role: payload.role,
+      expiresIn: '15m',
+    })
+
+    return {
+      token: newToken,
+      expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+    }
+  } catch (error) {
+    throw new Error('Invalid refresh token')
+  }
+}
+
+// 6. Logout
+export async function logoutUser(token: string) {
+  // Revoke token
+  await auth.revokeToken(token)
+
+  return {
+    message: 'Logged out successfully',
+  }
+}
+```
+
+## Usage
+
+### Register New User
+
+```typescript
+const result = await registerUser('user@example.com', 'SecurePassword123!', 'John Smith')
+
+console.log(result)
+// { userId: "user_123", message: "User registered successfully" }
+```
+
+### Login
+
+```typescript
+const session = await loginUser('user@example.com', 'SecurePassword123!')
+
+console.log(session)
+// {
+//   token: "eyJhbGciOiJIUzI1NiIs...",
+//   refreshToken: "rt_abc123...",
+//   userId: "user_123",
+//   expiresAt: "2025-10-10T12:15:00Z"
+// }
+```
+
+### Make Authenticated Request
+
+```typescript
+// Client-side
+const response = await fetch('/api/protected', {
+  headers: {
+    Authorization: `Bearer ${session.token}`,
+  },
+})
+
+const data = await response.json()
+console.log(data)
+// { message: "Access granted", userId: "user_123", role: "user" }
+```
+
+### Refresh Token When Expired
+
+```typescript
+try {
+  const payload = await auth.verifyToken(token)
+} catch (error) {
+  if (error.code === 'TOKEN_EXPIRED') {
+    // Refresh token
+    const newSession = await refreshAccessToken(refreshToken)
+    // Use newSession.token for subsequent requests
+  }
+}
+```
+
+### Logout
+
+```typescript
+await logoutUser(token)
+console.log('Logged out')
+```
+
+## Client-Side Implementation
+
+### React Example
+
+```typescript
+import { useState } from 'react'
+
+function LoginForm() {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [token, setToken] = useState(null)
+
+  async function handleLogin(e) {
+    e.preventDefault()
+
+    try {
+      const response = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      })
+
+      const session = await response.json()
+
+      if (session.token) {
+        setToken(session.token)
+        localStorage.setItem('token', session.token)
+        localStorage.setItem('refreshToken', session.refreshToken)
+      }
+    } catch (error) {
+      console.error('Login failed:', error)
+    }
+  }
+
+  return (
+    <form onSubmit={handleLogin}>
+      <input
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="Email"
+      />
+      <input
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        placeholder="Password"
+      />
+      <button type="submit">Login</button>
+    </form>
+  )
+}
+```
+
+## Next Steps
+
+- [Advanced Patterns](./advanced-patterns) - Complex authentication scenarios
+- [Integration](./integration) - Integration with other services
+- [Real-World Use Case](./real-world-use-case) - Production implementation
+
+## License
+
+CC-BY-4.0 (Open Source)

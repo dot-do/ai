@@ -1,0 +1,125 @@
+---
+$id: https://queue.do/examples/basic-usage
+$type: HowTo
+title: Basic Queue Usage
+description: Learn the fundamentals of enqueuing and processing tasks with queue.do.
+keywords: [queue, examples, basic usage, enqueue, worker]
+---
+
+# Basic Queue Usage
+
+Learn the fundamentals of task queue operations.
+
+## Simple Enqueue and Process
+
+```typescript
+import $, { queue } from 'sdk.do'
+
+// Enqueue a task
+await queue.enqueue($.Task, {
+  action: 'send_welcome_email',
+  userId: 'user-123',
+})
+
+// Process tasks
+await queue.worker($.Task, async (task) => {
+  console.log('Processing:', task.data)
+  return { completed: true }
+})
+```
+
+## Email Queue
+
+```typescript
+import { queue } from 'sdk.do'
+
+// Enqueue email
+await queue.enqueue($.EmailSendTask, {
+  to: 'user@example.com',
+  subject: 'Welcome!',
+  body: 'Welcome to our platform',
+})
+
+// Process emails
+await queue.worker($.EmailSendTask, async (task) => {
+  const { to, subject, body } = task.data
+
+  await sendEmail({ to, subject, body })
+
+  return { sent: true, timestamp: new Date() }
+})
+```
+
+## Priority Queue
+
+```typescript
+// Enqueue with different priorities
+await queue.enqueue(
+  $.Task,
+  { action: 'critical' },
+  {
+    priority: 'critical',
+  }
+)
+
+await queue.enqueue(
+  $.Task,
+  { action: 'normal' },
+  {
+    priority: 'normal',
+  }
+)
+
+await queue.enqueue(
+  $.Task,
+  { action: 'low' },
+  {
+    priority: 'low',
+  }
+)
+
+// Worker processes by priority (critical first)
+await queue.worker($.Task, async (task) => {
+  console.log(`Processing ${task.priority} priority task`)
+  return await processTask(task)
+})
+```
+
+## Batch Enqueue
+
+```typescript
+// Enqueue multiple tasks efficiently
+const tasks = users.map((user) => ({
+  type: $.EmailTask,
+  data: {
+    to: user.email,
+    subject: 'Newsletter',
+    template: 'monthly_newsletter',
+  },
+}))
+
+await queue.enqueueBatch(tasks)
+```
+
+## Retry Logic
+
+```typescript
+// Automatic retries on failure
+await queue.enqueue(
+  $.Task,
+  { action: 'flaky' },
+  {
+    retries: 3,
+    retryDelay: 1000,
+    retryBackoff: 'exponential',
+  }
+)
+
+await queue.worker($.Task, async (task) => {
+  // Throw error to trigger retry
+  if (Math.random() < 0.5) {
+    throw new Error('Temporary failure')
+  }
+  return { success: true }
+})
+```

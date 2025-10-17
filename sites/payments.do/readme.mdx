@@ -1,0 +1,406 @@
+---
+$id: https://payments.do
+$type: WebSite
+title: payments.do - Payment Processing for Business-as-Code
+description: Build autonomous payment processing systems with semantic patterns. Handle payments, refunds, subscriptions, and multiple payment methods using Schema.org PaymentMethod types.
+keywords: [payments, payment processing, payment gateway, refunds, subscriptions, Business-as-Code, Schema.org]
+author:
+  $type: Organization
+  name: .do Platform
+license: MIT
+---
+
+# payments.do
+
+**Semantic Payment Processing for Business-as-Code**
+
+payments.do provides a comprehensive payment processing framework for the `.do` platform, enabling you to build autonomous payment systems using semantic patterns with Schema.org PaymentMethod and PaymentCard types.
+
+## What is Payment Processing?
+
+Payment processing encompasses the complete payment lifecycle:
+
+- **Payment Acceptance**: Process credit cards, debit cards, digital wallets
+- **Payment Authorization**: Validate and authorize payment methods
+- **Payment Capture**: Capture authorized payments
+- **Refund Processing**: Issue full or partial refunds
+- **Subscription Billing**: Recurring payment processing
+- **Payment Security**: PCI compliance and tokenization
+- **Payment Reconciliation**: Match payments to orders/invoices
+
+## Quick Start
+
+```bash
+pnpm add sdk.do
+```
+
+```typescript
+import $, { db } from 'sdk.do'
+
+// Process a payment
+const payment = await db.create($.PaymentRecord, {
+  $type: 'PaymentRecord',
+  paymentId: 'PAY-2025-001',
+  paymentDate: new Date().toISOString(),
+  paymentMethod: {
+    $type: 'PaymentCard',
+    name: 'Visa ending in 1234',
+    cardNumber: 'tok_visa_1234', // Tokenized
+  },
+  amount: {
+    $type: 'MonetaryAmount',
+    value: 299.99,
+    currency: 'USD',
+  },
+  paymentStatus: 'PaymentComplete',
+  paymentFor: {
+    $type: 'Order',
+    $id: 'order-123',
+  },
+  paymentProvider: 'stripe',
+})
+```
+
+## Key Features
+
+### Multiple Payment Methods
+
+Support various payment methods:
+
+```typescript
+// Credit/Debit Cards
+const cardPayment = {
+  $type: 'PaymentCard',
+  name: 'Visa',
+  cardNumber: 'tok_visa', // Tokenized
+  expiryMonth: 12,
+  expiryYear: 2025,
+  cvv: '***', // Never store plain CVV
+}
+
+// Bank Transfer
+const bankTransfer = {
+  $type: 'BankAccount',
+  name: 'Checking Account',
+  accountNumber: 'tok_bank', // Tokenized
+  routingNumber: '123456789',
+}
+
+// Digital Wallets
+const digitalWallet = {
+  $type: 'DigitalWallet',
+  name: 'Apple Pay',
+  walletToken: 'tok_applepay',
+}
+
+// PayPal
+const paypal = {
+  $type: 'PaymentService',
+  name: 'PayPal',
+  paypalEmail: 'customer@example.com',
+}
+```
+
+### Payment Authorization & Capture
+
+Two-step payment processing:
+
+```typescript
+// Step 1: Authorize payment
+async function authorizePayment(order: Order, paymentMethod: PaymentMethod) {
+  const authorization = await send({
+    $type: 'PaymentAuthorizationRequest',
+    amount: calculateOrderTotal(order).total,
+    currency: 'USD',
+    paymentMethod,
+    orderId: order.$id,
+  })
+
+  await db.create($.PaymentAuthorization, {
+    $type: 'PaymentAuthorization',
+    authorizationId: authorization.id,
+    amount: authorization.amount,
+    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    status: 'Authorized',
+  })
+
+  return authorization
+}
+
+// Step 2: Capture payment (when order ships)
+async function capturePayment(authorizationId: string) {
+  const authorization = await db.get($.PaymentAuthorization, authorizationId)
+
+  const capture = await send({
+    $type: 'PaymentCaptureRequest',
+    authorizationId: authorization.authorizationId,
+    amount: authorization.amount,
+  })
+
+  await db.update(authorization, {
+    status: 'Captured',
+    capturedAt: new Date().toISOString(),
+    transactionId: capture.transactionId,
+  })
+
+  return capture
+}
+```
+
+### Refund Processing
+
+Issue full or partial refunds:
+
+```typescript
+async function processRefund(paymentId: string, amount: number, reason: string) {
+  const payment = await db.get($.PaymentRecord, paymentId)
+
+  // Validate refund amount
+  if (amount > payment.amount.value) {
+    throw new Error('Refund amount exceeds original payment')
+  }
+
+  // Process refund via payment provider
+  const refund = await send({
+    $type: 'RefundRequest',
+    paymentId: payment.paymentId,
+    transactionId: payment.transactionId,
+    amount,
+    currency: payment.amount.currency,
+    reason,
+  })
+
+  // Record refund
+  const refundRecord = await db.create($.RefundRecord, {
+    $type: 'RefundRecord',
+    refundId: refund.id,
+    originalPayment: payment.$id,
+    amount,
+    currency: payment.amount.currency,
+    reason,
+    refundDate: new Date().toISOString(),
+    status: 'RefundComplete',
+  })
+
+  // Update payment
+  await db.update(payment, {
+    refundedAmount: (payment.refundedAmount || 0) + amount,
+    paymentStatus: amount >= payment.amount.value ? 'PaymentRefunded' : 'PaymentPartialRefund',
+  })
+
+  return refundRecord
+}
+```
+
+### Subscription Billing
+
+Recurring payment processing:
+
+```typescript
+interface Subscription {
+  $type: 'Subscription'
+  subscriptionId: string
+  customer: Person
+  plan: {
+    name: string
+    amount: number
+    interval: 'monthly' | 'yearly' | 'weekly'
+  }
+  paymentMethod: PaymentMethod
+  status: 'Active' | 'Paused' | 'Cancelled'
+  startDate: string
+  nextBillingDate: string
+}
+
+async function createSubscription(customer: Person, plan: any, paymentMethod: PaymentMethod): Promise<Subscription> {
+  const subscription = await db.create($.Subscription, {
+    $type: 'Subscription',
+    subscriptionId: `SUB-${Date.now()}`,
+    customer,
+    plan,
+    paymentMethod,
+    status: 'Active',
+    startDate: new Date().toISOString(),
+    nextBillingDate: calculateNextBillingDate(plan.interval),
+  })
+
+  // Schedule first payment
+  await scheduleSubscriptionPayment(subscription)
+
+  return subscription
+}
+
+// Process recurring payment
+import { every } from 'sdk.do'
+
+await every('0 0 * * *', async () => {
+  const dueSubscriptions = await db.list($.Subscription, {
+    where: {
+      status: 'Active',
+      nextBillingDate: { $lte: new Date().toISOString() },
+    },
+  })
+
+  for (const subscription of dueSubscriptions) {
+    try {
+      // Process payment
+      const payment = await processPayment({
+        amount: subscription.plan.amount,
+        paymentMethod: subscription.paymentMethod,
+        description: `Subscription: ${subscription.plan.name}`,
+      })
+
+      // Update next billing date
+      await db.update(subscription, {
+        nextBillingDate: calculateNextBillingDate(subscription.plan.interval),
+        lastPaymentDate: new Date().toISOString(),
+      })
+
+      // Send receipt
+      await sendPaymentReceipt(subscription.customer, payment)
+    } catch (error) {
+      // Handle failed payment
+      await handleFailedSubscriptionPayment(subscription, error)
+    }
+  }
+})
+```
+
+### Payment Security
+
+Secure payment handling with tokenization:
+
+```typescript
+// Tokenize payment method
+async function tokenizePaymentMethod(cardData: { number: string; exp_month: number; exp_year: number; cvc: string }): Promise<string> {
+  // Never store raw card data - tokenize immediately
+  const token = await send({
+    $type: 'TokenizationRequest',
+    provider: 'stripe',
+    cardData,
+  })
+
+  return token.id // Returns 'tok_...'
+}
+
+// Use token for payment
+const token = await tokenizePaymentMethod(cardData)
+
+const payment = await processPayment({
+  amount: 99.99,
+  paymentMethod: {
+    $type: 'PaymentCard',
+    token,
+  },
+})
+```
+
+## Semantic Patterns
+
+```typescript
+import $ from 'sdk.do'
+
+// Payment types
+$.PaymentRecord
+$.PaymentCard
+$.PaymentMethod
+$.PaymentAuthorization
+$.RefundRecord
+$.Subscription
+
+// Payment events
+$.Payment.initiated
+$.Payment.authorized
+$.Payment.captured
+$.Payment.completed
+$.Payment.failed
+$.Payment.refunded
+
+// Payment relationships
+$.Payment.for.Order
+$.Payment.from.Customer
+$.Payment.uses.PaymentMethod
+$.Refund.for.Payment
+$.Subscription.has.PaymentMethod
+```
+
+## Payment Providers
+
+### Stripe Integration
+
+```typescript
+async function processStripePayment(params: { amount: number; currency: string; paymentMethod: string; customerId?: string }) {
+  const payment = await send({
+    $type: 'StripePaymentRequest',
+    provider: 'stripe',
+    ...params,
+    metadata: {
+      orderId: params.orderId,
+      customerId: params.customerId,
+    },
+  })
+
+  return payment
+}
+```
+
+### PayPal Integration
+
+```typescript
+async function processPayPalPayment(params: { amount: number; currency: string; returnUrl: string; cancelUrl: string }) {
+  const payment = await send({
+    $type: 'PayPalPaymentRequest',
+    provider: 'paypal',
+    ...params,
+  })
+
+  return payment
+}
+```
+
+## Integration
+
+```typescript
+// Orders → Payments
+await on($.Order.created, async (order) => {
+  const payment = await processPayment({
+    amount: calculateOrderTotal(order).total,
+    paymentMethod: order.paymentMethod,
+    orderId: order.$id,
+  })
+
+  await db.update(order, {
+    paymentStatus: 'PaymentComplete',
+    paymentId: payment.$id,
+  })
+})
+
+// Payments → Invoices
+await on($.Payment.completed, async (payment) => {
+  await recordPayment(payment.invoice, payment.amount, payment.method)
+})
+```
+
+## Documentation
+
+- [Getting Started](./docs/getting-started)
+- [Architecture](./docs/architecture)
+- [Best Practices](./docs/best-practices)
+- [Troubleshooting](./docs/troubleshooting)
+- [API Reference](./api/)
+- [Examples](./examples/)
+
+## Related Projects
+
+- [orders.do](https://orders.do) - Order management
+- [invoices.do](https://invoices.do) - Invoice management
+- [customers.do](https://customers.do) - Customer management
+- [sdk.do](https://sdk.do) - Core SDK
+
+## License
+
+MIT (Open Source)
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

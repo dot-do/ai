@@ -1,0 +1,111 @@
+---
+$id: https://integrations.do/discord
+$type: Integration
+name: Discord
+service: discord
+description: An instant messaging and VoIP social platform.
+category: social-media
+sdkBased: false
+baseUrl: https://api.discord.com
+
+auth:
+  type: oauth2
+  authorizationUrl: https://discord.com/api/oauth2/authorize
+  tokenUrl: https://discord.com/api/oauth2/token
+  scopes:
+    - identify
+    - email
+    - connections
+    - guilds
+    - guilds.join
+    - guilds.members.read
+    - messages.read
+    - openid
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Discord actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: true
+  verificationMethod: none
+  events:
+    - name: generic_trigger
+      type: trigger
+      description: Generic webhook trigger
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://composio.dev
+  apiDocs: https://composio.dev
+---
+
+# Discord Integration
+
+An instant messaging and VoIP social platform.
+
+## Quick Start
+
+```typescript
+import { DiscordClient } from '@dotdo/sdk.do/integrations/discord'
+
+const discord = new DiscordClient({
+  apiKey: process.env.DISCORD_API_KEY,
+})
+
+const result = await discord.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Discord provides 6 actions through the Composio API.
+
+## Webhooks
+
+Discord supports 1 webhook triggers for real-time event notifications.
+
+## License
+
+MIT

@@ -1,0 +1,1917 @@
+---
+title: AI Agents Framework
+description: Build autonomous AI agents with the .do platform
+$type: Documentation
+$id: /ai/docs/agents-framework
+---
+
+# AI Agents Framework
+
+Build autonomous AI agents that can reason, plan, and execute complex tasks using the `.do` platform's semantic primitives.
+
+## Table of Contents
+
+- [Quick Start](#quick-start)
+- [Core Concepts](#core-concepts)
+- [Agent Architecture](#agent-architecture)
+- [Building Agents](#building-agents)
+- [Agent Patterns](#agent-patterns)
+- [Tool Integration](#tool-integration)
+- [Memory & Context](#memory--context)
+- [Multi-Agent Systems](#multi-agent-systems)
+- [Production Patterns](#production-patterns)
+- [Real-World Examples](#real-world-examples)
+
+## Quick Start
+
+```bash
+pnpm install sdk.do
+```
+
+```typescript
+import { $, ai, db, on, send } from 'sdk.do'
+
+// Define agent
+const customerSupportAgent = {
+  name: 'Customer Support Agent',
+  model: 'gpt-5',
+  instructions: 'You are a helpful customer support agent.',
+  tools: ['database', 'email', 'search'],
+}
+
+// Create agent handler
+on($.Support.request, async (request) => {
+  // Get customer context
+  const customer = await db.get($.Person, request.customerId)
+  const orders = await db.list($.Order, {
+    where: { customerId: request.customerId },
+    limit: 5,
+  })
+
+  // Generate response with AI
+  const response = await ai.generate({
+    model: customerSupportAgent.model,
+    prompt: `
+      Customer: ${customer.name} (${customer.email})
+      Recent Orders: ${JSON.stringify(orders)}
+      Question: ${request.message}
+
+      Provide a helpful response.
+    `,
+    schema: {
+      type: 'object',
+      properties: {
+        response: { type: 'string' },
+        actions: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              type: { type: 'string' },
+              params: { type: 'object' },
+            },
+          },
+        },
+      },
+    },
+  })
+
+  // Execute actions
+  for (const action of response.actions) {
+    await executeAction(action)
+  }
+
+  // Send response
+  await send($.Support.response, {
+    requestId: request.$id,
+    message: response.response,
+  })
+})
+```
+
+## Core Concepts
+
+### What is an AI Agent?
+
+An AI agent is an autonomous system that:
+
+1. **Perceives** its environment through sensors/inputs
+2. **Reasons** about the current state and goals
+3. **Plans** sequences of actions
+4. **Acts** by executing those actions
+5. **Learns** from outcomes to improve
+
+### Agent Components
+
+```typescript
+interface Agent {
+  // Identity
+  name: string
+  description?: string
+  version?: string
+
+  // AI Model
+  model: string
+  temperature?: number
+  maxTokens?: number
+
+  // Behavior
+  instructions: string
+  systemPrompt?: string
+
+  // Capabilities
+  tools: Tool[]
+  memory?: Memory
+
+  // Constraints
+  rules?: Rule[]
+  guardrails?: Guardrail[]
+}
+```
+
+### Agent Lifecycle
+
+```
+┌─────────────┐
+│   INPUT     │
+│  (Event)    │
+└──────┬──────┘
+       │
+       ▼
+┌─────────────┐
+│  PERCEIVE   │  ← Gather context, retrieve memory
+└──────┬──────┘
+       │
+       ▼
+┌─────────────┐
+│   REASON    │  ← Analyze situation, generate plan
+└──────┬──────┘
+       │
+       ▼
+┌─────────────┐
+│    PLAN     │  ← Break down into actions
+└──────┬──────┘
+       │
+       ▼
+┌─────────────┐
+│    ACT      │  ← Execute actions with tools
+└──────┬──────┘
+       │
+       ▼
+┌─────────────┐
+│   LEARN     │  ← Store outcomes in memory
+└──────┬──────┘
+       │
+       ▼
+┌─────────────┐
+│   OUTPUT    │
+│  (Result)   │
+└─────────────┘
+```
+
+## Agent Architecture
+
+### Single-Agent Architecture
+
+```typescript
+// Define agent
+interface CustomerSupportAgent {
+  perceive(input: Request): Context
+  reason(context: Context): Plan
+  act(plan: Plan): Result
+  learn(result: Result): void
+}
+
+// Implement agent
+class CustomerSupport implements CustomerSupportAgent {
+  async perceive(input: Request) {
+    // Gather all relevant context
+    const customer = await db.get($.Person, input.customerId)
+    const orders = await db.list($.Order, {
+      where: { customerId: input.customerId },
+    })
+    const history = await db.list($.SupportTicket, {
+      where: { customerId: input.customerId },
+      orderBy: { createdAt: 'desc' },
+      limit: 10,
+    })
+
+    return { customer, orders, history, input }
+  }
+
+  async reason(context: Context) {
+    // Use AI to analyze and plan
+    const plan = await ai.generate({
+      model: 'gpt-5',
+      prompt: `
+        Analyze this support request and create a plan:
+
+        Customer: ${context.customer.name}
+        Issue: ${context.input.message}
+        Order History: ${JSON.stringify(context.orders)}
+        Previous Tickets: ${JSON.stringify(context.history)}
+
+        Create a step-by-step plan to resolve this issue.
+      `,
+      schema: {
+        type: 'object',
+        properties: {
+          analysis: { type: 'string' },
+          steps: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                action: { type: 'string' },
+                reason: { type: 'string' },
+                tool: { type: 'string' },
+              },
+            },
+          },
+        },
+      },
+    })
+
+    return plan
+  }
+
+  async act(plan: Plan) {
+    const results = []
+
+    for (const step of plan.steps) {
+      const result = await this.executeTool(step.tool, step.action)
+      results.push(result)
+    }
+
+    return { success: true, results }
+  }
+
+  async learn(result: Result) {
+    // Store interaction for future reference
+    await db.create($.SupportInteraction, {
+      $id: crypto.randomUUID(),
+      $type: $.SupportInteraction,
+      timestamp: new Date().toISOString(),
+      success: result.success,
+      actions: result.results,
+    })
+  }
+
+  private async executeTool(tool: string, action: string) {
+    // Tool execution logic
+  }
+}
+```
+
+### Multi-Agent Architecture
+
+```typescript
+// Orchestrator coordinates multiple specialized agents
+class SupportOrchestrator {
+  private agents = {
+    triage: new TriageAgent(),
+    billing: new BillingAgent(),
+    technical: new TechnicalAgent(),
+    escalation: new EscalationAgent(),
+  }
+
+  async handle(request: Request) {
+    // 1. Triage determines which agent(s) to use
+    const triage = await this.agents.triage.classify(request)
+
+    // 2. Route to appropriate agent(s)
+    const responses = await Promise.all(triage.agents.map((agent) => this.agents[agent].handle(request)))
+
+    // 3. Aggregate results
+    const finalResponse = await this.aggregate(responses)
+
+    // 4. Escalate if needed
+    if (finalResponse.needsHuman) {
+      await this.agents.escalation.escalate(request, finalResponse)
+    }
+
+    return finalResponse
+  }
+}
+```
+
+## Building Agents
+
+### Step 1: Define Agent Purpose
+
+```typescript
+const agent = {
+  name: 'Order Fulfillment Agent',
+  description: 'Automates order processing and fulfillment',
+
+  // What can it do?
+  capabilities: ['Validate orders', 'Process payments', 'Manage inventory', 'Create shipments', 'Send notifications'],
+
+  // What should it know?
+  knowledge: ['Product catalog', 'Inventory levels', 'Shipping options', 'Customer preferences'],
+
+  // What are the constraints?
+  rules: [
+    'Never ship without payment confirmation',
+    'Always validate inventory before confirming',
+    'Escalate orders over $10,000',
+    'Send confirmation within 5 minutes',
+  ],
+}
+```
+
+### Step 2: Design Tool Set
+
+```typescript
+const tools = {
+  // Read operations
+  async getOrder(orderId: string) {
+    return await db.get($.Order, orderId)
+  },
+
+  async checkInventory(productId: string, quantity: number) {
+    const product = await db.get($.Product, productId)
+    return product.stock >= quantity
+  },
+
+  // Write operations
+  async reserveInventory(productId: string, quantity: number) {
+    const product = await db.get($.Product, productId)
+    await db.update($.Product, productId, {
+      stock: product.stock - quantity,
+      reserved: product.reserved + quantity,
+    })
+  },
+
+  async processPayment(orderId: string, amount: number) {
+    const result = await api.stripe.paymentIntents.create({
+      amount: Math.round(amount * 100),
+      currency: 'usd',
+      metadata: { orderId },
+    })
+    return result
+  },
+
+  async createShipment(orderId: string, address: Address) {
+    await send($.Shipment.create, { orderId, address })
+  },
+
+  // Communication
+  async notifyCustomer(customerId: string, message: string) {
+    await send($.Email.send, { to: customerId, message })
+  },
+}
+```
+
+### Step 3: Implement Agent Loop
+
+```typescript
+on($.Order.created, async (order) => {
+  // PERCEIVE: Gather context
+  const context = {
+    order,
+    customer: await db.get($.Person, order.customerId),
+    products: await Promise.all(order.items.map((item) => db.get($.Product, item.productId))),
+  }
+
+  // REASON: Generate plan
+  const plan = await ai.generate({
+    model: 'gpt-5',
+    prompt: `
+      You are an order fulfillment agent. Create a plan to process this order:
+
+      Order: ${JSON.stringify(order)}
+      Customer: ${context.customer.name}
+      Products: ${JSON.stringify(context.products)}
+
+      Steps should include:
+      1. Validation (inventory, pricing, customer)
+      2. Payment processing
+      3. Inventory reservation
+      4. Shipment creation
+      5. Customer notification
+
+      If any step fails, create appropriate rollback actions.
+    `,
+    schema: {
+      type: 'object',
+      properties: {
+        steps: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              action: { type: 'string' },
+              tool: { type: 'string' },
+              params: { type: 'object' },
+              rollback: { type: 'object' },
+            },
+          },
+        },
+      },
+    },
+  })
+
+  // ACT: Execute plan
+  try {
+    for (const step of plan.steps) {
+      const result = await tools[step.tool](...Object.values(step.params))
+
+      if (!result.success) {
+        throw new Error(`Step failed: ${step.action}`)
+      }
+    }
+
+    // Success
+    await send($.Order.fulfilled, { orderId: order.$id })
+  } catch (error) {
+    // Rollback
+    for (const step of plan.steps.reverse()) {
+      if (step.rollback) {
+        await tools[step.rollback.tool](...Object.values(step.rollback.params))
+      }
+    }
+
+    // Escalate
+    await send($.Order.failed, {
+      orderId: order.$id,
+      error: error.message,
+    })
+  }
+
+  // LEARN: Store outcome
+  await db.create($.AgentExecution, {
+    $id: crypto.randomUUID(),
+    $type: $.AgentExecution,
+    agent: 'order-fulfillment',
+    input: order,
+    plan,
+    success: true,
+    timestamp: new Date().toISOString(),
+  })
+})
+```
+
+## Agent Patterns
+
+### 1. ReAct Pattern (Reasoning + Acting)
+
+```typescript
+async function reactLoop(input: string, maxSteps: number = 10) {
+  let step = 0
+  let thought = ''
+  let observation = ''
+
+  while (step < maxSteps) {
+    // Reasoning step
+    const reasoning = await ai.generate({
+      model: 'gpt-5',
+      prompt: `
+        Input: ${input}
+        Previous thought: ${thought}
+        Previous observation: ${observation}
+
+        Think about what to do next. Then select an action.
+      `,
+      schema: {
+        type: 'object',
+        properties: {
+          thought: { type: 'string' },
+          action: { type: 'string' },
+          actionInput: { type: 'object' },
+        },
+      },
+    })
+
+    thought = reasoning.thought
+
+    // Action step
+    if (reasoning.action === 'FINISH') {
+      return reasoning.actionInput.answer
+    }
+
+    // Execute action
+    observation = await executeAction(reasoning.action, reasoning.actionInput)
+
+    step++
+  }
+
+  throw new Error('Max steps reached')
+}
+```
+
+### 2. Chain-of-Thought Pattern
+
+```typescript
+async function chainOfThought(problem: string) {
+  const steps = []
+
+  // Break down problem
+  const breakdown = await ai.generate({
+    model: 'gpt-5',
+    prompt: `
+      Break down this problem into logical steps:
+
+      ${problem}
+
+      Think step by step.
+    `,
+    schema: {
+      type: 'object',
+      properties: {
+        steps: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              description: { type: 'string' },
+              reasoning: { type: 'string' },
+            },
+          },
+        },
+      },
+    },
+  })
+
+  // Execute each step
+  for (const step of breakdown.steps) {
+    const result = await ai.generate({
+      model: 'gpt-5',
+      prompt: `
+        Previous steps: ${JSON.stringify(steps)}
+        Current step: ${step.description}
+        Reasoning: ${step.reasoning}
+
+        Complete this step.
+      `,
+      schema: { type: 'string' },
+    })
+
+    steps.push({ ...step, result })
+  }
+
+  // Synthesize final answer
+  const answer = await ai.generate({
+    model: 'gpt-5',
+    prompt: `
+      Problem: ${problem}
+      Steps completed: ${JSON.stringify(steps)}
+
+      Synthesize the final answer.
+    `,
+    schema: { type: 'string' },
+  })
+
+  return { steps, answer }
+}
+```
+
+### 3. Tree of Thoughts Pattern
+
+```typescript
+async function treeOfThoughts(problem: string, depth: number = 3) {
+  // Generate multiple reasoning paths
+  const paths = await Promise.all(
+    Array(3)
+      .fill(null)
+      .map(() => generateReasoningPath(problem, depth))
+  )
+
+  // Evaluate each path
+  const evaluations = await Promise.all(paths.map((path) => evaluatePath(path)))
+
+  // Select best path
+  const bestIndex = evaluations.indexOf(Math.max(...evaluations))
+  return paths[bestIndex]
+}
+
+async function generateReasoningPath(problem: string, depth: number) {
+  const path = []
+
+  for (let i = 0; i < depth; i++) {
+    const thought = await ai.generate({
+      model: 'gpt-5',
+      prompt: `
+        Problem: ${problem}
+        Current path: ${JSON.stringify(path)}
+
+        Generate the next thought in this reasoning path.
+      `,
+      schema: { type: 'string' },
+    })
+
+    path.push(thought)
+  }
+
+  return path
+}
+
+async function evaluatePath(path: string[]) {
+  const evaluation = await ai.generate({
+    model: 'gpt-5',
+    prompt: `
+      Rate this reasoning path from 0-10:
+      ${JSON.stringify(path)}
+    `,
+    schema: { type: 'number' },
+  })
+
+  return evaluation
+}
+```
+
+### 4. Reflexion Pattern (Self-Reflection)
+
+```typescript
+async function reflexionLoop(task: string, maxRetries: number = 3) {
+  let attempt = 0
+  let lastResult = null
+  let reflection = ''
+
+  while (attempt < maxRetries) {
+    // Attempt task
+    const result = await ai.generate({
+      model: 'gpt-5',
+      prompt: `
+        Task: ${task}
+        Previous attempt: ${lastResult}
+        Reflection: ${reflection}
+
+        Complete the task.
+      `,
+      schema: { type: 'object' },
+    })
+
+    // Evaluate result
+    const evaluation = await ai.generate({
+      model: 'gpt-5',
+      prompt: `
+        Task: ${task}
+        Result: ${JSON.stringify(result)}
+
+        Is this result correct? If not, what needs improvement?
+      `,
+      schema: {
+        type: 'object',
+        properties: {
+          correct: { type: 'boolean' },
+          feedback: { type: 'string' },
+        },
+      },
+    })
+
+    if (evaluation.correct) {
+      return result
+    }
+
+    // Reflect on failure
+    reflection = await ai.generate({
+      model: 'gpt-5',
+      prompt: `
+        Task: ${task}
+        Result: ${JSON.stringify(result)}
+        Feedback: ${evaluation.feedback}
+
+        Reflect on what went wrong and how to improve.
+      `,
+      schema: { type: 'string' },
+    })
+
+    lastResult = result
+    attempt++
+  }
+
+  throw new Error('Max retries reached')
+}
+```
+
+## Tool Integration
+
+### Defining Tools
+
+```typescript
+const tools = {
+  database: {
+    async search(query: string) {
+      return await db.search($.Product, query)
+    },
+
+    async get(type: string, id: string) {
+      return await db.get(type as any, id)
+    },
+
+    async create(type: string, data: any) {
+      return await db.create(type as any, data)
+    },
+  },
+
+  email: {
+    async send(to: string, subject: string, body: string) {
+      await send($.Email.send, { to, subject, body })
+    },
+  },
+
+  api: {
+    async stripe(method: string, ...args: any[]) {
+      return await api.stripe[method](...args)
+    },
+
+    async github(method: string, ...args: any[]) {
+      return await api.github[method](...args)
+    },
+  },
+
+  search: {
+    async web(query: string) {
+      // Web search implementation
+      return []
+    },
+
+    async knowledge(query: string) {
+      // Knowledge base search
+      return []
+    },
+  },
+}
+```
+
+### Tool Selection
+
+```typescript
+async function selectTool(task: string, availableTools: string[]) {
+  const selection = await ai.generate({
+    model: 'gpt-5',
+    prompt: `
+      Task: ${task}
+      Available tools: ${availableTools.join(', ')}
+
+      Which tool should be used? Explain your reasoning.
+    `,
+    schema: {
+      type: 'object',
+      properties: {
+        tool: { type: 'string' },
+        reasoning: { type: 'string' },
+        params: { type: 'object' },
+      },
+    },
+  })
+
+  return selection
+}
+```
+
+### Tool Execution
+
+```typescript
+async function executeTool(toolName: string, params: any) {
+  try {
+    const tool = tools[toolName]
+    if (!tool) {
+      throw new Error(`Tool not found: ${toolName}`)
+    }
+
+    const result = await tool(...Object.values(params))
+
+    return {
+      success: true,
+      result,
+    }
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message,
+    }
+  }
+}
+```
+
+## Memory & Context
+
+### Short-Term Memory
+
+```typescript
+class ShortTermMemory {
+  private memory: Array<{ role: string; content: string }> = []
+
+  add(role: string, content: string) {
+    this.memory.push({ role, content })
+
+    // Keep only last 10 messages
+    if (this.memory.length > 10) {
+      this.memory = this.memory.slice(-10)
+    }
+  }
+
+  get() {
+    return this.memory
+  }
+
+  clear() {
+    this.memory = []
+  }
+}
+```
+
+### Long-Term Memory
+
+```typescript
+class LongTermMemory {
+  async store(key: string, value: any, metadata?: any) {
+    // Store in database
+    await db.create($.Memory, {
+      $id: key,
+      $type: $.Memory,
+      content: value,
+      metadata,
+      timestamp: new Date().toISOString(),
+    })
+
+    // Create embedding for semantic search
+    const embedding = await ai.embed(JSON.stringify(value))
+    await db.create($.Embedding, {
+      $id: `embedding-${key}`,
+      $type: $.Embedding,
+      key,
+      vector: embedding,
+    })
+  }
+
+  async recall(query: string, limit: number = 5) {
+    // Semantic search
+    const embedding = await ai.embed(query)
+    const similar = await db.search($.Embedding, {
+      vector: embedding,
+      limit,
+    })
+
+    // Retrieve memories
+    return await Promise.all(similar.map((s) => db.get($.Memory, s.key)))
+  }
+
+  async forget(key: string) {
+    await db.delete($.Memory, key)
+    await db.delete($.Embedding, `embedding-${key}`)
+  }
+}
+```
+
+### Episodic Memory
+
+```typescript
+class EpisodicMemory {
+  async recordEpisode(episode: { input: any; actions: any[]; output: any; success: boolean }) {
+    await db.create($.Episode, {
+      $id: crypto.randomUUID(),
+      $type: $.Episode,
+      ...episode,
+      timestamp: new Date().toISOString(),
+    })
+  }
+
+  async findSimilarEpisodes(situation: any, limit: number = 5) {
+    const embedding = await ai.embed(JSON.stringify(situation))
+
+    // Find similar past episodes
+    const similar = await db.search($.Episode, {
+      vector: embedding,
+      limit,
+    })
+
+    return similar
+  }
+
+  async learnFromEpisodes(episodes: any[]) {
+    // Extract patterns from successful episodes
+    const patterns = await ai.generate({
+      model: 'gpt-5',
+      prompt: `
+        Analyze these episodes and extract patterns:
+        ${JSON.stringify(episodes)}
+
+        What patterns lead to success?
+      `,
+      schema: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            pattern: { type: 'string' },
+            confidence: { type: 'number' },
+          },
+        },
+      },
+    })
+
+    return patterns
+  }
+}
+```
+
+## Multi-Agent Systems
+
+### Agent Communication
+
+```typescript
+// Agent A
+on($.Agent.message, async (message) => {
+  if (message.to === 'agent-a') {
+    const response = await processMessage(message)
+
+    // Send response back
+    await send($.Agent.message, {
+      from: 'agent-a',
+      to: message.from,
+      content: response,
+      threadId: message.threadId,
+    })
+  }
+})
+
+// Agent B
+async function sendToAgentA(content: string) {
+  const threadId = crypto.randomUUID()
+
+  await send($.Agent.message, {
+    from: 'agent-b',
+    to: 'agent-a',
+    content,
+    threadId,
+  })
+
+  // Wait for response
+  return new Promise((resolve) => {
+    on($.Agent.message, async (message) => {
+      if (message.threadId === threadId && message.to === 'agent-b') {
+        resolve(message.content)
+      }
+    })
+  })
+}
+```
+
+### Hierarchical Agents
+
+```typescript
+class Manager {
+  private workers: Worker[] = []
+
+  async delegate(task: Task) {
+    // Break down task
+    const subtasks = await this.breakdown(task)
+
+    // Assign to workers
+    const assignments = await Promise.all(subtasks.map((subtask, i) => this.workers[i % this.workers.length].execute(subtask)))
+
+    // Aggregate results
+    return this.aggregate(assignments)
+  }
+
+  private async breakdown(task: Task) {
+    const breakdown = await ai.generate({
+      model: 'gpt-5',
+      prompt: `
+        Break down this task into subtasks:
+        ${JSON.stringify(task)}
+      `,
+      schema: {
+        type: 'array',
+        items: { type: 'object' },
+      },
+    })
+
+    return breakdown
+  }
+
+  private async aggregate(results: any[]) {
+    return await ai.generate({
+      model: 'gpt-5',
+      prompt: `
+        Aggregate these results:
+        ${JSON.stringify(results)}
+      `,
+      schema: { type: 'object' },
+    })
+  }
+}
+```
+
+### Collaborative Agents
+
+```typescript
+class CollaborativeSystem {
+  private agents: Agent[] = []
+
+  async solve(problem: string) {
+    // Each agent proposes solutions
+    const proposals = await Promise.all(this.agents.map((agent) => agent.propose(problem)))
+
+    // Agents vote on proposals
+    const votes = await Promise.all(this.agents.map((agent) => agent.vote(proposals)))
+
+    // Select best solution
+    const winner = this.selectWinner(proposals, votes)
+
+    // All agents implement solution
+    await Promise.all(this.agents.map((agent) => agent.implement(winner)))
+
+    return winner
+  }
+
+  private selectWinner(proposals: any[], votes: any[][]) {
+    // Tally votes
+    const scores = proposals.map((_, i) => votes.reduce((sum, agentVotes) => sum + agentVotes[i], 0))
+
+    // Return proposal with highest score
+    const maxScore = Math.max(...scores)
+    return proposals[scores.indexOf(maxScore)]
+  }
+}
+```
+
+## Production Patterns
+
+### Error Handling
+
+```typescript
+class RobustAgent {
+  private maxRetries = 3
+  private timeout = 30000
+
+  async execute(task: Task) {
+    let attempt = 0
+
+    while (attempt < this.maxRetries) {
+      try {
+        const result = await Promise.race([this.doExecute(task), this.timeoutPromise()])
+
+        return result
+      } catch (error) {
+        attempt++
+
+        if (attempt >= this.maxRetries) {
+          // Final failure - escalate
+          await this.escalate(task, error)
+          throw error
+        }
+
+        // Exponential backoff
+        await this.delay(Math.pow(2, attempt) * 1000)
+      }
+    }
+  }
+
+  private timeoutPromise() {
+    return new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), this.timeout))
+  }
+
+  private async escalate(task: Task, error: Error) {
+    await send($.Alert.critical, {
+      agent: this.name,
+      task,
+      error: error.message,
+      timestamp: new Date().toISOString(),
+    })
+  }
+
+  private delay(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms))
+  }
+
+  private async doExecute(task: Task) {
+    // Agent logic
+  }
+}
+```
+
+### Rate Limiting
+
+```typescript
+class RateLimitedAgent {
+  private queue: Task[] = []
+  private processing = false
+  private requestsPerMinute = 60
+
+  async execute(task: Task) {
+    this.queue.push(task)
+
+    if (!this.processing) {
+      this.processQueue()
+    }
+
+    return new Promise((resolve, reject) => {
+      task.resolve = resolve
+      task.reject = reject
+    })
+  }
+
+  private async processQueue() {
+    this.processing = true
+
+    while (this.queue.length > 0) {
+      const task = this.queue.shift()!
+
+      try {
+        const result = await this.doExecute(task)
+        task.resolve(result)
+      } catch (error) {
+        task.reject(error)
+      }
+
+      // Rate limit
+      await this.delay(60000 / this.requestsPerMinute)
+    }
+
+    this.processing = false
+  }
+
+  private delay(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms))
+  }
+
+  private async doExecute(task: Task) {
+    // Agent logic
+  }
+}
+```
+
+### Monitoring & Observability
+
+```typescript
+class ObservableAgent {
+  private metrics = {
+    totalRequests: 0,
+    successfulRequests: 0,
+    failedRequests: 0,
+    averageLatency: 0,
+    errors: [],
+  }
+
+  async execute(task: Task) {
+    const start = Date.now()
+    this.metrics.totalRequests++
+
+    try {
+      const result = await this.doExecute(task)
+
+      this.metrics.successfulRequests++
+      this.updateLatency(Date.now() - start)
+
+      // Track success
+      await this.track('agent.success', {
+        task: task.type,
+        latency: Date.now() - start,
+      })
+
+      return result
+    } catch (error) {
+      this.metrics.failedRequests++
+      this.metrics.errors.push({
+        error: error.message,
+        task,
+        timestamp: new Date().toISOString(),
+      })
+
+      // Track failure
+      await this.track('agent.failure', {
+        task: task.type,
+        error: error.message,
+      })
+
+      throw error
+    }
+  }
+
+  private updateLatency(latency: number) {
+    const total = this.metrics.averageLatency * (this.metrics.totalRequests - 1)
+    this.metrics.averageLatency = (total + latency) / this.metrics.totalRequests
+  }
+
+  private async track(event: string, data: any) {
+    await send($.Metrics.track, {
+      event,
+      data,
+      timestamp: new Date().toISOString(),
+    })
+  }
+
+  getMetrics() {
+    return {
+      ...this.metrics,
+      successRate: this.metrics.successfulRequests / this.metrics.totalRequests,
+      errorRate: this.metrics.failedRequests / this.metrics.totalRequests,
+    }
+  }
+
+  private async doExecute(task: Task) {
+    // Agent logic
+  }
+}
+```
+
+## Real-World Examples
+
+### Example 1: Content Generation Agent
+
+```typescript
+import { $, ai, db, on, send } from 'sdk.do'
+
+class ContentGenerationAgent {
+  async generateBlogPost(topic: string) {
+    // 1. Research phase
+    const research = await this.research(topic)
+
+    // 2. Outline phase
+    const outline = await this.createOutline(topic, research)
+
+    // 3. Writing phase
+    const content = await this.writeContent(outline, research)
+
+    // 4. Optimization phase
+    const optimized = await this.optimizeSEO(content)
+
+    // 5. Review phase
+    const final = await this.review(optimized)
+
+    // 6. Store
+    await db.create($.BlogPosting, {
+      $id: crypto.randomUUID(),
+      $type: $.BlogPosting,
+      headline: final.title,
+      articleBody: final.content,
+      keywords: final.keywords,
+      dateCreated: new Date().toISOString(),
+    })
+
+    return final
+  }
+
+  private async research(topic: string) {
+    // Search knowledge base
+    const knowledge = await db.search($.Article, topic, { limit: 10 })
+
+    // Web search
+    const webResults = await api.search.web(topic)
+
+    return { knowledge, webResults }
+  }
+
+  private async createOutline(topic: string, research: any) {
+    return await ai.generate({
+      model: 'gpt-5',
+      prompt: `
+        Create a blog post outline about: ${topic}
+
+        Research: ${JSON.stringify(research)}
+
+        The outline should have:
+        - Engaging introduction
+        - 3-5 main sections
+        - Conclusion with call-to-action
+      `,
+      schema: {
+        type: 'object',
+        properties: {
+          title: { type: 'string' },
+          introduction: { type: 'string' },
+          sections: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                heading: { type: 'string' },
+                points: { type: 'array', items: { type: 'string' } },
+              },
+            },
+          },
+          conclusion: { type: 'string' },
+        },
+      },
+    })
+  }
+
+  private async writeContent(outline: any, research: any) {
+    const sections = await Promise.all(
+      outline.sections.map((section) =>
+        ai.generate({
+          model: 'gpt-5',
+          prompt: `
+            Write section: ${section.heading}
+            Points to cover: ${section.points.join(', ')}
+            Research: ${JSON.stringify(research)}
+
+            Write 2-3 paragraphs of engaging, informative content.
+          `,
+          schema: { type: 'string' },
+        })
+      )
+    )
+
+    return {
+      title: outline.title,
+      introduction: outline.introduction,
+      sections: sections.map((content, i) => ({
+        heading: outline.sections[i].heading,
+        content,
+      })),
+      conclusion: outline.conclusion,
+    }
+  }
+
+  private async optimizeSEO(content: any) {
+    return await ai.generate({
+      model: 'gpt-5',
+      prompt: `
+        Optimize this content for SEO:
+        ${JSON.stringify(content)}
+
+        Add:
+        - Meta description
+        - Keywords
+        - Internal linking opportunities
+        - Alt text suggestions for images
+      `,
+      schema: {
+        type: 'object',
+        properties: {
+          ...content,
+          metaDescription: { type: 'string' },
+          keywords: { type: 'array', items: { type: 'string' } },
+          internalLinks: { type: 'array', items: { type: 'string' } },
+        },
+      },
+    })
+  }
+
+  private async review(content: any) {
+    const review = await ai.generate({
+      model: 'gpt-5',
+      prompt: `
+        Review this content for:
+        - Grammar and spelling
+        - Clarity and readability
+        - Factual accuracy
+        - SEO optimization
+
+        Content: ${JSON.stringify(content)}
+
+        Provide a score (0-10) and suggestions.
+      `,
+      schema: {
+        type: 'object',
+        properties: {
+          score: { type: 'number' },
+          suggestions: { type: 'array', items: { type: 'string' } },
+        },
+      },
+    })
+
+    if (review.score < 8) {
+      // Revise based on suggestions
+      const revised = await ai.generate({
+        model: 'gpt-5',
+        prompt: `
+          Revise this content based on these suggestions:
+
+          Content: ${JSON.stringify(content)}
+          Suggestions: ${review.suggestions.join('\n')}
+        `,
+        schema: { type: 'object' },
+      })
+
+      return revised
+    }
+
+    return content
+  }
+}
+
+// Usage
+on($.Content.generate, async (request) => {
+  const agent = new ContentGenerationAgent()
+  const post = await agent.generateBlogPost(request.topic)
+
+  await send($.Content.generated, {
+    requestId: request.$id,
+    post,
+  })
+})
+```
+
+### Example 2: Customer Support Agent
+
+```typescript
+import { $, ai, db, on, send } from 'sdk.do'
+
+class CustomerSupportAgent {
+  private memory = new ShortTermMemory()
+  private knowledgeBase = new LongTermMemory()
+
+  async handleRequest(request: { customerId: string; message: string; conversationId?: string }) {
+    // 1. Load context
+    const context = await this.loadContext(request)
+
+    // 2. Classify intent
+    const intent = await this.classifyIntent(request.message)
+
+    // 3. Route to handler
+    const response = await this.route(intent, context)
+
+    // 4. Store in memory
+    this.memory.add('user', request.message)
+    this.memory.add('assistant', response.message)
+
+    // 5. Check if resolved
+    if (response.resolved) {
+      await this.markResolved(request.conversationId)
+    } else if (response.needsEscalation) {
+      await this.escalate(request, response)
+    }
+
+    return response
+  }
+
+  private async loadContext(request: any) {
+    // Get customer
+    const customer = await db.get($.Person, request.customerId)
+
+    // Get conversation history
+    let history = []
+    if (request.conversationId) {
+      history = await db.list($.Message, {
+        where: { conversationId: request.conversationId },
+        orderBy: { timestamp: 'asc' },
+      })
+    }
+
+    // Get recent orders
+    const orders = await db.list($.Order, {
+      where: { customerId: request.customerId },
+      orderBy: { createdAt: 'desc' },
+      limit: 5,
+    })
+
+    // Search knowledge base
+    const relevant = await this.knowledgeBase.recall(request.message)
+
+    return { customer, history, orders, relevant }
+  }
+
+  private async classifyIntent(message: string) {
+    return await ai.generate({
+      model: 'gpt-5',
+      prompt: `
+        Classify this customer support message:
+        "${message}"
+
+        Categories:
+        - order_status: Asking about order status
+        - returns: Wants to return/exchange item
+        - technical: Technical issue with product
+        - billing: Billing/payment question
+        - general: General inquiry
+      `,
+      schema: {
+        type: 'object',
+        properties: {
+          category: { type: 'string' },
+          confidence: { type: 'number' },
+          entities: {
+            type: 'array',
+            items: { type: 'string' },
+          },
+        },
+      },
+    })
+  }
+
+  private async route(intent: any, context: any) {
+    switch (intent.category) {
+      case 'order_status':
+        return await this.handleOrderStatus(intent, context)
+
+      case 'returns':
+        return await this.handleReturns(intent, context)
+
+      case 'technical':
+        return await this.handleTechnical(intent, context)
+
+      case 'billing':
+        return await this.handleBilling(intent, context)
+
+      default:
+        return await this.handleGeneral(intent, context)
+    }
+  }
+
+  private async handleOrderStatus(intent: any, context: any) {
+    // Extract order number from message
+    const orderNumber = intent.entities.find((e: string) => e.startsWith('ORD-'))
+
+    if (!orderNumber) {
+      return {
+        message: 'Could you provide your order number? It should start with ORD-',
+        resolved: false,
+      }
+    }
+
+    // Get order
+    const order = await db.get($.Order, orderNumber)
+
+    if (!order) {
+      return {
+        message: `I couldn't find order ${orderNumber}. Could you double-check the order number?`,
+        resolved: false,
+      }
+    }
+
+    // Generate response
+    const response = await ai.generate({
+      model: 'gpt-5',
+      prompt: `
+        Provide a friendly update about this order:
+
+        Order: ${JSON.stringify(order)}
+        Customer: ${context.customer.name}
+
+        Include:
+        - Current status
+        - Expected delivery date
+        - Tracking link if available
+      `,
+      schema: { type: 'string' },
+    })
+
+    return {
+      message: response,
+      resolved: true,
+      actions: ['order_status_checked'],
+    }
+  }
+
+  private async handleReturns(intent: any, context: any) {
+    // Check return policy eligibility
+    const orderId = intent.entities.find((e: string) => e.startsWith('ORD-'))
+
+    const order = await db.get($.Order, orderId)
+
+    const daysOld = Math.floor((Date.now() - new Date(order.createdAt).getTime()) / (1000 * 60 * 60 * 24))
+
+    if (daysOld > 30) {
+      return {
+        message: `I'm sorry, but order ${orderId} was placed ${daysOld} days ago. Our return policy allows returns within 30 days. Would you like to speak with a manager?`,
+        resolved: false,
+        needsEscalation: true,
+      }
+    }
+
+    // Create return
+    const returnId = `RET-${Date.now()}`
+    await db.create($.ReturnOrder, {
+      $id: returnId,
+      $type: $.ReturnOrder,
+      orderId,
+      customerId: context.customer.$id,
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+    })
+
+    // Send return label
+    await send($.Email.send, {
+      to: context.customer.email,
+      subject: `Return label for order ${orderId}`,
+      body: `Your return has been initiated. Return ID: ${returnId}`,
+    })
+
+    return {
+      message: `I've initiated return ${returnId} for order ${orderId}. You'll receive an email with the return label shortly.`,
+      resolved: true,
+      actions: ['return_created'],
+    }
+  }
+
+  private async handleTechnical(intent: any, context: any) {
+    // Search knowledge base for solutions
+    const solutions = await this.knowledgeBase.recall(intent.entities.join(' '), 5)
+
+    if (solutions.length > 0) {
+      const response = await ai.generate({
+        model: 'gpt-5',
+        prompt: `
+          Customer issue: ${intent.entities.join(' ')}
+
+          Potential solutions: ${JSON.stringify(solutions)}
+
+          Provide helpful troubleshooting steps.
+        `,
+        schema: { type: 'string' },
+      })
+
+      return {
+        message: response,
+        resolved: false,
+        actions: ['troubleshooting_provided'],
+      }
+    }
+
+    // No solutions found - escalate
+    return {
+      message: 'This seems like a technical issue that requires specialist support. Let me connect you with our technical team.',
+      resolved: false,
+      needsEscalation: true,
+      escalationType: 'technical',
+    }
+  }
+
+  private async handleBilling(intent: any, context: any) {
+    // Billing requires human verification
+    return {
+      message: 'For billing inquiries, I need to connect you with our billing department to ensure your account security.',
+      resolved: false,
+      needsEscalation: true,
+      escalationType: 'billing',
+    }
+  }
+
+  private async handleGeneral(intent: any, context: any) {
+    const response = await ai.generate({
+      model: 'gpt-5',
+      prompt: `
+        Customer: ${context.customer.name}
+        Message: ${intent.entities.join(' ')}
+        Context: ${JSON.stringify(context)}
+
+        Provide a helpful, friendly response.
+      `,
+      schema: { type: 'string' },
+    })
+
+    return {
+      message: response,
+      resolved: false,
+    }
+  }
+
+  private async escalate(request: any, response: any) {
+    await send($.Support.escalate, {
+      customerId: request.customerId,
+      conversationId: request.conversationId,
+      reason: response.needsEscalation,
+      type: response.escalationType,
+      priority: 'high',
+    })
+  }
+
+  private async markResolved(conversationId: string) {
+    await db.update($.Conversation, conversationId, {
+      status: 'resolved',
+      resolvedAt: new Date().toISOString(),
+    })
+  }
+}
+
+// Usage
+on($.Support.request, async (request) => {
+  const agent = new CustomerSupportAgent()
+  const response = await agent.handleRequest(request)
+
+  await send($.Support.response, {
+    requestId: request.$id,
+    ...response,
+  })
+})
+```
+
+### Example 3: Data Analysis Agent
+
+```typescript
+import { $, ai, db, on, send } from 'sdk.do'
+
+class DataAnalysisAgent {
+  async analyzeData(request: { dataSource: string; question: string }) {
+    // 1. Understand question
+    const understanding = await this.understandQuestion(request.question)
+
+    // 2. Fetch data
+    const data = await this.fetchData(request.dataSource, understanding)
+
+    // 3. Analyze
+    const analysis = await this.analyze(data, understanding)
+
+    // 4. Visualize
+    const visualizations = await this.createVisualizations(data, analysis)
+
+    // 5. Generate insights
+    const insights = await this.generateInsights(analysis, visualizations)
+
+    return {
+      question: request.question,
+      data,
+      analysis,
+      visualizations,
+      insights,
+    }
+  }
+
+  private async understandQuestion(question: string) {
+    return await ai.generate({
+      model: 'gpt-5',
+      prompt: `
+        Understand this data analysis question:
+        "${question}"
+
+        Identify:
+        - What metrics to analyze
+        - What dimensions to group by
+        - What time period to consider
+        - What type of analysis (trend, comparison, distribution, etc.)
+      `,
+      schema: {
+        type: 'object',
+        properties: {
+          metrics: { type: 'array', items: { type: 'string' } },
+          dimensions: { type: 'array', items: { type: 'string' } },
+          timePeriod: { type: 'string' },
+          analysisType: { type: 'string' },
+        },
+      },
+    })
+  }
+
+  private async fetchData(source: string, understanding: any) {
+    // Build query based on understanding
+    const query = this.buildQuery(understanding)
+
+    // Execute query
+    const data = await db.query(query)
+
+    return data
+  }
+
+  private buildQuery(understanding: any) {
+    const { metrics, dimensions, timePeriod } = understanding
+
+    return `
+      SELECT
+        ${metrics.join(', ')},
+        ${dimensions.join(', ')}
+      FROM ${understanding.dataSource}
+      WHERE created_at >= '${timePeriod}'
+      GROUP BY ${dimensions.join(', ')}
+      ORDER BY ${metrics[0]} DESC
+    `
+  }
+
+  private async analyze(data: any[], understanding: any) {
+    return await ai.generate({
+      model: 'gpt-5',
+      prompt: `
+        Analyze this data:
+        ${JSON.stringify(data.slice(0, 100))} (showing first 100 rows)
+
+        Analysis type: ${understanding.analysisType}
+
+        Calculate:
+        - Summary statistics
+        - Trends
+        - Anomalies
+        - Correlations
+      `,
+      schema: {
+        type: 'object',
+        properties: {
+          summary: {
+            type: 'object',
+            properties: {
+              total: { type: 'number' },
+              average: { type: 'number' },
+              median: { type: 'number' },
+              min: { type: 'number' },
+              max: { type: 'number' },
+            },
+          },
+          trends: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                metric: { type: 'string' },
+                direction: { type: 'string' },
+                strength: { type: 'number' },
+              },
+            },
+          },
+          anomalies: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                timestamp: { type: 'string' },
+                value: { type: 'number' },
+                expected: { type: 'number' },
+                deviation: { type: 'number' },
+              },
+            },
+          },
+        },
+      },
+    })
+  }
+
+  private async createVisualizations(data: any[], analysis: any) {
+    return await ai.generate({
+      model: 'gpt-5',
+      prompt: `
+        Suggest visualizations for this data:
+
+        Data: ${JSON.stringify(data.slice(0, 10))}
+        Analysis: ${JSON.stringify(analysis)}
+
+        Recommend:
+        - Chart types
+        - Axes
+        - Colors
+        - Annotations
+      `,
+      schema: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            type: { type: 'string' },
+            title: { type: 'string' },
+            xAxis: { type: 'string' },
+            yAxis: { type: 'string' },
+            series: { type: 'array', items: { type: 'string' } },
+          },
+        },
+      },
+    })
+  }
+
+  private async generateInsights(analysis: any, visualizations: any) {
+    return await ai.generate({
+      model: 'gpt-5',
+      prompt: `
+        Generate insights from this analysis:
+
+        Analysis: ${JSON.stringify(analysis)}
+        Visualizations: ${JSON.stringify(visualizations)}
+
+        Provide:
+        - Key findings
+        - Actionable recommendations
+        - Areas for further investigation
+      `,
+      schema: {
+        type: 'object',
+        properties: {
+          keyFindings: {
+            type: 'array',
+            items: { type: 'string' },
+          },
+          recommendations: {
+            type: 'array',
+            items: { type: 'string' },
+          },
+          furtherInvestigation: {
+            type: 'array',
+            items: { type: 'string' },
+          },
+        },
+      },
+    })
+  }
+}
+
+// Usage
+on($.Analysis.request, async (request) => {
+  const agent = new DataAnalysisAgent()
+  const result = await agent.analyzeData(request)
+
+  // Store result
+  await db.create($.AnalysisReport, {
+    $id: crypto.randomUUID(),
+    $type: $.AnalysisReport,
+    ...result,
+    createdAt: new Date().toISOString(),
+  })
+
+  await send($.Analysis.complete, {
+    requestId: request.$id,
+    result,
+  })
+})
+```
+
+## See Also
+
+- [SDK.do Documentation](./SDK.mdx) - Main SDK guide
+- [AI Service](./SDK.mdx#ai-ai-inference) - AI inference API
+- [Database](./database.do.mdx) - Semantic database operations
+- [Events](./events.do.mdx) - Event-driven patterns
+- [APIs](./apis.do.mdx) - External API integrations
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform)

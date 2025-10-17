@@ -1,0 +1,149 @@
+---
+$id: https://embeddings.do/examples/basic-usage
+$type: HowTo
+title: Basic Usage - embeddings.do
+description: Basic examples of generating and using vector embeddings
+keywords: [embeddings, examples, tutorial, basic, getting started]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Basic Usage
+
+Simple examples of generating and using vector embeddings.
+
+## Generate Single Embedding
+
+```typescript
+import { ai } from 'sdk.do'
+
+const embedding = await ai.embed('machine learning and artificial intelligence')
+
+console.log('Dimensions:', embedding.length) // 1536
+console.log('First 5 values:', embedding.slice(0, 5))
+// [-0.0123, 0.0456, -0.0789, 0.0234, -0.0567]
+```
+
+## Generate Multiple Embeddings
+
+```typescript
+import { ai } from 'sdk.do'
+
+const texts = ['smartphone with great camera', 'laptop for programming', 'wireless headphones', 'fitness tracker watch']
+
+const embeddings = await ai.embed(texts)
+
+console.log(`Generated ${embeddings.length} embeddings`)
+embeddings.forEach((embed, i) => {
+  console.log(`${i + 1}. ${texts[i]}: ${embed.length} dimensions`)
+})
+```
+
+## Calculate Similarity
+
+```typescript
+import { ai } from 'sdk.do'
+
+function cosineSimilarity(a: number[], b: number[]): number {
+  const dotProduct = a.reduce((sum, val, i) => sum + val * b[i], 0)
+  const magnitudeA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0))
+  const magnitudeB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0))
+  return dotProduct / (magnitudeA * magnitudeB)
+}
+
+// Compare similar texts
+const embed1 = await ai.embed('machine learning algorithms')
+const embed2 = await ai.embed('artificial intelligence models')
+const embed3 = await ai.embed('cooking recipes')
+
+console.log('Similar texts:', cosineSimilarity(embed1, embed2).toFixed(3)) // ~0.850
+console.log('Different texts:', cosineSimilarity(embed1, embed3).toFixed(3)) // ~0.120
+```
+
+## Simple Search
+
+```typescript
+import { $, ai, db } from 'sdk.do'
+
+async function simpleSearch(query: string) {
+  // Generate query embedding
+  const queryEmbedding = await ai.embed(query)
+
+  // Get all products
+  const products = await db.list($.Product)
+
+  // Calculate similarity and sort
+  const results = products
+    .map((product) => ({
+      product,
+      similarity: cosineSimilarity(queryEmbedding, product.embedding),
+    }))
+    .sort((a, b) => b.similarity - a.similarity)
+    .slice(0, 10)
+
+  return results
+}
+
+// Use it
+const results = await simpleSearch('affordable laptop for students')
+results.forEach((r) => {
+  console.log(`${r.product.name}: ${r.similarity.toFixed(3)}`)
+})
+```
+
+## Index Products
+
+```typescript
+import { $, ai, db } from 'sdk.do'
+
+async function indexProducts() {
+  const products = await db.list($.Product)
+
+  console.log(`Indexing ${products.length} products...`)
+
+  for (const product of products) {
+    const text = `${product.name} ${product.description} ${product.category}`
+    const embedding = await ai.embed(text)
+
+    await db.update(product.$id, { embedding })
+  }
+
+  console.log('Indexing complete!')
+}
+
+await indexProducts()
+```
+
+## Find Similar Items
+
+```typescript
+import { $, ai, db } from 'sdk.do'
+
+async function findSimilar(productId: string, limit = 5) {
+  // Get target product
+  const product = await db.get($.Product, productId)
+
+  // Get all products
+  const allProducts = await db.list($.Product)
+
+  // Find similar
+  return allProducts
+    .filter((p) => p.$id !== productId)
+    .map((p) => ({
+      product: p,
+      similarity: cosineSimilarity(product.embedding, p.embedding),
+    }))
+    .sort((a, b) => b.similarity - a.similarity)
+    .slice(0, limit)
+}
+
+const similar = await findSimilar('prod_123', 5)
+similar.forEach((s) => {
+  console.log(`${s.product.name}: ${s.similarity.toFixed(3)}`)
+})
+```
+
+## License
+
+CC-BY-4.0 (Open Source)

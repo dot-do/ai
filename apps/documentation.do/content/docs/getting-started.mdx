@@ -1,0 +1,173 @@
+---
+title: Getting started
+description: If you're new to Sunar, you can follow these steps to get started building your discord bot!
+icon: Rocket
+---
+
+## Automatic Installation
+
+Create a new app with `create-sunar`, it requires Node.js 18+.
+
+<InstallTabs items={['npm', 'pnpm', 'yarn', 'bun']}>
+
+```bash tab="npm"
+npm create sunar@latest
+```
+
+```bash tab="pnpm"
+pnpm create sunar@latest
+```
+
+```bash tab="yarn"
+yarn create sunar@latest
+```
+
+```bash tab="bun"
+bun create sunar@latest
+```
+
+</InstallTabs>
+
+You will be prompted to enter some details about your project, such as the project name, preferred language (TypeScript or JavaScript), and desired features (e.g., Biome, TSX, TSUP, Prettier, ESLint).
+
+<Steps>
+<Step>
+
+## Manual Installation
+
+Ensure you have [Node.js](https://nodejs.org) (18 or newer) installed on your machine. Sunar requires [discord.js](https://npmjs.com/package/discord.js) as a peer dependency.
+
+```package-install
+sunar discord.js
+```
+
+</Step>
+
+<Step>
+## Initialize the client
+
+Create a new file, e.g., `index.js`, and set up your Discord bot using Sunar.
+
+```js title="src/index.js"
+import { Client, dirname, load } from 'sunar'
+
+const start = async () => {
+  const client = new Client({ intents: [] })
+
+  // stores all sunar modules, you can add more
+  // directories by passing them after the "signals"
+  // with a comma (e.g. signals,buttons,autocompletes)
+  await load(`${dirname(import.meta.url)}/{commands,signals}/**/*.{js,ts}`)
+
+  client.login('YOUR_DISCORD_BOT_TOKEN')
+}
+
+start()
+```
+
+<Callout>
+  Replace `'YOUR_DISCORD_BOT_TOKEN'` with your actual bot token obtained from the [Discord Developer Portal](https://discord.com/developers/applications).
+</Callout>
+
+</Step>
+
+<Step>
+## Create your first signal
+
+Signals handle events in your Discord bot. Let's create a basic `ready` signal to log when the bot is online and ready.
+
+```js title="src/signals/ready.js"
+import { Signal, execute } from 'sunar'
+import { registerCommands } from 'sunar/registry'
+
+const signal = new Signal('ready', { once: true })
+
+execute(signal, async (client) => {
+  await registerCommands(client.application)
+  console.log(`Logged in as ${client.user.tag}`)
+})
+
+export { signal }
+```
+
+<Callout>
+  This basically register all loaded application commands (by default globally). If you want to change this behavior read the [registering commands
+  guide](/docs/guides/registering-commands).
+</Callout>
+
+</Step>
+
+<Step>
+
+## Create your first command
+
+Let's create a simple `ping` command that responds with the bot's ping when invoked.
+
+```js title="src/commands/ping.js"
+import { Slash, execute } from 'sunar'
+
+const slash = new Slash({
+  name: 'ping',
+  description: 'Show client ws ping',
+})
+
+execute(slash, (interaction) => {
+  interaction.reply({
+    content: `Client WS Ping: ${interaction.client.ws.ping}`,
+  })
+})
+
+export { slash }
+```
+
+</Step>
+
+<Step>
+
+## Handle interactions
+
+To make the ping command work, add the `interactionCreate` signal to your project to handle interactions:
+
+```js title="src/signals/interaction-create.js"
+import { Signal, execute } from 'sunar'
+import { handleInteraction } from 'sunar/handlers'
+
+const signal = new Signal('interactionCreate')
+
+execute(signal, async (interaction) => {
+  await handleInteraction(interaction)
+})
+
+export { signal }
+```
+
+<Callout>For more information about the interaction handling, see [handle interactions guide](/docs/guides/interactions-handling).</Callout>
+
+</Step>
+
+</Steps>
+
+## File structure
+
+Here's an overview of the project's file structure to help you visualize how files are organized within Sunar.
+
+<Files>
+  	<Folder name="src" defaultOpen>
+		<Folder name="commands" defaultOpen>
+			<File name="ping.js" />
+		</Folder>
+
+    	<Folder name="signals" defaultOpen>
+    		<File name="interaction-create.js" />
+    		<File name="ready.js" />
+    	</Folder>
+
+  	</Folder>
+	<File name="index.js" />
+</Files>
+
+## Next steps
+
+- Customize and expand your commands and signals based on your bot's functionality.
+- Dive deeper into command options such as subcommands, options, and permissions to create more complex and versatile interactions.
+- Explore comprehensive features like context menu commands, buttons, modals, and more.

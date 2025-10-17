@@ -1,0 +1,604 @@
+---
+$id: https://graphdl.do/docs/relationships
+$type: TechArticle
+title: Building Graph Relationships
+description: Learn how to create and manage relationships in semantic graphs using graphdl
+keywords: [graph-relationships, edges, triples, semantic-graph, graphdl, linked-data]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Building Graph Relationships
+
+Relationships are the core of semantic graphs. In graphdl, relationships connect entities through predicates, forming a rich network of knowledge. This guide covers how to create, query, and manage relationships.
+
+## Understanding Relationships
+
+A relationship in graphdl is represented as a **triple** - a three-part statement:
+
+- **Subject** - The entity making the statement
+- **Predicate** - The relationship or property
+- **Object** - The entity being related to
+
+```typescript
+import { createTriple } from 'graphdl'
+
+// Basic relationship
+const relationship = createTriple(
+  'Person:john', // Subject
+  'worksFor', // Predicate
+  'Organization:acme' // Object
+)
+
+// This represents: "John works for Acme"
+```
+
+## Creating Relationships
+
+### Using Triples
+
+The most basic way to create relationships is with triples:
+
+```typescript
+import { triple, createTriple } from 'graphdl'
+
+// Method 1: Function syntax
+const t1 = createTriple('Person:john', 'worksFor', 'Organization:acme', {
+  context: 'https://schema.org',
+  metadata: {
+    startDate: '2023-01-01',
+    role: 'Engineer',
+  },
+})
+
+// Method 2: Builder syntax
+const t2 = triple('Person:john')
+  .predicate('hasSkill')
+  .object('Skill:typescript')
+  .context('https://schema.org')
+  .metadata({
+    level: 'expert',
+    yearsExperience: 5,
+  })
+  .build()
+```
+
+### Using Graph Edges
+
+Edges are relationships within a graph structure:
+
+```typescript
+import { graph, node, edge } from 'graphdl'
+
+const orgGraph = graph()
+  .context('https://schema.org')
+  // Define nodes
+  .node(
+    node('john', 'Person', {
+      name: 'John Doe',
+      email: 'john@example.com',
+    })
+  )
+  .node(
+    node('acme', 'Organization', {
+      name: 'Acme Corp',
+    })
+  )
+  // Create relationship
+  .edge(edge('john', 'worksFor', 'acme'))
+  .build()
+```
+
+### With Metadata
+
+Add rich metadata to relationships:
+
+```typescript
+import { edge } from 'graphdl'
+
+// Edge with properties
+const employmentEdge = edge('john', 'worksFor', 'acme', {
+  startDate: '2023-01-01',
+  role: 'Senior Engineer',
+  department: 'Engineering',
+  employmentType: 'Full-time',
+  location: 'Remote',
+})
+```
+
+## Relationship Types
+
+### Direct Relationships
+
+Simple one-to-one relationships:
+
+```typescript
+import $ from 'graphdl'
+import { graph, node, edge } from 'graphdl'
+
+// Person works for Organization
+$.Person.worksFor.Organization
+
+const g = graph()
+  .edge(edge('john', 'worksFor', 'acme'))
+  .build()
+```
+
+### Inverse Relationships
+
+Relationships viewed from both directions:
+
+```typescript
+import { graph, node, edge } from 'graphdl'
+
+const g = graph()
+  .context('https://schema.org')
+  // Forward relationship
+  .edge(edge('john', 'worksFor', 'acme'))
+  // Inverse relationship
+  .edge(edge('acme', 'employs', 'john'))
+  .build()
+
+// Both represent the same semantic fact from different perspectives
+```
+
+### Multi-valued Relationships
+
+One entity related to multiple entities:
+
+```typescript
+import { graph, node, edge } from 'graphdl'
+
+const g = graph()
+  .node(node('john', 'Person', { name: 'John Doe' }))
+  .node(node('typescript', 'Skill', { name: 'TypeScript' }))
+  .node(node('python', 'Skill', { name: 'Python' }))
+  .node(node('rust', 'Skill', { name: 'Rust' }))
+  // John has multiple skills
+  .edge(edge('john', 'hasSkill', 'typescript'))
+  .edge(edge('john', 'hasSkill', 'python'))
+  .edge(edge('john', 'hasSkill', 'rust'))
+  .build()
+```
+
+### Chained Relationships
+
+Relationships that form paths:
+
+```typescript
+import { graph, node, edge } from 'graphdl'
+
+const g = graph()
+  .context('https://schema.org')
+  .node(node('john', 'Person', { name: 'John Doe' }))
+  .node(node('acme', 'Organization', { name: 'Acme Corp' }))
+  .node(node('widget', 'Brand', { name: 'Widget' }))
+  .node(node('sf', 'City', { name: 'San Francisco' }))
+  // Chain: John -> Acme -> Widget
+  .edge(edge('john', 'worksFor', 'acme'))
+  .edge(edge('acme', 'owns', 'widget'))
+  // Chain: Acme -> San Francisco
+  .edge(edge('acme', 'locatedIn', 'sf'))
+  .build()
+
+// Query path: Person -> worksFor -> Organization -> locatedIn -> City
+```
+
+## Common Relationship Patterns
+
+### Organizational Hierarchies
+
+```typescript
+import { graph, node, edge } from 'graphdl'
+
+const orgHierarchy = graph()
+  .context('https://schema.org')
+  // People
+  .node(node('ceo', 'Person', { name: 'CEO', title: 'Chief Executive Officer' }))
+  .node(node('cto', 'Person', { name: 'CTO', title: 'Chief Technology Officer' }))
+  .node(node('eng-mgr', 'Person', { name: 'Engineering Manager' }))
+  .node(node('engineer', 'Person', { name: 'Software Engineer' }))
+  // Relationships
+  .edge(edge('cto', 'reportsTo', 'ceo'))
+  .edge(edge('eng-mgr', 'reportsTo', 'cto'))
+  .edge(edge('engineer', 'reportsTo', 'eng-mgr'))
+  // All work for same org
+  .node(node('acme', 'Organization', { name: 'Acme Corp' }))
+  .edge(edge('ceo', 'worksFor', 'acme'))
+  .edge(edge('cto', 'worksFor', 'acme'))
+  .edge(edge('eng-mgr', 'worksFor', 'acme'))
+  .edge(edge('engineer', 'worksFor', 'acme'))
+  .build()
+```
+
+### Supply Chain Networks
+
+```typescript
+import { graph, node, edge } from 'graphdl'
+
+const supplyChain = graph()
+  .context({
+    $vocab: 'https://schema.org/',
+    gs1: 'https://gs1.org/voc/',
+  })
+  .node(node('widget', 'Product', { name: 'Widget', sku: 'WDG-001' }))
+  .node(node('factory', 'Factory', { name: 'Manufacturing Plant' }))
+  .node(node('warehouse', 'Warehouse', { name: 'Distribution Center' }))
+  .node(node('store', 'Store', { name: 'Retail Store' }))
+  // Product journey
+  .edge(edge('widget', 'manufacturedAt', 'factory'))
+  .edge(edge('widget', 'shippedTo', 'warehouse'))
+  .edge(edge('widget', 'deliveredTo', 'store'))
+  .build()
+```
+
+### Knowledge Graphs
+
+```typescript
+import { graph, node, edge } from 'graphdl'
+
+const knowledgeGraph = graph()
+  .context({
+    $vocab: 'https://schema.org/',
+    onet: 'https://www.onetonline.org/',
+  })
+  .node(node('john', 'Person', { name: 'John Doe' }))
+  .node(node('15-1252.00', 'Occupation', { title: 'Software Developer' }))
+  .node(node('typescript', 'Skill', { name: 'TypeScript' }))
+  .node(node('problem-solving', 'Ability', { name: 'Problem Solving' }))
+  .node(node('software-dev', 'Activity', { name: 'Software Development' }))
+  // Person relationships
+  .edge(edge('john', 'hasOccupation', '15-1252.00'))
+  .edge(edge('john', 'hasSkill', 'typescript'))
+  .edge(edge('john', 'hasAbility', 'problem-solving'))
+  // Occupation requirements
+  .edge(edge('15-1252.00', 'requiresSkill', 'typescript'))
+  .edge(edge('15-1252.00', 'requiresAbility', 'problem-solving'))
+  .edge(edge('15-1252.00', 'performsActivity', 'software-dev'))
+  .build()
+```
+
+### Social Networks
+
+```typescript
+import { graph, node, edge } from 'graphdl'
+
+const socialGraph = graph()
+  .context('https://schema.org')
+  .node(node('alice', 'Person', { name: 'Alice' }))
+  .node(node('bob', 'Person', { name: 'Bob' }))
+  .node(node('charlie', 'Person', { name: 'Charlie' }))
+  // Friendships
+  .edge(edge('alice', 'knows', 'bob'))
+  .edge(edge('bob', 'knows', 'alice'))
+  .edge(edge('bob', 'knows', 'charlie'))
+  .edge(edge('charlie', 'knows', 'bob'))
+  // Professional
+  .edge(edge('alice', 'colleague', 'bob'))
+  .build()
+```
+
+## Relationship Metadata
+
+Add rich context to relationships:
+
+```typescript
+import { edge } from 'graphdl'
+
+// Temporal metadata
+const employment = edge('john', 'worksFor', 'acme', {
+  validFrom: '2023-01-01',
+  validUntil: '2025-12-31',
+  status: 'active',
+})
+
+// Confidence and provenance
+const skill = edge('john', 'hasSkill', 'typescript', {
+  confidence: 0.95,
+  source: 'linkedin-profile',
+  verifiedBy: 'manager',
+  lastVerified: '2025-10-01',
+})
+
+// Quantitative metadata
+const owns = edge('acme', 'owns', 'widget-brand', {
+  ownershipPercentage: 100,
+  acquisitionDate: '2020-05-15',
+  acquisitionPrice: 10000000,
+})
+```
+
+## Querying Relationships
+
+### With sdk.do
+
+Use semantic patterns to query relationships:
+
+```typescript
+import $, { db } from 'sdk.do'
+
+// Create relationship
+const person = await db.get($.Person, 'john-id')
+const organization = await db.get($.Organization, 'acme-id')
+await db.relate(person, $.worksFor, organization)
+
+// Query forward relationships
+const employers = await db.related(person, $.worksFor, $.Organization)
+
+// Query inverse relationships
+const employees = await db.related(organization, $.employs, $.Person)
+
+// Query with filters
+const seniorEngineers = await db.related(organization, $.employs, $.Person, {
+  where: { jobTitle: 'Senior Engineer' },
+})
+```
+
+### Multi-hop Queries
+
+Traverse multiple relationships:
+
+```typescript
+import $, { db } from 'sdk.do'
+
+// Get person
+const person = await db.get($.Person, 'john-id')
+
+// First hop: Person -> Organization
+const orgs = await db.related(person, $.worksFor, $.Organization)
+const org = orgs[0]
+
+// Second hop: Organization -> Brand
+const brands = await db.related(org, $.owns, $.Brand)
+
+// Third hop: Brand -> Product
+const products = await db.related(brands[0], $.brand, $.Product)
+```
+
+## Relationship Constraints
+
+### Cardinality
+
+Define how many relationships are allowed:
+
+```typescript
+// One-to-one: Person has one birth date
+$.Person.birthDate.Date
+
+// One-to-many: Organization has many employees
+$.Organization.employs.Person
+
+// Many-to-many: Person has many skills, Skill possessed by many people
+$.Person.hasSkill.Skill
+```
+
+### Type Constraints
+
+Ensure relationships connect appropriate types:
+
+```typescript
+import $ from 'graphdl'
+import type { Person, Organization } from 'schema.org.ai'
+
+// Type-safe relationships
+const person: Person = { $type: 'Person', name: 'John' }
+const org: Organization = { $type: 'Organization', name: 'Acme' }
+
+// This makes semantic sense
+$.Person.worksFor.Organization
+
+// This would be semantically incorrect
+// $.Person.worksFor.Product  // People don't work for products
+```
+
+## Bidirectional Relationships
+
+Maintain consistency in both directions:
+
+```typescript
+import { graph, node, edge } from 'graphdl'
+
+const g = graph()
+  .context('https://schema.org')
+  .node(node('john', 'Person', { name: 'John' }))
+  .node(node('acme', 'Organization', { name: 'Acme' }))
+  // Forward: John works for Acme
+  .edge(edge('john', 'worksFor', 'acme'))
+  // Inverse: Acme employs John
+  .edge(edge('acme', 'employs', 'john'))
+  .build()
+
+// Both edges represent the same fact from different perspectives
+```
+
+## Temporal Relationships
+
+Track relationships over time:
+
+```typescript
+import { graph, node, edge } from 'graphdl'
+
+const g = graph()
+  .context('https://schema.org')
+  .node(node('john', 'Person', { name: 'John' }))
+  .node(node('acme', 'Organization', { name: 'Acme Corp' }))
+  .node(node('globex', 'Organization', { name: 'Globex Corp' }))
+  // Current employment
+  .edge(
+    edge('john', 'worksFor', 'acme', {
+      startDate: '2023-01-01',
+      endDate: null,
+      status: 'current',
+    })
+  )
+  // Previous employment
+  .edge(
+    edge('john', 'previouslyWorkedFor', 'globex', {
+      startDate: '2020-01-01',
+      endDate: '2022-12-31',
+      status: 'past',
+    })
+  )
+  .build()
+```
+
+## Weighted Relationships
+
+Add weights for strength or importance:
+
+```typescript
+import { edge } from 'graphdl'
+
+// Skill proficiency
+const typescript = edge('john', 'hasSkill', 'typescript', {
+  proficiency: 0.9, // 90% proficient
+  yearsExperience: 5,
+})
+
+const python = edge('john', 'hasSkill', 'python', {
+  proficiency: 0.6, // 60% proficient
+  yearsExperience: 2,
+})
+
+// Social connection strength
+const strongFriend = edge('alice', 'knows', 'bob', {
+  connectionStrength: 0.95,
+  interactionFrequency: 'daily',
+  relationshipDuration: '10 years',
+})
+```
+
+## Best Practices
+
+### 1. Use Meaningful Predicates
+
+Choose predicates that clearly express the relationship:
+
+```typescript
+// Good - clear and specific
+$.Person.worksFor.Organization
+$.Product.manufacturedBy.Organization
+$.Order.shippedTo.Address
+
+// Avoid - vague or generic
+$.Person.relatedTo.Organization
+$.Product.linkedTo.Organization
+$.Order.associatedWith.Address
+```
+
+### 2. Maintain Bidirectional Consistency
+
+If relationships have natural inverses, maintain both:
+
+```typescript
+import { graph, node, edge } from 'graphdl'
+
+const g = graph()
+  // Forward
+  .edge(edge('john', 'worksFor', 'acme'))
+  // Inverse
+  .edge(edge('acme', 'employs', 'john'))
+  .build()
+```
+
+### 3. Add Context with Metadata
+
+Enrich relationships with metadata:
+
+```typescript
+import { edge } from 'graphdl'
+
+// Good - rich context
+const employment = edge('john', 'worksFor', 'acme', {
+  startDate: '2023-01-01',
+  role: 'Engineer',
+  department: 'Engineering',
+  employmentType: 'Full-time',
+})
+
+// Basic - minimal context
+const employment = edge('john', 'worksFor', 'acme')
+```
+
+### 4. Use Established Vocabularies
+
+Prefer predicates from Schema.org, GS1, or O\*NET:
+
+```typescript
+// Good - Schema.org predicate
+$.Person.worksFor.Organization
+
+// Acceptable - custom predicate when no standard exists
+$.Project.implementedUsing.Technology
+```
+
+### 5. Consider Performance
+
+Limit relationship traversal depth:
+
+```typescript
+// Good - specific depth
+const results = await db.related(person, $.worksFor, $.Organization)
+
+// Be cautious - unlimited depth can be expensive
+// const allConnections = await db.relatedRecursive(person, $.knows, $.Person)
+```
+
+## Advanced Patterns
+
+### Qualified Relations
+
+Add qualification to relationships:
+
+```typescript
+import { graph, node, edge } from 'graphdl'
+
+const g = graph()
+  .node(node('john', 'Person', { name: 'John' }))
+  .node(node('acme', 'Organization', { name: 'Acme' }))
+  .node(
+    node('role-1', 'Role', {
+      title: 'Senior Engineer',
+      startDate: '2023-01-01',
+    })
+  )
+  .edge(edge('john', 'hasRole', 'role-1'))
+  .edge(edge('role-1', 'atOrganization', 'acme'))
+  .build()
+```
+
+### N-ary Relations
+
+Represent relationships involving more than two entities:
+
+```typescript
+import { graph, node, edge } from 'graphdl'
+
+// Represent: John sold Product to Customer on Date
+const g = graph()
+  .node(node('john', 'Person', { name: 'John' }))
+  .node(node('widget', 'Product', { name: 'Widget' }))
+  .node(node('acme', 'Organization', { name: 'Acme' }))
+  .node(
+    node('sale-1', 'SaleEvent', {
+      date: '2025-10-10',
+      amount: 999.99,
+    })
+  )
+  .edge(edge('sale-1', 'seller', 'john'))
+  .edge(edge('sale-1', 'product', 'widget'))
+  .edge(edge('sale-1', 'buyer', 'acme'))
+  .build()
+```
+
+## See Also
+
+- [Getting Started](./getting-started) - Basic usage and installation
+- [Semantic Patterns](./semantic-patterns) - Understanding $.Subject.predicate.Object
+- [API Reference](../api/) - Complete API documentation
+- [Graph Queries Example](../examples/graph-queries) - Query patterns
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

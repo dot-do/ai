@@ -1,0 +1,771 @@
+---
+$id: https://db.do/docs/getting-started
+$type: TechArticle
+title: Getting Started with db.do
+description: Quick start guide for database operations using the db SDK function
+keywords: [database, getting started, setup, installation, crud, queries]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Getting Started
+
+Get started with database operations using the `db` SDK function in under 5 minutes.
+
+## Installation
+
+Install the SDK in your project:
+
+```bash
+pnpm add sdk.do
+```
+
+Or use the CLI globally:
+
+```bash
+pnpm add -g cli.do
+```
+
+## Basic Usage
+
+### Import the db Function
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// $ provides semantic types ($.Business, $.Product, etc.)
+// db provides database operations (list, get, create, update, delete, relate)
+```
+
+### List Entities
+
+Query multiple entities with optional filters:
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// List all businesses
+const businesses = await db.list($.Business)
+
+// List with filter
+const techBiz = await db.list($.Business, {
+  where: { industry: 'Technology' },
+})
+
+console.log(`Found ${techBiz.length} technology businesses`)
+```
+
+### Get Entity by ID
+
+Retrieve a single entity:
+
+```typescript
+import { $, db } from 'sdk.do'
+
+const business = await db.get($.Business, 'biz_123')
+
+console.log(business)
+// {
+//   $id: 'biz_123',
+//   $type: 'Business',
+//   name: 'Acme Corp',
+//   industry: 'Technology',
+//   foundedDate: '2025-01-01'
+// }
+```
+
+### Create Entity
+
+Create a new entity:
+
+```typescript
+import { $, db } from 'sdk.do'
+
+const newBusiness = await db.create($.Business, {
+  name: 'Acme Corp',
+  industry: 'Technology',
+  foundedDate: '2025-01-01',
+  address: {
+    $type: 'PostalAddress',
+    addressLocality: 'San Francisco',
+    addressRegion: 'CA',
+    addressCountry: 'US',
+  },
+})
+
+console.log('Created:', newBusiness.$id)
+```
+
+### Update Entity
+
+Modify an existing entity:
+
+```typescript
+import { $, db } from 'sdk.do'
+
+await db.update($.Business, 'biz_123', {
+  industry: 'Software',
+  numberOfEmployees: 50,
+})
+
+console.log('Updated successfully')
+```
+
+### Delete Entity
+
+Remove an entity:
+
+```typescript
+import { $, db } from 'sdk.do'
+
+await db.delete($.Business, 'biz_123')
+
+console.log('Deleted successfully')
+```
+
+### Query Relationships
+
+Query semantic relationships between entities:
+
+```typescript
+import { $, db } from 'sdk.do'
+
+const business = await db.get($.Business, 'biz_123')
+
+// Find all brands owned by this business
+const brands = await db.relate(business, $.owns, $.Brand)
+
+console.log(`Business owns ${brands.length} brands`)
+```
+
+## Semantic Types
+
+The `$` proxy provides access to 817 Schema.org types:
+
+### Business Types
+
+```typescript
+import { $ } from 'sdk.do'
+
+// General business entities
+$.Business
+$.Organization
+$.Corporation
+$.LocalBusiness
+
+// Specific business types
+$.AutomotiveBusiness
+$.FoodEstablishment
+$.HealthAndBeautyBusiness
+$.Store
+```
+
+### People Types
+
+```typescript
+import { $ } from 'sdk.do'
+
+$.Person
+$.Employee
+$.Customer
+```
+
+### Product Types
+
+```typescript
+import { $ } from 'sdk.do'
+
+$.Product
+$.Service
+$.Offer
+$.Brand
+```
+
+### Content Types
+
+```typescript
+import { $ } from 'sdk.do'
+
+$.Article
+$.BlogPost
+$.HowTo
+$.CreativeWork
+```
+
+### Event Types
+
+```typescript
+import { $ } from 'sdk.do'
+
+$.Event
+$.BusinessEvent
+$.OnlineEvent
+$.SocialEvent
+```
+
+See [schema.org.ai](https://schema.org.ai) for all 817 available types.
+
+## Query Filters
+
+Use filters to narrow down results:
+
+### Equality Filters
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Exact match
+const tech = await db.list($.Business, {
+  where: { industry: 'Technology' },
+})
+
+// Multiple conditions (AND)
+const filtered = await db.list($.Business, {
+  where: {
+    industry: 'Technology',
+    numberOfEmployees: 50,
+  },
+})
+```
+
+### Comparison Operators
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Greater than or equal
+const recent = await db.list($.Business, {
+  where: {
+    foundingDate: { $gte: '2020-01-01' },
+  },
+})
+
+// Less than
+const small = await db.list($.Business, {
+  where: {
+    numberOfEmployees: { $lt: 50 },
+  },
+})
+
+// Range
+const medium = await db.list($.Business, {
+  where: {
+    numberOfEmployees: {
+      $gte: 10,
+      $lte: 100,
+    },
+  },
+})
+```
+
+### Array Filters
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// In array
+const specific = await db.list($.Business, {
+  where: {
+    industry: { $in: ['Technology', 'Software', 'AI'] },
+  },
+})
+
+// Not in array
+const excluded = await db.list($.Business, {
+  where: {
+    industry: { $nin: ['Manufacturing', 'Retail'] },
+  },
+})
+```
+
+## Sorting
+
+Sort results by one or more fields:
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Sort ascending
+const alphabetical = await db.list($.Business, {
+  orderBy: { name: 'asc' },
+})
+
+// Sort descending
+const newest = await db.list($.Business, {
+  orderBy: { foundingDate: 'desc' },
+})
+
+// Multiple sort fields
+const sorted = await db.list($.Business, {
+  orderBy: [{ industry: 'asc' }, { name: 'asc' }],
+})
+```
+
+## Pagination
+
+Handle large result sets with pagination:
+
+### Offset-Based Pagination
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// First page (0-49)
+const page1 = await db.list($.Business, {
+  limit: 50,
+  offset: 0,
+})
+
+// Second page (50-99)
+const page2 = await db.list($.Business, {
+  limit: 50,
+  offset: 50,
+})
+
+// Third page (100-149)
+const page3 = await db.list($.Business, {
+  limit: 50,
+  offset: 100,
+})
+```
+
+### Cursor-Based Pagination
+
+More efficient for large datasets:
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// First page
+const page1 = await db.list($.Business, {
+  limit: 50,
+  orderBy: { createdAt: 'desc' },
+})
+
+// Next page using cursor
+const page2 = await db.list($.Business, {
+  limit: 50,
+  after: page1[page1.length - 1].$id,
+  orderBy: { createdAt: 'desc' },
+})
+```
+
+## Including Relationships
+
+Fetch related entities in a single query:
+
+```typescript
+import { $, db } from 'sdk.do'
+
+// Include single relationship
+const business = await db.get($.Business, 'biz_123', {
+  include: ['brands'],
+})
+
+console.log(business.brands) // Array of Brand entities
+
+// Include multiple relationships
+const full = await db.get($.Business, 'biz_123', {
+  include: ['brands', 'employees', 'address'],
+})
+
+console.log(full.brands) // Brand[]
+console.log(full.employees) // Person[]
+console.log(full.address) // PostalAddress
+```
+
+## Error Handling
+
+Handle errors gracefully:
+
+```typescript
+import { $, db } from 'sdk.do'
+
+try {
+  const business = await db.get($.Business, 'biz_123')
+  console.log(business)
+} catch (error) {
+  if (error.code === 'NOT_FOUND') {
+    console.error('Business not found')
+  } else if (error.code === 'DATABASE_ERROR') {
+    console.error('Database error:', error.message)
+  } else if (error.code === 'VALIDATION_ERROR') {
+    console.error('Validation error:', error.details)
+  } else {
+    console.error('Unknown error:', error)
+  }
+}
+```
+
+## Common Error Codes
+
+- `NOT_FOUND` - Entity does not exist
+- `DATABASE_ERROR` - Database connection or query error
+- `VALIDATION_ERROR` - Entity validation failed
+- `DUPLICATE_KEY` - Unique constraint violation
+- `PERMISSION_DENIED` - Insufficient permissions
+- `TIMEOUT` - Query timeout exceeded
+
+## Configuration
+
+### Environment Variables
+
+Database configuration is handled automatically by the platform:
+
+```bash
+# These are set by the platform
+DATABASE_URL=...
+DATABASE_REGION=auto
+DATABASE_CACHE_TTL=300
+```
+
+### Client Configuration
+
+Optionally configure the database client:
+
+```typescript
+import { db } from 'sdk.do'
+
+db.config({
+  region: 'auto', // Database region
+  cacheTTL: 300, // Cache TTL in seconds
+  timeout: 5000, // Query timeout in ms
+  retry: true, // Enable automatic retries
+  retryAttempts: 3, // Number of retry attempts
+})
+```
+
+## Using with CLI
+
+Execute database operations from the command line:
+
+### List Entities
+
+```bash
+# List all businesses
+do db list Business
+
+# List with filter
+do db list Business --where '{"industry": "Technology"}'
+```
+
+### Get Entity
+
+```bash
+# Get by ID
+do db get Business biz_123
+```
+
+### Create Entity
+
+```bash
+# Create new business
+do db create Business --data '{
+  "name": "Acme Corp",
+  "industry": "Technology"
+}'
+```
+
+### Update Entity
+
+```bash
+# Update business
+do db update Business biz_123 --data '{
+  "industry": "Software"
+}'
+```
+
+### Delete Entity
+
+```bash
+# Delete business
+do db delete Business biz_123
+```
+
+## Complete Example
+
+Here's a complete example putting it all together:
+
+```typescript
+import { $, db } from 'sdk.do'
+
+async function manageBusinesses() {
+  // Create a business
+  const business = await db.create($.Business, {
+    name: 'TechCorp',
+    industry: 'Technology',
+    foundingDate: '2025-01-01',
+    address: {
+      $type: 'PostalAddress',
+      addressLocality: 'San Francisco',
+      addressRegion: 'CA',
+      addressCountry: 'US',
+    },
+  })
+
+  console.log('Created business:', business.$id)
+
+  // Create brands for the business
+  const brand1 = await db.create($.Brand, {
+    name: 'TechBrand Pro',
+    owner: { $id: business.$id },
+  })
+
+  const brand2 = await db.create($.Brand, {
+    name: 'TechBrand Lite',
+    owner: { $id: business.$id },
+  })
+
+  console.log('Created brands:', brand1.$id, brand2.$id)
+
+  // Query brands owned by business
+  const brands = await db.relate(business, $.owns, $.Brand)
+  console.log(`Business owns ${brands.length} brands`)
+
+  // List all technology businesses
+  const techBiz = await db.list($.Business, {
+    where: { industry: 'Technology' },
+    orderBy: { name: 'asc' },
+  })
+
+  console.log(`Found ${techBiz.length} technology businesses`)
+
+  // Update business
+  await db.update($.Business, business.$id, {
+    numberOfEmployees: 50,
+  })
+
+  console.log('Updated business')
+
+  // Get business with relationships
+  const full = await db.get($.Business, business.$id, {
+    include: ['brands', 'address'],
+  })
+
+  console.log('Full business data:', full)
+
+  // Delete a brand
+  await db.delete($.Brand, brand2.$id)
+  console.log('Deleted brand')
+
+  // Verify deletion
+  const remainingBrands = await db.relate(business, $.owns, $.Brand)
+  console.log(`Business now owns ${remainingBrands.length} brands`)
+}
+
+// Run the example
+manageBusinesses().catch(console.error)
+```
+
+## Next Steps
+
+Now that you understand the basics, explore more features:
+
+- [Operations](./operations) - Detailed operation reference
+- [Relationships](./relationships) - Semantic relationship queries
+- [API Reference](../api/) - Complete API documentation
+- [CRUD Examples](../examples/crud) - Practical examples
+- [Relationships Examples](../examples/relationships) - Relationship examples
+
+## Integration with Other Services
+
+Combine `db` with other SDK functions:
+
+### With AI Services
+
+```typescript
+import { $, db, ai } from 'sdk.do'
+
+// Generate descriptions for products
+const products = await db.list($.Product, {
+  where: { description: null },
+})
+
+for (const product of products) {
+  const description = await ai.generate(`Generate description for ${product.name}`, { context: product })
+
+  await db.update(product.$id, { description })
+}
+```
+
+### With Event Listeners
+
+```typescript
+import { $, db, on } from 'sdk.do'
+
+// Listen for business creation
+on($.Business.created, async (event) => {
+  const business = event.data
+
+  console.log('New business created:', business.name)
+
+  // Create default settings
+  await db.create($.Settings, {
+    business: { $id: business.$id },
+    notifications: true,
+    theme: 'light',
+  })
+})
+```
+
+### With Event Publishing
+
+```typescript
+import { $, db, send } from 'sdk.do'
+
+// Create business and publish event
+const business = await db.create($.Business, {
+  name: 'Acme Corp',
+  industry: 'Technology',
+})
+
+// Send custom event
+await send($.Business.verified, business)
+```
+
+## Best Practices
+
+### 1. Use Semantic Types
+
+Always use Schema.org types:
+
+```typescript
+// Good
+const business = await db.get($.Business, 'biz_123')
+
+// Avoid
+const business = await db.get('businesses', 'biz_123')
+```
+
+### 2. Include Related Data
+
+Fetch relationships efficiently:
+
+```typescript
+// Good - single query
+const business = await db.get($.Business, 'biz_123', {
+  include: ['brands', 'employees'],
+})
+
+// Avoid - multiple queries
+const business = await db.get($.Business, 'biz_123')
+const brands = await db.relate(business, $.owns, $.Brand)
+```
+
+### 3. Filter at Database
+
+Apply filters in queries:
+
+```typescript
+// Good - filter at database
+const active = await db.list($.Business, {
+  where: { status: 'active' },
+})
+
+// Avoid - filter in memory
+const all = await db.list($.Business)
+const active = all.filter((b) => b.status === 'active')
+```
+
+### 4. Handle Errors
+
+Always implement error handling:
+
+```typescript
+try {
+  const business = await db.get($.Business, 'biz_123')
+} catch (error) {
+  // Handle specific errors
+  if (error.code === 'NOT_FOUND') {
+    // Entity not found
+  }
+}
+```
+
+### 5. Use Pagination
+
+Don't fetch all data at once:
+
+```typescript
+// Good - paginate
+const page = await db.list($.Business, {
+  limit: 50,
+  offset: 0,
+})
+
+// Avoid - fetch everything
+const all = await db.list($.Business)
+```
+
+## Troubleshooting
+
+### "Entity not found" Error
+
+Check that the entity exists and ID is correct:
+
+```typescript
+try {
+  const business = await db.get($.Business, 'biz_123')
+} catch (error) {
+  if (error.code === 'NOT_FOUND') {
+    console.error('Business does not exist')
+  }
+}
+```
+
+### "Validation error" on Create/Update
+
+Ensure data matches Schema.org type:
+
+```typescript
+// Check required fields
+await db.create($.Business, {
+  name: 'Acme Corp', // Required
+  industry: 'Technology', // Recommended
+})
+```
+
+### Query Returns Empty Results
+
+Verify filter conditions:
+
+```typescript
+// Check filter syntax
+const results = await db.list($.Business, {
+  where: { industry: 'Technology' }, // Exact match, case-sensitive
+})
+
+// Use $in for multiple values
+const results = await db.list($.Business, {
+  where: { industry: { $in: ['Technology', 'Tech', 'Software'] } },
+})
+```
+
+### Performance Issues
+
+Use pagination and indexes:
+
+```typescript
+// Paginate large results
+const results = await db.list($.Business, {
+  limit: 50,
+  offset: 0,
+})
+
+// Include only needed relationships
+const business = await db.get($.Business, 'biz_123', {
+  include: ['brands'], // Only what you need
+})
+```
+
+## Support
+
+- [API Reference](../api/) - Complete API documentation
+- [Examples](../examples/) - Code examples
+- [GitHub Issues](https://github.com/dot-do/ai/issues) - Report bugs
+- [Discord Community](https://discord.gg/dotdo) - Get help
+
+## License
+
+MIT (Open Source)

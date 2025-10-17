@@ -1,0 +1,311 @@
+---
+$id: /docs/core-concepts/data-model
+$type: Documentation
+title: Data Model - Schema-First Database Design
+description: Learn how .do automatically generates database schemas from semantic types
+keywords: [database, schema, orm, drizzle, payload, data model]
+author: .do Team
+lastUpdated: 2025-10-13
+readingTime: 8 min
+---
+
+# Data Model
+
+The `.do` platform uses a **schema-first** approach where your database structure is automatically inferred from semantic types. No migrations, no schema files—just type-safe TypeScript that maps directly to PostgreSQL.
+
+## Automatic Schema Generation
+
+Every time you use a semantic type like `$.Organization` or `$.Product`, the platform automatically:
+
+1. **Creates tables** if they don't exist
+2. **Adds columns** based on properties
+3. **Generates indexes** for common queries
+4. **Sets up relationships** between types
+
+```typescript
+import { db, $ } from 'sdk.do'
+
+// This automatically creates the 'organizations' table
+const org = await db.create('Organization', {
+  $type: '$.Organization',
+  name: 'Acme Corp',
+  industry: '$.Industry.Technology',
+  employees: 500,
+  founded: '2020-01-15',
+})
+
+// Table structure is inferred:
+// - id: UUID primary key
+// - name: VARCHAR(255) NOT NULL
+// - industry: VARCHAR(100)
+// - employees: INTEGER
+// - founded: DATE
+// - created_at: TIMESTAMP
+// - updated_at: TIMESTAMP
+```
+
+## Schema.org Type System
+
+The platform includes **800+ Schema.org types** with full TypeScript autocomplete:
+
+```typescript
+// Business entities
+await db.create('Organization', { ... })
+await db.create('Person', { ... })
+await db.create('Product', { ... })
+
+// Events and actions
+await db.create('Event', { ... })
+await db.create('Order', { ... })
+await db.create('Invoice', { ... })
+
+// Creative works
+await db.create('Article', { ... })
+await db.create('VideoObject', { ... })
+await db.create('SoftwareApplication', { ... })
+```
+
+## Relationships
+
+Relationships are expressed using semantic references:
+
+```typescript
+// One-to-many: Organization -> Products
+const products = await db.create('Product', {
+  $type: '$.Product',
+  name: 'Widget Pro',
+  manufacturer: org.$id, // Reference to organization
+  price: {
+    $type: '$.PriceSpecification',
+    price: 99.99,
+    priceCurrency: 'USD',
+  },
+})
+
+// Query with relationships
+const orgWithProducts = await db.get('Organization', org.$id, {
+  include: ['products'],
+})
+
+console.log(orgWithProducts.products) // Array of Product objects
+```
+
+## Type-Safe Queries
+
+All queries are type-safe with autocomplete:
+
+```typescript
+// List with filters
+const activeCustomers = await db.list('Customer', {
+  where: {
+    status: '$.Active',
+    revenue: { $gt: 10000 },
+    signupDate: { $gte: '2024-01-01' },
+  },
+  include: ['orders', 'subscriptions'],
+  sort: { revenue: 'desc' },
+  limit: 100,
+})
+
+// Get single record
+const customer = await db.get('Customer', customerId, {
+  include: ['orders'],
+})
+
+// Update
+await db.update('Customer', customerId, {
+  status: '$.Premium',
+  revenue: customer.revenue + 1000,
+})
+
+// Delete
+await db.delete('Customer', customerId)
+```
+
+## Query Operators
+
+Powerful query operators for complex filters:
+
+```typescript
+await db.list('Product', {
+  where: {
+    // Comparison
+    price: { $gt: 50, $lt: 200 },
+    stock: { $gte: 10 },
+
+    // Text search
+    name: { $contains: 'Pro' },
+    description: { $startsWith: 'Premium' },
+
+    // Arrays
+    tags: { $in: ['featured', 'new'] },
+    categories: { $contains: 'electronics' },
+
+    // Dates
+    created_at: { $gte: '2024-01-01' },
+    updated_at: { $lt: new Date() },
+
+    // Boolean
+    isActive: true,
+    isDeleted: { $ne: true },
+
+    // Null checks
+    deletedAt: { $is: null },
+  },
+})
+```
+
+## Nested Objects
+
+Store complex nested structures:
+
+```typescript
+await db.create('Event', {
+  $type: '$.Event',
+  name: 'TechConf 2025',
+  location: {
+    $type: '$.Place',
+    name: 'SF Convention Center',
+    address: {
+      $type: '$.PostalAddress',
+      streetAddress: '747 Howard St',
+      addressLocality: 'San Francisco',
+      addressRegion: 'CA',
+      postalCode: '94103',
+      addressCountry: 'US',
+    },
+    geo: {
+      $type: '$.GeoCoordinates',
+      latitude: 37.7833,
+      longitude: -122.4031,
+    },
+  },
+  offers: [
+    {
+      $type: '$.Offer',
+      price: 299,
+      priceCurrency: 'USD',
+      availability: '$.InStock',
+    },
+  ],
+})
+```
+
+## Database Backends
+
+The platform supports multiple database backends:
+
+### PostgreSQL (Production)
+
+```typescript
+// Using Drizzle ORM + Hyperdrive
+DATABASE_URL=postgresql://user:pass@host:5432/db
+
+// Automatic connection pooling
+// Query caching
+// Read replicas support
+```
+
+### D1 SQLite (Edge)
+
+```typescript
+// Cloudflare D1 for edge deployments
+// Ultra-fast queries at the edge
+// Automatic replication
+```
+
+### Payload CMS
+
+```typescript
+// 150+ pre-built collections
+// Media management with R2
+// Rich text editing
+// Access control
+```
+
+## Migrations
+
+Migrations are **automatic and zero-downtime**:
+
+```typescript
+// Add a new field - automatically migrated
+await db.create('Organization', {
+  name: 'Acme',
+  website: 'https://acme.com', // New field!
+})
+
+// Column is added on-the-fly:
+// ALTER TABLE organizations ADD COLUMN website VARCHAR(500)
+
+// No manual migration files needed
+```
+
+## Transactions
+
+Ensure data consistency with transactions:
+
+```typescript
+await db.transaction(async (tx) => {
+  // Deduct from sender
+  await tx.update('Account', senderId, {
+    balance: sender.balance - amount,
+  })
+
+  // Add to recipient
+  await tx.update('Account', recipientId, {
+    balance: recipient.balance + amount,
+  })
+
+  // Create transfer record
+  await tx.create('Transfer', {
+    from: senderId,
+    to: recipientId,
+    amount,
+    timestamp: new Date(),
+  })
+
+  // All-or-nothing: if any operation fails, entire transaction rolls back
+})
+```
+
+## Performance
+
+Optimizations built-in:
+
+- **Automatic indexes** on frequently queried fields
+- **Query caching** with configurable TTL
+- **Connection pooling** via Hyperdrive
+- **Batch operations** for bulk inserts
+- **Lazy loading** of relationships
+
+```typescript
+// Batch insert for performance
+await db.createMany('Product', [
+  { name: 'Widget 1', price: 10 },
+  { name: 'Widget 2', price: 20 },
+  { name: 'Widget 3', price: 30 },
+])
+
+// Query with caching
+const products = await db.list('Product', {
+  cache: '5m', // Cache for 5 minutes
+})
+```
+
+## Best Practices
+
+1. **Use semantic types**: Always specify `$type` for Schema.org compatibility
+2. **Include relationships selectively**: Only include what you need
+3. **Paginate large result sets**: Use `limit` and `offset` or cursor-based pagination
+4. **Leverage caching**: Cache frequently accessed, rarely changing data
+5. **Use transactions**: For operations that must succeed or fail together
+
+## Next Steps
+
+- [Event System](./03-event-system.mdx) - Learn about reactive programming with events
+- [AI Services](./04-ai-services.mdx) - Integrate AI into your data workflows
+- [Database API Reference](/docs/api-reference/sdk/db.mdx) - Complete API documentation
+
+---
+
+**Need help?** Ask in [Discord](https://discord.gg/dotdo) or check the [examples](/docs/EXAMPLES).

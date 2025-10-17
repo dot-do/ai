@@ -1,0 +1,681 @@
+---
+$id: https://embeddings.do/docs/architecture
+$type: TechArticle
+title: embeddings.do Architecture
+description: Understanding how vector embeddings and semantic search work
+keywords: [embeddings, architecture, vectors, neural networks, transformers, semantic search]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Architecture
+
+Understanding how vector embeddings work under the hood.
+
+## Overview
+
+embeddings.do converts text into dense vector representations that capture semantic meaning, enabling mathematical operations on natural language.
+
+```
+Text → Tokenization → Model → Vector Embedding → Storage → Search
+```
+
+## How Embeddings Work
+
+### 1. Text Input
+
+Natural language text is provided:
+
+```typescript
+const text = 'machine learning and artificial intelligence'
+```
+
+### 2. Tokenization
+
+Text is broken into tokens:
+
+```
+['machine', 'learning', 'and', 'artificial', 'intelligence']
+→ [1234, 5678, 91, 2345, 6789]
+```
+
+### 3. Neural Network Processing
+
+Transformer model processes tokens:
+
+```
+Input Tokens
+     ↓
+Multi-Head Attention Layers
+     ↓
+Feed-Forward Networks
+     ↓
+Pooling/Aggregation
+     ↓
+Output Vector (1536 dimensions)
+```
+
+### 4. Vector Output
+
+Dense numerical vector is generated:
+
+```typescript
+;[
+  -0.0123, 0.0456, -0.0789, 0.0234, -0.0567,
+  // ... 1531 more values
+]
+```
+
+## Vector Space
+
+Embeddings create a high-dimensional semantic space where similar concepts cluster together.
+
+### Semantic Clustering
+
+```
+                     AI/ML Cluster
+                    ┌──────────────┐
+                    │ "AI"         │
+                    │ "ML"         │
+                    │ "neural"     │
+                    │ "deep learn" │
+                    └──────────────┘
+
+        Tech Cluster              Food Cluster
+        ┌──────────┐             ┌──────────┐
+        │"software"│             │"cooking" │
+        │"coding"  │             │"recipe"  │
+        │"computer"│             │"cuisine" │
+        └──────────┘             └──────────┘
+```
+
+### Distance = Similarity
+
+Similar concepts have small distances:
+
+```typescript
+distance(embed('AI'), embed('ML')) // Small distance
+distance(embed('AI'), embed('cooking')) // Large distance
+```
+
+## Embedding Models
+
+### Transformer Architecture
+
+Modern embedding models use transformer architecture:
+
+```
+Input: "artificial intelligence"
+     ↓
+Token Embeddings: [1234, 5678]
+     ↓
+Positional Encoding: Add position information
+     ↓
+Self-Attention: Tokens attend to each other
+     ↓
+Feed-Forward: Process attended representations
+     ↓
+Pooling: Aggregate to single vector
+     ↓
+Output: [0.12, -0.34, 0.56, ..., 0.78]
+```
+
+### Model Variants
+
+Different models produce different embeddings:
+
+**OpenAI text-embedding-3-large**
+
+- 1536 dimensions
+- Trained on massive web corpus
+- Best accuracy
+
+**OpenAI text-embedding-3-small**
+
+- 512 dimensions
+- Faster inference
+- Good accuracy
+
+**OpenAI text-embedding-ada-002**
+
+- 1536 dimensions
+- Proven performance
+- Stable model
+
+## Similarity Metrics
+
+### Cosine Similarity
+
+Measures angle between vectors:
+
+```
+cos(θ) = (A · B) / (||A|| × ||B||)
+
+Where:
+  A · B = dot product
+  ||A|| = magnitude of A
+  ||B|| = magnitude of B
+
+Result: -1 to 1 (1 = identical, 0 = orthogonal, -1 = opposite)
+```
+
+Implementation:
+
+```typescript
+function cosineSimilarity(a: number[], b: number[]): number {
+  const dotProduct = a.reduce((sum, val, i) => sum + val * b[i], 0)
+  const magnitudeA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0))
+  const magnitudeB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0))
+  return dotProduct / (magnitudeA * magnitudeB)
+}
+```
+
+### Euclidean Distance
+
+Straight-line distance in vector space:
+
+```
+dist(A, B) = √(Σ(Aᵢ - Bᵢ)²)
+
+Result: 0 to ∞ (0 = identical, larger = more different)
+```
+
+Implementation:
+
+```typescript
+function euclideanDistance(a: number[], b: number[]): number {
+  return Math.sqrt(a.reduce((sum, val, i) => sum + Math.pow(val - b[i], 2), 0))
+}
+```
+
+### Dot Product
+
+Raw similarity score:
+
+```
+dot(A, B) = Σ(Aᵢ × Bᵢ)
+
+Result: -∞ to ∞ (higher = more similar)
+```
+
+Implementation:
+
+```typescript
+function dotProduct(a: number[], b: number[]): number {
+  return a.reduce((sum, val, i) => sum + val * b[i], 0)
+}
+```
+
+## Semantic Search Architecture
+
+### Indexing Phase
+
+```
+┌─────────────┐
+│  Documents  │
+└──────┬──────┘
+       │
+       ▼
+┌──────────────┐
+│ Preprocess   │ Clean, normalize
+└──────┬───────┘
+       │
+       ▼
+┌──────────────┐
+│ Generate     │ ai.embed()
+│ Embeddings   │
+└──────┬───────┘
+       │
+       ▼
+┌──────────────┐
+│ Store in     │ Database or
+│ Vector DB    │ Vector DB
+└──────────────┘
+```
+
+### Query Phase
+
+```
+┌─────────────┐
+│    Query    │
+└──────┬──────┘
+       │
+       ▼
+┌──────────────┐
+│ Generate     │ ai.embed()
+│ Embedding    │
+└──────┬───────┘
+       │
+       ▼
+┌──────────────┐
+│ Calculate    │ Cosine similarity
+│ Similarity   │ with all docs
+└──────┬───────┘
+       │
+       ▼
+┌──────────────┐
+│ Rank and     │ Top K results
+│ Return       │
+└──────────────┘
+```
+
+## Storage Strategies
+
+### Database Storage
+
+Store embeddings alongside entities:
+
+```typescript
+// Database schema
+interface Product {
+  $id: string
+  $type: 'Product'
+  name: string
+  description: string
+  embedding: number[] // Vector embedding
+}
+
+// Storage
+await db.create($.Product, {
+  name: 'Smart Watch',
+  description: 'Advanced fitness tracking',
+  embedding: await ai.embed('Smart Watch Advanced fitness tracking'),
+})
+```
+
+### Vector Database
+
+Specialized databases for vector operations:
+
+```typescript
+// Pinecone example
+await index.upsert([
+  {
+    id: 'prod_123',
+    values: embedding, // Vector
+    metadata: { name: 'Smart Watch' },
+  },
+])
+
+// Fast similarity search
+const results = await index.query({
+  vector: queryEmbedding,
+  topK: 10,
+})
+```
+
+## Optimization Techniques
+
+### Approximate Nearest Neighbors (ANN)
+
+For large-scale search, use ANN algorithms:
+
+**HNSW (Hierarchical Navigable Small World)**
+
+- Graph-based index
+- Fast search
+- High recall
+
+**IVF (Inverted File Index)**
+
+- Cluster-based index
+- Balanced speed/accuracy
+- Good for large datasets
+
+**LSH (Locality-Sensitive Hashing)**
+
+- Hash-based index
+- Very fast
+- Lower accuracy
+
+### Dimensionality Reduction
+
+Reduce embedding dimensions for efficiency:
+
+**PCA (Principal Component Analysis)**
+
+```typescript
+import { PCA } from 'ml-pca'
+
+function reduceDimensions(embeddings: number[][], targetDim = 256) {
+  const pca = new PCA(embeddings)
+  return pca.predict(embeddings, { nComponents: targetDim }).to2DArray()
+}
+
+// 1536 → 256 dimensions
+const reduced = reduceDimensions(embeddings, 256)
+// 6x faster similarity computation!
+```
+
+**t-SNE (t-Distributed Stochastic Neighbor Embedding)**
+
+For visualization:
+
+```typescript
+import { TSNE } from 'tsne-js'
+
+const tsne = new TSNE({
+  dim: 2,
+  perplexity: 30,
+})
+
+// Reduce to 2D for plotting
+const coords2D = tsne.fit(embeddings)
+```
+
+### Caching Strategy
+
+Multi-level caching for performance:
+
+```
+Request
+   ↓
+L1: Memory Cache (instant)
+   ↓
+L2: Redis Cache (< 1ms)
+   ↓
+L3: Database (< 10ms)
+   ↓
+L4: Generate Embedding (100-500ms)
+```
+
+Implementation:
+
+```typescript
+class EmbeddingCache {
+  private memoryCache = new Map<string, number[]>()
+
+  async get(text: string): Promise<number[]> {
+    // L1: Memory
+    if (this.memoryCache.has(text)) {
+      return this.memoryCache.get(text)!
+    }
+
+    // L2: Redis
+    const redisKey = `embed:${hash(text)}`
+    const cached = await redis.get(redisKey)
+    if (cached) {
+      const embedding = JSON.parse(cached)
+      this.memoryCache.set(text, embedding)
+      return embedding
+    }
+
+    // L3: Database
+    const dbRecord = await db.get($.Embedding, redisKey)
+    if (dbRecord) {
+      const embedding = dbRecord.vector
+      await redis.set(redisKey, JSON.stringify(embedding), 'EX', 3600)
+      this.memoryCache.set(text, embedding)
+      return embedding
+    }
+
+    // L4: Generate
+    const embedding = await ai.embed(text)
+    await db.create($.Embedding, {
+      $id: redisKey,
+      text,
+      vector: embedding,
+    })
+    await redis.set(redisKey, JSON.stringify(embedding), 'EX', 3600)
+    this.memoryCache.set(text, embedding)
+
+    return embedding
+  }
+}
+```
+
+## Batch Processing
+
+Process multiple embeddings efficiently:
+
+### Sequential Processing
+
+```typescript
+// Slow: One at a time
+for (const text of texts) {
+  const embedding = await ai.embed(text)
+  await db.update(item.$id, { embedding })
+}
+// Total time: n × 200ms = 20s for 100 items
+```
+
+### Parallel Processing
+
+```typescript
+// Fast: Batch API
+const embeddings = await ai.embed(texts)
+for (let i = 0; i < texts.length; i++) {
+  await db.update(items[i].$id, { embedding: embeddings[i] })
+}
+// Total time: ~500ms for 100 items
+```
+
+### Rate Limiting
+
+Handle API limits:
+
+```typescript
+import pLimit from 'p-limit'
+
+const limit = pLimit(10) // Max 10 concurrent requests
+
+const embeddings = await Promise.all(texts.map((text) => limit(() => ai.embed(text))))
+```
+
+## Data Flow
+
+### Complete System Architecture
+
+```
+┌────────────────────────────────────────────────┐
+│              Application Layer                  │
+│  (User queries, content creation, etc.)         │
+└──────────────────┬─────────────────────────────┘
+                   │
+                   ▼
+┌────────────────────────────────────────────────┐
+│             Embedding Service                   │
+│  - Text preprocessing                           │
+│  - Batch management                             │
+│  - Rate limiting                                │
+└──────────────────┬─────────────────────────────┘
+                   │
+        ┌──────────┴──────────┐
+        │                     │
+        ▼                     ▼
+┌─────────────┐     ┌────────────────┐
+│ Cache Layer │     │  AI Provider   │
+│ (Redis)     │     │ (OpenAI, etc.) │
+└──────┬──────┘     └────────┬───────┘
+       │                     │
+       └──────────┬──────────┘
+                  │
+                  ▼
+┌────────────────────────────────────────────────┐
+│            Storage Layer                        │
+│  ┌──────────────┐    ┌──────────────┐         │
+│  │  Database    │    │  Vector DB   │         │
+│  │  (D1, etc.)  │    │  (Pinecone)  │         │
+│  └──────────────┘    └──────────────┘         │
+└────────────────────────────────────────────────┘
+```
+
+## Performance Characteristics
+
+### Latency
+
+- **Embedding generation**: 100-500ms per request
+- **Batch generation**: ~500ms for 100 texts
+- **Similarity computation**: < 1ms per comparison
+- **Database query**: 10-50ms
+- **Vector DB query**: 1-10ms
+
+### Throughput
+
+- **OpenAI API**: ~3,000 requests/minute
+- **Batch processing**: 50-100 items/second
+- **Similarity search**: 1M+ comparisons/second (optimized)
+
+### Storage
+
+- **Embedding size**: ~6KB (1536 dims × 4 bytes/float)
+- **1M documents**: ~6GB storage
+- **Compressed**: ~2-3GB (with quantization)
+
+## Scaling Strategies
+
+### Horizontal Scaling
+
+Distribute work across workers:
+
+```
+         Load Balancer
+               │
+       ┌───────┼───────┐
+       │       │       │
+    Worker  Worker  Worker
+       │       │       │
+     Cache   Cache   Cache
+       │       │       │
+     ────┴───────┴─────┴────
+          Shared Storage
+```
+
+### Sharding
+
+Partition data for parallel search:
+
+```
+Query
+  │
+  ├─→ Shard 1 (0-999,999)
+  ├─→ Shard 2 (1M-1.9M)
+  └─→ Shard 3 (2M-2.9M)
+  │
+  └─→ Merge & Rank Results
+```
+
+### Read Replicas
+
+Scale read operations:
+
+```
+         Primary DB
+              │
+      ┌───────┼───────┐
+      │       │       │
+  Replica  Replica  Replica
+      │       │       │
+  ────┴───────┴───────┴────
+       Read Requests
+```
+
+## Security Considerations
+
+### API Key Protection
+
+Never expose API keys:
+
+```typescript
+// Good: Server-side only
+const embedding = await ai.embed(text) // Uses OPENAI_API_KEY env var
+
+// Bad: Client-side exposure
+// NEVER do this in client code
+```
+
+### Data Privacy
+
+Embeddings can leak information:
+
+```typescript
+// Consider privacy implications
+const sensitiveText = 'Patient medical history: ...'
+const embedding = await ai.embed(sensitiveText)
+// Embedding may reveal sensitive information
+```
+
+### Rate Limiting
+
+Protect against abuse:
+
+```typescript
+class RateLimiter {
+  private requests = new Map<string, number[]>()
+
+  async checkLimit(userId: string, maxPerMinute = 60): Promise<boolean> {
+    const now = Date.now()
+    const userRequests = this.requests.get(userId) || []
+
+    // Remove old requests
+    const recentRequests = userRequests.filter((t) => now - t < 60000)
+
+    if (recentRequests.length >= maxPerMinute) {
+      return false // Rate limit exceeded
+    }
+
+    recentRequests.push(now)
+    this.requests.set(userId, recentRequests)
+    return true
+  }
+}
+```
+
+## Monitoring
+
+### Key Metrics
+
+Track system health:
+
+```typescript
+interface EmbeddingMetrics {
+  requestCount: number
+  avgLatency: number
+  cacheHitRate: number
+  errorRate: number
+  queueDepth: number
+}
+
+// Monitor
+const metrics: EmbeddingMetrics = {
+  requestCount: 1_500_000, // Total requests
+  avgLatency: 250, // ms
+  cacheHitRate: 0.85, // 85% cache hits
+  errorRate: 0.001, // 0.1% errors
+  queueDepth: 50, // Pending requests
+}
+```
+
+### Alerting
+
+Set up alerts:
+
+```typescript
+// Alert thresholds
+const thresholds = {
+  maxLatency: 1000, // ms
+  minCacheHitRate: 0.7, // 70%
+  maxErrorRate: 0.05, // 5%
+  maxQueueDepth: 1000,
+}
+
+// Check and alert
+if (metrics.avgLatency > thresholds.maxLatency) {
+  await sendAlert('High embedding latency')
+}
+
+if (metrics.cacheHitRate < thresholds.minCacheHitRate) {
+  await sendAlert('Low cache hit rate')
+}
+```
+
+## Next Steps
+
+- [Best Practices](./best-practices) - Optimization techniques
+- [Troubleshooting](./troubleshooting) - Common issues
+- [API Reference](../api/reference) - Complete API docs
+
+## License
+
+CC-BY-4.0 (Open Source)

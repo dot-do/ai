@@ -1,0 +1,651 @@
+---
+title: Human Functions
+description: Multi-platform human-in-the-loop functions with automatic reminders
+---
+
+# Human Functions
+
+Human Functions enable **human-in-the-loop** workflows by requesting human input across multiple platforms (Slack, Discord, Teams, Web, Email) with automatic reminder delivery, timeout handling, and webhook callbacks.
+
+## Overview
+
+Human Functions are powered by the **Human Worker** (`workers/human`), a Cloudflare Worker built with Hono and Durable Objects that provides:
+
+- **Multi-Platform Execution** - Slack, Discord, Teams, Web UI, and Email
+- **Durable State Management** - Reliable execution tracking with Durable Objects
+- **Automatic Reminders** - Smart reminder scheduling with platform-optimized delivery
+- **Webhook Integration** - Secure callback handling with signature verification
+- **Timeout Handling** - Automatic detection and fallback strategies
+
+## Architecture
+
+```
+┌─────────────────┐
+│   Application   │
+└────────┬────────┘
+         │ POST /execute
+         ▼
+┌─────────────────────────────────────────┐
+│         Human Worker (Hono)             │
+│  ┌───────────────────────────────────┐  │
+│  │  Routes & Middleware              │  │
+│  │  • /execute - Create execution    │  │
+│  │  • /status - Check status         │  │
+│  │  │  • /send-reminder - Reminders  │  │
+│  │  • /webhooks/* - Platform         │  │
+│  └───────────────────────────────────┘  │
+│             │                            │
+│             ▼                            │
+│  ┌───────────────────────────────────┐  │
+│  │     PendingResponse (DO)          │  │
+│  │  • State management               │  │
+│  │  • Alarm scheduling               │  │
+│  │  • Reminder tracking              │  │
+│  └───────────────────────────────────┘  │
+└────┬──────────────────────┬──────────────┘
+     │                      │
+     │                      │ Reminders
+     ▼                      ▼
+┌──────────────────┐   ┌──────────────────┐
+│    Platforms     │   │  POST /send-     │
+│  • Slack         │   │    reminder      │
+│  • Discord       │   │                  │
+│  • Teams         │   │  Platform-       │
+│  • Web/Email     │   │  specific        │
+└────────┬─────────┘   │  delivery        │
+         │             └──────────────────┘
+         │ Webhook callback
+         ▼
+┌─────────────────┐
+│  POST /webhooks │
+│  • /slack       │
+│  • /discord     │
+│  • /teams       │
+│  • /web         │
+└─────────────────┘
+```
+
+## Quick Start
+
+### Installation
+
+```bash
+npm install human-in-the-loop functions.do
+```
+
+### Basic Usage
+
+```typescript
+import { defineHumanFunction } from 'functions.do'
+
+// Define a human function
+const approvalRequest = defineHumanFunction({
+  name: 'documentApproval',
+  description: 'Request approval for a document',
+  inputSchema: z.object({
+    documentTitle: z.string(),
+    documentUrl: z.string().url(),
+    requester: z.string(),
+  }),
+  outputSchema: z.object({
+    approved: z.boolean(),
+    comments: z.string().optional(),
+  }),
+  uiType: 'slack',
+  channel: 'approvals',
+  timeout: 3600000, // 1 hour
+  reminderInterval: 900000, // 15 minutes
+})
+
+// Execute the function
+const result = await approvalRequest.execute({
+  documentTitle: 'Q2 Financial Report',
+  documentUrl: 'https://example.com/docs/q2-finance.pdf',
+  requester: 'alice@company.com',
+})
+
+// Handle the response
+if (result.approved) {
+  console.log('Document approved!')
+  console.log(`Comments: ${result.comments}`)
+} else {
+  console.log('Document not approved')
+}
+```
+
+## Platforms
+
+### Slack
+
+**UI**: BlockKit messages with interactive components
+
+**Features**:
+
+- Interactive buttons and select menus
+- Thread-based reminders
+- Modal dialogs
+- Rich text formatting
+- HMAC-SHA256 webhook verification
+
+**Example**:
+
+```typescript
+const slackApproval = defineHumanFunction({
+  name: 'slackApproval',
+  description: 'Request approval via Slack',
+  inputSchema: z.object({
+    title: z.string(),
+    details: z.string(),
+  }),
+  outputSchema: z.object({
+    approved: z.boolean(),
+    reason: z.string().optional(),
+  }),
+  uiType: 'slack',
+  channel: 'approvals',
+  timeout: 7200000, // 2 hours
+  reminderInterval: 1800000, // 30 minutes
+})
+```
+
+**Environment Variables**:
+
+```bash
+SLACK_BOT_TOKEN=xoxb-your-bot-token
+SLACK_SIGNING_SECRET=your-signing-secret
+```
+
+### Discord
+
+**UI**: Rich embeds with button components
+
+**Features**:
+
+- Rich embeds with fields and colors
+- Button components (Primary, Secondary, Success, Danger)
+- Message reply reminders
+- Ed25519 webhook verification
+
+**Example**:
+
+```typescript
+const discordPoll = defineHumanFunction({
+  name: 'teamPoll',
+  description: 'Create a team poll in Discord',
+  inputSchema: z.object({
+    question: z.string(),
+    options: z.array(z.string()),
+  }),
+  outputSchema: z.object({
+    choice: z.string(),
+    userId: z.string(),
+  }),
+  uiType: 'discord',
+  channel: process.env.DISCORD_CHANNEL_ID,
+  timeout: 86400000, // 24 hours
+  reminderInterval: 21600000, // 6 hours
+})
+```
+
+**Environment Variables**:
+
+```bash
+DISCORD_BOT_TOKEN=your-bot-token
+```
+
+### Microsoft Teams
+
+**UI**: Adaptive Cards v1.5
+
+**Features**:
+
+- Adaptive Cards with rich formatting
+- Input fields and action buttons
+- New card reminders
+- Incoming webhook integration
+
+**Example**:
+
+```typescript
+const teamsApproval = defineHumanFunction({
+  name: 'teamsApproval',
+  description: 'Request approval via Microsoft Teams',
+  inputSchema: z.object({
+    requestTitle: z.string(),
+    details: z.string(),
+  }),
+  outputSchema: z.object({
+    approved: z.boolean(),
+  }),
+  uiType: 'teams',
+  webhookUrl: process.env.TEAMS_WEBHOOK_URL,
+  timeout: 3600000, // 1 hour
+  reminderInterval: 900000, // 15 minutes
+})
+```
+
+**Environment Variables**:
+
+```bash
+TEAMS_WEBHOOK_URL=https://outlook.office.com/webhook/...
+```
+
+### Web UI
+
+**UI**: HTML5 forms with modern CSS
+
+**Features**:
+
+- Responsive design (mobile-friendly)
+- Form validation
+- Custom UI renderers
+- Email reminders via Resend
+
+**Example**:
+
+```typescript
+const webFeedback = defineHumanFunction({
+  name: 'customerFeedback',
+  description: 'Collect customer feedback via web form',
+  inputSchema: z.object({
+    customerName: z.string(),
+    customerEmail: z.string().email(),
+    productName: z.string(),
+  }),
+  outputSchema: z.object({
+    rating: z.number().min(1).max(5),
+    feedback: z.string(),
+  }),
+  uiType: 'web',
+  timeout: 604800000, // 7 days
+  reminderInterval: 86400000, // 24 hours
+})
+```
+
+**Environment Variables**:
+
+```bash
+HUMAN_WORKER_URL=https://human.do
+WEB_CALLBACK_URL=https://human.do/webhooks/web
+RESEND_API_KEY=re_your-api-key
+```
+
+### Email
+
+**UI**: Beautiful HTML emails via Resend
+
+**Features**:
+
+- Responsive email templates
+- Gradient design matching platform branding
+- Direct CTA buttons
+- Timeout warnings
+- Follow-up reminders
+
+**Example**:
+
+```typescript
+const emailSurvey = defineHumanFunction({
+  name: 'customerSurvey',
+  description: 'Send customer satisfaction survey via email',
+  inputSchema: z.object({
+    customerName: z.string(),
+    customerEmail: z.string().email(),
+    surveyTopic: z.string(),
+  }),
+  outputSchema: z.object({
+    satisfaction: z.enum(['very-satisfied', 'satisfied', 'neutral', 'dissatisfied', 'very-dissatisfied']),
+    comments: z.string().optional(),
+  }),
+  uiType: 'web', // Web platform sends email reminders
+  timeout: 604800000, // 7 days
+  reminderInterval: 172800000, // 48 hours
+})
+```
+
+## Reminder System
+
+All platforms support automatic reminders with platform-optimized delivery.
+
+### Configuration
+
+```typescript
+const approval = defineHumanFunction({
+  name: 'urgentApproval',
+  description: 'Urgent approval request',
+  inputSchema: /* ... */,
+  outputSchema: /* ... */,
+  uiType: 'slack',
+  timeout: 86400000, // 24 hours until timeout
+  reminderInterval: 3600000, // Send reminder every 1 hour
+})
+```
+
+### Reminder Behavior
+
+| Platform    | Delivery Method   | Visual Style                                             |
+| ----------- | ----------------- | -------------------------------------------------------- |
+| **Slack**   | Thread reply      | `⏰ *Reminder N*: Please respond to the request above`   |
+| **Discord** | Message reply     | `⏰ **Reminder N**: Please respond to the request above` |
+| **Teams**   | New Adaptive Card | Orange "Attention" color with reminder count             |
+| **Web**     | HTML Email        | Beautiful template with form link and CTA button         |
+
+### Reminder Algorithm
+
+The Human Worker uses a single Durable Object alarm to handle both reminders and timeouts:
+
+1. **Calculate next event**:
+   - Next reminder time = `lastReminderAt + reminderInterval`
+   - Timeout time = `startedAt + timeout`
+   - Next alarm = earliest of (next reminder, timeout)
+
+2. **On alarm trigger**:
+   - If current time >= timeout → Execute timeout handler
+   - If current time >= next reminder → Send reminder, schedule next alarm
+   - If response received → Cancel all alarms
+
+3. **Reminder tracking**:
+   - `reminderCount`: Number of reminders sent
+   - `lastReminderAt`: Timestamp of last reminder
+   - Stored in Durable Object state
+
+## Timeout Handling
+
+When a human function times out without a response:
+
+1. **Status Update**: Execution status changes to `timeout`
+2. **Callback**: Optional callback URL is notified
+3. **Fallback**: Application can define fallback behavior
+
+```typescript
+const approval = defineHumanFunction({
+  name: 'approvalWithTimeout',
+  description: 'Approval with timeout handling',
+  inputSchema: /* ... */,
+  outputSchema: /* ... */,
+  uiType: 'slack',
+  timeout: 3600000, // 1 hour
+  onTimeout: async (input, ctx) => {
+    // Fallback logic
+    console.log('Approval timed out, auto-rejecting')
+    return { approved: false, reason: 'Timeout' }
+  },
+})
+```
+
+## Webhook Security
+
+Each platform uses cryptographic signature verification:
+
+### Slack (HMAC-SHA256)
+
+```typescript
+// Verify Slack request signature
+const timestamp = request.headers.get('X-Slack-Request-Timestamp')
+const signature = request.headers.get('X-Slack-Signature')
+const body = await request.text()
+
+const hmac = crypto.createHmac('sha256', SLACK_SIGNING_SECRET)
+hmac.update(`v0:${timestamp}:${body}`)
+const expected = `v0=${hmac.digest('hex')}`
+
+if (signature !== expected) {
+  throw new Error('Invalid signature')
+}
+```
+
+### Discord (Ed25519)
+
+```typescript
+// Verify Discord interaction signature
+const signature = request.headers.get('X-Signature-Ed25519')
+const timestamp = request.headers.get('X-Signature-Timestamp')
+const body = await request.text()
+
+const isValid = nacl.sign.detached.verify(Buffer.from(timestamp + body), Buffer.from(signature, 'hex'), Buffer.from(DISCORD_PUBLIC_KEY, 'hex'))
+
+if (!isValid) {
+  throw new Error('Invalid signature')
+}
+```
+
+## Advanced Features
+
+### Custom UI Renderers
+
+Define custom UI logic for each platform:
+
+```typescript
+const customApproval = defineHumanFunction({
+  name: 'customApproval',
+  description: 'Approval with custom UI',
+  inputSchema: /* ... */,
+  outputSchema: /* ... */,
+  uiType: 'web',
+  uiRenderer: `
+    function render(executionId, callbackUrl) {
+      return \`
+        <!DOCTYPE html>
+        <html>
+          <head><title>Custom Approval</title></head>
+          <body>
+            <h1>Please Approve</h1>
+            <button onclick="approve()">Approve</button>
+            <script>
+              async function approve() {
+                await fetch('${callbackUrl}', {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    executionId: '${executionId}',
+                    action: 'accept',
+                    data: { approved: true }
+                  })
+                })
+              }
+            </script>
+          </body>
+        </html>
+      \`
+    }
+  `,
+})
+```
+
+### Response Parsers
+
+Parse platform-specific responses:
+
+```typescript
+const slackFeedback = defineHumanFunction({
+  name: 'slackFeedback',
+  description: 'Collect feedback via Slack',
+  inputSchema: /* ... */,
+  outputSchema: /* ... */,
+  uiType: 'slack',
+  responseParser: `
+    function parse(payload, data) {
+      // Parse Slack BlockKit response
+      return {
+        rating: parseInt(data.rating),
+        feedback: data.feedback || '',
+        userId: payload.user.id,
+        timestamp: Date.now()
+      }
+    }
+  `,
+})
+```
+
+### Execution Status Tracking
+
+Monitor execution status:
+
+```typescript
+// Check status
+const status = await fetch('https://human.do/status/exec_123')
+const data = await status.json()
+
+console.log(data)
+// {
+//   executionId: 'exec_123',
+//   status: 'pending',
+//   startedAt: 1234567890,
+//   reminderCount: 2,
+//   lastReminderAt: 1234567890,
+//   timeoutAt: 1234567890,
+// }
+```
+
+## Best Practices
+
+### 1. Set Appropriate Timeouts
+
+```typescript
+// Short timeout for urgent requests
+const urgentApproval = defineHumanFunction({
+  timeout: 1800000, // 30 minutes
+  reminderInterval: 300000, // 5 minutes
+})
+
+// Long timeout for surveys
+const survey = defineHumanFunction({
+  timeout: 604800000, // 7 days
+  reminderInterval: 86400000, // 24 hours
+})
+```
+
+### 2. Provide Clear Descriptions
+
+```typescript
+const approval = defineHumanFunction({
+  name: 'purchaseApproval',
+  description: 'Purchase Order Approval Required',
+  // In the input, provide context
+  inputSchema: z.object({
+    poNumber: z.string(),
+    vendor: z.string(),
+    amount: z.number(),
+    requester: z.string(),
+    justification: z.string(),
+  }),
+})
+```
+
+### 3. Handle Errors Gracefully
+
+```typescript
+try {
+  const result = await approval.execute(input)
+} catch (error) {
+  if (error.code === 'TIMEOUT') {
+    // Handle timeout
+    console.log('Approval timed out')
+  } else if (error.code === 'DECLINED') {
+    // Handle rejection
+    console.log('Approval declined')
+  } else {
+    // Handle other errors
+    console.error('Error:', error)
+  }
+}
+```
+
+### 4. Use Idempotency Keys
+
+```typescript
+const result = await approval.execute(input, {
+  idempotencyKey: `approval-${poNumber}`,
+})
+```
+
+## API Reference
+
+### `defineHumanFunction<TInput, TOutput>(options)`
+
+Defines a human function with strongly-typed input and output.
+
+**Parameters**:
+
+- `name` - Unique function name
+- `description` - Human-readable description
+- `inputSchema` - Zod schema for input validation
+- `outputSchema` - Zod schema for output validation
+- `uiType` - Platform type ('slack' | 'discord' | 'teams' | 'web')
+- `timeout` - Timeout in milliseconds
+- `reminderInterval` - Reminder interval in milliseconds
+- Platform-specific options (channel, webhookUrl, etc.)
+
+**Returns**: `HumanFunction<TInput, TOutput>`
+
+### `HumanFunction.execute(input, options?)`
+
+Executes the human function and waits for response.
+
+**Parameters**:
+
+- `input` - Function input (validated against inputSchema)
+- `options` - Execution options
+  - `idempotencyKey` - Optional idempotency key
+  - `context` - Additional context
+  - `timeout` - Override default timeout
+
+**Returns**: `Promise<TOutput>`
+
+### Worker Endpoints
+
+**POST /execute** - Create execution
+
+```typescript
+{
+  functionDef: HumanFunctionDefinition,
+  input: Record<string, any>,
+  executionId: string,
+  timeout?: number,
+  reminderInterval?: number,
+  callbackUrl?: string
+}
+```
+
+**GET /status/:executionId** - Check status
+
+```typescript
+{
+  executionId: string,
+  status: 'pending' | 'completed' | 'timeout',
+  startedAt: number,
+  completedAt?: number,
+  reminderCount: number,
+  response?: any
+}
+```
+
+**POST /send-reminder** - Send reminder (internal)
+
+```typescript
+{
+  executionId: string,
+  platform: string,
+  messageId: string,
+  channel: string,
+  reminderCount: number
+}
+```
+
+## Related Documentation
+
+- **Worker Implementation**: [`workers/human/README.md`](../../../workers/human/README.md)
+- **Package**: [`ai/packages/human-in-the-loop`](../../packages/human-in-the-loop/README.md)
+- **Functions.do**: [`ai/packages/functions.do`](../../packages/functions.do/README.md)
+- **Implementation Notes**:
+  - [Phase 6: Webhook Callbacks](../../../notes/2025-10-11/phase-6-webhook-callbacks.md)
+  - [Phase 7: Reminder System](../../../notes/2025-10-11/phase-7-reminder-system.md)
+  - [Phase 8: Multi-Platform Reminders](../../../notes/2025-10-11/phase-8-multi-platform-reminders.md)
+  - [Phase 9: Email Reminders](../../../notes/2025-10-11/phase-9-email-reminders.md)
+
+## Support
+
+For issues or questions:
+
+- **GitHub**: [github.com/dot-do/platform](https://github.com/dot-do/platform)
+- **Documentation**: [docs.do](https://docs.do)
+- **Community**: [community.do](https://community.do)

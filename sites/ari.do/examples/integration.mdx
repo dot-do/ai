@@ -1,0 +1,266 @@
+---
+$id: https://ari.do/examples/integration
+$type: TechArticle
+title: Recruiting AI Agent Integration Examples
+description: Integrate Recruiting AI Agent with external tools and services
+keywords: [integration, ari.do, api, external tools]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Integration Examples
+
+Integrate Recruiting AI Agent with external tools and services.
+
+## Platform Integration
+
+### Database Integration
+
+```typescript
+import $, { agent, db } from 'sdk.do'
+
+const recruitingAgent = await agent.create({
+  $role: $.RecruitingAgent,
+  tools: { db },
+})
+
+// Use database
+const result = await recruitingAgent.execute({
+  task: 'Analyze data',
+  data_source: await db.list($.DataModel),
+})
+
+// Store results
+await db.create($.Result, result)
+```
+
+### Event System Integration
+
+```typescript
+import $, { agent, on, send } from 'sdk.do'
+
+const recruitingAgent = await agent.create({
+  $role: $.RecruitingAgent,
+  tools: { on, send },
+})
+
+// React to events
+await on($.Event.triggered, async (event) => {
+  const result = await recruitingAgent.execute({
+    task: 'Handle event',
+    event: event,
+  })
+
+  await send($.Result.completed, result)
+})
+```
+
+### Scheduling Integration
+
+```typescript
+import $, { agent, every } from 'sdk.do'
+
+const recruitingAgent = await agent.create({
+  $role: $.RecruitingAgent,
+})
+
+// Schedule tasks
+await every($.Daily, async () => {
+  const report = await recruitingAgent.generateReport({
+    period: 'yesterday',
+  })
+
+  await send($.Report.daily, report)
+})
+
+await every($.Weekly, async () => {
+  const analysis = await recruitingAgent.analyzeWeek()
+  await db.create($.WeeklyAnalysis, analysis)
+})
+```
+
+## External API Integration
+
+### REST API Integration
+
+```typescript
+import $, { agent, api } from 'sdk.do'
+
+const externalAPI = await api.connect('external_service', {
+  baseURL: 'https://api.example.com',
+  auth: {
+    type: 'bearer',
+    token: process.env.API_TOKEN,
+  },
+  timeout: 30000,
+  retry: 3,
+})
+
+const recruitingAgent = await agent.create({
+  $role: $.RecruitingAgent,
+  tools: { externalAPI },
+})
+
+// Use external API
+const result = await recruitingAgent.execute({
+  task: 'Fetch and analyze external data',
+  fetch_from: 'externalAPI',
+})
+```
+
+### Webhook Integration
+
+```typescript
+import $, { agent } from 'sdk.do'
+
+const recruitingAgent = await agent.create({
+  $role: $.RecruitingAgent,
+  webhooks: {
+    endpoint: '/webhooks/events',
+    events: ['data.updated', 'task.completed'],
+    retry: 3,
+  },
+})
+
+// Webhook handler
+app.post('/webhooks/events', async (req, res) => {
+  const event = req.body
+
+  const result = await recruitingAgent.execute({
+    task: 'Handle webhook',
+    event: event,
+  })
+
+  res.json(result)
+})
+```
+
+## Tool-Specific Integrations
+
+### Example Tool 1 Integration
+
+```typescript
+import $, { agent, api } from 'sdk.do'
+
+const tool1 = await api.connect('tool1', {
+  api_key: process.env.TOOL1_API_KEY,
+  config: {
+    option1: 'value1',
+    option2: 'value2',
+  },
+})
+
+const recruitingAgent = await agent.create({
+  $role: $.RecruitingAgent,
+  tools: { tool1 },
+})
+```
+
+### Example Tool 2 Integration
+
+```typescript
+const tool2 = await api.connect('tool2', {
+  credentials: {
+    username: process.env.TOOL2_USERNAME,
+    password: process.env.TOOL2_PASSWORD,
+  },
+})
+
+const recruitingAgent = await agent.create({
+  $role: $.RecruitingAgent,
+  tools: { tool2 },
+})
+```
+
+## Authentication Patterns
+
+### API Key Authentication
+
+```typescript
+const service = await api.connect('service', {
+  auth: {
+    type: 'api_key',
+    key: process.env.API_KEY,
+    header: 'X-API-Key', // Custom header
+  },
+})
+```
+
+### OAuth 2.0 Authentication
+
+```typescript
+const service = await api.connect('service', {
+  auth: {
+    type: 'oauth2',
+    client_id: process.env.CLIENT_ID,
+    client_secret: process.env.CLIENT_SECRET,
+    token_url: 'https://auth.example.com/token',
+    scopes: ['read', 'write'],
+  },
+})
+```
+
+### Custom Authentication
+
+```typescript
+const service = await api.connect('service', {
+  auth: {
+    type: 'custom',
+    authenticate: async () => {
+      // Custom auth logic
+      const token = await getCustomToken()
+      return { headers: { Authorization: `Bearer ${token}` } }
+    },
+  },
+})
+```
+
+## Error Handling
+
+### Retry Logic
+
+```typescript
+const service = await api.connect('service', {
+  retry: {
+    max_retries: 3,
+    backoff: 'exponential',
+    initial_delay: 1000,
+    max_delay: 10000,
+    on_retry: (attempt, error) => {
+      console.log(`Retry attempt ${attempt}: ${error.message}`)
+    },
+  },
+})
+```
+
+### Fallback Strategies
+
+```typescript
+try {
+  const result = await primaryService.execute(task)
+} catch (error) {
+  console.log('Primary service failed, using fallback')
+  const result = await fallbackService.execute(task)
+}
+```
+
+## Best Practices
+
+1. **Secure Credentials**: Never hardcode API keys
+2. **Error Handling**: Implement comprehensive error handling
+3. **Rate Limiting**: Respect API rate limits
+4. **Caching**: Cache responses when appropriate
+5. **Monitoring**: Monitor integration health
+
+## Next Steps
+
+- [Real-world Use Case](./real-world-use-case) - Production example
+- [API Reference](../api/reference) - Complete API
+- [Best Practices](../docs/best-practices) - Best practices
+
+## Related Documentation
+
+- [Basic Usage](./basic-usage) - Basic examples
+- [Advanced Patterns](./advanced-patterns) - Advanced patterns
+- [Getting Started](../docs/getting-started) - Setup guide

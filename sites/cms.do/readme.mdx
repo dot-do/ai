@@ -1,0 +1,419 @@
+---
+$id: https://cms.do
+$type: WebSite
+name: cms.do
+description: Modern headless CMS with content creation, publishing workflows, media management, and versioning
+keywords: [cms, content-management, publishing, workflow, media, versioning, headless]
+license: MIT
+---
+
+# cms.do
+
+**Modern headless CMS with content creation, publishing workflows, media management, and versioning**
+
+cms.do is a comprehensive content management system for the `.do` platform, providing structured content creation, flexible publishing workflows, digital asset management, content versioning, and multi-channel publishing capabilities.
+
+## Quick Start
+
+```bash
+pnpm add cms.do
+```
+
+```typescript
+import $, { cms } from 'cms.do'
+
+// Create content
+const article = await cms.create($.Article, {
+  title: 'Getting Started with CMS',
+  body: 'Content goes here...',
+  author: user.$id,
+  status: 'draft',
+})
+
+// Publish content
+await cms.publish(article, {
+  channels: ['web', 'mobile', 'api'],
+  scheduledFor: new Date('2025-02-01'),
+})
+
+// Query content
+const articles = await cms.list($.Article, {
+  where: { status: 'published' },
+  orderBy: { datePublished: 'desc' },
+})
+
+// Media management
+const image = await cms.media.upload(file, {
+  alt: 'Hero image',
+  tags: ['homepage', 'featured'],
+})
+```
+
+## Key Features
+
+### Content Creation
+
+Structured content with rich editing:
+
+```typescript
+import { cms } from 'cms.do'
+
+// Create article
+const article = await cms.create($.Article, {
+  title: 'Platform Updates',
+  headline: 'New Features Released',
+  articleBody: `
+# New Features
+
+We're excited to announce several new features...
+
+## What's New
+
+- Feature 1
+- Feature 2
+- Feature 3
+  `,
+  author: {
+    $type: 'Person',
+    name: 'John Doe',
+    email: 'john@acme.com',
+  },
+  dateCreated: new Date(),
+  status: 'draft',
+  metadata: {
+    seo: {
+      title: 'Platform Updates | Acme',
+      description: 'Latest platform updates',
+      keywords: ['platform', 'updates', 'features'],
+    },
+    social: {
+      image: 'https://cdn.acme.com/og-image.png',
+      title: 'Check out our new features!',
+    },
+  },
+})
+
+// Create with rich content
+const richArticle = await cms.create($.Article, {
+  title: 'Rich Content Example',
+  content: {
+    blocks: [
+      { type: 'heading', level: 1, text: 'Title' },
+      { type: 'paragraph', text: 'Introduction paragraph...' },
+      { type: 'image', url: 'https://...', alt: 'Description' },
+      { type: 'code', language: 'typescript', code: 'const x = 1' },
+      { type: 'callout', style: 'info', text: 'Important note' },
+    ],
+  },
+})
+```
+
+### Publishing Workflows
+
+Multi-stage content workflows:
+
+```typescript
+// Create workflow
+const workflow = await cms.workflows.create({
+  name: 'Article Publishing',
+  stages: [
+    {
+      name: 'draft',
+      next: ['review'],
+      permissions: ['author', 'editor'],
+    },
+    {
+      name: 'review',
+      next: ['approved', 'draft'],
+      permissions: ['editor'],
+      actions: ['approve', 'reject'],
+    },
+    {
+      name: 'approved',
+      next: ['published'],
+      permissions: ['publisher'],
+      autoPublish: false,
+    },
+    {
+      name: 'published',
+      permissions: ['publisher'],
+      final: true,
+    },
+  ],
+})
+
+// Submit for review
+await cms.workflows.transition(article, {
+  from: 'draft',
+  to: 'review',
+  comment: 'Ready for review',
+})
+
+// Approve
+await cms.workflows.transition(article, {
+  from: 'review',
+  to: 'approved',
+  approver: editor.$id,
+  comment: 'Looks good!',
+})
+
+// Publish
+await cms.publish(article, {
+  channels: ['web', 'api'],
+  notify: true,
+})
+```
+
+### Media Management
+
+Digital asset management:
+
+```typescript
+// Upload media
+const image = await cms.media.upload(file, {
+  folder: '/images/blog',
+  alt: 'Blog post hero image',
+  tags: ['blog', '2025', 'featured'],
+  metadata: {
+    photographer: 'Jane Doe',
+    license: 'CC-BY-4.0',
+  },
+})
+
+// Image transformations
+const thumbnail = await cms.media.transform(image, {
+  width: 300,
+  height: 200,
+  fit: 'cover',
+  format: 'webp',
+})
+
+// Video processing
+const video = await cms.media.upload(videoFile, {
+  type: 'video',
+  transcode: {
+    formats: ['mp4', 'webm'],
+    resolutions: ['1080p', '720p', '480p'],
+    generateThumbnails: true,
+  },
+})
+
+// Media library
+const mediaLibrary = await cms.media.list({
+  where: {
+    type: 'image',
+    tags: { $contains: 'featured' },
+  },
+  orderBy: { dateUploaded: 'desc' },
+  limit: 50,
+})
+
+// Organize media
+await cms.media.createFolder('/images/2025')
+await cms.media.move(image, '/images/2025/blog')
+```
+
+### Content Versioning
+
+Track content changes:
+
+```typescript
+// Auto-versioning on save
+await cms.update(article, {
+  title: 'Updated Title',
+  createVersion: true,
+  versionNote: 'Updated title for SEO',
+})
+
+// Get all versions
+const versions = await cms.versions(article.$id)
+versions.forEach((v) => {
+  console.log(`${v.version} - ${v.date} - ${v.author.name}`)
+})
+
+// Compare versions
+const diff = await cms.diff(article.$id, 'v1', 'v2')
+console.log('Changes:', diff.changes)
+
+// Revert to version
+await cms.revert(article, 'v1', {
+  reason: 'Reverting recent changes',
+})
+
+// Branch content
+const draft = await cms.branch(article, {
+  name: 'draft-redesign',
+  description: 'Experimenting with new layout',
+})
+```
+
+### Multi-Channel Publishing
+
+Publish to multiple platforms:
+
+```typescript
+// Configure channels
+await cms.channels.create({
+  name: 'website',
+  type: 'web',
+  endpoint: 'https://acme.com',
+  config: {
+    apiKey: 'key',
+    webhook: 'https://acme.com/webhooks/cms',
+  },
+})
+
+await cms.channels.create({
+  name: 'mobile-app',
+  type: 'mobile',
+  config: {
+    platform: ['ios', 'android'],
+    pushNotifications: true,
+  },
+})
+
+// Publish to channels
+await cms.publish(article, {
+  channels: ['website', 'mobile-app', 'newsletter'],
+  scheduledFor: new Date('2025-02-01T09:00:00Z'),
+  metadata: {
+    website: { featured: true, position: 'hero' },
+    'mobile-app': { pushNotification: true },
+    newsletter: { segment: 'developers' },
+  },
+})
+
+// Check publishing status
+const status = await cms.publishStatus(article)
+console.log('Published to:', status.channels)
+console.log('Pending:', status.scheduled)
+```
+
+### Content Relationships
+
+Link related content:
+
+```typescript
+// Create relationships
+await cms.relate(article, $.about, product)
+await cms.relate(article, $.author, author)
+await cms.relate(article, $.relatedTo, otherArticles)
+
+// Query relationships
+const related = await cms.related(article, $.relatedTo, $.Article)
+const author = await cms.related(article, $.author, $.Person)
+
+// Content collections
+const collection = await cms.collections.create({
+  name: 'Featured Articles',
+  items: [article1.$id, article2.$id, article3.$id],
+  order: 'manual',
+  filters: {
+    tags: { $contains: 'featured' },
+    status: 'published',
+  },
+})
+```
+
+## Use Cases
+
+### Blog Platform
+
+```typescript
+import { cms } from 'cms.do'
+
+class BlogPlatform {
+  async createPost(data: PostData) {
+    // Create draft
+    const post = await cms.create($.BlogPosting, {
+      headline: data.title,
+      articleBody: data.content,
+      author: data.author,
+      keywords: data.tags,
+      status: 'draft',
+    })
+
+    // Upload featured image
+    if (data.featuredImage) {
+      const image = await cms.media.upload(data.featuredImage, {
+        folder: '/blog/featured',
+      })
+      await cms.update(post, { image: image.$id })
+    }
+
+    // Generate SEO metadata
+    const seo = await cms.generateSEO(post)
+    await cms.update(post, { metadata: { seo } })
+
+    return post
+  }
+
+  async publishPost(postId: string) {
+    // Submit for review
+    await cms.workflows.transition(postId, {
+      to: 'review',
+    })
+
+    // Auto-publish after approval
+    on($.WorkflowCompleted, async (event) => {
+      if (event.entityId === postId && event.stage === 'approved') {
+        await cms.publish(postId, {
+          channels: ['web', 'rss', 'social'],
+          notify: true,
+        })
+      }
+    })
+  }
+}
+```
+
+### E-commerce Content
+
+```typescript
+async function manageProductContent() {
+  // Create product content
+  const product = await cms.create($.Product, {
+    name: 'Smart Watch Pro',
+    description: 'Advanced fitness tracking...',
+    images: await cms.media.uploadBatch(productImages),
+    price: 299.99,
+    availability: 'InStock',
+    category: 'Electronics',
+  })
+
+  // Localize content
+  await cms.localize(product, 'es', {
+    name: 'Reloj Inteligente Pro',
+    description: 'Seguimiento avanzado de fitness...',
+  })
+
+  // Product variations
+  const variations = await cms.createVariations(product, {
+    colors: ['black', 'silver', 'gold'],
+    sizes: ['small', 'medium', 'large'],
+  })
+
+  // Publish across channels
+  await cms.publish(product, {
+    channels: ['website', 'marketplace', 'social'],
+  })
+}
+```
+
+## TypeScript Support
+
+```typescript
+import { cms } from 'cms.do'
+import type { Article, BlogPosting, Product } from 'schema.org.ai'
+
+const article: Article = await cms.create($.Article, data)
+const post: BlogPosting = await cms.get($.BlogPosting, postId)
+```
+
+## License
+
+MIT (Open Source)
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

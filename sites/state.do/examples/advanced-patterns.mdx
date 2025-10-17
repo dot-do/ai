@@ -1,0 +1,808 @@
+---
+$id: https://state.do/examples/advanced-patterns
+$type: HowTo
+title: Advanced Patterns
+description: Advanced state management patterns and techniques
+keywords: [advanced, patterns, locks, event sourcing, CQRS, replication]
+author:
+  $type: Organization
+  name: .do Platform
+license: CC-BY-4.0
+---
+
+# Advanced Patterns
+
+Advanced state management patterns and techniques with state.do.
+
+## Distributed Locks
+
+Implement distributed locking for coordinated access:
+
+```typescript
+import { $, state } from 'sdk.do'
+
+export class DistributedLock {
+  locks: Map<string, { owner: string; expiresAt: number }> = new Map()
+
+  async acquire(resource: string, owner: string, ttl: number = 30000): Promise<boolean> {
+    const existing = this.locks.get(resource)
+
+    // Check if lock is expired
+    if (existing && existing.expiresAt < Date.now()) {
+      this.locks.delete(resource)
+    }
+
+    // Try to acquire
+    if (!this.locks.has(resource)) {
+      this.locks.set(resource, {
+        owner,
+        expiresAt: Date.now() + ttl,
+      })
+      await state.save(this)
+      return true
+    }
+
+    return false
+  }
+
+  async release(resource: string, owner: string): Promise<boolean> {
+    const existing = this.locks.get(resource)
+
+    // Only owner can release
+    if (existing && existing.owner === owner) {
+      this.locks.delete(resource)
+      await state.save(this)
+      return true
+    }
+
+    return false
+  }
+
+  async extend(resource: string, owner: string, ttl: number = 30000): Promise<boolean> {
+    const existing = this.locks.get(resource)
+
+    // Only owner can extend
+    if (existing && existing.owner === owner) {
+      existing.expiresAt = Date.now() + ttl
+      await state.save(this)
+      return true
+    }
+
+    return false
+  }
+
+  async isLocked(resource: string): Promise<boolean> {
+    const existing = this.locks.get(resource)
+
+    if (!existing) return false
+
+    // Check expiration
+    if (existing.expiresAt < Date.now()) {
+      this.locks.delete(resource)
+      await state.save(this)
+      return false
+    }
+
+    return true
+  }
+}
+
+// Usage
+const locks = await state.get($.DistributedLock, 'global-locks')
+
+const acquired = await locks.acquire('resource-1', 'worker-1', 60000)
+if (acquired) {
+  try {
+    // Critical section
+    await performWork()
+  } finally {
+    await locks.release('resource-1', 'worker-1')
+  }
+} else {
+  console.log('Could not acquire lock')
+}
+```
+
+## Event Sourcing
+
+Store state as a sequence of events:
+
+```typescript
+import { $, state, send } from 'sdk.do'
+
+interface Event {
+  type: string
+  data: any
+  timestamp: number
+  version: number
+}
+
+export class EventSourcedEntity {
+  events: Event[] = []
+  currentState: any = {}
+  version: number = 0
+
+  async applyEvent(type: string, data: any) {
+    const event: Event = {
+      type,
+      data,
+      timestamp: Date.now(),
+      version: ++this.version,
+    }
+
+    this.events.push(event)
+    this.currentState = this.reduce(this.currentState, event)
+
+    await state.save(this)
+
+    // Publish event
+    await send($.Event.created, event)
+
+    return event
+  }
+
+  reduce(state: any, event: Event): any {
+    switch (event.type) {
+      case 'AccountCreated':
+        return { balance: 0, owner: event.data.owner }
+
+      case 'MoneyDeposited':
+        return { ...state, balance: state.balance + event.data.amount }
+
+      case 'MoneyWithdrawn':
+        return { ...state, balance: state.balance - event.data.amount }
+
+      default:
+        return state
+    }
+  }
+
+  async getState() {
+    return this.currentState
+  }
+
+  async getEvents(fromVersion: number = 0) {
+    return this.events.filter((e) => e.version > fromVersion)
+  }
+
+  async rebuild() {
+    // Rebuild state from events
+    this.currentState = this.events.reduce((state, event) => this.reduce(state, event), {})
+    await state.save(this)
+    return this.currentState
+  }
+}
+
+// Usage
+const account = await state.get($.EventSourcedEntity, 'account:123')
+
+await account.applyEvent('AccountCreated', { owner: 'user-1' })
+await account.applyEvent('MoneyDeposited', { amount: 1000 })
+await account.applyEvent('MoneyWithdrawn', { amount: 250 })
+
+const currentState = await account.getState()
+console.log(currentState) // { balance: 750, owner: 'user-1' }
+
+const events = await account.getEvents()
+console.log(`${events.length} events recorded`)
+```
+
+## CQRS Pattern
+
+Separate command and query models:
+
+```typescript
+import { $, state } from 'sdk.do'
+
+// Write model (commands)
+export class OrderCommands {
+  private orders: Map<string, any> = new Map()
+
+  async createOrder(orderId: string, data: any) {
+    if (this.orders.has(orderId)) {
+      throw new Error('Order already exists')
+    }
+
+    const order = {
+      id: orderId,
+      ...data,
+      status: 'pending',
+      createdAt: Date.now(),
+    }
+
+    this.orders.set(orderId, order)
+    await state.save(this)
+
+    // Update read model
+    await this.updateReadModel(orderId, order)
+
+    return order
+  }
+
+  async updateOrderStatus(orderId: string, status: string) {
+    const order = this.orders.get(orderId)
+    if (!order) throw new Error('Order not found')
+
+    order.status = status
+    order.updatedAt = Date.now()
+
+    await state.save(this)
+    await this.updateReadModel(orderId, order)
+
+    return order
+  }
+
+  async cancelOrder(orderId: string) {
+    const order = this.orders.get(orderId)
+    if (!order) throw new Error('Order not found')
+
+    if (order.status === 'completed') {
+      throw new Error('Cannot cancel completed order')
+    }
+
+    order.status = 'cancelled'
+    order.cancelledAt = Date.now()
+
+    await state.save(this)
+    await this.updateReadModel(orderId, order)
+
+    return order
+  }
+
+  private async updateReadModel(orderId: string, order: any) {
+    // Update read-optimized model
+    const readModel = await state.get($.OrderQueries, 'read-model')
+    await readModel.updateOrder(orderId, order)
+  }
+}
+
+// Read model (queries)
+export class OrderQueries {
+  private ordersByStatus: Map<string, Set<string>> = new Map()
+  private ordersByCustomer: Map<string, Set<string>> = new Map()
+  private orders: Map<string, any> = new Map()
+
+  async updateOrder(orderId: string, order: any) {
+    // Update indexes
+    const oldOrder = this.orders.get(orderId)
+
+    if (oldOrder) {
+      // Remove from old indexes
+      this.ordersByStatus.get(oldOrder.status)?.delete(orderId)
+      this.ordersByCustomer.get(oldOrder.customerId)?.delete(orderId)
+    }
+
+    // Add to new indexes
+    if (!this.ordersByStatus.has(order.status)) {
+      this.ordersByStatus.set(order.status, new Set())
+    }
+    this.ordersByStatus.get(order.status).add(orderId)
+
+    if (!this.ordersByCustomer.has(order.customerId)) {
+      this.ordersByCustomer.set(order.customerId, new Set())
+    }
+    this.ordersByCustomer.get(order.customerId).add(orderId)
+
+    this.orders.set(orderId, order)
+    await state.save(this)
+  }
+
+  async getOrdersByStatus(status: string) {
+    const orderIds = this.ordersByStatus.get(status) || new Set()
+    return Array.from(orderIds).map((id) => this.orders.get(id))
+  }
+
+  async getOrdersByCustomer(customerId: string) {
+    const orderIds = this.ordersByCustomer.get(customerId) || new Set()
+    return Array.from(orderIds).map((id) => this.orders.get(id))
+  }
+
+  async getOrder(orderId: string) {
+    return this.orders.get(orderId)
+  }
+}
+
+// Usage
+const commands = await state.get($.OrderCommands, 'commands')
+const queries = await state.get($.OrderQueries, 'read-model')
+
+// Write
+await commands.createOrder('order-1', { customerId: 'user-1', items: ['item-1'] })
+await commands.updateOrderStatus('order-1', 'processing')
+
+// Read
+const processingOrders = await queries.getOrdersByStatus('processing')
+const userOrders = await queries.getOrdersByCustomer('user-1')
+```
+
+## Saga Pattern
+
+Coordinate distributed transactions:
+
+```typescript
+import { $, state } from 'sdk.do'
+
+interface SagaStep {
+  name: string
+  execute: () => Promise<any>
+  compensate: () => Promise<any>
+}
+
+export class Saga {
+  steps: SagaStep[] = []
+  completedSteps: string[] = []
+  state: 'running' | 'completed' | 'compensating' | 'failed' = 'running'
+  data: any = {}
+
+  async addStep(step: SagaStep) {
+    this.steps.push(step)
+    await state.save(this)
+  }
+
+  async execute() {
+    try {
+      for (const step of this.steps) {
+        console.log(`Executing step: ${step.name}`)
+
+        const result = await step.execute()
+        this.data[step.name] = result
+        this.completedSteps.push(step.name)
+
+        await state.save(this)
+      }
+
+      this.state = 'completed'
+      await state.save(this)
+
+      return { success: true, data: this.data }
+    } catch (error) {
+      console.error(`Step failed:`, error)
+      await this.compensate()
+      throw error
+    }
+  }
+
+  async compensate() {
+    console.log('Starting compensation')
+    this.state = 'compensating'
+    await state.save(this)
+
+    // Execute compensation in reverse order
+    for (let i = this.completedSteps.length - 1; i >= 0; i--) {
+      const stepName = this.completedSteps[i]
+      const step = this.steps.find((s) => s.name === stepName)
+
+      if (step) {
+        console.log(`Compensating step: ${step.name}`)
+        await step.compensate()
+      }
+    }
+
+    this.state = 'failed'
+    await state.save(this)
+  }
+}
+
+// Usage: Order Processing Saga
+const saga = await state.get($.Saga, 'order:123')
+
+await saga.addStep({
+  name: 'reserveInventory',
+  execute: async () => {
+    const inventory = await state.get($.Inventory, 'inventory')
+    return await inventory.reserve(['item-1', 'item-2'])
+  },
+  compensate: async () => {
+    const inventory = await state.get($.Inventory, 'inventory')
+    await inventory.release(['item-1', 'item-2'])
+  },
+})
+
+await saga.addStep({
+  name: 'processPayment',
+  execute: async () => {
+    const payment = await state.get($.Payment, 'user:123')
+    return await payment.charge(100)
+  },
+  compensate: async () => {
+    const payment = await state.get($.Payment, 'user:123')
+    await payment.refund(100)
+  },
+})
+
+await saga.addStep({
+  name: 'createShipment',
+  execute: async () => {
+    const shipping = await state.get($.Shipping, 'shipments')
+    return await shipping.create({ items: ['item-1', 'item-2'] })
+  },
+  compensate: async () => {
+    const shipping = await state.get($.Shipping, 'shipments')
+    await shipping.cancel('shipment-id')
+  },
+})
+
+try {
+  const result = await saga.execute()
+  console.log('Saga completed:', result)
+} catch (error) {
+  console.error('Saga failed and compensated:', error)
+}
+```
+
+## Multi-Region Replication
+
+Replicate state across regions:
+
+```typescript
+import { $, state } from 'sdk.do'
+
+export class ReplicatedState {
+  data: any = {}
+  version: number = 0
+  replicas: string[] = ['us-east', 'eu-west', 'ap-south']
+  region: string = 'us-east'
+
+  async write(key: string, value: any) {
+    this.data[key] = value
+    this.version++
+
+    await state.save(this)
+
+    // Replicate to other regions
+    await this.replicate({
+      type: 'write',
+      key,
+      value,
+      version: this.version,
+    })
+  }
+
+  async read(key: string) {
+    return this.data[key]
+  }
+
+  async replicate(operation: any) {
+    const promises = this.replicas
+      .filter((region) => region !== this.region)
+      .map(async (region) => {
+        try {
+          const replica = await state.get($.ReplicatedState, `${region}:replica`)
+          await replica.applyReplication(operation)
+        } catch (error) {
+          console.error(`Replication to ${region} failed:`, error)
+        }
+      })
+
+    await Promise.allSettled(promises)
+  }
+
+  async applyReplication(operation: any) {
+    // Apply if version is newer
+    if (operation.version > this.version) {
+      if (operation.type === 'write') {
+        this.data[operation.key] = operation.value
+        this.version = operation.version
+        await state.save(this)
+      }
+    }
+  }
+
+  async sync() {
+    // Pull latest from all replicas
+    for (const region of this.replicas) {
+      if (region === this.region) continue
+
+      try {
+        const replica = await state.get($.ReplicatedState, `${region}:replica`)
+        const replicaData = await replica.getData()
+
+        if (replicaData.version > this.version) {
+          this.data = replicaData.data
+          this.version = replicaData.version
+          await state.save(this)
+        }
+      } catch (error) {
+        console.error(`Sync from ${region} failed:`, error)
+      }
+    }
+  }
+
+  async getData() {
+    return {
+      data: this.data,
+      version: this.version,
+    }
+  }
+}
+
+// Usage
+const state1 = await state.get($.ReplicatedState, 'us-east:replica')
+await state1.write('key', 'value')
+
+// Automatically replicated to other regions
+const state2 = await state.get($.ReplicatedState, 'eu-west:replica')
+const value = await state2.read('key') // 'value'
+```
+
+## Optimistic Locking
+
+Implement optimistic concurrency control:
+
+```typescript
+import { $, state } from 'sdk.do'
+
+export class OptimisticEntity {
+  data: any = {}
+  version: number = 0
+
+  async read() {
+    return {
+      data: { ...this.data },
+      version: this.version,
+    }
+  }
+
+  async write(updates: any, expectedVersion: number) {
+    // Check version
+    if (this.version !== expectedVersion) {
+      throw new Error(`Conflict: expected version ${expectedVersion}, got ${this.version}`)
+    }
+
+    // Apply updates
+    Object.assign(this.data, updates)
+    this.version++
+
+    await state.save(this)
+
+    return {
+      data: { ...this.data },
+      version: this.version,
+    }
+  }
+
+  async forceWrite(updates: any) {
+    // Write without version check
+    Object.assign(this.data, updates)
+    this.version++
+
+    await state.save(this)
+
+    return {
+      data: { ...this.data },
+      version: this.version,
+    }
+  }
+}
+
+// Usage
+const entity = await state.get($.OptimisticEntity, 'document:123')
+
+const snapshot = await entity.read() // { data: {...}, version: 5 }
+
+try {
+  await entity.write({ title: 'Updated Title' }, snapshot.version)
+  console.log('Write successful')
+} catch (error) {
+  console.error('Conflict detected:', error.message)
+  // Retry with latest version
+  const latest = await entity.read()
+  await entity.write({ title: 'Updated Title' }, latest.version)
+}
+```
+
+## Snapshot and Restore
+
+Create snapshots for backup and restore:
+
+```typescript
+import { $, state } from 'sdk.do'
+
+export class SnapshotableEntity {
+  data: any = {}
+  snapshots: Array<{ id: string; data: any; timestamp: number }> = []
+
+  async createSnapshot(id?: string) {
+    const snapshot = {
+      id: id || crypto.randomUUID(),
+      data: JSON.parse(JSON.stringify(this.data)), // Deep clone
+      timestamp: Date.now(),
+    }
+
+    this.snapshots.push(snapshot)
+
+    // Keep only last 10 snapshots
+    if (this.snapshots.length > 10) {
+      this.snapshots.shift()
+    }
+
+    await state.save(this)
+    return snapshot.id
+  }
+
+  async restoreSnapshot(id: string) {
+    const snapshot = this.snapshots.find((s) => s.id === id)
+
+    if (!snapshot) {
+      throw new Error(`Snapshot ${id} not found`)
+    }
+
+    this.data = JSON.parse(JSON.stringify(snapshot.data))
+    await state.save(this)
+
+    return this.data
+  }
+
+  async listSnapshots() {
+    return this.snapshots.map((s) => ({
+      id: s.id,
+      timestamp: s.timestamp,
+    }))
+  }
+
+  async deleteSnapshot(id: string) {
+    const index = this.snapshots.findIndex((s) => s.id === id)
+
+    if (index !== -1) {
+      this.snapshots.splice(index, 1)
+      await state.save(this)
+      return true
+    }
+
+    return false
+  }
+
+  async update(updates: any) {
+    Object.assign(this.data, updates)
+    await state.save(this)
+  }
+}
+
+// Usage
+const entity = await state.get($.SnapshotableEntity, 'document:123')
+
+await entity.update({ title: 'Version 1' })
+const snapshot1 = await entity.createSnapshot('v1')
+
+await entity.update({ title: 'Version 2' })
+const snapshot2 = await entity.createSnapshot('v2')
+
+await entity.update({ title: 'Version 3' })
+
+// Restore to version 1
+await entity.restoreSnapshot('v1')
+
+const snapshots = await entity.listSnapshots()
+console.log(snapshots) // [{ id: 'v1', timestamp: ... }, { id: 'v2', timestamp: ... }]
+```
+
+## Time-Series Data
+
+Store and query time-series data:
+
+```typescript
+import { $, state } from 'sdk.do'
+
+interface DataPoint {
+  timestamp: number
+  value: number
+  tags?: Record<string, string>
+}
+
+export class TimeSeries {
+  data: DataPoint[] = []
+  retention: number = 86400000 // 24 hours
+
+  async add(value: number, tags?: Record<string, string>) {
+    const point: DataPoint = {
+      timestamp: Date.now(),
+      value,
+      tags,
+    }
+
+    this.data.push(point)
+    await this.cleanup()
+    await state.save(this)
+  }
+
+  async query(
+    options: {
+      start?: number
+      end?: number
+      tags?: Record<string, string>
+    } = {}
+  ) {
+    let filtered = this.data
+
+    // Filter by time range
+    if (options.start) {
+      filtered = filtered.filter((p) => p.timestamp >= options.start)
+    }
+    if (options.end) {
+      filtered = filtered.filter((p) => p.timestamp <= options.end)
+    }
+
+    // Filter by tags
+    if (options.tags) {
+      filtered = filtered.filter((point) => {
+        if (!point.tags) return false
+
+        return Object.entries(options.tags).every(([key, value]) => point.tags[key] === value)
+      })
+    }
+
+    return filtered
+  }
+
+  async aggregate(interval: number, aggregation: 'sum' | 'avg' | 'min' | 'max' = 'avg') {
+    const buckets = new Map<number, number[]>()
+
+    // Group by interval
+    for (const point of this.data) {
+      const bucket = Math.floor(point.timestamp / interval) * interval
+      if (!buckets.has(bucket)) {
+        buckets.set(bucket, [])
+      }
+      buckets.get(bucket).push(point.value)
+    }
+
+    // Aggregate
+    const result: DataPoint[] = []
+    for (const [timestamp, values] of buckets) {
+      let value: number
+
+      switch (aggregation) {
+        case 'sum':
+          value = values.reduce((a, b) => a + b, 0)
+          break
+        case 'avg':
+          value = values.reduce((a, b) => a + b, 0) / values.length
+          break
+        case 'min':
+          value = Math.min(...values)
+          break
+        case 'max':
+          value = Math.max(...values)
+          break
+      }
+
+      result.push({ timestamp, value })
+    }
+
+    return result.sort((a, b) => a.timestamp - b.timestamp)
+  }
+
+  async cleanup() {
+    const cutoff = Date.now() - this.retention
+    this.data = this.data.filter((p) => p.timestamp > cutoff)
+  }
+}
+
+// Usage
+const metrics = await state.get($.TimeSeries, 'cpu-usage')
+
+await metrics.add(45.2, { host: 'server-1' })
+await metrics.add(52.1, { host: 'server-1' })
+await metrics.add(48.7, { host: 'server-1' })
+
+// Query last hour
+const lastHour = await metrics.query({
+  start: Date.now() - 3600000,
+})
+
+// Aggregate by 5 minutes
+const aggregated = await metrics.aggregate(300000, 'avg')
+console.log(aggregated) // [{ timestamp: ..., value: 48.67 }, ...]
+```
+
+## Next Steps
+
+- Review [Integration Examples](./integration) for combining with other services
+- Study [Real-World Use Case](./real-world-use-case) for production implementations
+- Read [Best Practices](../docs/best-practices) for optimization strategies
+- Check [API Reference](../api/reference) for complete documentation
+
+---
+
+Documentation licensed under [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/).
+Code examples licensed under MIT.

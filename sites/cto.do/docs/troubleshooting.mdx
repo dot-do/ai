@@ -1,0 +1,605 @@
+---
+$id: https://cto.do/docs/troubleshooting
+$type: TechArticle
+title: CTO Agent Troubleshooting
+description: Common issues and solutions when working with autonomous CTO agents
+keywords: [troubleshooting, CTO agent issues, debugging, common problems]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# CTO Agent Troubleshooting
+
+Common issues and solutions for CTO agents.
+
+## Decision Quality Issues
+
+### Problem: Generic or Surface-Level Recommendations
+
+**Symptoms:**
+
+- Recommendations lack depth and specificity
+- Missing trade-off analysis
+- No concrete implementation details
+
+**Solution: Provide Richer Context**
+
+```typescript
+// Before (insufficient context)
+const decision = await cto.execute({
+  task: 'Should we use Kubernetes?',
+  context: { team_size: 20 },
+})
+
+// After (rich context)
+const decision = await cto.execute({
+  task: 'Evaluate Kubernetes adoption',
+  context: {
+    current_state: {
+      deployment: 'Manual deployments to EC2 via Capistrano',
+      services: '1 Rails monolith, 3 worker services',
+      scale: '50 servers, 10M requests/day',
+      team: { devops: 1, backend: 15, expertise: 'Traditional ops, limited container experience' },
+    },
+    pain_points: ['Deployment takes 45 minutes', 'Rollbacks are risky and slow', 'Resource utilization <30%', 'Difficult to scale individual services'],
+    requirements: {
+      deploy_frequency: '10x per day target',
+      zero_downtime: true,
+      cost_optimization: 'Reduce infrastructure costs by 30%',
+      team_learning: 'Max 2 months to proficiency',
+    },
+    constraints: {
+      timeline: '6 months',
+      budget: '$200K (migration + training)',
+      downtime_tolerance: 'Zero',
+      compliance: ['SOC 2', 'HIPAA'],
+    },
+  },
+})
+```
+
+### Problem: Recommendations Don't Account for Team Capabilities
+
+**Symptoms:**
+
+- Suggests technologies team doesn't know
+- Unrealistic timelines
+- Overlooks learning curve
+
+**Solution: Include Detailed Team Context**
+
+```typescript
+await cto.execute({
+  task: 'Choose backend language for new service',
+  context: {
+    team: {
+      size: 12,
+      expertise: {
+        ruby: { engineers: 10, level: 'expert' },
+        python: { engineers: 5, level: 'proficient' },
+        go: { engineers: 2, level: 'beginner' },
+        rust: { engineers: 0, level: 'none' },
+      },
+      learning_capacity: 'Can adopt one new technology per quarter',
+      hiring: 'Difficult market, 3-month time to hire',
+      retention: 'Low turnover, team stability high',
+      preferences: 'Team excited about Go, interested in Rust',
+    },
+    requirements: {
+      performance: 'High throughput, low latency',
+      timeline: 'Ship MVP in 3 months',
+      maintainability: 'Long-term ownership by team',
+    },
+  },
+})
+```
+
+### Problem: Missing Business Justification
+
+**Symptoms:**
+
+- Technical decision without ROI analysis
+- No alignment with business goals
+- Unclear business impact
+
+**Solution: Include Business Context and Metrics**
+
+```typescript
+await cto.execute({
+  task: 'Evaluate microservices migration',
+  context: {
+    business: {
+      stage: 'Series B, $15M ARR, growing 3x YoY',
+      unit_economics: {
+        gross_margin: '75%',
+        cac_payback: '12 months',
+        ltv_cac_ratio: 4,
+      },
+      strategic_goals: ['Reach $50M ARR by end of year', 'Expand to enterprise segment', 'Launch mobile app in Q3'],
+      competitive_pressure: 'Competitors shipping faster',
+      financial: {
+        runway: '18 months',
+        next_round: 'Series C in 12 months',
+        engineering_budget: '$5M/year',
+      },
+    },
+    kpis: {
+      deployment_frequency: { current: '2x/week', target: '10x/day' },
+      feature_velocity: { current: 'Declining 20%', target: '+50%' },
+      incident_rate: { current: '3/week', target: '< 1/week' },
+      time_to_market: { current: '3 months', target: '2 weeks' },
+    },
+  },
+})
+```
+
+## Confidence and Accuracy Issues
+
+### Problem: Low Confidence Scores
+
+**Symptoms:**
+
+- Agent returns confidence < 0.6
+- Hedges with "it depends" frequently
+- Multiple caveats and disclaimers
+
+**Causes & Solutions:**
+
+**1. Ambiguous Requirements**
+
+```typescript
+// Clarify requirements
+await cto.execute({
+  task: 'Choose database',
+  requirements: {
+    // Be specific
+    data_model: 'Relational with complex joins',
+    scale: '100M rows, 10K writes/sec, 50K reads/sec',
+    consistency: 'Strong consistency required (financial data)',
+    query_patterns: 'Complex analytics queries, real-time dashboards',
+    latency: 'p95 < 50ms for reads, p95 < 100ms for writes',
+    availability: '99.99% uptime SLA',
+    budget: '$10K/month max',
+  },
+})
+```
+
+**2. Missing Comparative Data**
+
+```typescript
+// Provide options to compare
+await cto.execute({
+  task: 'Choose between PostgreSQL and MongoDB',
+  options: [
+    {
+      name: 'PostgreSQL',
+      current_experience: 'Expert level, 5 years',
+      operational_knowledge: 'Deep',
+      existing_tooling: 'Extensive',
+    },
+    {
+      name: 'MongoDB',
+      current_experience: 'None',
+      operational_knowledge: 'Would need to learn',
+      existing_tooling: 'Would need to build',
+    },
+  ],
+})
+```
+
+**3. Insufficient Domain Context**
+
+```typescript
+// Add industry and domain context
+await cto.execute({
+  task: 'Architecture for fintech application',
+  domain: {
+    industry: 'Financial services',
+    regulations: ['PCI-DSS', 'SOC 2', 'GLBA'],
+    data_sensitivity: 'Highly sensitive financial data',
+    audit_requirements: 'Full audit trail required',
+    uptime_requirements: '99.99% (financial transactions)',
+    industry_standards: 'ISO 27001, NIST frameworks',
+  },
+})
+```
+
+### Problem: Incorrect or Outdated Recommendations
+
+**Symptoms:**
+
+- Suggests deprecated technologies
+- Outdated best practices
+- Inaccurate cost estimates
+
+**Solution: Verify and Provide Current Data**
+
+```typescript
+// Provide current benchmarks and data
+await cto.execute({
+  task: 'Optimize cloud costs',
+  current_state: {
+    provider: 'AWS',
+    monthly_cost: '$50K',
+    breakdown: {
+      compute: '$30K (EC2: 200 instances, m5.xlarge)',
+      storage: '$10K (S3: 500TB, EBS: 100TB)',
+      data_transfer: '$5K',
+      other: '$5K',
+    },
+    utilization: {
+      compute: '35% average CPU',
+      storage: '60% of provisioned',
+      reserved_instances: '0%',
+    },
+    workload: {
+      type: 'Web application, batch processing',
+      traffic_pattern: 'Business hours (9am-6pm peak)',
+      storage_growth: '10TB/month',
+    },
+  },
+  market_data: {
+    // Provide current pricing
+    aws_current_pricing: await api.aws.getCurrentPricing(),
+    spot_instance_savings: '70% vs on-demand',
+    reserved_instance_savings: '40-60% vs on-demand',
+    competitor_pricing: await getCompetitorPricing(),
+  },
+})
+```
+
+## Integration Issues
+
+### Problem: CTO Agent Can't Access Required Data
+
+**Symptoms:**
+
+- Asks for data it should have access to
+- Makes decisions without full context
+- Errors accessing tools or APIs
+
+**Solution: Configure Tool Access**
+
+```typescript
+// Properly configure tool integrations
+const cto = await agent.create({
+  $role: $.ChiefTechnologyOfficer,
+  name: 'CTO Agent',
+  tools: {
+    github: {
+      api: github,
+      permissions: ['read:repo', 'read:org', 'read:user'],
+      rate_limit: { requests_per_hour: 5000 },
+    },
+    aws: {
+      api: aws,
+      permissions: ['ViewOnlyAccess', 'Cost Explorer'],
+      regions: ['us-east-1', 'us-west-2'],
+    },
+    datadog: {
+      api: datadog,
+      permissions: ['read:metrics', 'read:logs'],
+      api_key: process.env.DATADOG_API_KEY,
+    },
+    jira: {
+      api: jira,
+      permissions: ['read:project', 'read:issue'],
+      projects: ['BACKEND', 'PLATFORM', 'INFRA'],
+    },
+  },
+})
+```
+
+### Problem: Agent Doesn't Collaborate with Other Agents
+
+**Symptoms:**
+
+- Siloed decision-making
+- Conflicts with other agents
+- Duplicate work
+
+**Solution: Enable Multi-Agent Communication**
+
+```typescript
+// Set up agent collaboration
+const cto = await agent.create({
+  $role: $.ChiefTechnologyOfficer,
+  collaboration: {
+    peers: {
+      ceo: { agent: ceoAgent, sync_frequency: 'weekly' },
+      cfo: { agent: cfoAgent, sync_on: ['budget', 'vendor_contracts'] },
+      cpo: { agent: cpoAgent, sync_on: ['product_roadmap', 'technical_feasibility'] },
+    },
+    team: {
+      engineers: { agents: sweAgents, command_chain: true },
+      architects: { agents: architectAgents, advisory: true },
+    },
+  },
+})
+
+// CTO consults with CFO on budget decisions
+const decision = await cto.execute({
+  task: 'Evaluate infrastructure migration',
+  collaborate_with: {
+    cfo: {
+      questions: ['Budget approval for $500K', 'ROI expectations', 'Payment terms'],
+      required: true,
+    },
+    ceo: {
+      questions: ['Strategic alignment', 'Risk tolerance'],
+      required: false,
+    },
+  },
+})
+```
+
+## Performance Issues
+
+### Problem: Slow Decision-Making
+
+**Symptoms:**
+
+- Takes > 2 minutes for simple decisions
+- Timeouts on complex analyses
+- High latency
+
+**Solutions:**
+
+**1. Use Appropriate Model**
+
+```typescript
+// Fast model for simple decisions
+const quickDecision = await cto.execute({
+  task: 'Approve architecture proposal',
+  model: 'gpt-5-mini', // Faster, cheaper
+  max_tokens: 2048,
+})
+
+// Powerful model for complex analysis
+const complexDecision = await cto.execute({
+  task: 'Design company-wide architecture strategy',
+  model: 'claude-sonnet-4.5', // More capable
+  max_tokens: 8192,
+})
+```
+
+**2. Cache Common Analyses**
+
+```typescript
+// Cache technology evaluations
+const techEvalCache = new Map()
+
+async function evaluateTechnology(tech: string) {
+  if (techEvalCache.has(tech)) {
+    return techEvalCache.get(tech)
+  }
+
+  const evaluation = await cto.execute({
+    task: `Evaluate ${tech}`,
+    context: /* context */
+  })
+
+  techEvalCache.set(tech, evaluation)
+  return evaluation
+}
+```
+
+**3. Parallelize Independent Analyses**
+
+```typescript
+// Parallel evaluation of alternatives
+const [postgres, mysql, mongodb] = await Promise.all([
+  cto.evaluate({ database: 'PostgreSQL', context }),
+  cto.evaluate({ database: 'MySQL', context }),
+  cto.evaluate({ database: 'MongoDB', context }),
+])
+
+const decision = await cto.compare([postgres, mysql, mongodb])
+```
+
+### Problem: High Token Usage / Cost
+
+**Symptoms:**
+
+- Unexpectedly high API costs
+- Token limits exceeded
+- Verbose responses
+
+**Solutions:**
+
+**1. Optimize Prompts and Context**
+
+```typescript
+// Summarize large context
+const summarizedContext = await summarize(largeContext)
+
+const decision = await cto.execute({
+  task: 'Evaluate architecture',
+  context: summarizedContext, // Use summary instead of full context
+  detail_level: 'concise', // Request concise responses
+})
+```
+
+**2. Use Streaming for Long Responses**
+
+```typescript
+// Stream responses to show progress
+const stream = await cto.executeStream({
+  task: 'Create technology roadmap',
+})
+
+for await (const chunk of stream) {
+  process.stdout.write(chunk)
+}
+```
+
+**3. Set Token Budgets**
+
+```typescript
+await cto.configure({
+  token_budget: {
+    max_tokens_per_decision: 4096,
+    max_monthly_tokens: 1000000,
+    alert_threshold: 800000,
+  },
+})
+```
+
+## Monitoring and Debugging
+
+### Enable Debug Logging
+
+```typescript
+await cto.configure({
+  logging: {
+    level: 'debug',
+    include: ['context_analysis', 'option_generation', 'scoring', 'decision_rationale'],
+    destination: 'console', // or 'file' or  logging service
+  },
+})
+
+// View decision process
+const decision = await cto.execute({
+  task: 'Evaluate migration',
+  debug: true,
+})
+
+console.log(decision.debug_info)
+// {
+//   context_parsed: { /* parsed context */ },
+//   options_considered: 5,
+//   scoring_breakdown: { /* scores */ },
+//   reasoning_steps: [ /* step by step */ ],
+//   total_time: 2500,
+//   token_usage: { prompt: 1500, completion: 800 }
+// }
+```
+
+### Track Decision Outcomes
+
+```typescript
+// Decision tracking system
+await cto.on('decision_made', async (decision) => {
+  await db.create($.Decision, {
+    $id: decision.id,
+    task: decision.task,
+    recommendation: decision.recommendation,
+    confidence: decision.confidence,
+    timestamp: new Date(),
+    status: 'pending_outcome',
+  })
+})
+
+// Outcome tracking
+async function recordOutcome(decisionId: string, outcome: Outcome) {
+  await db.update($.Decision, decisionId, {
+    outcome: outcome,
+    outcome_timestamp: new Date(),
+    outcome_quality: outcome.met_expectations ? 'success' : 'needs_improvement',
+    lessons_learned: outcome.lessons,
+  })
+
+  // Provide feedback to agent
+  await cto.provideFeedback({
+    decision_id: decisionId,
+    outcome: outcome,
+  })
+}
+```
+
+### Monitor Agent Health
+
+```typescript
+// Regular health checks
+await every($.Daily, async () => {
+  const health = await cto.getHealth()
+
+  console.log(health)
+  // {
+  //   status: 'healthy' | 'degraded' | 'unhealthy',
+  //   metrics: {
+  //     avg_confidence: 0.82,
+  //     decision_success_rate: 0.85,
+  //     avg_response_time: 2500,
+  //     error_rate: 0.02
+  //   },
+  //   issues: [
+  //     { type: 'low_confidence', count: 5, threshold: 0.6 },
+  //     { type: 'slow_responses', count: 3, threshold: 5000 }
+  //   ],
+  //   recommendations: [
+  //     'Provide more context for low-confidence decisions',
+  //     'Consider using faster model for simple decisions'
+  //   ]
+  // }
+
+  if (health.status !== 'healthy') {
+    await send($.Alert.agent_health, health)
+  }
+})
+```
+
+## Getting Help
+
+### Review Comprehensive Context Checklist
+
+Before reaching out for support, ensure you've provided:
+
+- [ ] Technical context (architecture, stack, scale, infrastructure)
+- [ ] Business context (stage, growth, financials, goals)
+- [ ] Team context (size, expertise, capacity, culture)
+- [ ] Requirements (specific, measurable, time-bound)
+- [ ] Constraints (budget, timeline, compliance, team)
+- [ ] Historical context (past decisions, lessons learned)
+
+### Debugging Template
+
+Use this template for troubleshooting:
+
+```typescript
+const debugInfo = {
+  // What you're trying to do
+  task: 'Evaluate database migration',
+
+  // What you expected
+  expected: 'Detailed migration plan with timeline and costs',
+
+  // What you got
+  actual: 'Generic recommendation without specifics',
+
+  // Context provided
+  context: {
+    /* your context */
+  },
+
+  // Agent configuration
+  config: await cto.getConfig(),
+
+  // Recent decisions
+  recent_decisions: await db.list($.Decision, {
+    limit: 5,
+    order_by: 'created_at DESC',
+  }),
+
+  // Error logs (if any)
+  errors: await cto.getErrors({ timeframe: 'last_24_hours' }),
+}
+```
+
+### Community Support
+
+- [GitHub Issues](https://github.com/dot-do/platform/issues)
+- [Discord Community](https://discord.gg/dotdo)
+- [Documentation](https://cto.do/docs)
+
+## Next Steps
+
+- [Getting Started](./getting-started) - Setup your first CTO agent
+- [Best Practices](./best-practices) - Advanced patterns
+- [API Reference](../api/) - Complete API documentation
+- [Examples](../examples/) - Real-world implementations
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) agent framework.

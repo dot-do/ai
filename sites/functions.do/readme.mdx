@@ -1,0 +1,516 @@
+---
+$id: https://functions.do
+$type: WebSite
+name: functions.do
+description: Typesafe, composable business logic execution for autonomous Business-as-Code systems
+license: MIT
+keywords: [functions, business logic, composition, type-safe, workflows, sdk]
+---
+
+# functions.do
+
+**Typesafe, composable business logic execution for autonomous Business-as-Code systems**
+
+functions.do provides a powerful framework for defining, composing, and executing business logic as pure, typesafe functions. It enables developers to build complex workflows from simple, reusable function primitives with full type safety and semantic clarity.
+
+## Quick Start
+
+```bash
+pnpm add sdk.do
+```
+
+```typescript
+import $, { fn } from 'sdk.do'
+
+// Define a simple function
+const calculateDiscount = fn($.CalculateDiscount, async (order: $.Order) => {
+  const discount = order.total * 0.1
+  return { ...order, discount, finalTotal: order.total - discount }
+})
+
+// Execute the function
+const result = await calculateDiscount({
+  $type: 'Order',
+  total: 100,
+  items: [],
+})
+```
+
+## Key Features
+
+### Type-Safe Functions
+
+Define functions with full TypeScript type safety and semantic types:
+
+```typescript
+import $, { fn } from 'sdk.do'
+
+// Function with explicit input/output types
+const processPayment = fn($.ProcessPayment, async (payment: $.PaymentRequest): Promise<$.PaymentResult> => {
+  // Type-safe business logic
+  const result = await stripe.charges.create({
+    amount: payment.amount,
+    currency: payment.currency,
+    source: payment.token,
+  })
+
+  return {
+    $type: 'PaymentResult',
+    $id: result.id,
+    status: result.status,
+    amount: result.amount,
+  }
+})
+```
+
+### Composable Workflows
+
+Compose functions into complex workflows using semantic patterns:
+
+```typescript
+import $, { fn, compose, pipe } from 'sdk.do'
+
+// Define individual functions
+const validateOrder = fn($.ValidateOrder, async (order) => {
+  if (!order.items.length) throw new Error('Order must have items')
+  return order
+})
+
+const calculateTotal = fn($.CalculateTotal, async (order) => {
+  const total = order.items.reduce((sum, item) => sum + item.price, 0)
+  return { ...order, total }
+})
+
+const applyDiscount = fn($.ApplyDiscount, async (order) => {
+  const discount = order.total * 0.1
+  return { ...order, discount, finalTotal: order.total - discount }
+})
+
+// Compose into workflow
+const processOrder = compose($.ProcessOrder, validateOrder, calculateTotal, applyDiscount)
+
+// Or use pipe for left-to-right flow
+const processOrderPipe = pipe(validateOrder, calculateTotal, applyDiscount)
+```
+
+### Semantic Function Patterns
+
+Functions use `$.Subject.predicate.Object` patterns for semantic clarity:
+
+```typescript
+import $, { fn } from 'sdk.do'
+
+// Define functions with semantic patterns
+const $.Order.validate = fn($.ValidateOrder, validateOrderImpl)
+const $.Order.calculate = fn($.CalculateTotal, calculateImpl)
+const $.Order.process = fn($.ProcessOrder, processImpl)
+
+// Use semantic patterns
+const order = await $.Order.create(orderData)
+const validated = await $.Order.validate(order)
+const calculated = await $.Order.calculate(validated)
+const processed = await $.Order.process(calculated)
+```
+
+### Error Handling
+
+Built-in error handling and retry logic:
+
+```typescript
+import $, { fn, withRetry, withTimeout } from 'sdk.do'
+
+// Function with automatic retry
+const fetchData = withRetry(
+  fn($.FetchData, async (url: string) => {
+    const response = await fetch(url)
+    return response.json()
+  }),
+  { attempts: 3, backoff: 'exponential' }
+)
+
+// Function with timeout
+const processWithTimeout = withTimeout(
+  fn($.ProcessData, processDataImpl),
+  5000 // 5 second timeout
+)
+
+// Custom error handling
+const safeProcess = fn($.SafeProcess, async (data) => {
+  try {
+    return await processData(data)
+  } catch (error) {
+    // Handle error
+    return { $type: 'ErrorResult', error: error.message }
+  }
+})
+```
+
+## Core Concepts
+
+### Pure Functions
+
+Functions in functions.do are pure, making them predictable and testable:
+
+```typescript
+import $, { fn } from 'sdk.do'
+
+// Pure function - same input always produces same output
+const calculateTax = fn($.CalculateTax, (amount: number, rate: number) => amount * rate)
+
+// Impure operations wrapped explicitly
+const sendEmail = fn($.SendEmail, async (email: $.EmailMessage) => {
+  // Side effect clearly visible
+  await emailService.send(email)
+  return { $type: 'EmailSent', messageId: '123' }
+})
+```
+
+### Function Metadata
+
+Every function includes rich metadata for discovery and documentation:
+
+```typescript
+const processOrder = fn(
+  {
+    $type: 'Function',
+    $id: 'https://example.com/functions/processOrder',
+    name: 'ProcessOrder',
+    description: 'Validates and processes customer orders',
+    input: {
+      $type: 'Order',
+      properties: ['items', 'customer', 'shippingAddress'],
+    },
+    output: {
+      $type: 'ProcessedOrder',
+      properties: ['orderId', 'status', 'total'],
+    },
+  },
+  async (order) => {
+    // Implementation
+  }
+)
+```
+
+### Composition Patterns
+
+Multiple ways to compose functions:
+
+```typescript
+import { compose, pipe, parallel, sequential } from 'sdk.do'
+
+// Sequential composition (right-to-left)
+const workflow1 = compose(stepC, stepB, stepA)
+
+// Sequential composition (left-to-right)
+const workflow2 = pipe(stepA, stepB, stepC)
+
+// Parallel execution
+const workflow3 = parallel([fetchUser, fetchOrders, fetchProducts])
+
+// Sequential with explicit ordering
+const workflow4 = sequential([validate, process, notify])
+```
+
+### Conditional Execution
+
+Execute functions conditionally based on runtime values:
+
+```typescript
+import { fn, when, ifElse, match } from 'sdk.do'
+
+// Simple conditional
+const processIfValid = when((order) => order.isValid, processOrder)
+
+// If-else logic
+const handleOrder = ifElse((order) => order.total > 1000, processLargeOrder, processSmallOrder)
+
+// Pattern matching
+const handleByStatus = match((order) => order.status, {
+  pending: processPending,
+  paid: processPaid,
+  shipped: processShipped,
+  _: handleUnknown,
+})
+```
+
+## Use Cases
+
+### Business Process Automation
+
+Define complete business processes as composable functions:
+
+```typescript
+import $, { fn, compose } from 'sdk.do'
+
+const onboardCustomer = compose(
+  $.OnboardCustomer,
+  fn($.ValidateCustomer, validateCustomerData),
+  fn($.CreateAccount, createCustomerAccount),
+  fn($.SendWelcomeEmail, sendWelcomeEmail),
+  fn($.AssignAccountManager, assignAccountManager),
+  fn($.NotifyTeam, notifyOnboardingTeam)
+)
+
+// Execute the complete workflow
+const result = await onboardCustomer(customerData)
+```
+
+### Data Transformation Pipelines
+
+Build data transformation pipelines:
+
+```typescript
+import $, { pipe, fn } from 'sdk.do'
+
+const transformData = pipe(
+  fn($.ExtractData, extractFromSource),
+  fn($.ValidateData, validateSchema),
+  fn($.TransformData, normalizeFields),
+  fn($.EnrichData, addMetadata),
+  fn($.LoadData, saveToDatabase)
+)
+
+const result = await transformData(rawData)
+```
+
+### Event-Driven Workflows
+
+Combine with event system for reactive workflows:
+
+```typescript
+import $, { on, fn } from 'sdk.do'
+
+// Define event handlers as functions
+const handleOrderCreated = fn($.HandleOrderCreated, async (event) => {
+  const order = event.data
+  await validateOrder(order)
+  await processPayment(order)
+  await notifyCustomer(order)
+})
+
+// Register event handler
+on($.Order.created, handleOrderCreated)
+```
+
+### API Endpoint Handlers
+
+Use functions as API endpoint handlers:
+
+```typescript
+import $, { fn, api } from 'sdk.do'
+
+// Define handler function
+const getUser = fn($.GetUser, async (userId: string): Promise<$.Person> => {
+  return await db.get($.Person, userId)
+})
+
+// Expose as API endpoint
+api.get('/users/:id', getUser)
+```
+
+## Integration with `.do` Platform
+
+functions.do integrates seamlessly with other `.do` platform services:
+
+### With Database
+
+```typescript
+import $, { db, fn } from 'sdk.do'
+
+const createBusiness = fn($.CreateBusiness, async (data) => {
+  // Database operations within functions
+  const business = await db.create($.Business, data)
+  return business
+})
+```
+
+### With AI Services
+
+```typescript
+import $, { ai, fn } from 'sdk.do'
+
+const generateDescription = fn($.GenerateDescription, async (product) => {
+  const description = await ai.generate({
+    prompt: `Write a description for: ${product.name}`,
+    schema: $.Product,
+  })
+  return { ...product, description }
+})
+```
+
+### With Events
+
+```typescript
+import $, { send, fn } from 'sdk.do'
+
+const processOrder = fn($.ProcessOrder, async (order) => {
+  // Process order logic
+  const processed = await processOrderLogic(order)
+
+  // Emit event
+  await send($.Order.processed, processed)
+
+  return processed
+})
+```
+
+### With Workflows
+
+```typescript
+import $, { every, fn } from 'sdk.do'
+
+const generateReport = fn($.GenerateReport, async () => {
+  // Report generation logic
+  return reportData
+})
+
+// Schedule function execution
+every($.Daily, generateReport)
+```
+
+## Function Categories
+
+Functions are organized by their purpose:
+
+### Data Operations
+
+- **Transform**: Data transformation and mapping
+- **Validate**: Schema validation and business rules
+- **Enrich**: Data enrichment and augmentation
+- **Filter**: Data filtering and selection
+
+### Business Logic
+
+- **Calculate**: Calculations and computations
+- **Process**: Business process execution
+- **Workflow**: Multi-step workflows
+- **Decision**: Decision-making logic
+
+### Integration
+
+- **Fetch**: External API calls
+- **Send**: External system integration
+- **Sync**: Data synchronization
+- **Webhook**: Webhook handlers
+
+### Communication
+
+- **Notify**: Notification delivery
+- **Email**: Email operations
+- **Message**: Messaging operations
+- **Alert**: Alert and warning systems
+
+## Best Practices
+
+### 1. Keep Functions Pure
+
+Prefer pure functions for predictability and testability:
+
+```typescript
+// Good - Pure function
+const calculateTotal = fn($.CalculateTotal, (items) => {
+  return items.reduce((sum, item) => sum + item.price, 0)
+})
+
+// Avoid - Side effects hidden
+const calculateAndLog = fn($.CalculateTotal, (items) => {
+  console.log('Calculating...') // Side effect
+  return items.reduce((sum, item) => sum + item.price, 0)
+})
+```
+
+### 2. Use Descriptive Names
+
+Use clear, semantic names that describe what the function does:
+
+```typescript
+// Good
+const validateCustomerEmail = fn($.ValidateEmail, ...)
+const calculateOrderTotal = fn($.CalculateTotal, ...)
+const processPaymentTransaction = fn($.ProcessPayment, ...)
+
+// Avoid
+const validate = fn($.Validate, ...)
+const calc = fn($.Calculate, ...)
+const process = fn($.Process, ...)
+```
+
+### 3. Compose Over Complexity
+
+Build complex workflows through composition rather than large functions:
+
+```typescript
+// Good - Composed from small functions
+const processOrder = compose(notifyCustomer, updateInventory, processPayment, validateOrder)
+
+// Avoid - Large monolithic function
+const processOrder = fn($.ProcessOrder, async (order) => {
+  // 100+ lines of complex logic
+})
+```
+
+### 4. Include Type Information
+
+Always include type information for better IDE support:
+
+```typescript
+// Good
+const processOrder = fn($.ProcessOrder, async (order: $.Order): Promise<$.ProcessedOrder> => {
+  // Implementation
+})
+
+// Avoid
+const processOrder = fn($.ProcessOrder, async (order) => {
+  // Implementation
+})
+```
+
+## Documentation
+
+- [Getting Started](./docs/getting-started) - Installation and first function
+- [Creating Functions](./docs/creating-functions) - How to define functions
+- [Composition Patterns](./docs/composition) - Composing functions into workflows
+- [API Reference](./api/) - Complete API documentation
+- [Examples](./examples/) - Real-world examples
+
+## Examples
+
+Explore practical examples:
+
+- [Basic Function](./examples/basic-function) - Simple function definition
+- [Workflow Functions](./examples/workflow-functions) - Complex workflow composition
+- [Error Handling](./examples/error-handling) - Error handling patterns
+
+## Resources
+
+### Related Domains
+
+- [sdk.do](https://sdk.do) - Core TypeScript SDK
+- [workflows.do](https://workflows.do) - Workflow orchestration
+- [events.do](https://events.do) - Event system
+- [agents.do](https://agents.do) - AI agent framework
+
+### Ontologies
+
+- [actions.org.ai](https://actions.org.ai) - Action definitions
+- [schema.org.ai](https://schema.org.ai) - Schema.org types
+- [graphdl](https://graphdl.do) - Semantic graph patterns
+
+## License
+
+MIT (Open Source)
+
+functions.do is part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.
+
+## Contributing
+
+Contributions are welcome! functions.do is designed to be extensible with:
+
+- New composition patterns
+- Additional utility functions
+- Enhanced type definitions
+- Integration examples
+
+## Acknowledgments
+
+functions.do builds upon functional programming principles, type theory, and semantic web standards to provide a powerful yet approachable framework for business logic execution.

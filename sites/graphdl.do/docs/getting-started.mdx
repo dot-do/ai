@@ -1,0 +1,442 @@
+---
+$id: https://graphdl.do/docs/getting-started
+$type: TechArticle
+title: Getting Started with graphdl
+description: Learn how to install and use graphdl for semantic graph patterns in TypeScript
+keywords: [graphdl, installation, getting-started, semantic-patterns, typescript]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Getting Started with graphdl
+
+graphdl is a TypeScript library for building semantic graphs using natural `$.Subject.predicate.Object` patterns. This guide will help you install and start using graphdl in your projects.
+
+## Installation
+
+Install graphdl using your preferred package manager:
+
+```bash
+# Using pnpm (recommended)
+pnpm add graphdl
+
+# Using npm
+npm install graphdl
+
+# Using yarn
+yarn add graphdl
+```
+
+## Basic Usage
+
+### The $ Semantic Proxy
+
+The primary way to use graphdl is through the `$` semantic proxy:
+
+```typescript
+import $ from 'graphdl'
+
+// Create semantic paths using property access
+const path1 = $.Person.worksFor.Organization
+const path2 = $.John.hasSkill.TypeScript
+const path3 = $.Product.locatedAt.Warehouse
+
+// Convert to string
+console.log(String($.Person.hasOccupation.Occupation))
+// Output: "$.Person.hasOccupation.Occupation"
+
+// Use in real scenarios
+const johnWorksForAcme = $.John.worksFor.Acme
+console.log(String(johnWorksForAcme))
+// Output: "$.John.worksFor.Acme"
+```
+
+The `$` proxy allows you to create semantic paths naturally using JavaScript property access. Each access chain creates a `$.Subject.predicate.Object` pattern.
+
+### Understanding the Pattern
+
+The `$.Subject.predicate.Object` pattern consists of three parts:
+
+1. **$** - The semantic context prefix (indicates this is a semantic pattern)
+2. **Subject** - The entity type or instance (e.g., Person, John, Product)
+3. **predicate** - The relationship or property (e.g., worksFor, hasSkill, locatedAt)
+4. **Object** - The target entity type or instance (e.g., Organization, TypeScript, Warehouse)
+
+```typescript
+// Pattern breakdown:
+//   $         - Semantic prefix
+//   Person    - Subject (entity type)
+//   worksFor  - Predicate (relationship)
+//   Organization - Object (target type)
+$.Person.worksFor.Organization
+
+// With instances:
+//   $         - Semantic prefix
+//   John      - Subject (entity instance)
+//   worksFor  - Predicate (relationship)
+//   Acme      - Object (target instance)
+$.John.worksFor.Acme
+```
+
+## Creating Your First Triple
+
+Triples are the fundamental building blocks of semantic graphs. A triple represents a single fact as Subject-Predicate-Object:
+
+```typescript
+import { createTriple } from 'graphdl'
+
+// Create a simple triple
+const triple = createTriple(
+  'Person:john', // Subject
+  'worksFor', // Predicate
+  'Organization:acme', // Object
+  {
+    context: 'https://schema.org',
+    metadata: {
+      confidence: 0.95,
+      source: 'user-input',
+    },
+  }
+)
+
+console.log(triple)
+// {
+//   subject: 'Person:john',
+//   predicate: 'worksFor',
+//   object: 'Organization:acme',
+//   context: 'https://schema.org',
+//   metadata: { confidence: 0.95, source: 'user-input' }
+// }
+```
+
+### Triple Builder Pattern
+
+For more complex triple creation, use the builder pattern:
+
+```typescript
+import { triple } from 'graphdl'
+
+const t = triple('Person:john')
+  .predicate('hasSkill')
+  .object('Skill:typescript')
+  .context('https://schema.org')
+  .metadata({
+    level: 'expert',
+    yearsExperience: 5,
+  })
+  .build()
+```
+
+## Building Your First Graph
+
+Graphs combine multiple nodes and edges to represent complex relationships:
+
+```typescript
+import { graph, node, edge } from 'graphdl'
+
+// Create a simple organizational graph
+const orgGraph = graph()
+  .context('https://schema.org')
+  .node(
+    node('john', 'Person', {
+      name: 'John Doe',
+      email: 'john@example.com',
+      jobTitle: 'Engineer',
+    })
+  )
+  .node(
+    node('jane', 'Person', {
+      name: 'Jane Smith',
+      email: 'jane@example.com',
+      jobTitle: 'Manager',
+    })
+  )
+  .node(
+    node('acme', 'Organization', {
+      name: 'Acme Corp',
+      industry: 'Technology',
+    })
+  )
+  .edge(edge('john', 'worksFor', 'acme'))
+  .edge(edge('jane', 'worksFor', 'acme'))
+  .edge(edge('jane', 'manages', 'john'))
+  .metadata({
+    created: new Date().toISOString(),
+    source: 'employee-database',
+  })
+  .build()
+
+console.log(orgGraph)
+```
+
+## Working with Vocabularies
+
+graphdl works seamlessly with standard vocabularies like Schema.org, GS1, and O\*NET:
+
+### Schema.org Types
+
+```typescript
+import $ from 'graphdl'
+import type { Person, Organization } from 'schema.org.ai'
+
+// Create Schema.org entities
+const person: Person = {
+  $type: 'Person',
+  $id: 'https://example.com/person/john',
+  name: 'John Doe',
+  email: 'john@example.com',
+}
+
+const org: Organization = {
+  $type: 'Organization',
+  $id: 'https://example.com/org/acme',
+  name: 'Acme Corp',
+}
+
+// Use with semantic patterns
+const employmentPath = $.Person.worksFor.Organization
+```
+
+### GS1 Supply Chain
+
+```typescript
+import $ from 'graphdl'
+
+// GS1 patterns use camelCase
+const shipmentPath = $.Shipment.inTransit.Warehouse
+const productPath = $.Product.receiving.DistributionCenter
+const containerPath = $.Container.locatedAt.Location
+
+// Create supply chain graph
+const supplyChain = graph()
+  .context({
+    $vocab: 'https://schema.org/',
+    gs1: 'https://gs1.org/voc/',
+  })
+  .node(
+    node('shipment-123', 'Shipment', {
+      status: 'inTransit',
+      expectedDelivery: '2025-10-15',
+    })
+  )
+  .node(
+    node('warehouse-sf', 'Warehouse', {
+      location: 'San Francisco, CA',
+    })
+  )
+  .edge(edge('shipment-123', 'destinedFor', 'warehouse-sf'))
+  .build()
+```
+
+### O\*NET Occupations
+
+```typescript
+import $ from 'graphdl'
+import type { Occupation } from 'soc.org.ai'
+
+// O*NET occupation patterns
+const skillPath = $.Occupation.requiresSkill.Skill
+const abilityPath = $.SoftwareDeveloper.requiresAbility.CriticalThinking
+
+// Create occupation graph
+const occupation: Occupation = {
+  onetCode: '15-1252.00',
+  title: 'Software Developers',
+}
+
+const occupationGraph = graph()
+  .context({
+    $vocab: 'https://schema.org/',
+    onet: 'https://www.onetonline.org/',
+  })
+  .node(node('15-1252.00', 'Occupation', occupation))
+  .node(
+    node('typescript', 'Skill', {
+      name: 'TypeScript',
+      category: 'Programming',
+    })
+  )
+  .edge(edge('15-1252.00', 'requiresSkill', 'typescript'))
+  .build()
+```
+
+## Semantic Naming Conventions
+
+graphdl provides utilities for consistent naming across collections, actions, activities, and events:
+
+```typescript
+import { toPlural, toActivity, toEvent } from 'graphdl'
+
+// Collections (plural)
+const orders = toPlural('order') // 'orders'
+const people = toPlural('person') // 'people'
+const categories = toPlural('category') // 'categories'
+
+// Activities (present continuous)
+const creating = toActivity('create') // 'creating'
+const sending = toActivity('send') // 'sending'
+const processing = toActivity('process') // 'processing'
+
+// Events (past tense)
+const created = toEvent('create') // 'created'
+const sent = toEvent('send') // 'sent'
+const processed = toEvent('process') // 'processed'
+
+// Use in semantic patterns
+const orderCollection = $.Orders // Collection
+const orderItem = $.Order // Item
+const createAction = $.Order.create // Action
+const creatingActivity = $.Order.creating // Activity
+const createdEvent = $.Order.created // Event
+```
+
+## Exporting as JSON-LD
+
+Convert your graphs to JSON-LD format for interoperability:
+
+```typescript
+import { graph, node, edge } from 'graphdl'
+
+const g = graph()
+  .context('https://schema.org')
+  .node(node('john', 'Person', { name: 'John Doe' }))
+  .node(node('acme', 'Organization', { name: 'Acme Corp' }))
+  .edge(edge('john', 'worksFor', 'acme'))
+
+// Export as JSON-LD
+const jsonld = g.toJSONLD()
+
+console.log(jsonld)
+// {
+//   $context: 'https://schema.org',
+//   $graph: [
+//     { $id: 'john', $type: 'Person', name: 'John Doe' },
+//     { $id: 'acme', $type: 'Organization', name: 'Acme Corp' }
+//   ]
+// }
+```
+
+## Integration with sdk.do
+
+graphdl integrates seamlessly with the sdk.do platform:
+
+```typescript
+import $, { db } from 'sdk.do'
+
+// Use semantic patterns in database queries
+const businesses = await db.list($.Business, {
+  where: { industry: 'Technology' },
+})
+
+// Create relationships
+const person = await db.get($.Person, 'john')
+const organization = await db.get($.Organization, 'acme')
+await db.relate(person, $.worksFor, organization)
+
+// Query related entities
+const employees = await db.related(organization, $.employs, $.Person)
+```
+
+## Next Steps
+
+Now that you've learned the basics, explore these topics:
+
+- [Semantic Patterns](./semantic-patterns) - Deep dive into $.Subject.predicate.Object patterns
+- [Relationships](./relationships) - Building complex graph relationships
+- [API Reference](../api/) - Complete API documentation
+- [Basic Semantics Example](../examples/basic-semantics) - Working examples
+- [Graph Queries Example](../examples/graph-queries) - Query patterns
+
+## Common Patterns
+
+### Business Relationships
+
+```typescript
+// Organizational structure
+$.Person.worksFor.Organization
+$.Organization.owns.Brand
+$.Employee.reportsTo.Manager
+
+// Customer relationships
+$.Customer.purchases.Product
+$.Customer.subscribedTo.Service
+$.Business.serves.Customer
+```
+
+### Supply Chain
+
+```typescript
+// Product lifecycle
+$.Product.manufacturedAt.Factory
+$.Product.locatedAt.Warehouse
+$.Product.shippedTo.Customer
+
+// Logistics
+$.Shipment.inTransit.Container
+$.Container.loadedOn.Vehicle
+$.Vehicle.destinedFor.Location
+```
+
+### Knowledge Management
+
+```typescript
+// Skills and abilities
+$.Person.hasSkill.Skill
+$.Occupation.requiresSkill.Skill
+$.Role.requiresAbility.Ability
+
+// Learning
+$.Person.completedCourse.Course
+$.Course.teaches.Skill
+$.Certification.validates.Competency
+```
+
+## Troubleshooting
+
+### TypeScript Errors
+
+Make sure to install type definitions for vocabularies you're using:
+
+```bash
+pnpm add schema.org.ai gs1.org.ai soc.org.ai
+```
+
+### Path Not Converting to String
+
+Remember to explicitly convert paths to strings:
+
+```typescript
+// Correct
+const pathString = String($.Person.worksFor.Organization)
+
+// Or use in template literals
+console.log(`Path: ${$.Person.worksFor.Organization}`)
+```
+
+### Missing Context
+
+Always include semantic context when building graphs:
+
+```typescript
+// Good
+const g = graph()
+  .context('https://schema.org')
+  .nodes([...])
+  .build()
+
+// Missing context - may cause issues
+const g = graph()
+  .nodes([...])
+  .build()
+```
+
+## Support
+
+- [GitHub Issues](https://github.com/dot-do/ai/issues)
+- [Contributing Guide](https://github.com/dot-do/ai/blob/main/CONTRIBUTING.md)
+- [API Reference](../api/)
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

@@ -1,0 +1,782 @@
+---
+$id: https://apis.do/docs/authentication
+$type: TechArticle
+title: API Authentication
+description: Complete guide to authentication methods for the apis.do gateway
+keywords: [authentication, api, security, jwt, oauth, api-keys, tokens]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# API Authentication
+
+The apis.do gateway supports multiple authentication methods to secure access to platform services. Choose the authentication method that best fits your use case.
+
+## Overview
+
+apis.do supports four authentication methods:
+
+1. **API Keys** - Simple token-based authentication for server-to-server
+2. **JWT Bearer Tokens** - Stateless authentication with JSON Web Tokens
+3. **OAuth2** - Industry-standard authorization framework
+4. **Service Credentials** - Service-to-service authentication
+
+## API Key Authentication
+
+### Overview
+
+API keys provide simple, token-based authentication ideal for:
+
+- Server-to-server communication
+- Backend services
+- Scripts and automation
+- Development and testing
+
+### Getting an API Key
+
+1. Log in to the `.do` platform dashboard
+2. Navigate to Settings > API Keys
+3. Click "Generate New API Key"
+4. Name your key and set permissions
+5. Copy and securely store the key
+
+### Using API Keys
+
+```typescript
+import { api } from 'sdk.do'
+
+// Set API key in environment variable
+process.env.APIS_API_KEY = 'your-api-key-here'
+
+// Use in requests
+const businesses = await api('https://apis.do/businesses', {
+  method: 'GET',
+  headers: {
+    'X-API-Key': process.env.APIS_API_KEY,
+    'Content-Type': 'application/json',
+  },
+})
+```
+
+### API Key Security
+
+**Best Practices**:
+
+- Store keys in environment variables, never in code
+- Use different keys for development, staging, and production
+- Rotate keys regularly (recommended: every 90 days)
+- Revoke compromised keys immediately
+- Use key-specific permissions (principle of least privilege)
+
+```bash
+# Good - environment variable
+export APIS_API_KEY=your-api-key-here
+
+# Bad - hardcoded in code
+const apiKey = 'your-api-key-here' // Never do this!
+```
+
+### API Key Permissions
+
+Control what each key can access:
+
+```typescript
+// Read-only key
+const readonlyKey = {
+  name: 'Read-only key',
+  permissions: ['read:businesses', 'read:products', 'read:orders'],
+}
+
+// Full access key
+const fullAccessKey = {
+  name: 'Full access key',
+  permissions: ['*'],
+}
+
+// Service-specific key
+const aiServiceKey = {
+  name: 'AI service key',
+  permissions: ['ai:generate', 'ai:embed', 'ai:batch'],
+}
+```
+
+## JWT Bearer Token Authentication
+
+### Overview
+
+JWT (JSON Web Token) authentication provides:
+
+- Stateless authentication
+- User-specific access
+- Built-in expiration
+- Cryptographic signatures
+
+### Getting a JWT Token
+
+Authenticate with username/password to receive a JWT:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Login to get JWT token
+const response = await api('https://apis.do/auth/login', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: {
+    email: 'user@example.com',
+    password: 'secure-password',
+  },
+})
+
+const { token, refreshToken, expiresIn } = response
+
+// Store tokens securely
+localStorage.setItem('jwt_token', token)
+localStorage.setItem('refresh_token', refreshToken)
+```
+
+### Using JWT Tokens
+
+```typescript
+import { api } from 'sdk.do'
+
+const token = localStorage.getItem('jwt_token')
+
+// Use Bearer token in Authorization header
+const businesses = await api('https://apis.do/businesses', {
+  method: 'GET',
+  headers: {
+    Authorization: `Bearer ${token}`,
+    'Content-Type': 'application/json',
+  },
+})
+```
+
+### Token Refresh
+
+Refresh expired tokens using the refresh token:
+
+```typescript
+import { api } from 'sdk.do'
+
+async function refreshAccessToken() {
+  const refreshToken = localStorage.getItem('refresh_token')
+
+  const response = await api('https://apis.do/auth/refresh', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: {
+      refreshToken,
+    },
+  })
+
+  const { token, expiresIn } = response
+
+  localStorage.setItem('jwt_token', token)
+  return token
+}
+
+// Automatic token refresh
+async function apiWithTokenRefresh(url: string, options: any) {
+  try {
+    return await api(url, options)
+  } catch (error) {
+    if (error.status === 401) {
+      // Token expired, refresh and retry
+      const newToken = await refreshAccessToken()
+      options.headers.Authorization = `Bearer ${newToken}`
+      return await api(url, options)
+    }
+    throw error
+  }
+}
+```
+
+### JWT Token Structure
+
+JWT tokens contain three parts: header, payload, and signature:
+
+```
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.    ← Header
+eyJzdWIiOiJ1c2VyLTEyMyIsIm5hbWUiOiJK...  ← Payload
+SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_a... ← Signature
+```
+
+Decoded payload:
+
+```json
+{
+  "sub": "user-123",
+  "name": "John Doe",
+  "email": "john@example.com",
+  "iat": 1640995200,
+  "exp": 1640998800,
+  "permissions": ["read:businesses", "write:businesses"]
+}
+```
+
+### Token Validation
+
+Verify token before use:
+
+```typescript
+import { api } from 'sdk.do'
+
+async function verifyToken(token: string) {
+  try {
+    const response = await api('https://apis.do/auth/verify', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: { token },
+    })
+
+    return response.valid
+  } catch (error) {
+    return false
+  }
+}
+
+const token = localStorage.getItem('jwt_token')
+if (await verifyToken(token)) {
+  // Token is valid
+} else {
+  // Token is invalid or expired
+  await refreshAccessToken()
+}
+```
+
+## OAuth2 Authentication
+
+### Overview
+
+OAuth2 provides secure, delegated access:
+
+- User consent-based authorization
+- Third-party application access
+- Fine-grained permissions (scopes)
+- Industry-standard protocol
+
+### OAuth2 Flow
+
+**Authorization Code Flow** (recommended for web apps):
+
+```typescript
+import { api } from 'sdk.do'
+
+// Step 1: Redirect user to authorization URL
+const authUrl = new URL('https://apis.do/oauth/authorize')
+authUrl.searchParams.set('client_id', 'your-client-id')
+authUrl.searchParams.set('redirect_uri', 'https://your-app.com/callback')
+authUrl.searchParams.set('response_type', 'code')
+authUrl.searchParams.set('scope', 'read:businesses write:businesses')
+authUrl.searchParams.set('state', 'random-state-string')
+
+// Redirect user
+window.location.href = authUrl.toString()
+
+// Step 2: User authorizes and is redirected back
+// https://your-app.com/callback?code=AUTH_CODE&state=random-state-string
+
+// Step 3: Exchange authorization code for access token
+const code = new URLSearchParams(window.location.search).get('code')
+
+const tokenResponse = await api('https://apis.do/oauth/token', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: {
+    grant_type: 'authorization_code',
+    code,
+    client_id: 'your-client-id',
+    client_secret: 'your-client-secret',
+    redirect_uri: 'https://your-app.com/callback',
+  },
+})
+
+const { access_token, refresh_token, expires_in, token_type } = tokenResponse
+
+// Step 4: Use access token for API requests
+const businesses = await api('https://apis.do/businesses', {
+  method: 'GET',
+  headers: {
+    Authorization: `Bearer ${access_token}`,
+  },
+})
+```
+
+### OAuth2 Scopes
+
+Request specific permissions with scopes:
+
+```typescript
+// Read-only access
+const scopes = 'read:businesses read:products read:orders'
+
+// Read and write access
+const scopes = 'read:businesses write:businesses'
+
+// Multiple resources
+const scopes = 'read:businesses write:businesses read:orders write:orders'
+
+// Admin access
+const scopes = 'admin'
+
+// Use in authorization URL
+authUrl.searchParams.set('scope', scopes)
+```
+
+### Available Scopes
+
+```
+read:businesses     - Read business data
+write:businesses    - Create/update/delete businesses
+read:products       - Read product data
+write:products      - Create/update/delete products
+read:orders         - Read order data
+write:orders        - Create/update/delete orders
+read:users          - Read user data
+write:users         - Create/update/delete users
+ai:generate         - Use AI generation
+ai:embed            - Use AI embeddings
+events:publish      - Publish events
+events:subscribe    - Subscribe to events
+workflows:execute   - Execute workflows
+admin               - Full platform access
+```
+
+### OAuth2 Client Types
+
+**Web Application**:
+
+```typescript
+// Uses authorization code flow
+// Runs on server, can keep client_secret secure
+const config = {
+  client_id: 'web-app-client-id',
+  client_secret: 'web-app-client-secret',
+  redirect_uri: 'https://your-app.com/callback',
+  grant_type: 'authorization_code',
+}
+```
+
+**Single Page Application (SPA)**:
+
+```typescript
+// Uses PKCE (Proof Key for Code Exchange)
+// Runs in browser, no client_secret
+const config = {
+  client_id: 'spa-client-id',
+  redirect_uri: 'https://your-spa.com/callback',
+  grant_type: 'authorization_code',
+  code_challenge_method: 'S256',
+  code_challenge: generateCodeChallenge(),
+}
+```
+
+**Native Mobile App**:
+
+```typescript
+// Uses PKCE with custom URI scheme
+const config = {
+  client_id: 'mobile-app-client-id',
+  redirect_uri: 'myapp://oauth/callback',
+  grant_type: 'authorization_code',
+  code_challenge_method: 'S256',
+  code_challenge: generateCodeChallenge(),
+}
+```
+
+### OAuth2 Token Refresh
+
+Refresh access tokens using refresh token:
+
+```typescript
+async function refreshOAuthToken(refreshToken: string) {
+  const response = await api('https://apis.do/oauth/token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: {
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+      client_id: 'your-client-id',
+      client_secret: 'your-client-secret',
+    },
+  })
+
+  return response.access_token
+}
+```
+
+## Service-to-Service Authentication
+
+### Overview
+
+Authenticate services without user interaction:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Service credentials
+const serviceAuth = {
+  serviceId: 'service-123',
+  serviceSecret: 'service-secret-key',
+}
+
+// Make authenticated request
+const businesses = await api('https://apis.do/businesses', {
+  method: 'GET',
+  headers: {
+    'X-Service-ID': serviceAuth.serviceId,
+    'X-Service-Secret': serviceAuth.serviceSecret,
+    'Content-Type': 'application/json',
+  },
+})
+```
+
+### Service Token Generation
+
+Generate long-lived service tokens:
+
+```typescript
+import { api } from 'sdk.do'
+
+const serviceToken = await api('https://apis.do/auth/service-token', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: {
+    serviceId: 'service-123',
+    serviceSecret: 'service-secret-key',
+    expiresIn: '30d', // Token valid for 30 days
+  },
+})
+
+// Use service token
+const businesses = await api('https://apis.do/businesses', {
+  method: 'GET',
+  headers: {
+    Authorization: `Bearer ${serviceToken.token}`,
+  },
+})
+```
+
+## Authentication Helpers
+
+### Auth Client Class
+
+Create a reusable auth client:
+
+```typescript
+import { api } from 'sdk.do'
+
+class AuthClient {
+  private token: string | null = null
+  private refreshToken: string | null = null
+
+  async login(email: string, password: string) {
+    const response = await api('https://apis.do/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: { email, password },
+    })
+
+    this.token = response.token
+    this.refreshToken = response.refreshToken
+    return response
+  }
+
+  async refresh() {
+    if (!this.refreshToken) {
+      throw new Error('No refresh token available')
+    }
+
+    const response = await api('https://apis.do/auth/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: { refreshToken: this.refreshToken },
+    })
+
+    this.token = response.token
+    return response
+  }
+
+  async request(url: string, options: any = {}) {
+    if (!this.token) {
+      throw new Error('Not authenticated')
+    }
+
+    try {
+      return await api(url, {
+        ...options,
+        headers: {
+          ...options.headers,
+          Authorization: `Bearer ${this.token}`,
+        },
+      })
+    } catch (error) {
+      if (error.status === 401) {
+        await this.refresh()
+        return this.request(url, options)
+      }
+      throw error
+    }
+  }
+
+  logout() {
+    this.token = null
+    this.refreshToken = null
+  }
+}
+
+// Usage
+const auth = new AuthClient()
+await auth.login('user@example.com', 'password')
+const businesses = await auth.request('/businesses')
+```
+
+### Automatic Token Refresh
+
+Middleware to automatically refresh expired tokens:
+
+```typescript
+import { api } from 'sdk.do'
+
+function createAuthenticatedApi(getToken: () => string, refreshToken: () => Promise<string>) {
+  return async function authenticatedApi(url: string, options: any = {}) {
+    const token = getToken()
+
+    const requestOptions = {
+      ...options,
+      headers: {
+        ...options.headers,
+        Authorization: `Bearer ${token}`,
+      },
+    }
+
+    try {
+      return await api(url, requestOptions)
+    } catch (error) {
+      if (error.status === 401) {
+        // Token expired, refresh and retry
+        const newToken = await refreshToken()
+        requestOptions.headers.Authorization = `Bearer ${newToken}`
+        return await api(url, requestOptions)
+      }
+      throw error
+    }
+  }
+}
+
+// Usage
+let currentToken = 'initial-token'
+let currentRefreshToken = 'refresh-token'
+
+const authenticatedApi = createAuthenticatedApi(
+  () => currentToken,
+  async () => {
+    const response = await api('https://apis.do/auth/refresh', {
+      method: 'POST',
+      body: { refreshToken: currentRefreshToken },
+    })
+    currentToken = response.token
+    return response.token
+  }
+)
+
+const businesses = await authenticatedApi('/businesses')
+```
+
+## Security Best Practices
+
+### Store Credentials Securely
+
+```typescript
+// Good - environment variables
+const apiKey = process.env.APIS_API_KEY
+
+// Good - secure storage (browser)
+const token = localStorage.getItem('jwt_token')
+
+// Bad - hardcoded
+const apiKey = 'hardcoded-key-here' // Never do this!
+
+// Bad - in code
+const credentials = {
+  username: 'admin',
+  password: 'password123',
+} // Never do this!
+```
+
+### Use HTTPS
+
+Always use HTTPS for API requests:
+
+```typescript
+// Good
+const businesses = await api('https://apis.do/businesses')
+
+// Bad - unencrypted
+const businesses = await api('http://apis.do/businesses')
+```
+
+### Rotate Credentials
+
+Implement credential rotation:
+
+```typescript
+async function rotateApiKey(oldKey: string) {
+  // Create new key
+  const newKey = await api('https://apis.do/auth/api-keys', {
+    method: 'POST',
+    headers: {
+      'X-API-Key': oldKey,
+    },
+    body: {
+      name: 'Rotated key',
+      permissions: ['*'],
+    },
+  })
+
+  // Update application to use new key
+  process.env.APIS_API_KEY = newKey.key
+
+  // Revoke old key after grace period
+  setTimeout(
+    async () => {
+      await api(`https://apis.do/auth/api-keys/${oldKey}`, {
+        method: 'DELETE',
+        headers: {
+          'X-API-Key': newKey.key,
+        },
+      })
+    },
+    24 * 60 * 60 * 1000
+  ) // 24 hour grace period
+}
+```
+
+### Implement Rate Limiting
+
+Respect rate limits:
+
+```typescript
+class RateLimitedClient {
+  private remaining: number = Infinity
+  private resetTime: number = 0
+
+  async request(url: string, options: any = {}) {
+    // Wait if rate limited
+    if (this.remaining <= 0) {
+      const waitTime = this.resetTime - Date.now()
+      if (waitTime > 0) {
+        await new Promise((resolve) => setTimeout(resolve, waitTime))
+      }
+    }
+
+    const response = await api(url, options)
+
+    // Update rate limit info
+    this.remaining = parseInt(response.headers['x-ratelimit-remaining'] || '100')
+    this.resetTime = parseInt(response.headers['x-ratelimit-reset'] || '0') * 1000
+
+    return response
+  }
+}
+```
+
+### Monitor Authentication
+
+Log authentication events:
+
+```typescript
+async function monitoredLogin(email: string, password: string) {
+  try {
+    const response = await api('https://apis.do/auth/login', {
+      method: 'POST',
+      body: { email, password },
+    })
+
+    console.log(`[AUTH] Successful login: ${email}`)
+    return response
+  } catch (error) {
+    console.error(`[AUTH] Failed login: ${email}`, error)
+    throw error
+  }
+}
+```
+
+## Troubleshooting
+
+### Invalid API Key
+
+```bash
+Error: 401 Unauthorized - Invalid API key
+```
+
+Solution: Verify your API key is correct and active:
+
+```typescript
+const response = await api('https://apis.do/auth/verify', {
+  method: 'POST',
+  body: { apiKey: process.env.APIS_API_KEY },
+})
+```
+
+### Expired JWT Token
+
+```bash
+Error: 401 Unauthorized - Token expired
+```
+
+Solution: Refresh the token:
+
+```typescript
+const newToken = await refreshAccessToken()
+```
+
+### Insufficient Permissions
+
+```bash
+Error: 403 Forbidden - Insufficient permissions
+```
+
+Solution: Check your token/key has required permissions:
+
+```typescript
+const response = await api('https://apis.do/auth/verify', {
+  method: 'POST',
+  body: { token: myToken },
+})
+
+console.log('Permissions:', response.permissions)
+```
+
+### OAuth2 Errors
+
+```bash
+Error: invalid_grant - Authorization code expired
+```
+
+Solution: Authorization codes expire quickly (typically 10 minutes). Restart the OAuth flow.
+
+## Related Documentation
+
+- [Getting Started](./getting-started) - Basic API usage
+- [Routing](./routing) - API routing patterns
+- [API Reference](../api/) - Complete API documentation
+- [Examples](../examples/) - Authentication examples
+
+---
+
+Continue to [Examples](../examples/) for practical authentication implementations.

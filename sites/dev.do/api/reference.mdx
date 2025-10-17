@@ -1,0 +1,265 @@
+---
+$id: https://dev.do/api/reference
+$type: APIReference
+title: dev.do API Reference
+description: Complete API reference for dev.do functions and types
+keywords: [dev, api, reference, documentation, types]
+---
+
+# dev.do API Reference
+
+Complete API documentation for dev.do functions, types, and interfaces.
+
+## Functions
+
+### dev()
+
+Main function for development utilities.
+
+**Signature:**
+
+```typescript
+async function dev<T = any>(data: T | DevInput, options?: DevOptions): Promise<DevResult<T>>
+```
+
+**Parameters:**
+
+- `data` - Input data to process
+- `options` - Optional configuration options
+
+**Returns:** Promise resolving to result object
+
+**Example:**
+
+```typescript
+const result = await dev({
+  data: 'input',
+  options: { format: 'json' },
+})
+```
+
+### dev.create()
+
+Create a reusable instance.
+
+**Signature:**
+
+```typescript
+function create(config: DevConfig): DevInstance
+```
+
+**Parameters:**
+
+- `config` - Instance configuration
+
+**Returns:** Instance object
+
+**Example:**
+
+```typescript
+const instance = dev.create({
+  timeout: 30000,
+  retries: 3,
+})
+
+const result = await instance.process(data)
+```
+
+### dev.batch()
+
+Process multiple items.
+
+**Signature:**
+
+```typescript
+async function batch<T>(items: T[], options?: BatchOptions): Promise<DevResult<T>[]>
+```
+
+**Parameters:**
+
+- `items` - Array of items to process
+- `options` - Optional batch options
+
+**Returns:** Promise resolving to array of results
+
+**Example:**
+
+```typescript
+const results = await dev.batch([item1, item2, item3])
+```
+
+### dev.stream()
+
+Process data as a stream.
+
+**Signature:**
+
+```typescript
+async function* stream<T>(
+  data: AsyncIterable<T>,
+  options?: StreamOptions
+): AsyncGenerator<DevResult<T>>
+```
+
+**Parameters:**
+
+- `data` - Async iterable data source
+- `options` - Optional stream options
+
+**Returns:** Async generator yielding results
+
+**Example:**
+
+```typescript
+for await (const result of dev.stream(dataStream)) {
+  console.log('Result:', result)
+}
+```
+
+## Types
+
+### DevOptions
+
+Configuration options for dev().
+
+```typescript
+interface DevOptions {
+  // Format options
+  format?: 'json' | 'xml' | 'text'
+
+  // Validation
+  validate?: boolean
+  strict?: boolean
+
+  // Performance
+  timeout?: number
+  cache?: boolean
+  cacheTTL?: number
+
+  // Error handling
+  throwOnError?: boolean
+  retries?: number
+}
+```
+
+### DevResult
+
+Result object returned by dev().
+
+```typescript
+interface DevResult<T = any> {
+  // Success indicator
+  success: boolean
+
+  // Result data
+  data?: T
+
+  // Error information
+  error?: string
+  code?: string
+
+  // Metadata
+  metadata?: {
+    duration: number
+    timestamp: Date
+    cached: boolean
+  }
+}
+```
+
+### DevConfig
+
+Configuration for creating instances.
+
+```typescript
+interface DevConfig {
+  // API configuration
+  apiKey?: string
+  endpoint?: string
+
+  // Timeouts
+  timeout?: number
+  retries?: number
+
+  // Defaults
+  defaultOptions?: DevOptions
+}
+```
+
+### DevInstance
+
+Instance created by dev.create().
+
+```typescript
+interface DevInstance {
+  // Process method
+  process<T>(data: T, options?: DevOptions): Promise<DevResult<T>>
+
+  // Batch method
+  batch<T>(items: T[], options?: BatchOptions): Promise<DevResult<T>[]>
+
+  // Close instance
+  close(): Promise<void>
+
+  // Get metrics
+  getMetrics(): Metrics
+}
+```
+
+### DevError
+
+Custom error class.
+
+```typescript
+class DevError extends Error {
+  code: string
+  details?: any
+
+  constructor(message: string, code: string, details?: any)
+}
+```
+
+## Constants
+
+### DEFAULT_OPTIONS
+
+Default options used when none provided.
+
+```typescript
+const DEFAULT_OPTIONS: DevOptions = {
+  format: 'json',
+  validate: true,
+  timeout: 30000,
+  retries: 3,
+}
+```
+
+## Events
+
+### Instance Events
+
+Instances emit events for monitoring:
+
+```typescript
+instance.on('start', (data) => {
+  console.log('Processing started:', data)
+})
+
+instance.on('complete', (result) => {
+  console.log('Processing completed:', result)
+})
+
+instance.on('error', (error) => {
+  console.error('Processing error:', error)
+})
+```
+
+## Learn More
+
+- [Getting Started](../docs/getting-started) - Setup guide
+- [Examples](../examples/basic-usage) - Code examples
+- [Best Practices](../docs/best-practices) - Recommended patterns
+
+---
+
+Part of the [dev.do](https://dev.do) documentation.

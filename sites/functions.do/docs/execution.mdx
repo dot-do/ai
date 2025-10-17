@@ -1,0 +1,810 @@
+---
+$id: https://functions.do/docs/execution
+$type: TechArticle
+title: Function Execution Guide
+description: Learn how to execute functions synchronously, asynchronously, and with custom options
+keywords: [execution, async, sync, parameters, context, options]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Function Execution Guide
+
+Learn how to execute functions in the functions.do platform, including synchronous execution, asynchronous execution, execution options, and error handling.
+
+## Overview
+
+functions.do supports two execution modes:
+
+- **Synchronous** - Wait for result before continuing
+- **Asynchronous** - Fire and forget, check status later
+
+Both modes support:
+
+- Custom execution parameters
+- Resource limits (memory, timeout)
+- Execution context (environment variables, request IDs)
+- Sandbox isolation
+- Detailed execution metadata
+
+## Quick Start
+
+### Synchronous Execution
+
+```typescript
+import { executeFunction } from 'ai-functions'
+
+const result = await executeFunction('hello-world', {
+  params: {
+    name: 'Alice',
+  },
+})
+
+if (result.success) {
+  console.log('Result:', result.data)
+} else {
+  console.error('Error:', result.error?.message)
+}
+```
+
+### Asynchronous Execution
+
+```typescript
+import { executeFunctionAsync, getExecutionStatus } from 'ai-functions'
+
+const executionId = await executeFunctionAsync('process-batch', {
+  params: {
+    batchSize: 10000,
+  },
+})
+
+console.log('Started execution:', executionId)
+
+// Check status later
+const result = await getExecutionStatus(executionId)
+```
+
+## Synchronous Execution
+
+### Basic Execution
+
+Execute a function and wait for the result:
+
+```typescript
+import { executeFunction } from 'ai-functions'
+
+const result = await executeFunction('calculate-total', {
+  params: {
+    items: [
+      { price: 10.99, quantity: 2 },
+      { price: 5.99, quantity: 3 },
+    ],
+  },
+})
+
+console.log('Total:', result.data)
+console.log('Duration:', result.execution.duration, 'ms')
+```
+
+### With Type Safety
+
+Use TypeScript generics for type-safe results:
+
+```typescript
+interface CalculateResult {
+  subtotal: number
+  tax: number
+  total: number
+}
+
+const result = await executeFunction<CalculateResult>('calculate-total', {
+  params: {
+    items: [{ price: 100, quantity: 1 }],
+  },
+})
+
+if (result.success) {
+  // TypeScript knows result.data is CalculateResult
+  console.log('Total:', result.data.total)
+}
+```
+
+### With Execution Options
+
+Customize execution behavior:
+
+```typescript
+const result = await executeFunction('process-data', {
+  params: {
+    data: largeDataset,
+  },
+  options: {
+    sandbox: true, // Execute in isolated sandbox
+    timeout: 60, // 60 second timeout
+    memory: 512, // 512MB memory limit
+  },
+})
+```
+
+### With Context
+
+Provide additional execution context:
+
+```typescript
+const result = await executeFunction('process-order', {
+  params: {
+    orderId: 'order-123',
+  },
+  context: {
+    requestId: 'req-xyz789',
+    env: {
+      STRIPE_KEY: process.env.STRIPE_KEY,
+      DATABASE_URL: process.env.DATABASE_URL,
+    },
+  },
+})
+```
+
+## Asynchronous Execution
+
+### Fire and Forget
+
+Start execution without waiting for result:
+
+```typescript
+import { executeFunctionAsync } from 'ai-functions'
+
+const executionId = await executeFunctionAsync('send-emails', {
+  params: {
+    recipients: ['user1@example.com', 'user2@example.com'],
+    subject: 'Welcome!',
+  },
+})
+
+console.log('Email sending started:', executionId)
+// Continue without waiting
+```
+
+### Check Execution Status
+
+Poll for completion:
+
+```typescript
+import { executeFunctionAsync, getExecutionStatus } from 'ai-functions'
+
+const executionId = await executeFunctionAsync('long-running-task', {
+  params: { data: 'process this' },
+})
+
+// Poll every 5 seconds
+const interval = setInterval(async () => {
+  const result = await getExecutionStatus(executionId)
+
+  if (result) {
+    clearInterval(interval)
+
+    if (result.success) {
+      console.log('Task completed:', result.data)
+    } else {
+      console.error('Task failed:', result.error?.message)
+    }
+  } else {
+    console.log('Still running...')
+  }
+}, 5000)
+```
+
+### Cancel Execution
+
+Cancel a running async execution:
+
+```typescript
+import { executeFunctionAsync, cancelExecution } from 'ai-functions'
+
+const executionId = await executeFunctionAsync('slow-task', {
+  params: { data: 'process' },
+})
+
+// Cancel after 10 seconds if still running
+setTimeout(async () => {
+  const cancelled = await cancelExecution(executionId)
+  if (cancelled) {
+    console.log('Execution cancelled')
+  }
+}, 10000)
+```
+
+## Execution Parameters
+
+### Simple Parameters
+
+Pass basic types as parameters:
+
+```typescript
+await executeFunction('greet', {
+  params: {
+    name: 'Alice',
+    age: 30,
+    active: true,
+  },
+})
+```
+
+### Complex Parameters
+
+Pass objects and arrays:
+
+```typescript
+await executeFunction('process-order', {
+  params: {
+    order: {
+      id: 'order-123',
+      customer: {
+        email: 'customer@example.com',
+        name: 'John Doe',
+      },
+      items: [
+        { id: 'item-1', quantity: 2, price: 29.99 },
+        { id: 'item-2', quantity: 1, price: 49.99 },
+      ],
+      shipping: {
+        address: '123 Main St',
+        city: 'San Francisco',
+        country: 'US',
+      },
+    },
+  },
+})
+```
+
+### Schema Validation
+
+Validate parameters against a schema:
+
+```typescript
+import { z } from 'zod'
+
+const OrderSchema = z.object({
+  id: z.string(),
+  total: z.number().positive(),
+  items: z.array(
+    z.object({
+      id: z.string(),
+      quantity: z.number().int().positive(),
+    })
+  ),
+})
+
+// Validate before execution
+const order = OrderSchema.parse(inputData)
+
+const result = await executeFunction('process-order', {
+  params: { order },
+})
+```
+
+## Execution Options
+
+### Sandbox Isolation
+
+Execute in isolated sandbox for security:
+
+```typescript
+const result = await executeFunction('untrusted-code', {
+  params: { data: userInput },
+  options: {
+    sandbox: true, // Isolated execution
+  },
+})
+```
+
+Sandbox features:
+
+- Separate V8 isolate
+- Resource limits enforced
+- Network access restricted
+- Filesystem access restricted
+- No access to parent process
+
+**Note:** Sandbox execution requires `ai-sandbox` package and additional setup.
+
+### Timeout Control
+
+Set maximum execution time:
+
+```typescript
+const result = await executeFunction('slow-operation', {
+  params: { data: 'process' },
+  options: {
+    timeout: 30, // 30 seconds
+  },
+})
+
+if (!result.success && result.error?.code === 'TIMEOUT') {
+  console.log('Function timed out after 30 seconds')
+}
+```
+
+### Memory Limits
+
+Control memory allocation:
+
+```typescript
+const result = await executeFunction('memory-intensive', {
+  params: { largeDataset },
+  options: {
+    memory: 1024, // 1GB
+  },
+})
+```
+
+### Combined Options
+
+Use multiple options together:
+
+```typescript
+const result = await executeFunction('critical-operation', {
+  params: { data: sensitiveData },
+  options: {
+    sandbox: true, // Isolated
+    timeout: 60, // 60 seconds max
+    memory: 512, // 512MB limit
+  },
+  context: {
+    requestId: 'req-123',
+    env: {
+      API_KEY: process.env.API_KEY,
+    },
+  },
+})
+```
+
+## Execution Context
+
+### Request Tracking
+
+Track execution across systems:
+
+```typescript
+const result = await executeFunction('api-handler', {
+  params: { userId: '123' },
+  context: {
+    requestId: 'req-abc123', // Trace across services
+  },
+})
+
+console.log('Request ID:', result.execution.executionId)
+```
+
+### Environment Variables
+
+Pass environment-specific configuration:
+
+```typescript
+const result = await executeFunction('database-query', {
+  params: { query: 'SELECT * FROM users' },
+  context: {
+    env: {
+      DATABASE_URL: process.env.DATABASE_URL,
+      ENVIRONMENT: 'production',
+    },
+  },
+})
+```
+
+### Resource Overrides
+
+Override default resource limits:
+
+```typescript
+const result = await executeFunction('batch-processor', {
+  params: { batchSize: 1000 },
+  context: {
+    timeout: 300, // Override to 5 minutes
+    memory: 2048, // Override to 2GB
+  },
+})
+```
+
+## Execution Results
+
+### Success Results
+
+When execution succeeds:
+
+```typescript
+const result = await executeFunction('calculate', {
+  params: { x: 5, y: 10 },
+})
+
+if (result.success) {
+  console.log('Data:', result.data) // Function return value
+  console.log('Execution ID:', result.execution.executionId)
+  console.log('Duration:', result.execution.duration, 'ms')
+  console.log('Memory used:', result.execution.memory, 'MB')
+  console.log('Started:', result.execution.startedAt)
+  console.log('Completed:', result.execution.completedAt)
+}
+```
+
+### Error Results
+
+When execution fails:
+
+```typescript
+const result = await executeFunction('failing-function', {
+  params: { data: 'bad' },
+})
+
+if (!result.success) {
+  console.error('Error message:', result.error?.message)
+  console.error('Error code:', result.error?.code)
+  console.error('Stack trace:', result.error?.stack)
+}
+```
+
+### Execution Logs
+
+Access execution logs if available:
+
+```typescript
+const result = await executeFunction('logged-function', {
+  params: { data: 'process' },
+})
+
+if (result.logs) {
+  console.log('Execution logs:')
+  result.logs.forEach((log) => console.log(log))
+}
+```
+
+## Error Handling
+
+### Try-Catch Pattern
+
+Wrap execution in try-catch for errors:
+
+```typescript
+try {
+  const result = await executeFunction('may-fail', {
+    params: { data: 'test' },
+  })
+
+  if (result.success) {
+    console.log('Success:', result.data)
+  } else {
+    console.error('Function error:', result.error?.message)
+  }
+} catch (error) {
+  console.error('Execution error:', error.message)
+}
+```
+
+### Error Types
+
+Handle different error types:
+
+```typescript
+const result = await executeFunction('function-id', { params: {} })
+
+if (!result.success) {
+  switch (result.error?.code) {
+    case 'FUNCTION_NOT_FOUND':
+      console.error('Function does not exist')
+      break
+
+    case 'TIMEOUT':
+      console.error('Function timed out')
+      break
+
+    case 'MEMORY_LIMIT':
+      console.error('Function exceeded memory limit')
+      break
+
+    case 'EXECUTION_ERROR':
+      console.error('Function threw an error:', result.error.message)
+      break
+
+    default:
+      console.error('Unknown error:', result.error?.message)
+  }
+}
+```
+
+### Retry Logic
+
+Implement retry for transient failures:
+
+```typescript
+async function executeWithRetry(functionId: string, input: any, maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const result = await executeFunction(functionId, input)
+
+    if (result.success) {
+      return result
+    }
+
+    if (attempt < maxRetries) {
+      console.log(`Attempt ${attempt} failed, retrying...`)
+      await new Promise((resolve) => setTimeout(resolve, 1000 * attempt))
+    }
+  }
+
+  throw new Error('Function failed after max retries')
+}
+
+const result = await executeWithRetry('unreliable-function', { params: {} })
+```
+
+### Timeout Handling
+
+Handle timeout errors specifically:
+
+```typescript
+const result = await executeFunction('slow-function', {
+  params: { data: 'process' },
+  options: { timeout: 10 },
+})
+
+if (!result.success && result.error?.message.includes('timed out')) {
+  console.log('Function exceeded 10 second timeout')
+  // Retry with longer timeout or handle gracefully
+}
+```
+
+## Performance Optimization
+
+### Batch Execution
+
+Execute multiple functions in parallel:
+
+```typescript
+const results = await Promise.all([
+  executeFunction('func-1', { params: { id: 1 } }),
+  executeFunction('func-2', { params: { id: 2 } }),
+  executeFunction('func-3', { params: { id: 3 } }),
+])
+
+results.forEach((result, i) => {
+  console.log(`Function ${i + 1}:`, result.success ? 'Success' : 'Failed')
+})
+```
+
+### Async for Long Operations
+
+Use async execution for long-running operations:
+
+```typescript
+// Don't wait for long operations
+const executionId = await executeFunctionAsync('generate-report', {
+  params: { month: 'January' },
+})
+
+// Return immediately, check later
+return { message: 'Report generation started', executionId }
+```
+
+### Memory Management
+
+Right-size memory allocation:
+
+```typescript
+// Too much memory (wasteful)
+await executeFunction('simple-calc', {
+  params: { x: 1, y: 2 },
+  options: { memory: 2048 }, // Overkill
+})
+
+// Right-sized memory
+await executeFunction('simple-calc', {
+  params: { x: 1, y: 2 },
+  options: { memory: 128 }, // Appropriate
+})
+```
+
+### Timeout Tuning
+
+Set appropriate timeouts:
+
+```typescript
+// Fast operations - short timeout
+await executeFunction('validate-email', {
+  params: { email: 'test@example.com' },
+  options: { timeout: 5 },
+})
+
+// Slow operations - longer timeout
+await executeFunction('process-video', {
+  params: { videoUrl: 'https://...' },
+  options: { timeout: 300 },
+})
+```
+
+## Advanced Patterns
+
+### Chaining Functions
+
+Execute functions in sequence:
+
+```typescript
+const result1 = await executeFunction('validate-data', {
+  params: { data: inputData },
+})
+
+if (result1.success) {
+  const result2 = await executeFunction('process-data', {
+    params: { data: result1.data },
+  })
+
+  if (result2.success) {
+    const result3 = await executeFunction('store-result', {
+      params: { result: result2.data },
+    })
+  }
+}
+```
+
+### Parallel Execution
+
+Execute independent functions in parallel:
+
+```typescript
+const [userData, orderData, productData] = await Promise.all([
+  executeFunction('fetch-user', { params: { userId: '123' } }),
+  executeFunction('fetch-orders', { params: { userId: '123' } }),
+  executeFunction('fetch-products', { params: {} }),
+])
+```
+
+### Conditional Execution
+
+Execute based on conditions:
+
+```typescript
+const validateResult = await executeFunction('validate', {
+  params: { data: inputData },
+})
+
+if (validateResult.success && validateResult.data.isValid) {
+  await executeFunction('process', { params: { data: inputData } })
+} else {
+  await executeFunction('handle-invalid', { params: { errors: validateResult.data.errors } })
+}
+```
+
+### Fan-Out Pattern
+
+Execute same function with different inputs:
+
+```typescript
+const userIds = ['user-1', 'user-2', 'user-3']
+
+const results = await Promise.all(
+  userIds.map((userId) =>
+    executeFunction('process-user', {
+      params: { userId },
+    })
+  )
+)
+
+const successful = results.filter((r) => r.success).length
+console.log(`Processed ${successful}/${userIds.length} users`)
+```
+
+## Testing Execution
+
+### Unit Testing
+
+Test function execution in unit tests:
+
+```typescript
+import { describe, it, expect } from 'vitest'
+import { executeFunction } from 'ai-functions'
+
+describe('calculate-tax', () => {
+  it('should calculate tax correctly', async () => {
+    const result = await executeFunction('calculate-tax', {
+      params: {
+        amount: 100,
+        rate: 0.08,
+      },
+    })
+
+    expect(result.success).toBe(true)
+    expect(result.data).toEqual({
+      tax: 8,
+      total: 108,
+    })
+  })
+
+  it('should handle invalid input', async () => {
+    const result = await executeFunction('calculate-tax', {
+      params: {
+        amount: -100,
+        rate: 0.08,
+      },
+    })
+
+    expect(result.success).toBe(false)
+    expect(result.error?.message).toContain('Invalid amount')
+  })
+})
+```
+
+### Integration Testing
+
+Test function integration:
+
+```typescript
+it('should integrate with database', async () => {
+  // Create test data
+  await db.create($.Product, { id: 'test-1', price: 99.99 })
+
+  // Execute function
+  const result = await executeFunction('get-product-price', {
+    params: { productId: 'test-1' },
+  })
+
+  // Verify result
+  expect(result.success).toBe(true)
+  expect(result.data.price).toBe(99.99)
+
+  // Clean up
+  await db.delete($.Product, 'test-1')
+})
+```
+
+## Troubleshooting
+
+### Function Not Found
+
+```typescript
+const result = await executeFunction('non-existent', { params: {} })
+
+if (!result.success && result.error?.code === 'FUNCTION_NOT_FOUND') {
+  console.error('Function ID is incorrect or not registered')
+}
+```
+
+### Timeout Issues
+
+```typescript
+// If function times out, increase timeout
+const result = await executeFunction('slow-function', {
+  params: { data: 'process' },
+  options: { timeout: 60 }, // Increased from default 30
+})
+```
+
+### Memory Errors
+
+```typescript
+// If function runs out of memory, increase limit
+const result = await executeFunction('memory-intensive', {
+  params: { largeData },
+  options: { memory: 1024 }, // Increased from default 256
+})
+```
+
+### Parameter Errors
+
+```typescript
+// Validate parameters before execution
+try {
+  const validated = InputSchema.parse(params)
+  const result = await executeFunction('strict-function', {
+    params: validated,
+  })
+} catch (error) {
+  console.error('Invalid parameters:', error.errors)
+}
+```
+
+## Next Steps
+
+- [Scheduling](./scheduling) - Schedule function execution with cron
+- [Monitoring](./monitoring) - Monitor execution and debug issues
+- [Integration](./integration) - Integrate with SDK primitives
+- [Best Practices](./best-practices) - Execution patterns and recommendations
+- [API Reference](./api-reference) - Complete API documentation

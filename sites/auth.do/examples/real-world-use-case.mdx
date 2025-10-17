@@ -1,0 +1,145 @@
+---
+$id: https://auth.do/examples/real-world-use-case
+$type: HowTo
+title: Real-World Authentication Implementation
+description: Production-ready authentication system
+keywords: [auth, production, real-world, complete, implementation]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Real-World Authentication Implementation
+
+Complete production-ready authentication system with all features.
+
+## Full Implementation
+
+```typescript
+import { $, auth, db, send, on } from 'sdk.do'
+
+// Complete auth service
+export class AuthService {
+  // Registration with email verification
+  async register(email: string, password: string, name: string) {
+    const user = await db.create($.Person, {
+      email: email.toLowerCase(),
+      name,
+      emailVerified: false,
+    })
+
+    const hashedPassword = await auth.hashPassword(password)
+    await db.create($.Credentials, {
+      userId: user.$id,
+      passwordHash: hashedPassword,
+    })
+
+    const verificationToken = await auth.createVerificationToken(user.$id)
+    await send($.Email.send, {
+      to: user.email,
+      subject: 'Verify your email',
+      body: `Click here: https://app.example.com/verify?token=${verificationToken}`,
+    })
+
+    return { userId: user.$id }
+  }
+
+  // Login with MFA support
+  async login(email: string, password: string, mfaCode?: string) {
+    const users = await db.list($.Person, { where: { email: email.toLowerCase() } })
+    if (users.length === 0) throw new Error('Invalid credentials')
+
+    const user = users[0]
+    const creds = await db.list($.Credentials, { where: { userId: user.$id } })
+    const isValid = await auth.verifyPassword(password, creds[0].passwordHash)
+
+    if (!isValid) throw new Error('Invalid credentials')
+
+    // Check MFA
+    const mfaConfig = await db.list($.MFAConfig, { where: { userId: user.$id } })
+    if (mfaConfig.length > 0 && mfaConfig[0].enabled) {
+      if (!mfaCode) throw new Error('MFA_REQUIRED')
+
+      const mfaValid = await auth.verifyMFA({ userId: user.$id, code: mfaCode })
+      if (!mfaValid) throw new Error('INVALID_MFA_CODE')
+    }
+
+    const token = await auth.generateToken({
+      userId: user.$id,
+      email: user.email,
+      role: user.role || 'user',
+    })
+
+    const refreshToken = await auth.generateRefreshToken(user.$id)
+
+    // Log login
+    await db.create($.AuditLog, {
+      eventType: 'login',
+      userId: user.$id,
+      success: true,
+      timestamp: new Date(),
+    })
+
+    return { token, refreshToken, userId: user.$id }
+  }
+
+  // Logout with token revocation
+  async logout(token: string) {
+    await auth.revokeToken(token)
+
+    const payload = await auth.verifyToken(token)
+    await db.create($.AuditLog, {
+      eventType: 'logout',
+      userId: payload.userId,
+      timestamp: new Date(),
+    })
+  }
+}
+```
+
+## API Routes
+
+```typescript
+// /api/auth/register
+export async function POST(request: Request) {
+  const { email, password, name } = await request.json()
+
+  try {
+    const authService = new AuthService()
+    const result = await authService.register(email, password, name)
+    return Response.json(result)
+  } catch (error) {
+    return Response.json({ error: error.message }, { status: 400 })
+  }
+}
+
+// /api/auth/login
+export async function POST(request: Request) {
+  const { email, password, mfaCode } = await request.json()
+
+  try {
+    const authService = new AuthService()
+    const session = await authService.login(email, password, mfaCode)
+    return Response.json(session)
+  } catch (error) {
+    return Response.json({ error: error.message }, { status: 401 })
+  }
+}
+
+// /api/auth/logout
+export async function POST(request: Request) {
+  const token = request.headers.get('Authorization')?.replace('Bearer ', '')
+
+  try {
+    const authService = new AuthService()
+    await authService.logout(token)
+    return Response.json({ success: true })
+  } catch (error) {
+    return Response.json({ error: error.message }, { status: 400 })
+  }
+}
+```
+
+## License
+
+CC-BY-4.0 (Open Source)

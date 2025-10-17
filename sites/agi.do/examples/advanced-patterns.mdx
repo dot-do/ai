@@ -1,0 +1,746 @@
+---
+$id: https://agi.do/examples/advanced-patterns
+$type: HowTo
+title: Advanced AGI Agent Patterns
+description: Complex reasoning chains, self-improvement loops, meta-learning, and multi-agent orchestration
+keywords: [agi, advanced, reasoning, meta-learning, self-improvement, orchestration]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Advanced Patterns
+
+Advanced patterns for production use of agi.do with complex reasoning, self-improvement, and multi-agent systems.
+
+## Pattern 1: Chain-of-Thought Reasoning
+
+Implement step-by-step reasoning with explicit thought chains:
+
+```typescript
+import { $, agent } from 'sdk.do'
+
+const reasoner = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['advanced_reasoning'],
+  reasoning: {
+    strategy: 'chain-of-thought',
+    depth: 8,
+    verbosity: 'detailed',
+  },
+})
+
+// Complex reasoning task
+const solution = await reasoner.reason({
+  problem: 'Design a distributed consensus algorithm that tolerates Byzantine failures',
+  constraints: ['Support up to 10,000 nodes', 'Sub-second finality', 'Tolerate 33% malicious nodes'],
+  context: {
+    domain: 'distributed_systems',
+    requirements: 'production_grade',
+  },
+})
+
+console.log(solution.reasoning_chain)
+// Output:
+// [
+//   {
+//     step: 1,
+//     thought: "Identify core requirements: Byzantine fault tolerance, scalability, performance",
+//     conclusion: "Need BFT consensus with optimizations for scale"
+//   },
+//   {
+//     step: 2,
+//     thought: "Analyze existing algorithms: PBFT, Tendermint, HotStuff",
+//     conclusion: "HotStuff provides linear message complexity"
+//   },
+//   {
+//     step: 3,
+//     thought: "Consider scalability: 10k nodes exceeds typical BFT",
+//     conclusion: "Require sharding or hierarchical structure"
+//   },
+//   {
+//     step: 4,
+//     thought: "Design sharded architecture with cross-shard communication",
+//     conclusion: "Committee rotation prevents long-term attacks"
+//   },
+//   {
+//     step: 5,
+//     thought: "Optimize for sub-second finality",
+//     conclusion: "Pipeline consensus stages, parallel processing"
+//   },
+//   {
+//     step: 6,
+//     thought: "Validate 33% fault tolerance",
+//     conclusion: "2f+1 committee size maintains safety"
+//   },
+//   {
+//     step: 7,
+//     thought: "Consider recovery and liveness",
+//     conclusion: "View change protocol for progress"
+//   },
+//   {
+//     step: 8,
+//     thought: "Synthesize complete design",
+//     conclusion: "Hierarchical HotStuff with sharding and pipelining"
+//   }
+// ]
+
+console.log(solution.final_design)
+// Complete algorithm specification
+```
+
+## Pattern 2: Tree-of-Thought Exploration
+
+Explore multiple reasoning paths in parallel:
+
+```typescript
+import { $, agent } from 'sdk.do'
+
+const explorer = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['advanced_reasoning'],
+  reasoning: {
+    strategy: 'tree-of-thought',
+    breadth: 5, // Explore 5 options at each branch
+    depth: 4, // 4 levels deep
+    pruning: 'confidence_threshold', // Prune low-confidence branches
+  },
+})
+
+// Explore solution space
+const exploration = await explorer.reason({
+  problem: 'Optimize conversion rate for SaaS pricing page',
+  evaluate_options: true,
+})
+
+console.log(exploration.tree)
+// {
+//   root: 'Optimize conversion rate',
+//   branches: [
+//     {
+//       option: 'Redesign pricing tiers',
+//       confidence: 0.85,
+//       branches: [
+//         { option: 'Add middle tier', confidence: 0.78, expected_impact: '+12%' },
+//         { option: 'Remove lowest tier', confidence: 0.65, expected_impact: '+8%' },
+//         { option: 'Bundle features differently', confidence: 0.82, expected_impact: '+15%' }
+//       ]
+//     },
+//     {
+//       option: 'Improve copy and messaging',
+//       confidence: 0.72,
+//       branches: [
+//         { option: 'Customer-centric benefits', confidence: 0.88, expected_impact: '+18%' },
+//         { option: 'Social proof emphasis', confidence: 0.75, expected_impact: '+10%' }
+//       ]
+//     },
+//     {
+//       option: 'Add interactive elements',
+//       confidence: 0.68,
+//       branches: [
+//         { option: 'ROI calculator', confidence: 0.92, expected_impact: '+25%' },
+//         { option: 'Feature comparison tool', confidence: 0.70, expected_impact: '+12%' }
+//       ]
+//     }
+//   ],
+//   best_path: ['Add interactive elements', 'ROI calculator'],
+//   expected_total_impact: '+25%'
+// }
+```
+
+## Pattern 3: Graph-of-Thought Reasoning
+
+Build knowledge graphs during reasoning:
+
+```typescript
+import { $, agent, db } from 'sdk.do'
+
+const graphReasoner = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['advanced_reasoning', 'research_synthesis'],
+  reasoning: {
+    strategy: 'graph-of-thought',
+    build_knowledge_graph: true,
+  },
+})
+
+// Complex multi-domain problem
+const analysis = await graphReasoner.analyze({
+  problem: 'Why is our ML model performing poorly in production?',
+  context: {
+    model_type: 'recommendation_system',
+    training_accuracy: 0.92,
+    production_accuracy: 0.68,
+  },
+})
+
+// Knowledge graph built during reasoning
+const graph = analysis.knowledge_graph
+console.log(graph.nodes)
+// [
+//   { id: 'data_drift', type: 'cause', confidence: 0.88 },
+//   { id: 'label_quality', type: 'cause', confidence: 0.75 },
+//   { id: 'feature_engineering', type: 'cause', confidence: 0.65 },
+//   { id: 'training_data', type: 'factor', confidence: 0.92 },
+//   { id: 'production_data', type: 'factor', confidence: 0.95 },
+//   { id: 'monitoring', type: 'solution', confidence: 0.85 }
+// ]
+
+console.log(graph.edges)
+// [
+//   { from: 'training_data', to: 'data_drift', relation: 'differs_from', weight: 0.90 },
+//   { from: 'data_drift', to: 'monitoring', relation: 'requires', weight: 0.85 },
+//   { from: 'label_quality', to: 'training_data', relation: 'affects', weight: 0.80 }
+// ]
+
+// Query the knowledge graph
+const rootCauses = await db.query({
+  pattern: '$.Cause.affects.$.Performance',
+  where: { confidence: { $gt: 0.7 } },
+})
+```
+
+## Pattern 4: Self-Improvement Loops
+
+Agents that learn from feedback and improve over time:
+
+```typescript
+import { $, agent, db } from 'sdk.do'
+
+const learningAgent = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['self_improvement', 'meta_learning'],
+  learning: {
+    enabled: true,
+    strategy: 'experience_replay',
+    memory_size: 10000,
+    update_frequency: 'batch', // Update after N experiences
+    batch_size: 100,
+  },
+})
+
+// Execute task with learning enabled
+async function executeWithLearning(task: any) {
+  // Execute task
+  const result = await learningAgent.execute(task)
+
+  // Collect feedback
+  const feedback = await collectFeedback(result)
+
+  // Provide feedback for learning
+  await learningAgent.feedback({
+    task_id: result.$id,
+    outcome: feedback.success ? 'success' : 'failure',
+    metrics: {
+      quality: feedback.quality_score,
+      efficiency: feedback.time_saved,
+      user_satisfaction: feedback.satisfaction,
+    },
+    notes: feedback.comments,
+  })
+
+  // Agent automatically updates its strategies
+  return result
+}
+
+// Over time, the agent improves
+for (let i = 0; i < 100; i++) {
+  await executeWithLearning({
+    task: 'Code review',
+    code: getNextPullRequest(),
+  })
+
+  // Check learning progress
+  if (i % 10 === 0) {
+    const metrics = await learningAgent.getMetrics()
+    console.log(`Iteration ${i}: Quality ${metrics.quality}, Speed ${metrics.speed}`)
+  }
+}
+
+// Analyze learning trajectory
+const learningCurve = await learningAgent.getLearningCurve()
+console.log(learningCurve)
+// {
+//   iterations: [0, 10, 20, ..., 100],
+//   quality: [0.65, 0.72, 0.78, ..., 0.92],
+//   speed: [120, 95, 75, ..., 45],  // seconds per task
+//   confidence: [0.55, 0.68, 0.78, ..., 0.95]
+// }
+```
+
+## Pattern 5: Meta-Learning Strategies
+
+Learn how to learn more effectively:
+
+```typescript
+import { $, agent, db } from 'sdk.do'
+
+const metaLearner = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['meta_learning', 'self_improvement'],
+  learning: {
+    strategy: 'meta_learning',
+    meta_parameters: {
+      learning_rate_adaptation: true,
+      strategy_selection: 'dynamic',
+      transfer_learning: true,
+    },
+  },
+})
+
+// Agent learns optimal learning strategies for different task types
+const taskTypes = ['code_review', 'documentation', 'architecture', 'debugging']
+
+for (const taskType of taskTypes) {
+  // Execute multiple tasks of this type
+  const results = []
+  for (let i = 0; i < 50; i++) {
+    const result = await metaLearner.execute({
+      task: taskType,
+      data: getTaskData(taskType),
+    })
+    results.push(result)
+  }
+
+  // Agent learns optimal strategy for this task type
+  await metaLearner.learnStrategy({
+    task_type: taskType,
+    results: results,
+    optimize_for: ['quality', 'speed'],
+  })
+}
+
+// Now agent can quickly adapt to new but similar tasks
+const newTaskResult = await metaLearner.execute({
+  task: 'security_review', // New task type
+  transfer_from: 'code_review', // Transfer learning from similar task
+})
+
+// Agent automatically applies learned strategies
+console.log(newTaskResult.applied_strategies)
+// ['pattern_matching_from_code_review', 'domain_adaptation', 'few_shot_learning']
+```
+
+## Pattern 6: Adaptive Learning Rates
+
+Dynamically adjust learning based on performance:
+
+```typescript
+import { $, agent } from 'sdk.do'
+
+class AdaptiveLearningAgent {
+  private agent: any
+  private performanceWindow: number[] = []
+  private learningRate = 0.1
+
+  async initialize() {
+    this.agent = await agent.create({
+      $role: $.AGIAgent,
+      capabilities: ['self_improvement', 'meta_learning'],
+      learning: {
+        enabled: true,
+        strategy: 'online',
+        learning_rate: this.learningRate,
+      },
+    })
+  }
+
+  async execute(task: any) {
+    const result = await this.agent.execute(task)
+    const performance = await this.evaluatePerformance(result)
+
+    // Track performance
+    this.performanceWindow.push(performance)
+    if (this.performanceWindow.length > 20) {
+      this.performanceWindow.shift()
+    }
+
+    // Adjust learning rate based on performance trend
+    await this.adjustLearningRate()
+
+    // Provide feedback
+    await this.agent.feedback({
+      task_id: result.$id,
+      metrics: { performance },
+    })
+
+    return result
+  }
+
+  private async adjustLearningRate() {
+    if (this.performanceWindow.length < 10) return
+
+    const recentPerf = this.performanceWindow.slice(-5)
+    const olderPerf = this.performanceWindow.slice(-10, -5)
+
+    const recentAvg = recentPerf.reduce((a, b) => a + b) / recentPerf.length
+    const olderAvg = olderPerf.reduce((a, b) => a + b) / olderPerf.length
+
+    // Improving: maintain or increase learning rate
+    if (recentAvg > olderAvg * 1.05) {
+      this.learningRate = Math.min(0.5, this.learningRate * 1.1)
+      console.log(`Increasing learning rate to ${this.learningRate}`)
+    }
+    // Plateauing: decrease learning rate for fine-tuning
+    else if (Math.abs(recentAvg - olderAvg) < 0.02) {
+      this.learningRate = Math.max(0.01, this.learningRate * 0.9)
+      console.log(`Decreasing learning rate to ${this.learningRate}`)
+    }
+    // Degrading: significantly reduce learning rate
+    else if (recentAvg < olderAvg * 0.95) {
+      this.learningRate = Math.max(0.01, this.learningRate * 0.5)
+      console.log(`Sharply reducing learning rate to ${this.learningRate}`)
+    }
+
+    // Update agent configuration
+    await this.agent.configure({
+      learning: { learning_rate: this.learningRate },
+    })
+  }
+
+  private async evaluatePerformance(result: any): Promise<number> {
+    // Evaluate performance (0-1 scale)
+    return result.quality * 0.6 + result.speed * 0.4
+  }
+}
+```
+
+## Pattern 7: Knowledge Graph Construction
+
+Build and query knowledge graphs during reasoning:
+
+```typescript
+import { $, agent, db } from 'sdk.do'
+
+const knowledgeBuilder = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['research_synthesis', 'multi_domain_expertise'],
+  knowledge_graph: {
+    enabled: true,
+    store: db,
+    auto_link: true, // Automatically create relationships
+  },
+})
+
+// Build knowledge graph from research
+const research = await knowledgeBuilder.research({
+  topic: 'Competitive landscape in AI infrastructure',
+  depth: 'comprehensive',
+  build_knowledge_graph: true,
+})
+
+// Query entities
+const companies = await db.list($.Organization, {
+  where: {
+    related_to: research.$id,
+    industry: 'AI infrastructure',
+  },
+})
+
+// Query relationships
+const competition = await db.query({
+  pattern: '$.Organization.competes.with.$.Organization',
+  context: research.$id,
+})
+
+// Query insights
+const advantages = await db.query({
+  pattern: '$.Organization.has.$.CompetitiveAdvantage',
+  context: research.$id,
+})
+
+console.log({
+  companies: companies.map((c) => c.name),
+  relationships: competition.length,
+  advantages: advantages.map((a) => ({
+    company: a.source.name,
+    advantage: a.target.description,
+  })),
+})
+
+// Use knowledge graph for future reasoning
+const strategicAnalysis = await knowledgeBuilder.analyze({
+  question: 'Where are the white space opportunities?',
+  use_knowledge_graph: true,
+  graph_context: research.$id,
+})
+```
+
+## Pattern 8: Multi-Agent Orchestration
+
+Coordinate multiple specialized AGI agents:
+
+```typescript
+import { $, agent } from 'sdk.do'
+
+class MultiAgentOrchestrator {
+  private coordinator: any
+  private specialists: Map<string, any> = new Map()
+
+  async initialize() {
+    // Create coordinator agent
+    this.coordinator = await agent.create({
+      $role: $.AGIAgent.Coordinator,
+      capabilities: ['strategic_thinking', 'advanced_reasoning'],
+      orchestration: {
+        delegation: true,
+        synthesis: true,
+      },
+    })
+
+    // Create specialist agents
+    const specializations = [
+      { name: 'researcher', domains: ['research_synthesis'] },
+      { name: 'analyst', domains: ['data_science', 'statistics'] },
+      { name: 'strategist', domains: ['business_strategy', 'market_analysis'] },
+      { name: 'technologist', domains: ['software_engineering', 'system_design'] },
+    ]
+
+    for (const spec of specializations) {
+      const specialist = await agent.create({
+        $role: $.AGIAgent,
+        name: spec.name,
+        capabilities: ['multi_domain_expertise'],
+        domains: spec.domains,
+      })
+      this.specialists.set(spec.name, specialist)
+    }
+  }
+
+  async executeComplexTask(task: any) {
+    // Coordinator decomposes task
+    const plan = await this.coordinator.plan({
+      task: task,
+      available_agents: Array.from(this.specialists.keys()),
+    })
+
+    console.log('Execution plan:', plan)
+
+    // Execute subtasks in parallel or sequence
+    const results = new Map()
+
+    for (const step of plan.steps) {
+      if (step.parallel) {
+        // Execute parallel steps
+        const parallelResults = await Promise.all(
+          step.subtasks.map(async (subtask) => {
+            const agent = this.specialists.get(subtask.agent)
+            return await agent.execute(subtask)
+          })
+        )
+        parallelResults.forEach((r, i) => {
+          results.set(step.subtasks[i].id, r)
+        })
+      } else {
+        // Execute sequential steps
+        for (const subtask of step.subtasks) {
+          const agent = this.specialists.get(subtask.agent)
+          const context = subtask.dependencies?.map((d) => results.get(d)) || []
+          const result = await agent.execute({
+            ...subtask,
+            context,
+          })
+          results.set(subtask.id, result)
+        }
+      }
+    }
+
+    // Coordinator synthesizes results
+    const synthesis = await this.coordinator.synthesize({
+      task: task,
+      results: Array.from(results.values()),
+    })
+
+    return synthesis
+  }
+}
+
+// Usage
+const orchestrator = new MultiAgentOrchestrator()
+await orchestrator.initialize()
+
+const result = await orchestrator.executeComplexTask({
+  task: 'Develop go-to-market strategy for new AI product',
+  requirements: ['Market research and sizing', 'Competitive analysis', 'Technical feasibility assessment', 'Financial modeling', 'Strategic recommendations'],
+})
+
+// Output includes contributions from all specialists
+console.log(result)
+```
+
+## Pattern 9: Federated Learning Across Agents
+
+Agents learn collectively without sharing raw data:
+
+```typescript
+import { $, agent, db } from 'sdk.do'
+
+class FederatedLearningSystem {
+  private agents: any[] = []
+  private globalModel: any
+
+  async initialize(numAgents: number) {
+    // Create multiple agents with local learning
+    for (let i = 0; i < numAgents; i++) {
+      const agent = await this.createAgent(i)
+      this.agents.push(agent)
+    }
+
+    // Initialize global model
+    this.globalModel = await db.create({
+      $type: 'GlobalModel',
+      parameters: {},
+      version: 0,
+    })
+  }
+
+  private async createAgent(id: number) {
+    return await agent.create({
+      $role: $.AGIAgent,
+      agent_id: id,
+      capabilities: ['self_improvement', 'meta_learning'],
+      learning: {
+        enabled: true,
+        strategy: 'federated',
+        privacy_preserving: true,
+      },
+    })
+  }
+
+  async trainRound(tasks: any[]) {
+    // Each agent trains on local data
+    const localUpdates = await Promise.all(
+      this.agents.map(async (agent, i) => {
+        const localTasks = tasks.filter((_, idx) => idx % this.agents.length === i)
+
+        // Train locally
+        for (const task of localTasks) {
+          await agent.execute(task)
+        }
+
+        // Get model update (gradients, not raw data)
+        return await agent.getModelUpdate()
+      })
+    )
+
+    // Aggregate updates
+    const aggregatedUpdate = this.aggregateUpdates(localUpdates)
+
+    // Update global model
+    this.globalModel = await db.update(this.globalModel.$id, {
+      parameters: aggregatedUpdate,
+      version: this.globalModel.version + 1,
+    })
+
+    // Distribute updated model to all agents
+    await Promise.all(this.agents.map((agent) => agent.updateModel(this.globalModel.parameters)))
+
+    return this.globalModel
+  }
+
+  private aggregateUpdates(updates: any[]) {
+    // Federated averaging
+    const aggregated = {}
+    const numAgents = updates.length
+
+    for (const key of Object.keys(updates[0])) {
+      aggregated[key] = updates.reduce((sum, update) => sum + update[key] / numAgents, 0)
+    }
+
+    return aggregated
+  }
+}
+
+// Usage
+const federatedSystem = new FederatedLearningSystem()
+await federatedSystem.initialize(10) // 10 agents
+
+// Train for multiple rounds
+for (let round = 0; round < 20; round++) {
+  const tasks = await getTasks()
+  const model = await federatedSystem.trainRound(tasks)
+  console.log(`Round ${round}: Model version ${model.version}`)
+}
+```
+
+## Pattern 10: Continual Learning with Catastrophic Forgetting Prevention
+
+Prevent agents from forgetting previous knowledge:
+
+```typescript
+import { $, agent, db } from 'sdk.do'
+
+const continualLearner = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['meta_learning', 'self_improvement'],
+  learning: {
+    enabled: true,
+    strategy: 'continual',
+    forgetting_prevention: {
+      method: 'elastic_weight_consolidation', // or 'progressive_networks', 'memory_replay'
+      importance_threshold: 0.7,
+    },
+    memory: {
+      episodic: true, // Remember specific experiences
+      semantic: true, // Abstract knowledge
+      replay_frequency: 'periodic',
+    },
+  },
+})
+
+// Learn multiple tasks sequentially without forgetting
+const tasks = [
+  { type: 'code_review', domain: 'javascript', count: 100 },
+  { type: 'code_review', domain: 'python', count: 100 },
+  { type: 'architecture_design', domain: 'microservices', count: 100 },
+  { type: 'documentation', domain: 'api', count: 100 },
+]
+
+for (const taskConfig of tasks) {
+  console.log(`Learning ${taskConfig.type} in ${taskConfig.domain}`)
+
+  // Learn new task
+  for (let i = 0; i < taskConfig.count; i++) {
+    const task = await generateTask(taskConfig)
+    await continualLearner.execute(task)
+
+    // Periodically test retention of previous tasks
+    if (i % 20 === 0) {
+      const retention = await testRetention(continualLearner, tasks.slice(0, tasks.indexOf(taskConfig)))
+      console.log(`Retention scores:`, retention)
+    }
+  }
+
+  // Consolidate learning before moving to next task
+  await continualLearner.consolidate({
+    task_type: taskConfig.type,
+    domain: taskConfig.domain,
+  })
+}
+
+// Test final performance on all tasks
+const finalPerformance = await testAllTasks(continualLearner, tasks)
+console.log('Final performance across all tasks:', finalPerformance)
+// All tasks maintain > 90% of original performance
+
+async function testRetention(agent: any, previousTasks: any[]) {
+  const scores = {}
+  for (const task of previousTasks) {
+    const testTask = await generateTask(task)
+    const result = await agent.execute(testTask)
+    scores[`${task.type}_${task.domain}`] = result.quality
+  }
+  return scores
+}
+```
+
+## Next Steps
+
+- [Integration](./integration) - Integration with other `.do` services
+- [Real-World Use Case](./real-world-use-case) - Production implementation
+- [API Reference](../api/reference) - Complete API documentation
+- [Best Practices](../docs/best-practices) - Optimization tips
+
+## License
+
+MIT (Open Source)

@@ -1,0 +1,540 @@
+---
+$id: https://searches.org.ai
+$type: WebSite
+name: searches.org.ai
+description: An open-source ontology of searches in Business-as-Code
+license: CC-BY-4.0
+---
+
+# searches.org.ai
+
+**An open-source ontology of searches in Business-as-Code**
+
+searches.org.ai provides a comprehensive vocabulary for defining search operations in autonomous business systems, working alongside [triggers.org.ai](https://triggers.org.ai) and [actions.org.ai](https://actions.org.ai) as part of the [agents.org.ai](https://agents.org.ai) ecosystem.
+
+## Overview
+
+Searches are the foundational discovery patterns that enable workflows to find, filter, and retrieve information in Business-as-Code systems. This ontology defines a structured vocabulary for describing how, where, and what business processes should search for to make informed decisions.
+
+## Key Features
+
+### 🔍 Search-Driven Architecture
+
+searches.org.ai defines searches across multiple categories:
+
+- **Data Searches**: Query databases, APIs, and data sources
+- **Semantic Searches**: Natural language and vector-based searches
+- **Entity Searches**: Find specific business entities (customers, products, orders)
+- **Document Searches**: Full-text and metadata searches
+- **Knowledge Searches**: Search knowledge bases and documentation
+
+### 🔗 MDXLD Integration
+
+Like other `.do` platform ontologies, searches.org.ai uses the `$` prefix for linked data properties:
+
+```mdx
+---
+$type: Search
+$id: https://example.com/searches/find-customer
+name: Find Customer by Email
+query:
+  $type: DatabaseQuery
+  source: customers
+  filters:
+    - field: email
+      operator: equals
+      value: '{email}'
+result:
+  $type: Customer
+  $id: https://schema.org/Customer
+---
+
+# Find Customer Search
+
+Searches for a customer by their email address in the customer database.
+```
+
+### 🤖 AI-Native Design
+
+- **Type-safe**: Full TypeScript definitions for all search types
+- **Composable**: Combine searches with filters, joins, and aggregations
+- **Contextual**: Rich metadata for AI systems to understand search intent
+- **Extensible**: Easy to define custom domain-specific searches
+
+## Core Search Types
+
+### DatabaseSearch
+
+Query structured databases with SQL-like semantics.
+
+```typescript
+import type { DatabaseSearch } from 'searches.org.ai/types'
+
+const customerSearch: DatabaseSearch = {
+  $type: 'DatabaseSearch',
+  $id: 'https://example.com/searches/active-customers',
+  name: 'Active Customers',
+  source: 'customers',
+  filters: [
+    {
+      field: 'status',
+      operator: 'equals',
+      value: 'active',
+    },
+    {
+      field: 'lastPurchaseDate',
+      operator: 'greaterThan',
+      value: '2024-01-01',
+    },
+  ],
+  orderBy: 'lastPurchaseDate',
+  orderDirection: 'desc',
+  limit: 100,
+}
+```
+
+### SemanticSearch
+
+Natural language and vector-based similarity searches.
+
+```typescript
+import type { SemanticSearch } from 'searches.org.ai/types'
+
+const productSearch: SemanticSearch = {
+  $type: 'SemanticSearch',
+  $id: 'https://example.com/searches/similar-products',
+  name: 'Find Similar Products',
+  query: 'wireless headphones with noise cancellation',
+  vectorSpace: 'product-embeddings',
+  similarityMetric: 'cosine',
+  threshold: 0.85,
+  limit: 10,
+}
+```
+
+### APISearch
+
+Search external systems via APIs.
+
+```typescript
+import type { APISearch } from 'searches.org.ai/types'
+
+const weatherSearch: APISearch = {
+  $type: 'APISearch',
+  $id: 'https://example.com/searches/current-weather',
+  name: 'Current Weather',
+  endpoint: 'https://api.weather.com/v3/weather/current',
+  method: 'GET',
+  parameters: {
+    location: '{city}',
+    units: 'metric',
+  },
+  authentication: {
+    $type: 'APIAuthentication',
+    scheme: 'bearer',
+  },
+}
+```
+
+### DocumentSearch
+
+Full-text search across documents and content.
+
+```typescript
+import type { DocumentSearch } from 'searches.org.ai/types'
+
+const policySearch: DocumentSearch = {
+  $type: 'DocumentSearch',
+  $id: 'https://example.com/searches/company-policies',
+  name: 'Search Company Policies',
+  query: 'vacation policy',
+  sources: ['policies', 'handbooks', 'guidelines'],
+  searchFields: ['title', 'content', 'tags'],
+  highlightResults: true,
+  limit: 20,
+}
+```
+
+### GraphSearch
+
+Search graph databases and connected data.
+
+```typescript
+import type { GraphSearch } from 'searches.org.ai/types'
+
+const relationshipSearch: GraphSearch = {
+  $type: 'GraphSearch',
+  $id: 'https://example.com/searches/customer-network',
+  name: 'Customer Relationship Network',
+  startNode: {
+    type: 'Customer',
+    id: '{customerId}',
+  },
+  relationship: 'REFERRED_BY',
+  maxDepth: 3,
+  returnProperties: ['name', 'email', 'referralDate'],
+}
+```
+
+### CompositeSearch
+
+Combine multiple searches with joins and aggregations.
+
+```typescript
+import type { CompositeSearch } from 'searches.org.ai/types'
+
+const enrichedSearch: CompositeSearch = {
+  $type: 'CompositeSearch',
+  $id: 'https://example.com/searches/enriched-customers',
+  name: 'Enriched Customer Search',
+  searches: [
+    {
+      $type: 'DatabaseSearch',
+      name: 'customers',
+      source: 'customers',
+    },
+    {
+      $type: 'DatabaseSearch',
+      name: 'orders',
+      source: 'orders',
+    },
+  ],
+  join: {
+    type: 'left',
+    on: 'customers.id = orders.customerId',
+  },
+  aggregations: [
+    {
+      field: 'orders.total',
+      operation: 'sum',
+      alias: 'totalSpent',
+    },
+  ],
+}
+```
+
+## Integration with agents.org.ai
+
+searches.org.ai is part of the autonomous Business-as-Code ecosystem:
+
+- **searches.org.ai**: Defines HOW to find information (this ontology)
+- **triggers.org.ai**: Defines WHEN processes should run
+- **actions.org.ai**: Defines WHAT should be done
+- **agents.org.ai**: Orchestrates searches, triggers, and actions into autonomous workflows
+
+### Example Agent Workflow
+
+```mdx
+---
+$type: Agent
+$id: https://example.com/agents/customer-support
+name: Customer Support Agent
+trigger:
+  $type: UserActionTrigger
+  $id: https://example.com/triggers/support-ticket
+  actionType: create_ticket
+search:
+  $type: CompositeSearch
+  $id: https://example.com/searches/customer-context
+  searches:
+    - $type: DatabaseSearch
+      name: customer_history
+      source: customers
+      filters:
+        - field: id
+          value: '{customerId}'
+    - $type: SemanticSearch
+      name: similar_tickets
+      query: '{ticketDescription}'
+      vectorSpace: ticket-embeddings
+      limit: 5
+action:
+  $type: Action
+  $id: https://example.com/actions/respond-to-ticket
+  workflow:
+    - analyze customer history
+    - review similar ticket resolutions
+    - generate response recommendation
+    - notify support team
+---
+
+# Customer Support Agent
+
+Automatically searches for customer context and similar tickets when a support request is created.
+```
+
+## API Reference
+
+### Search Creation
+
+```typescript
+import { createSearch, validateSearch } from 'searches.org.ai'
+
+const search = createSearch({
+  $type: 'DatabaseSearch',
+  name: 'Active Orders',
+  source: 'orders',
+  filters: [
+    {
+      field: 'status',
+      operator: 'equals',
+      value: 'active',
+    },
+  ],
+})
+
+const validation = validateSearch(search)
+```
+
+### Search Execution
+
+```typescript
+import { executeSearch, getResults } from 'searches.org.ai'
+
+const context = {
+  customerId: '12345',
+  dateRange: {
+    start: '2024-01-01',
+    end: '2024-12-31',
+  },
+}
+
+const results = await executeSearch(search, context)
+const formattedResults = getResults(results)
+```
+
+### Search Registry
+
+```typescript
+import { registerSearch, getSearch, getAllSearches } from 'searches.org.ai'
+
+// Register custom search
+registerSearch(customSearch)
+
+// Retrieve search
+const search = getSearch('https://example.com/searches/custom')
+
+// List all searches
+const allSearches = getAllSearches()
+```
+
+## Search Categories
+
+### Data Searches
+
+- `DatabaseSearch`: SQL-like database queries
+- `NoSQLSearch`: Document and key-value store queries
+- `GraphSearch`: Graph database traversal
+- `TimeSeriesSearch`: Time-series data queries
+
+### Content Searches
+
+- `DocumentSearch`: Full-text document search
+- `SemanticSearch`: Vector-based similarity search
+- `KeywordSearch`: Keyword and phrase matching
+- `RegexSearch`: Regular expression pattern matching
+
+### External Searches
+
+- `APISearch`: External API queries
+- `WebSearch`: Web scraping and crawling
+- `FederatedSearch`: Distributed search across multiple sources
+- `CacheSearch`: Cached data lookup
+
+### Business Searches
+
+- `EntitySearch`: Business entity lookup (customers, products, etc.)
+- `InventorySearch`: Stock and inventory queries
+- `TransactionSearch`: Financial transaction lookup
+- `AuditSearch`: Audit trail and compliance searches
+
+## Use Cases
+
+### Customer Intelligence
+
+```mdx
+---
+$type: CompositeSearch
+$id: https://example.com/searches/customer-360
+name: Customer 360 View
+description: Complete customer profile with all interactions and transactions
+searches:
+  - $type: DatabaseSearch
+    name: profile
+    source: customers
+    filters:
+      - field: id
+        value: '{customerId}'
+  - $type: DatabaseSearch
+    name: orders
+    source: orders
+    filters:
+      - field: customerId
+        value: '{customerId}'
+  - $type: SemanticSearch
+    name: support_tickets
+    query: customer support history
+    vectorSpace: tickets
+---
+```
+
+### Inventory Management
+
+```mdx
+---
+$type: DatabaseSearch
+$id: https://example.com/searches/low-stock-items
+name: Low Stock Alert Search
+description: Find products below reorder threshold
+source: inventory
+filters:
+  - field: quantity
+    operator: lessThan
+    value: '{reorderPoint}'
+  - field: status
+    operator: equals
+    value: active
+orderBy: quantity
+orderDirection: asc
+notification:
+  enabled: true
+  channels: [email, slack]
+---
+```
+
+### Knowledge Discovery
+
+```mdx
+---
+$type: SemanticSearch
+$id: https://example.com/searches/knowledge-base
+name: Knowledge Base Search
+description: Find relevant documentation and answers
+query: '{userQuestion}'
+sources: [documentation, faqs, tutorials]
+vectorSpace: knowledge-embeddings
+similarityMetric: cosine
+threshold: 0.75
+limit: 5
+postProcessing:
+  rerank: true
+  deduplicate: true
+---
+```
+
+## Best Practices
+
+### 1. Descriptive Names
+
+Use clear, descriptive names that explain the search purpose:
+
+```typescript
+// Good
+name: 'Find High-Value Customers with Recent Activity'
+
+// Bad
+name: 'search1'
+```
+
+### 2. Documented Intent
+
+Always document the business intent behind searches:
+
+```mdx
+---
+$type: Search
+name: Expired Subscription Search
+description: |
+  Finds customers with subscriptions expiring in the next 30 days
+  to trigger renewal reminders and retention campaigns
+---
+```
+
+### 3. Performance Optimization
+
+Define appropriate limits and indexes:
+
+```typescript
+const search = {
+  $type: 'DatabaseSearch',
+  source: 'orders',
+  indexes: ['customer_id', 'created_at'],
+  limit: 100,
+  timeout: 5000,
+  caching: {
+    enabled: true,
+    ttl: 300,
+  },
+}
+```
+
+### 4. Error Handling
+
+Define fallback behavior for search failures:
+
+```typescript
+const search = {
+  $type: 'APISearch',
+  endpoint: 'https://api.example.com/data',
+  errorHandling: {
+    retryAttempts: 3,
+    backoffStrategy: 'exponential',
+    fallbackSearch: {
+      $type: 'CacheSearch',
+      source: 'api-cache',
+    },
+  },
+}
+```
+
+### 5. Testing Searches
+
+Always test searches in development:
+
+```typescript
+import { testSearch, mockContext } from 'searches.org.ai/testing'
+
+const context = mockContext({
+  customerId: 'test-123',
+  dateRange: { start: '2024-01-01', end: '2024-12-31' },
+})
+
+const results = await testSearch(customerSearch, context)
+expect(results.length).toBeGreaterThan(0)
+```
+
+## License
+
+searches.org.ai is released under the [Creative Commons Attribution 4.0 International License (CC-BY-4.0)](https://creativecommons.org/licenses/by/4.0/).
+
+This means you are free to:
+
+- **Share**: Copy and redistribute the material in any medium or format
+- **Adapt**: Remix, transform, and build upon the material for any purpose, even commercially
+
+Under the following terms:
+
+- **Attribution**: You must give appropriate credit, provide a link to the license, and indicate if changes were made
+
+## Resources
+
+- [agents.org.ai](https://agents.org.ai) - Autonomous agent orchestration
+- [triggers.org.ai](https://triggers.org.ai) - Event trigger ontology
+- [actions.org.ai](https://actions.org.ai) - Business action ontology
+- [schema.org.ai](/ai/sites/schema.org.ai) - AI-native schema.org superset
+- [MDXLD documentation](/mdxld) - Linked data in MDX
+
+## Contributing
+
+searches.org.ai is part of the [`.do` platform](https://do) ecosystem. Contributions are welcome!
+
+To propose new search types or enhancements:
+
+1. Review existing search types to avoid duplication
+2. Ensure the search pattern is broadly applicable
+3. Provide clear documentation and examples
+4. Include TypeScript type definitions
+
+## Acknowledgments
+
+searches.org.ai builds upon concepts from information retrieval, database query languages, and semantic search. The ontology is designed to be accessible to both technical and business users while maintaining the rigor needed for autonomous AI systems.

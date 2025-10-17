@@ -1,0 +1,440 @@
+---
+$id: https://mcp.do/docs/getting-started
+$type: TechArticle
+title: Getting Started with mcp.do
+description: Set up mcp.do and start executing TypeScript with AI assistants in 5 minutes
+keywords: [mcp, model context protocol, getting started, setup, claude]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Getting Started with mcp.do
+
+Get up and running with mcp.do in under 5 minutes.
+
+## Prerequisites
+
+Before you begin, ensure you have:
+
+- **Node.js 18+** installed ([download](https://nodejs.org/))
+- **Claude Desktop** or another MCP-compatible AI assistant
+- **API credentials** for the `.do` platform (optional for testing)
+
+## Installation
+
+### Option 1: Use with npx (Recommended)
+
+No installation required - use directly with npx:
+
+```json
+{
+  "mcpServers": {
+    "do": {
+      "command": "npx",
+      "args": ["-y", "mcp.do"]
+    }
+  }
+}
+```
+
+### Option 2: Global Installation
+
+Install mcp.do globally:
+
+```bash
+npm install -g mcp.do
+```
+
+Then reference in config:
+
+```json
+{
+  "mcpServers": {
+    "do": {
+      "command": "mcp.do"
+    }
+  }
+}
+```
+
+### Option 3: Local Project Installation
+
+For project-specific usage:
+
+```bash
+cd your-project
+npm install mcp.do
+```
+
+## Claude Desktop Configuration
+
+### 1. Locate Claude Config File
+
+The config file location depends on your operating system:
+
+**macOS**:
+
+```bash
+~/.config/claude/config.json
+```
+
+**Windows**:
+
+```
+%APPDATA%\Claude\config.json
+```
+
+**Linux**:
+
+```bash
+~/.config/claude/config.json
+```
+
+### 2. Add mcp.do Server
+
+Edit the config file and add the mcp.do server:
+
+```json
+{
+  "mcpServers": {
+    "do": {
+      "command": "npx",
+      "args": ["-y", "mcp.do"],
+      "env": {
+        "DO_API_KEY": "your-api-key-here"
+      }
+    }
+  }
+}
+```
+
+### 3. Restart Claude Desktop
+
+Close and restart Claude Desktop to load the new MCP server.
+
+### 4. Verify Installation
+
+In Claude Desktop, you should see the `do` tool available. Try it:
+
+````
+Can you use the do tool to execute this TypeScript:
+```typescript
+import { db } from 'sdk.do'
+const count = await db.query('SELECT COUNT(*) as total FROM users')
+return count
+````
+
+```
+
+## Your First TypeScript Execution
+
+### Simple Database Query
+
+Ask Claude to execute TypeScript:
+
+**Prompt**:
+```
+
+Use the do tool to query all businesses in the Technology industry
+
+````
+
+**Claude will execute**:
+```typescript
+import $, { db } from 'sdk.do'
+
+const businesses = await db.list($.Business, {
+  where: { industry: 'Technology' }
+})
+
+return businesses
+````
+
+### AI Content Generation
+
+**Prompt**:
+
+```
+Use the do tool to generate a product description for "AI-Powered CRM"
+```
+
+**Claude will execute**:
+
+```typescript
+import { ai } from 'sdk.do'
+
+const description = await ai.generate({
+  prompt: 'Write a compelling product description for an AI-Powered CRM',
+  model: 'gpt-5',
+})
+
+return description
+```
+
+### Combining Database and AI
+
+**Prompt**:
+
+```
+Use the do tool to fetch the latest blog post and generate a social media summary
+```
+
+**Claude will execute**:
+
+```typescript
+import $, { db, ai } from 'sdk.do'
+
+// Get latest blog post
+const posts = await db.list($.BlogPost, {
+  orderBy: { publishedDate: 'desc' },
+  limit: 1,
+})
+
+const post = posts[0]
+
+// Generate social media summary
+const summary = await ai.generate({
+  prompt: `Create a short, engaging social media summary for this blog post:
+    Title: ${post.title}
+    Content: ${post.content}`,
+  schema: $.Text,
+  model: 'gpt-5',
+})
+
+return {
+  post: {
+    title: post.title,
+    url: post.url,
+  },
+  socialSummary: summary.text,
+}
+```
+
+## Understanding the Execution Flow
+
+When you ask Claude to use the `do` tool, here's what happens:
+
+1. **Claude writes TypeScript code** based on your request
+2. **MCP server receives** the code via the `do` tool
+3. **Code is executed** in a secure sandbox with `sdk.do` available
+4. **Results are returned** to Claude
+5. **Claude presents** the results to you in natural language
+
+## Common Patterns
+
+### Import from sdk.do
+
+Always import what you need from `sdk.do`:
+
+```typescript
+// Semantic context proxy
+import $ from 'sdk.do'
+
+// Specific functions
+import { ai, db, api, on, send, every, user } from 'sdk.do'
+
+// Everything at once
+import $, { ai, db, api, on, send, every, user } from 'sdk.do'
+```
+
+### Working with Semantic Types
+
+Use the `$` proxy to access semantic types:
+
+```typescript
+import $ from 'sdk.do'
+
+// Access types
+$.Business
+$.Product
+$.Customer
+$.Order
+
+// Access relationships
+$.owns
+$.sells
+$.buys
+$.contains
+```
+
+### Error Handling
+
+Always handle potential errors:
+
+```typescript
+import { db } from 'sdk.do'
+
+try {
+  const result = await db.get($.Business, 'business-123')
+  return result
+} catch (error) {
+  return {
+    error: true,
+    message: error.message,
+  }
+}
+```
+
+### Returning Results
+
+Return structured data that Claude can present:
+
+```typescript
+import { db } from 'sdk.do'
+
+const businesses = await db.list($.Business, { limit: 5 })
+
+return {
+  success: true,
+  count: businesses.length,
+  data: businesses.map((b) => ({
+    id: b.$id,
+    name: b.name,
+    industry: b.industry,
+  })),
+}
+```
+
+## Environment Variables
+
+Configure mcp.do with environment variables:
+
+```json
+{
+  "mcpServers": {
+    "do": {
+      "command": "npx",
+      "args": ["-y", "mcp.do"],
+      "env": {
+        "DO_API_KEY": "your-api-key",
+        "DO_BASE_URL": "https://apis.do",
+        "DO_LOG_LEVEL": "info"
+      }
+    }
+  }
+}
+```
+
+**Available variables**:
+
+- `DO_API_KEY` - API key for authentication
+- `DO_BASE_URL` - Base URL for API (default: `https://apis.do`)
+- `DO_LOG_LEVEL` - Logging level (`debug`, `info`, `warn`, `error`)
+- `DO_MAX_EXECUTION_TIME` - Max execution time in ms (default: 30000)
+- `DO_ENABLE_CACHE` - Enable result caching (default: `true`)
+
+## Testing Your Setup
+
+### Test Database Access
+
+````
+Use the do tool to run this test:
+```typescript
+import { db } from 'sdk.do'
+const result = await db.query('SELECT 1 as test')
+return result
+````
+
+```
+
+### Test AI Access
+
+```
+
+Use the do tool to test AI:
+
+```typescript
+import { ai } from 'sdk.do'
+const result = await ai.generate({
+  prompt: 'Say hello',
+  model: 'gpt-5',
+})
+return result
+```
+
+```
+
+### Test Semantic Types
+
+```
+
+Use the do tool to list available semantic types:
+
+```typescript
+import $ from 'sdk.do'
+return {
+  business: $.Business.$type,
+  product: $.Product.$type,
+  customer: $.Customer.$type,
+}
+```
+
+```
+
+## Troubleshooting
+
+### MCP Server Not Connecting
+
+**Symptoms**: Claude says `do` tool is not available
+
+**Solutions**:
+1. Verify config file location and syntax
+2. Restart Claude Desktop
+3. Check console for error messages
+4. Ensure Node.js is in PATH
+
+### Execution Timeouts
+
+**Symptoms**: Code execution fails with timeout error
+
+**Solutions**:
+1. Increase `DO_MAX_EXECUTION_TIME` in config
+2. Optimize queries (add indexes, limits)
+3. Break large operations into smaller chunks
+4. Use batch processing for bulk operations
+
+### Permission Errors
+
+**Symptoms**: `Permission denied` errors
+
+**Solutions**:
+1. Verify `DO_API_KEY` is set correctly
+2. Check API key has required permissions
+3. Contact platform admin for access
+
+### Import Errors
+
+**Symptoms**: `Cannot find module 'sdk.do'`
+
+**Solutions**:
+1. Ensure mcp.do server is running
+2. Check MCP server logs
+3. Verify `sdk.do` is available in execution context
+
+## Next Steps
+
+Now that you have mcp.do set up, explore:
+
+- [Installation](./installation) - Advanced installation options
+- [Claude Integration](./claude-integration) - Deep dive into Claude setup
+- [API Reference](../api/) - Complete tool and method reference
+- [Examples](../examples/) - More code examples and patterns
+
+## Getting Help
+
+Need assistance?
+
+- **Documentation**: [mcp.do](https://mcp.do)
+- **Issues**: [GitHub Issues](https://github.com/dot-do/platform/issues)
+- **Community**: [Discord](https://discord.gg/dotdo)
+- **Email**: support@do
+
+## What's Next?
+
+Ready to dive deeper? Check out:
+
+1. **[Basic Examples](../examples/basic)** - Learn common patterns
+2. **[Execute TypeScript](../examples/execute-typescript)** - Advanced TypeScript usage
+3. **[Claude Workflows](../examples/claude-workflow)** - Build complete workflows
+```

@@ -1,0 +1,732 @@
+---
+$id: https://integrations.do/docs/best-practices
+$type: TechArticle
+title: Integration Best Practices
+description: Best practices and recommended patterns for external service integrations
+keywords: [integrations, best practices, patterns, security, performance]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Integration Best Practices
+
+Recommended patterns and practices for building robust integrations.
+
+## Security Best Practices
+
+### 1. Store Credentials Securely
+
+Never hardcode credentials. Use environment variables or secure vaults:
+
+```typescript
+// Good: Environment variables
+const salesforce = await integrations.use($.Salesforce, {
+  clientId: process.env.SALESFORCE_CLIENT_ID,
+  clientSecret: process.env.SALESFORCE_CLIENT_SECRET,
+})
+
+// Avoid: Hardcoded credentials
+const salesforce = await integrations.use($.Salesforce, {
+  clientId: 'hardcoded_client_id',
+  clientSecret: 'hardcoded_secret',
+})
+```
+
+### 2. Validate OAuth State
+
+Always validate OAuth state parameter to prevent CSRF attacks:
+
+```typescript
+import { integrations } from 'sdk.do'
+
+// Generate and store state
+const state = crypto.randomUUID()
+await session.set('oauthState', state)
+
+// Generate auth URL with state
+const authUrl = await integrations.oauth($.Salesforce, {
+  clientId: process.env.SALESFORCE_CLIENT_ID,
+  redirectUri: REDIRECT_URI,
+  state,
+})
+
+// Validate state in callback
+const receivedState = request.query.state
+const storedState = await session.get('oauthState')
+
+if (receivedState !== storedState) {
+  throw new Error('Invalid OAuth state')
+}
+```
+
+### 3. Encrypt Stored Tokens
+
+Encrypt tokens before storing in database:
+
+```typescript
+import { encrypt, decrypt } from 'crypto-utils'
+
+// Store encrypted tokens
+await db.create($.Credential, {
+  service: 'salesforce',
+  userId: user.id,
+  accessToken: encrypt(accessToken),
+  refreshToken: encrypt(refreshToken),
+})
+
+// Decrypt when retrieving
+const cred = await db.get($.Credential, credId)
+const accessToken = decrypt(cred.accessToken)
+```
+
+### 4. Use Webhook Signature Verification
+
+Always verify webhook signatures:
+
+```typescript
+import { integrations } from 'sdk.do'
+
+async function handleWebhook(request: Request) {
+  const signature = request.headers.get('X-Webhook-Signature')
+  const secret = process.env.WEBHOOK_SECRET
+
+  if (!integrations.verifyWebhookSignature(signature, request.body, secret)) {
+    throw new Error('Invalid webhook signature')
+  }
+
+  // Process webhook
+}
+```
+
+### 5. Implement Rate Limiting
+
+Respect API rate limits:
+
+```typescript
+const rateLimiter = new RateLimiter({
+  maxRequests: 100,
+  perMilliseconds: 60000,
+})
+
+await rateLimiter.execute(async () => {
+  return await salesforce.create($.Account, accountData)
+})
+```
+
+## Performance Best Practices
+
+### 1. Use Batch Operations
+
+Process multiple records in batch:
+
+```typescript
+// Good: Batch operation
+const results = await salesforce.batchCreate($.Account, accounts)
+
+// Avoid: Individual operations in loop
+for (const account of accounts) {
+  await salesforce.create($.Account, account)
+}
+```
+
+### 2. Implement Caching
+
+Cache frequently accessed data:
+
+```typescript
+import { cache } from 'sdk.do'
+
+async function getAccount(id: string) {
+  const cacheKey = `account:${id}`
+
+  // Check cache first
+  const cached = await cache.get(cacheKey)
+  if (cached) return cached
+
+  // Fetch from integration
+  const account = await salesforce.get($.Account, id)
+
+  // Cache result
+  await cache.set(cacheKey, account, 300000) // 5 minutes
+
+  return account
+}
+```
+
+### 3. Use Connection Pooling
+
+Reuse connections when possible:
+
+```typescript
+// Good: Reuse integration instance
+const salesforce = await integrations.use($.Salesforce)
+
+for (const account of accounts) {
+  await salesforce.create($.Account, account)
+}
+
+// Avoid: Creating new instance each time
+for (const account of accounts) {
+  const sf = await integrations.use($.Salesforce)
+  await sf.create($.Account, account)
+}
+```
+
+### 4. Implement Pagination
+
+Handle large result sets with pagination:
+
+```typescript
+async function getAllAccounts() {
+  const allAccounts = []
+  let cursor = null
+
+  do {
+    const result = await salesforce.list($.Account, {
+      limit: 100,
+      cursor,
+    })
+
+    allAccounts.push(...result.data)
+    cursor = result.nextCursor
+  } while (cursor)
+
+  return allAccounts
+}
+```
+
+### 5. Use Async Processing
+
+Process long-running operations asynchronously:
+
+```typescript
+import { $, integrations, send } from 'sdk.do'
+
+// Queue sync job
+await send($.SyncJob.queued, {
+  service: 'salesforce',
+  type: $.Account,
+  records: accountIds,
+})
+
+// Process async
+on($.SyncJob.queued, async (event) => {
+  const { service, type, records } = event.data
+
+  const integration = await integrations.use(service)
+
+  for (const recordId of records) {
+    const record = await db.get(type, recordId)
+    await integration.create(type, record)
+  }
+})
+```
+
+## Error Handling Best Practices
+
+### 1. Handle Specific Error Types
+
+Handle different error types appropriately:
+
+```typescript
+try {
+  await salesforce.create($.Account, accountData)
+} catch (error) {
+  switch (error.code) {
+    case 'DUPLICATE_VALUE':
+      // Try to update instead
+      const existing = await salesforce.query($.Account, {
+        where: { name: accountData.name },
+      })
+      await salesforce.update(existing[0].id, accountData)
+      break
+
+    case 'REQUIRED_FIELD_MISSING':
+      // Add default values and retry
+      const withDefaults = { ...accountData, ...getDefaults() }
+      await salesforce.create($.Account, withDefaults)
+      break
+
+    case 'RATE_LIMIT_EXCEEDED':
+      // Wait and retry
+      await sleep(error.retryAfter)
+      await salesforce.create($.Account, accountData)
+      break
+
+    case 'AUTH_FAILED':
+      // Refresh token and retry
+      await refreshTokens()
+      await salesforce.create($.Account, accountData)
+      break
+
+    default:
+      // Log and handle unknown errors
+      console.error('Integration error:', error)
+      throw error
+  }
+}
+```
+
+### 2. Implement Retry Logic
+
+Use exponential backoff for retries:
+
+```typescript
+async function withRetry<T>(operation: () => Promise<T>, maxAttempts = 3): Promise<T> {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      return await operation()
+    } catch (error) {
+      if (attempt === maxAttempts - 1) throw error
+
+      const delay = Math.pow(2, attempt) * 1000
+      await sleep(delay)
+    }
+  }
+  throw new Error('Max retries exceeded')
+}
+
+// Usage
+const result = await withRetry(() => salesforce.create($.Account, accountData))
+```
+
+### 3. Log Errors Properly
+
+Log errors with context:
+
+```typescript
+try {
+  await salesforce.create($.Account, accountData)
+} catch (error) {
+  console.error('Failed to create Salesforce account', {
+    error: error.message,
+    code: error.code,
+    accountData,
+    timestamp: new Date().toISOString(),
+  })
+  throw error
+}
+```
+
+### 4. Implement Circuit Breaker
+
+Prevent cascading failures:
+
+```typescript
+class CircuitBreaker {
+  private failures = 0
+  private lastFailureTime = 0
+  private state = 'closed' // closed, open, half-open
+
+  async execute<T>(operation: () => Promise<T>): Promise<T> {
+    if (this.state === 'open') {
+      if (Date.now() - this.lastFailureTime > 60000) {
+        this.state = 'half-open'
+      } else {
+        throw new Error('Circuit breaker is open')
+      }
+    }
+
+    try {
+      const result = await operation()
+      this.onSuccess()
+      return result
+    } catch (error) {
+      this.onFailure()
+      throw error
+    }
+  }
+
+  private onSuccess() {
+    this.failures = 0
+    this.state = 'closed'
+  }
+
+  private onFailure() {
+    this.failures++
+    this.lastFailureTime = Date.now()
+
+    if (this.failures >= 5) {
+      this.state = 'open'
+    }
+  }
+}
+```
+
+### 5. Handle Webhook Failures
+
+Implement webhook retry logic:
+
+```typescript
+on($.Webhook.failed, async (event) => {
+  const { webhook, attempts } = event.data
+
+  if (attempts < 3) {
+    // Retry with exponential backoff
+    const delay = Math.pow(2, attempts) * 1000
+    await sleep(delay)
+
+    await processWebhook(webhook)
+  } else {
+    // Log and alert
+    console.error('Webhook failed after 3 attempts:', webhook)
+    await sendAlert('Webhook failed', webhook)
+  }
+})
+```
+
+## Data Sync Best Practices
+
+### 1. Use Idempotent Operations
+
+Ensure operations are idempotent:
+
+```typescript
+// Use upsert instead of create
+async function syncAccount(account: any) {
+  const existing = await salesforce.query($.Account, {
+    where: { externalId: account.$id },
+  })
+
+  if (existing.length > 0) {
+    await salesforce.update(existing[0].id, account)
+  } else {
+    await salesforce.create($.Account, account)
+  }
+}
+```
+
+### 2. Track Sync State
+
+Store sync metadata:
+
+```typescript
+await db.update(org.$id, {
+  salesforceAccountId: account.id,
+  lastSyncedAt: new Date(),
+  syncStatus: 'success',
+})
+```
+
+### 3. Handle Conflicts
+
+Implement conflict resolution:
+
+```typescript
+on($.Account.updated, async (event) => {
+  const account = event.data
+  const org = await db.get($.Organization, {
+    where: { salesforceAccountId: account.id },
+  })
+
+  // Check for conflicts
+  if (org.updatedAt > account.LastModifiedDate) {
+    // Local is newer, push to Salesforce
+    await salesforce.update(account.id, org)
+  } else if (org.updatedAt < account.LastModifiedDate) {
+    // Salesforce is newer, update local
+    await db.update(org.$id, mapFromSalesforce(account))
+  } else {
+    // Same timestamp, use merge strategy
+    const merged = mergeRecords(org, account)
+    await db.update(org.$id, merged)
+    await salesforce.update(account.id, merged)
+  }
+})
+```
+
+### 4. Use Incremental Sync
+
+Sync only changed records:
+
+```typescript
+async function incrementalSync() {
+  const lastSync = await getLastSyncTime()
+
+  // Query records changed since last sync
+  const changed = await db.list($.Organization, {
+    where: {
+      updatedAt: { $gt: lastSync },
+    },
+  })
+
+  // Sync to Salesforce
+  for (const org of changed) {
+    await syncToSalesforce(org)
+  }
+
+  // Update last sync time
+  await setLastSyncTime(new Date())
+}
+```
+
+### 5. Implement Bulk Sync
+
+Use bulk operations for initial sync:
+
+```typescript
+async function bulkSync() {
+  const orgs = await db.list($.Organization)
+
+  // Split into batches
+  const batches = chunk(orgs, 200)
+
+  // Process batches
+  for (const batch of batches) {
+    await salesforce.batchCreate($.Account, batch)
+  }
+}
+```
+
+## Testing Best Practices
+
+### 1. Mock External Services
+
+Use mocks for testing:
+
+```typescript
+import { jest } from '@jest/globals'
+
+describe('Salesforce Integration', () => {
+  it('should create account', async () => {
+    const mockSalesforce = {
+      create: jest.fn().mockResolvedValue({ id: 'account_123' }),
+    }
+
+    const result = await mockSalesforce.create($.Account, accountData)
+    expect(result.id).toBe('account_123')
+  })
+})
+```
+
+### 2. Test Error Scenarios
+
+Test error handling:
+
+```typescript
+describe('Error Handling', () => {
+  it('should handle duplicate error', async () => {
+    const mockSalesforce = {
+      create: jest.fn().mockRejectedValue({
+        code: 'DUPLICATE_VALUE',
+      }),
+    }
+
+    await expect(mockSalesforce.create($.Account, accountData)).rejects.toMatchObject({
+      code: 'DUPLICATE_VALUE',
+    })
+  })
+})
+```
+
+### 3. Test Retry Logic
+
+Test retry behavior:
+
+```typescript
+describe('Retry Logic', () => {
+  it('should retry on transient failure', async () => {
+    let attempts = 0
+    const mockOperation = jest.fn().mockImplementation(async () => {
+      attempts++
+      if (attempts < 3) {
+        throw { code: 'TIMEOUT' }
+      }
+      return { success: true }
+    })
+
+    const result = await withRetry(mockOperation, 3)
+    expect(result.success).toBe(true)
+    expect(attempts).toBe(3)
+  })
+})
+```
+
+### 4. Test Webhook Handling
+
+Test webhook processing:
+
+```typescript
+describe('Webhook Handling', () => {
+  it('should process webhook', async () => {
+    const webhook = {
+      type: 'Account.updated',
+      data: { id: 'account_123', Name: 'Updated Name' },
+    }
+
+    await handleWebhook(webhook)
+
+    const org = await db.get($.Organization, {
+      where: { salesforceAccountId: 'account_123' },
+    })
+
+    expect(org.name).toBe('Updated Name')
+  })
+})
+```
+
+### 5. Use Integration Tests
+
+Test actual integration:
+
+```typescript
+describe('Salesforce Integration (E2E)', () => {
+  it('should create and retrieve account', async () => {
+    const salesforce = await integrations.use($.Salesforce)
+
+    // Create account
+    const created = await salesforce.create($.Account, {
+      name: 'Test Account',
+      industry: 'Technology',
+    })
+
+    // Retrieve account
+    const retrieved = await salesforce.get($.Account, created.id)
+
+    expect(retrieved.name).toBe('Test Account')
+    expect(retrieved.industry).toBe('Technology')
+
+    // Cleanup
+    await salesforce.delete($.Account, created.id)
+  })
+})
+```
+
+## Monitoring Best Practices
+
+### 1. Log Integration Activity
+
+Log all integration operations:
+
+```typescript
+async function loggedCreate(type: string, data: any) {
+  const startTime = Date.now()
+
+  try {
+    const result = await salesforce.create(type, data)
+
+    console.log('Integration success', {
+      operation: 'create',
+      type,
+      duration: Date.now() - startTime,
+      resultId: result.id,
+    })
+
+    return result
+  } catch (error) {
+    console.error('Integration error', {
+      operation: 'create',
+      type,
+      duration: Date.now() - startTime,
+      error: error.message,
+    })
+
+    throw error
+  }
+}
+```
+
+### 2. Track Metrics
+
+Monitor integration metrics:
+
+```typescript
+const metrics = {
+  totalRequests: 0,
+  successfulRequests: 0,
+  failedRequests: 0,
+  averageResponseTime: 0,
+}
+
+async function tracked<T>(operation: () => Promise<T>): Promise<T> {
+  metrics.totalRequests++
+  const startTime = Date.now()
+
+  try {
+    const result = await operation()
+    metrics.successfulRequests++
+    return result
+  } catch (error) {
+    metrics.failedRequests++
+    throw error
+  } finally {
+    const duration = Date.now() - startTime
+    metrics.averageResponseTime = (metrics.averageResponseTime * (metrics.totalRequests - 1) + duration) / metrics.totalRequests
+  }
+}
+```
+
+### 3. Set Up Alerts
+
+Alert on failures:
+
+```typescript
+on($.Integration.failed, async (event) => {
+  const { service, operation, error } = event.data
+
+  if (error.code === 'AUTH_FAILED') {
+    await sendAlert('critical', `${service} authentication failed`)
+  } else if (error.code === 'RATE_LIMIT_EXCEEDED') {
+    await sendAlert('warning', `${service} rate limit exceeded`)
+  }
+})
+```
+
+### 4. Monitor Rate Limits
+
+Track rate limit usage:
+
+```typescript
+const rateLimitStatus = {
+  remaining: 0,
+  total: 0,
+  resetAt: null,
+}
+
+async function monitoredRequest<T>(operation: () => Promise<T>): Promise<T> {
+  const result = await operation()
+
+  // Update rate limit status from response headers
+  rateLimitStatus.remaining = parseInt(response.headers.get('X-Rate-Limit-Remaining'))
+  rateLimitStatus.total = parseInt(response.headers.get('X-Rate-Limit-Total'))
+  rateLimitStatus.resetAt = new Date(response.headers.get('X-Rate-Limit-Reset'))
+
+  // Alert if low
+  if (rateLimitStatus.remaining < rateLimitStatus.total * 0.1) {
+    await sendAlert('warning', 'Rate limit usage above 90%')
+  }
+
+  return result
+}
+```
+
+### 5. Dashboard Integration
+
+Expose metrics via dashboard:
+
+```typescript
+import { dashboard } from 'sdk.do'
+
+dashboard.expose('integrations', {
+  metrics: {
+    totalRequests: metrics.totalRequests,
+    successRate: metrics.successfulRequests / metrics.totalRequests,
+    averageResponseTime: metrics.averageResponseTime,
+  },
+  status: {
+    rateLimits: rateLimitStatus,
+    circuitBreaker: circuitBreaker.state,
+  },
+})
+```
+
+## See Also
+
+- [Getting Started](./getting-started) - Quick start guide
+- [Architecture](./architecture) - Integration architecture
+- [Troubleshooting](./troubleshooting) - Common issues and solutions
+
+## License
+
+MIT (Open Source)

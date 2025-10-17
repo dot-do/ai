@@ -1,0 +1,824 @@
+---
+$id: https://database.do/docs/querying
+$type: TechArticle
+title: Query Patterns
+description: Advanced query patterns for filtering, sorting, searching, and pagination
+keywords: [database, queries, filtering, sorting, search, pagination, aggregation]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Query Patterns
+
+Advanced query patterns for filtering, sorting, searching, and pagination in database.do.
+
+## Overview
+
+database.do provides powerful querying capabilities that go beyond basic CRUD operations. This guide covers advanced patterns for working with semantic data.
+
+## Filtering
+
+### Basic Filters
+
+Simple equality filters:
+
+```typescript
+// Single field
+const businesses = await db.list($.Business, {
+  where: {
+    industry: 'Technology',
+  },
+})
+
+// Multiple fields (AND)
+const businesses = await db.list($.Business, {
+  where: {
+    industry: 'Technology',
+    status: 'active',
+  },
+})
+```
+
+### Comparison Operators
+
+#### Numeric Comparisons
+
+```typescript
+const businesses = await db.list($.Business, {
+  where: {
+    // Greater than
+    revenue: { $gt: 1000000 },
+
+    // Greater than or equal
+    revenue: { $gte: 1000000 },
+
+    // Less than
+    revenue: { $lt: 10000000 },
+
+    // Less than or equal
+    revenue: { $lte: 10000000 },
+
+    // Between (range)
+    revenue: { $gte: 1000000, $lte: 10000000 },
+  },
+})
+```
+
+#### Date Comparisons
+
+```typescript
+const businesses = await db.list($.Business, {
+  where: {
+    // Founded after 2020
+    foundingDate: { $gte: '2020-01-01' },
+
+    // Founded in 2020
+    foundingDate: {
+      $gte: '2020-01-01',
+      $lt: '2021-01-01',
+    },
+
+    // Modified in last 30 days
+    dateModified: {
+      $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+  },
+})
+```
+
+#### String Comparisons
+
+```typescript
+const businesses = await db.list($.Business, {
+  where: {
+    // Exact match
+    name: 'Acme Corporation',
+
+    // Contains substring
+    name: { $contains: 'Acme' },
+
+    // Starts with
+    name: { $startsWith: 'Acme' },
+
+    // Ends with
+    email: { $endsWith: '@example.com' },
+
+    // Case-insensitive contains
+    name: { $icontains: 'acme' },
+  },
+})
+```
+
+### Array Operators
+
+```typescript
+const businesses = await db.list($.Business, {
+  where: {
+    // In array
+    industry: {
+      $in: ['Technology', 'Software', 'Hardware'],
+    },
+
+    // Not in array
+    status: {
+      $nin: ['inactive', 'suspended', 'deleted'],
+    },
+  },
+})
+```
+
+### Null Checks
+
+```typescript
+const businesses = await db.list($.Business, {
+  where: {
+    // Is null
+    deletedAt: { $null: true },
+
+    // Is not null
+    verifiedAt: { $null: false },
+  },
+})
+```
+
+### Negation
+
+```typescript
+const businesses = await db.list($.Business, {
+  where: {
+    // Not equal
+    industry: { $ne: 'Unknown' },
+
+    // Complex negation
+    name: { $not: { $startsWith: 'Test' } },
+  },
+})
+```
+
+## Logical Operators
+
+### AND (Default)
+
+Multiple conditions in `where` are combined with AND:
+
+```typescript
+const businesses = await db.list($.Business, {
+  where: {
+    industry: 'Technology',
+    status: 'active',
+    revenue: { $gte: 1000000 },
+  },
+})
+// industry = 'Technology' AND status = 'active' AND revenue >= 1000000
+```
+
+### OR
+
+Combine conditions with OR:
+
+```typescript
+const businesses = await db.list($.Business, {
+  where: {
+    $or: [{ industry: 'Technology' }, { industry: 'Software' }],
+  },
+})
+// industry = 'Technology' OR industry = 'Software'
+```
+
+### Complex Combinations
+
+```typescript
+const businesses = await db.list($.Business, {
+  where: {
+    status: 'active',
+    $or: [
+      {
+        industry: 'Technology',
+        revenue: { $gte: 1000000 },
+      },
+      {
+        industry: 'Software',
+        employees: { $gte: 50 },
+      },
+    ],
+  },
+})
+// status = 'active' AND (
+//   (industry = 'Technology' AND revenue >= 1000000) OR
+//   (industry = 'Software' AND employees >= 50)
+// )
+```
+
+## Nested Object Queries
+
+### Filtering by Nested Fields
+
+```typescript
+const businesses = await db.list($.Business, {
+  where: {
+    address: {
+      addressLocality: 'San Francisco',
+      addressRegion: 'CA',
+    },
+  },
+})
+```
+
+### Deep Nesting
+
+```typescript
+const orders = await db.list($.Order, {
+  where: {
+    customer: {
+      address: {
+        addressCountry: 'US',
+      },
+    },
+  },
+})
+```
+
+### Nested with Operators
+
+```typescript
+const businesses = await db.list($.Business, {
+  where: {
+    address: {
+      postalCode: {
+        $startsWith: '94', // San Francisco area
+      },
+    },
+  },
+})
+```
+
+## Sorting
+
+### Single Field
+
+```typescript
+// Ascending
+const businesses = await db.list($.Business, {
+  orderBy: { name: 'asc' },
+})
+
+// Descending
+const businesses = await db.list($.Business, {
+  orderBy: { foundingDate: 'desc' },
+})
+```
+
+### Multiple Fields
+
+```typescript
+const businesses = await db.list($.Business, {
+  orderBy: {
+    industry: 'asc', // Primary sort
+    revenue: 'desc', // Secondary sort
+    name: 'asc', // Tertiary sort
+  },
+})
+```
+
+### Nested Field Sorting
+
+```typescript
+const businesses = await db.list($.Business, {
+  orderBy: {
+    'address.addressLocality': 'asc',
+    name: 'asc',
+  },
+})
+```
+
+### Null Handling
+
+```typescript
+const businesses = await db.list($.Business, {
+  orderBy: {
+    verifiedAt: {
+      sort: 'desc',
+      nulls: 'last', // or 'first'
+    },
+  },
+})
+```
+
+## Pagination
+
+### Offset-Based Pagination
+
+```typescript
+// Page 1 (items 0-49)
+const page1 = await db.list($.Business, {
+  limit: 50,
+  offset: 0,
+})
+
+// Page 2 (items 50-99)
+const page2 = await db.list($.Business, {
+  limit: 50,
+  offset: 50,
+})
+
+// Calculate offset
+const page = 3
+const pageSize = 50
+const results = await db.list($.Business, {
+  limit: pageSize,
+  offset: (page - 1) * pageSize,
+})
+```
+
+### With Total Count
+
+```typescript
+const result = await db.list($.Business, {
+  limit: 50,
+  offset: 0,
+  count: true,
+})
+
+console.log(`Showing ${result.items.length} of ${result.total}`)
+console.log(`Page ${Math.floor(result.offset / result.limit) + 1} of ${Math.ceil(result.total / result.limit)}`)
+```
+
+### Cursor-Based Pagination
+
+For better performance with large datasets:
+
+```typescript
+// First page
+const page1 = await db.list($.Business, {
+  limit: 50,
+  orderBy: { id: 'asc' },
+})
+
+// Next page using cursor
+const page2 = await db.list($.Business, {
+  limit: 50,
+  where: {
+    id: { $gt: page1[page1.length - 1].$id },
+  },
+  orderBy: { id: 'asc' },
+})
+```
+
+## Full-Text Search
+
+### Basic Search
+
+```typescript
+const results = await db.search($.Business, 'technology innovation', {
+  fields: ['name', 'description'],
+  limit: 20,
+})
+```
+
+### Advanced Search
+
+```typescript
+const results = await db.search($.Business, 'technology AND (software OR hardware)', {
+  fields: ['name', 'description', 'industry'],
+  where: {
+    status: 'active',
+  },
+  orderBy: {
+    _score: 'desc', // Relevance score
+    name: 'asc',
+  },
+  limit: 50,
+})
+```
+
+### Search with Highlighting
+
+```typescript
+const results = await db.search($.Business, 'innovation', {
+  fields: ['name', 'description'],
+  highlight: true,
+  limit: 20,
+})
+
+results.forEach((result) => {
+  console.log('Name:', result.name)
+  console.log('Highlighted:', result._highlights.description)
+})
+```
+
+### Fuzzy Search
+
+```typescript
+const results = await db.search(
+  $.Business,
+  'tecnology~2', // Allow 2 character differences
+  {
+    fields: ['name', 'description'],
+    limit: 20,
+  }
+)
+```
+
+## Aggregations
+
+### Count
+
+```typescript
+const count = await db.count($.Business, {
+  where: {
+    industry: 'Technology',
+  },
+})
+
+console.log(`Found ${count} technology businesses`)
+```
+
+### Group By
+
+```typescript
+const groups = await db.aggregate($.Business, {
+  groupBy: 'industry',
+  count: true,
+})
+
+groups.forEach((group) => {
+  console.log(`${group.industry}: ${group.count}`)
+})
+```
+
+### Sum
+
+```typescript
+const result = await db.aggregate($.Business, {
+  where: {
+    industry: 'Technology',
+  },
+  sum: 'revenue',
+})
+
+console.log(`Total revenue: $${result.sum}`)
+```
+
+### Average
+
+```typescript
+const result = await db.aggregate($.Business, {
+  groupBy: 'industry',
+  avg: 'revenue',
+})
+
+result.forEach((group) => {
+  console.log(`${group.industry}: $${group.avg}`)
+})
+```
+
+### Multiple Aggregations
+
+```typescript
+const result = await db.aggregate($.Business, {
+  groupBy: 'industry',
+  aggregations: {
+    count: true,
+    sum: 'revenue',
+    avg: 'revenue',
+    min: 'foundingDate',
+    max: 'foundingDate',
+  },
+})
+```
+
+## Including Related Data
+
+### Basic Include
+
+```typescript
+const business = await db.get($.Business, 'biz_123', {
+  include: ['brands', 'employees'],
+})
+
+console.log('Brands:', business.brands)
+console.log('Employees:', business.employees)
+```
+
+### Nested Includes
+
+```typescript
+const business = await db.get($.Business, 'biz_123', {
+  include: [
+    'brands',
+    {
+      employees: {
+        include: ['skills', 'certifications'],
+      },
+    },
+  ],
+})
+```
+
+### Include with Filters
+
+```typescript
+const business = await db.get($.Business, 'biz_123', {
+  include: [
+    {
+      employees: {
+        where: {
+          jobTitle: 'Engineer',
+        },
+        orderBy: {
+          dateHired: 'desc',
+        },
+      },
+    },
+  ],
+})
+```
+
+## Field Selection
+
+### Select Specific Fields
+
+```typescript
+const businesses = await db.list($.Business, {
+  select: ['name', 'industry', 'foundingDate'],
+  where: {
+    industry: 'Technology',
+  },
+})
+
+// Only selected fields are returned
+businesses.forEach((business) => {
+  console.log(business.name) // Available
+  console.log(business.industry) // Available
+  console.log(business.description) // undefined
+})
+```
+
+### Exclude Fields
+
+```typescript
+const businesses = await db.list($.Business, {
+  exclude: ['internalNotes', 'privateData'],
+  where: {
+    industry: 'Technology',
+  },
+})
+```
+
+## Distinct Values
+
+```typescript
+// Get unique industries
+const industries = await db.distinct($.Business, 'industry')
+
+console.log('Industries:', industries)
+// ['Technology', 'Manufacturing', 'Retail', ...]
+```
+
+## Exists Query
+
+Check if entities matching criteria exist:
+
+```typescript
+const exists = await db.exists($.Business, {
+  where: {
+    name: 'Acme Corporation',
+  },
+})
+
+if (exists) {
+  console.log('Business already exists')
+}
+```
+
+## Complex Query Examples
+
+### Multi-Condition Filter
+
+```typescript
+const businesses = await db.list($.Business, {
+  where: {
+    $or: [
+      {
+        industry: 'Technology',
+        revenue: { $gte: 1000000 },
+      },
+      {
+        industry: 'Software',
+        employees: { $gte: 50 },
+      },
+    ],
+    status: 'active',
+    foundingDate: { $gte: '2020-01-01' },
+    address: {
+      addressCountry: 'US',
+    },
+  },
+  orderBy: {
+    revenue: 'desc',
+  },
+  limit: 100,
+})
+```
+
+### Date Range Query
+
+```typescript
+const recentBusinesses = await db.list($.Business, {
+  where: {
+    foundingDate: {
+      $gte: '2024-01-01',
+      $lt: '2025-01-01',
+    },
+  },
+  orderBy: {
+    foundingDate: 'desc',
+  },
+})
+```
+
+### Geographic Query
+
+```typescript
+const sfBusinesses = await db.list($.Business, {
+  where: {
+    address: {
+      addressLocality: 'San Francisco',
+      addressRegion: 'CA',
+      postalCode: {
+        $startsWith: '94',
+      },
+    },
+  },
+})
+```
+
+### Relationship Query with Filters
+
+```typescript
+const business = await db.get($.Business, 'biz_123')
+
+const seniorEngineers = await db.relate(business, $.employs, $.Person, {
+  where: {
+    jobTitle: { $contains: 'Senior' },
+    department: 'Engineering',
+  },
+  orderBy: {
+    dateHired: 'asc',
+  },
+})
+```
+
+## Performance Optimization
+
+### Indexing
+
+Database.do automatically indexes common fields, but you can create custom indexes:
+
+```typescript
+await db.createIndex($.Business, ['industry', 'foundingDate'])
+```
+
+### Query Hints
+
+Provide hints for query optimization:
+
+```typescript
+const businesses = await db.list($.Business, {
+  where: {
+    industry: 'Technology',
+  },
+  hints: {
+    useIndex: 'industry_idx',
+  },
+})
+```
+
+### Batch Loading
+
+Load multiple entities efficiently:
+
+```typescript
+const ids = ['biz_1', 'biz_2', 'biz_3']
+const businesses = await db.getMany($.Business, ids)
+```
+
+### Caching
+
+Enable query result caching:
+
+```typescript
+const businesses = await db.list($.Business, {
+  where: {
+    industry: 'Technology',
+  },
+  cache: {
+    ttl: 300, // 5 minutes
+  },
+})
+```
+
+## Query Building
+
+### Programmatic Query Construction
+
+```typescript
+import { QueryBuilder } from 'sdk.do'
+
+const query = new QueryBuilder($.Business).where('industry', 'Technology').where('revenue', '$gte', 1000000).orderBy('name', 'asc').limit(50)
+
+const businesses = await db.list(query)
+```
+
+### Dynamic Filters
+
+```typescript
+function buildBusinessQuery(filters: any) {
+  const where: any = { status: 'active' }
+
+  if (filters.industry) {
+    where.industry = filters.industry
+  }
+
+  if (filters.minRevenue) {
+    where.revenue = { $gte: filters.minRevenue }
+  }
+
+  if (filters.location) {
+    where.address = {
+      addressLocality: filters.location,
+    }
+  }
+
+  return { where }
+}
+
+const businesses = await db.list(
+  $.Business,
+  buildBusinessQuery({
+    industry: 'Technology',
+    minRevenue: 1000000,
+  })
+)
+```
+
+## Best Practices
+
+### Use Indexes for Common Queries
+
+```typescript
+// Create index for frequently queried fields
+await db.createIndex($.Business, ['industry', 'status'])
+```
+
+### Paginate Large Results
+
+```typescript
+// Good - paginated
+const businesses = await db.list($.Business, {
+  limit: 100,
+  offset: 0,
+})
+
+// Avoid - may timeout
+const allBusinesses = await db.list($.Business)
+```
+
+### Select Only Needed Fields
+
+```typescript
+// Good - select specific fields
+const businesses = await db.list($.Business, {
+  select: ['name', 'industry'],
+})
+
+// Avoid - fetches all fields
+const businesses = await db.list($.Business)
+```
+
+### Use Exists for Checks
+
+```typescript
+// Good - efficient existence check
+const exists = await db.exists($.Business, {
+  where: { name: 'Acme Corp' },
+})
+
+// Avoid - fetches full entity
+const businesses = await db.list($.Business, {
+  where: { name: 'Acme Corp' },
+})
+const exists = businesses.length > 0
+```
+
+## See Also
+
+- [Operations Reference](./operations) - CRUD operations
+- [API Reference](../api/) - Complete API documentation
+- [Query Examples](../examples/queries) - Practical query examples
+- [Relationships](../examples/relationships) - Working with relationships
+
+---
+
+Next: Explore [practical query examples](../examples/queries) for common use cases.

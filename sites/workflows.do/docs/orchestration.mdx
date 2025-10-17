@@ -1,0 +1,1018 @@
+---
+$id: https://workflows.do/docs/orchestration
+$type: TechArticle
+title: Advanced Orchestration Strategies
+description: Learn advanced workflow orchestration strategies for complex business processes
+keywords: [orchestration, workflows, distributed systems, coordination, scheduling]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Advanced Orchestration Strategies
+
+Master advanced orchestration techniques for building complex, distributed, and resilient business workflows. This guide covers sophisticated patterns and strategies for enterprise-grade workflow systems.
+
+## Orchestration vs Choreography
+
+### Orchestration (Centralized Control)
+
+A central coordinator controls the workflow:
+
+```typescript
+const orchestratedWorkflow = workflow({
+  name: 'OrderOrchestrator',
+  steps: [
+    {
+      name: 'ValidateOrder',
+      action: async (order) => {
+        return await $.OrderService.validate(order)
+      },
+    },
+    {
+      name: 'ProcessPayment',
+      action: async (order) => {
+        return await $.PaymentService.process(order)
+      },
+    },
+    {
+      name: 'ReserveInventory',
+      action: async (order) => {
+        return await $.InventoryService.reserve(order)
+      },
+    },
+    {
+      name: 'CreateShipment',
+      action: async (order) => {
+        return await $.ShipmentService.create(order)
+      },
+    },
+  ],
+})
+```
+
+**Advantages:**
+
+- Clear control flow
+- Easy to understand
+- Centralized monitoring
+- Simple error handling
+
+**Disadvantages:**
+
+- Single point of failure
+- Central coordinator bottleneck
+- Tight coupling
+
+### Choreography (Decentralized)
+
+Services coordinate through events:
+
+```typescript
+import { on, send } from 'sdk.do'
+
+// Order Service
+on($.Order.created, async (order) => {
+  const validated = await validateOrder(order)
+  await send($.Order.validated, validated)
+})
+
+// Payment Service
+on($.Order.validated, async (order) => {
+  const payment = await processPayment(order)
+  await send($.Payment.processed, { order, payment })
+})
+
+// Inventory Service
+on($.Payment.processed, async ({ order }) => {
+  const reserved = await reserveInventory(order)
+  await send($.Inventory.reserved, { order, reserved })
+})
+
+// Shipment Service
+on($.Inventory.reserved, async ({ order }) => {
+  const shipment = await createShipment(order)
+  await send($.Shipment.created, { order, shipment })
+})
+```
+
+**Advantages:**
+
+- Loose coupling
+- No central coordinator
+- Scalable
+- Resilient
+
+**Disadvantages:**
+
+- Complex to understand
+- Harder to debug
+- Distributed monitoring needed
+- Complex error handling
+
+### Hybrid Approach
+
+Combine both approaches:
+
+```typescript
+const hybridWorkflow = workflow({
+  name: 'HybridOrderProcessing',
+  steps: [
+    // Orchestrated critical path
+    $.Order.validate,
+    $.Payment.process,
+
+    // Choreographed parallel operations
+    {
+      name: 'TriggerBackgroundTasks',
+      action: async (order) => {
+        // Fire events for decentralized processing
+        await send($.Analytics.track, order)
+        await send($.Marketing.notify, order)
+        await send($.Fulfillment.queue, order)
+        return order
+      },
+    },
+
+    // Continue orchestrated flow
+    $.Order.complete,
+  ],
+})
+```
+
+## Long-Running Workflows
+
+### Durable Execution
+
+Persist workflow state for resilience:
+
+```typescript
+import { $, workflow, db } from 'sdk.do'
+
+const durableWorkflow = workflow({
+  name: 'LongRunningProcess',
+  durable: true,
+  steps: [
+    {
+      name: 'Step1',
+      action: async (input) => {
+        // Automatically persisted
+        const result = await longOperation()
+
+        // Save checkpoint
+        await workflow.checkpoint({ step: 'Step1', result })
+
+        return result
+      },
+    },
+    {
+      name: 'Step2',
+      action: async (input) => {
+        // Can resume from checkpoint if workflow crashes
+        const result = await anotherLongOperation()
+        await workflow.checkpoint({ step: 'Step2', result })
+        return result
+      },
+    },
+  ],
+  onCrash: 'resume', // Resume from last checkpoint
+  checkpointInterval: 30000, // Checkpoint every 30s
+})
+```
+
+### Workflow Persistence
+
+Manually control persistence:
+
+```typescript
+const persistentWorkflow = workflow({
+  name: 'PersistentWorkflow',
+  steps: [
+    {
+      name: 'InitializeWorkflow',
+      action: async (input) => {
+        // Create workflow record
+        const workflowExecution = await db.create($.WorkflowExecution, {
+          workflowId: input.workflowId,
+          status: 'running',
+          startedAt: new Date(),
+          input,
+        })
+        return { ...input, executionId: workflowExecution.id }
+      },
+    },
+    {
+      name: 'ProcessStep',
+      action: async (context) => {
+        const result = await processData(context)
+
+        // Update workflow state
+        await db.update($.WorkflowExecution, {
+          where: { id: context.executionId },
+          data: {
+            currentStep: 'ProcessStep',
+            result,
+            updatedAt: new Date(),
+          },
+        })
+
+        return { ...context, result }
+      },
+    },
+    {
+      name: 'CompleteWorkflow',
+      action: async (context) => {
+        await db.update($.WorkflowExecution, {
+          where: { id: context.executionId },
+          data: {
+            status: 'completed',
+            completedAt: new Date(),
+          },
+        })
+        return context
+      },
+    },
+  ],
+})
+```
+
+### Resume from Failure
+
+Resume workflows after crashes:
+
+```typescript
+const resumableWorkflow = workflow({
+  name: 'ResumableWorkflow',
+  steps: [...],
+  onFailure: 'persist',
+  resumePolicy: {
+    strategy: 'from-last-checkpoint',
+    maxResumeAttempts: 3,
+    resumeDelay: 60000 // Wait 1 minute before resuming
+  }
+})
+
+// Resume workflow after crash
+const lastExecution = await db.get($.WorkflowExecution, {
+  where: { workflowId: 'workflow-123', status: 'failed' }
+})
+
+await resumableWorkflow.resume(lastExecution.id)
+```
+
+## Distributed Orchestration
+
+### Cross-Service Workflows
+
+Orchestrate across microservices:
+
+```typescript
+const distributedWorkflow = workflow({
+  name: 'DistributedOrderProcessing',
+  steps: [
+    {
+      name: 'ValidateOrder',
+      service: 'order-service',
+      action: $.Order.validate,
+      timeout: 5000,
+    },
+    {
+      name: 'ProcessPayment',
+      service: 'payment-service',
+      action: $.Payment.process,
+      timeout: 30000,
+      retryPolicy: {
+        maxAttempts: 3,
+        backoff: 'exponential',
+      },
+    },
+    {
+      name: 'ReserveInventory',
+      service: 'inventory-service',
+      action: $.Inventory.reserve,
+      timeout: 10000,
+    },
+    {
+      name: 'CreateShipment',
+      service: 'shipping-service',
+      action: $.Shipment.create,
+      timeout: 15000,
+    },
+  ],
+  serviceDiscovery: {
+    registry: 'consul',
+    loadBalancing: 'round-robin',
+  },
+})
+```
+
+### Distributed Transactions (Saga)
+
+Implement saga pattern for distributed transactions:
+
+```typescript
+const sagaWorkflow = workflow({
+  name: 'DistributedSaga',
+  pattern: 'saga',
+  steps: [
+    {
+      name: 'CreateOrder',
+      service: 'order-service',
+      action: $.Order.create,
+      compensation: {
+        service: 'order-service',
+        action: $.Order.delete,
+      },
+    },
+    {
+      name: 'ReserveInventory',
+      service: 'inventory-service',
+      action: $.Inventory.reserve,
+      compensation: {
+        service: 'inventory-service',
+        action: $.Inventory.release,
+      },
+    },
+    {
+      name: 'ProcessPayment',
+      service: 'payment-service',
+      action: $.Payment.process,
+      compensation: {
+        service: 'payment-service',
+        action: $.Payment.refund,
+      },
+    },
+    {
+      name: 'CreateShipment',
+      service: 'shipping-service',
+      action: $.Shipment.create,
+      compensation: {
+        service: 'shipping-service',
+        action: $.Shipment.cancel,
+      },
+    },
+  ],
+  sagaConfig: {
+    compensateInReverse: true,
+    isolationLevel: 'read-uncommitted',
+    timeoutMs: 300000, // 5 minutes
+    onCompensationFailure: 'manual-intervention',
+  },
+})
+```
+
+## Scheduling Strategies
+
+### Time-Based Scheduling
+
+Schedule workflows to run at specific times:
+
+```typescript
+import { every, workflow } from 'sdk.do'
+
+const scheduledWorkflow = workflow({
+  name: 'DailyReport',
+  steps: [$.Data.collect, $.Report.generate, $.Email.send],
+})
+
+// Run daily at 9 AM
+every($.Daily, { hour: 9, minute: 0 }, async () => {
+  await scheduledWorkflow.execute()
+})
+
+// Run every Monday at 8 AM
+every($.Weekly, { dayOfWeek: 1, hour: 8 }, async () => {
+  await scheduledWorkflow.execute()
+})
+
+// Run on first day of month
+every($.Monthly, { dayOfMonth: 1, hour: 0 }, async () => {
+  await scheduledWorkflow.execute()
+})
+
+// Cron syntax
+every('0 9 * * *', async () => {
+  await scheduledWorkflow.execute()
+})
+```
+
+### Interval-Based Scheduling
+
+Run workflows at intervals:
+
+```typescript
+// Every 5 minutes
+every('*/5 * * * *', async () => {
+  await monitoringWorkflow.execute()
+})
+
+// Every hour
+every($.Hourly, async () => {
+  await housekeepingWorkflow.execute()
+})
+
+// Custom interval
+every.interval(300000, async () => {
+  // 5 minutes in ms
+  await pollingWorkflow.execute()
+})
+```
+
+### Conditional Scheduling
+
+Schedule based on conditions:
+
+```typescript
+const conditionalScheduler = every($.Hourly, async () => {
+  // Check condition before executing
+  const metrics = await getSystemMetrics()
+
+  if (metrics.queueDepth > 1000) {
+    await batchProcessingWorkflow.execute()
+  }
+})
+
+// Stop scheduler when condition met
+conditionalScheduler.stopWhen(async () => {
+  const metrics = await getSystemMetrics()
+  return metrics.queueDepth === 0
+})
+```
+
+## Priority and Queue Management
+
+### Priority Workflows
+
+Execute high-priority workflows first:
+
+```typescript
+const priorityWorkflow = workflow({
+  name: 'PriorityProcessing',
+  priority: 'high', // high, normal, low
+  steps: [...]
+})
+
+const normalWorkflow = workflow({
+  name: 'NormalProcessing',
+  priority: 'normal',
+  steps: [...]
+})
+
+// Queue with priority
+await workflowQueue.enqueue(priorityWorkflow, { priority: 10 })
+await workflowQueue.enqueue(normalWorkflow, { priority: 5 })
+
+// Executes in priority order
+await workflowQueue.process()
+```
+
+### Workflow Queues
+
+Manage workflow execution with queues:
+
+```typescript
+import { queue, workflow } from 'sdk.do'
+
+// Create workflow queue
+const orderQueue = queue('orders', {
+  concurrency: 5, // Process 5 workflows in parallel
+  maxRetries: 3,
+  timeout: 300000 // 5 minutes
+})
+
+// Define workflow
+const orderWorkflow = workflow({
+  name: 'OrderProcessing',
+  steps: [...]
+})
+
+// Add to queue
+await orderQueue.add(orderWorkflow, {
+  orderId: '12345',
+  priority: 5,
+  delay: 5000 // Wait 5 seconds before processing
+})
+
+// Process queue
+orderQueue.process(async (job) => {
+  await orderWorkflow.execute(job.data)
+})
+```
+
+### Rate Limiting
+
+Control workflow execution rate:
+
+```typescript
+const rateLimitedWorkflow = workflow({
+  name: 'APIIntegration',
+  rateLimit: {
+    maxConcurrent: 10, // Max 10 concurrent executions
+    maxPerSecond: 100, // Max 100 executions per second
+    maxPerMinute: 5000,
+  },
+  steps: [$.API.call, $.Data.process],
+})
+```
+
+## Dynamic Workflow Generation
+
+### Template-Based Generation
+
+Generate workflows from templates:
+
+```typescript
+const generateApprovalWorkflow = (config) => {
+  const steps = [
+    {
+      name: 'Validate',
+      action: config.validateAction,
+    },
+  ]
+
+  // Add approval steps based on amount
+  if (config.amount > 10000) {
+    steps.push({
+      $type: 'ApprovalStep',
+      name: 'CFOApproval',
+      approver: $.CFO,
+    })
+  }
+
+  if (config.amount > 1000) {
+    steps.push({
+      $type: 'ApprovalStep',
+      name: 'ManagerApproval',
+      approver: $.Manager,
+    })
+  }
+
+  steps.push({
+    name: 'Execute',
+    action: config.executeAction,
+  })
+
+  return workflow({
+    name: `${config.type}Approval`,
+    steps,
+  })
+}
+
+// Generate workflow
+const expenseWorkflow = generateApprovalWorkflow({
+  type: 'Expense',
+  amount: 5000,
+  validateAction: $.Expense.validate,
+  executeAction: $.Expense.process,
+})
+```
+
+### Data-Driven Workflows
+
+Generate workflows from data:
+
+```typescript
+const generateDataPipeline = async (config) => {
+  const steps = []
+
+  // Extract phase
+  for (const source of config.sources) {
+    steps.push({
+      name: `Extract_${source.name}`,
+      action: async () => await extractData(source),
+    })
+  }
+
+  // Transform phase
+  for (const transform of config.transformations) {
+    steps.push({
+      name: `Transform_${transform.name}`,
+      action: async (data) => await applyTransform(data, transform),
+    })
+  }
+
+  // Load phase
+  for (const destination of config.destinations) {
+    steps.push({
+      name: `Load_${destination.name}`,
+      action: async (data) => await loadData(data, destination),
+    })
+  }
+
+  return workflow({
+    name: config.pipelineName,
+    steps,
+  })
+}
+
+// Load config and generate workflow
+const pipelineConfig = await db.get($.PipelineConfig, { id: 'pipeline-123' })
+const pipeline = await generateDataPipeline(pipelineConfig)
+await pipeline.execute()
+```
+
+## Workflow Versioning
+
+### Version Management
+
+Manage workflow versions:
+
+```typescript
+const orderWorkflowV1 = workflow({
+  name: 'OrderProcessing',
+  version: '1.0.0',
+  steps: [$.Order.validate, $.Payment.process, $.Order.fulfill],
+})
+
+const orderWorkflowV2 = workflow({
+  name: 'OrderProcessing',
+  version: '2.0.0',
+  steps: [
+    $.Order.validate,
+    $.Inventory.check, // New step in v2
+    $.Payment.process,
+    $.Order.fulfill,
+  ],
+  migration: {
+    from: '1.0.0',
+    strategy: 'finish-current-continue-new',
+  },
+})
+
+// Route to correct version
+const executeOrderWorkflow = async (order) => {
+  const version = order.workflowVersion || '2.0.0'
+  const workflow = getWorkflowVersion('OrderProcessing', version)
+  return await workflow.execute(order)
+}
+```
+
+### Migration Strategies
+
+Migrate between workflow versions:
+
+```typescript
+const workflowRegistry = {
+  OrderProcessing: {
+    '1.0.0': orderWorkflowV1,
+    '2.0.0': orderWorkflowV2,
+  },
+}
+
+const migrateWorkflow = async (executionId, toVersion) => {
+  const execution = await db.get($.WorkflowExecution, { id: executionId })
+
+  const migrationStrategy = {
+    // Finish current version, start new version
+    'finish-current-continue-new': async () => {
+      await execution.finish()
+      return await startNewVersion(execution.input, toVersion)
+    },
+
+    // Cancel current, start new version
+    'cancel-start-new': async () => {
+      await execution.cancel()
+      return await startNewVersion(execution.input, toVersion)
+    },
+
+    // Resume at equivalent step in new version
+    'resume-at-equivalent': async () => {
+      const currentStep = execution.currentStep
+      const newWorkflow = getWorkflowVersion('OrderProcessing', toVersion)
+      return await newWorkflow.resumeAt(currentStep, execution.state)
+    },
+  }
+
+  return await migrationStrategy[execution.migrationStrategy]()
+}
+```
+
+## Performance Optimization
+
+### Parallel Execution
+
+Maximize throughput with parallelism:
+
+```typescript
+const optimizedWorkflow = workflow({
+  name: 'OptimizedProcessing',
+  steps: [
+    $.Data.fetch,
+    {
+      $type: 'ParallelStep',
+      name: 'ProcessInParallel',
+      branches: [$.Validation.run, $.Enrichment.run, $.Analysis.run],
+      maxConcurrency: 10, // Limit concurrent branches
+    },
+    $.Results.aggregate,
+  ],
+})
+```
+
+### Caching
+
+Cache workflow step results:
+
+```typescript
+const cachedWorkflow = workflow({
+  name: 'CachedWorkflow',
+  steps: [
+    {
+      name: 'ExpensiveComputation',
+      action: $.Compute.expensive,
+      cache: {
+        enabled: true,
+        ttl: 3600, // Cache for 1 hour
+        key: (input) => `compute:${input.id}`,
+      },
+    },
+  ],
+})
+```
+
+### Batch Processing
+
+Process multiple items efficiently:
+
+```typescript
+const batchWorkflow = workflow({
+  name: 'BatchProcessing',
+  steps: [
+    {
+      name: 'FetchBatch',
+      action: async () => {
+        return await db.list($.Order, {
+          where: { status: 'pending' },
+          limit: 100,
+        })
+      },
+    },
+    {
+      name: 'ProcessBatch',
+      action: async (orders) => {
+        // Process in batches of 10
+        const batches = chunk(orders, 10)
+        const results = []
+
+        for (const batch of batches) {
+          const batchResults = await Promise.all(batch.map((order) => $.Order.process(order)))
+          results.push(...batchResults)
+        }
+
+        return results
+      },
+    },
+  ],
+})
+```
+
+## Monitoring and Observability
+
+### Metrics Collection
+
+Collect workflow metrics:
+
+```typescript
+const monitoredWorkflow = workflow({
+  name: 'MonitoredWorkflow',
+  metrics: {
+    enabled: true,
+    collect: ['duration', 'success-rate', 'error-rate'],
+  },
+  steps: [
+    {
+      name: 'Step1',
+      action: $.Action1,
+      onComplete: (result, duration) => {
+        metrics.histogram('workflow.step.duration', duration, {
+          workflow: 'MonitoredWorkflow',
+          step: 'Step1',
+        })
+      },
+    },
+  ],
+})
+```
+
+### Distributed Tracing
+
+Trace workflows across services:
+
+```typescript
+import { trace, workflow } from 'sdk.do'
+
+const tracedWorkflow = workflow({
+  name: 'TracedWorkflow',
+  tracing: {
+    enabled: true,
+    serviceName: 'order-service',
+    sampler: 'always',
+  },
+  steps: [
+    {
+      name: 'Step1',
+      action: async (input) => {
+        const span = trace.startSpan('Step1')
+        try {
+          const result = await $.Action1(input)
+          span.setTag('result', 'success')
+          return result
+        } catch (error) {
+          span.setTag('error', true)
+          span.log({ event: 'error', message: error.message })
+          throw error
+        } finally {
+          span.finish()
+        }
+      },
+    },
+  ],
+})
+```
+
+### Audit Logging
+
+Log workflow execution for compliance:
+
+```typescript
+const auditedWorkflow = workflow({
+  name: 'AuditedWorkflow',
+  audit: {
+    enabled: true,
+    logLevel: 'detailed',
+  },
+  steps: [
+    {
+      name: 'SensitiveOperation',
+      action: async (input) => {
+        await audit.log({
+          action: 'SensitiveOperation',
+          userId: input.userId,
+          timestamp: new Date(),
+          input: sanitize(input),
+          metadata: {
+            ipAddress: input.ipAddress,
+            userAgent: input.userAgent,
+          },
+        })
+
+        return await $.Operation.execute(input)
+      },
+    },
+  ],
+})
+```
+
+## Security
+
+### Authentication and Authorization
+
+Secure workflow execution:
+
+```typescript
+const secureWorkflow = workflow({
+  name: 'SecureWorkflow',
+  security: {
+    authentication: 'required',
+    authorization: {
+      roles: ['admin', 'operator'],
+      permissions: ['workflow:execute'],
+    },
+  },
+  steps: [
+    {
+      name: 'AuthorizedOperation',
+      action: async (input, context) => {
+        // Check authorization
+        if (!context.user.hasPermission('data:write')) {
+          throw new Error('Unauthorized')
+        }
+
+        return await $.Data.write(input)
+      },
+    },
+  ],
+})
+```
+
+### Data Encryption
+
+Encrypt sensitive workflow data:
+
+```typescript
+const encryptedWorkflow = workflow({
+  name: 'EncryptedWorkflow',
+  encryption: {
+    enabled: true,
+    algorithm: 'AES-256-GCM',
+    fields: ['ssn', 'creditCard', 'password'],
+  },
+  steps: [
+    {
+      name: 'ProcessSensitiveData',
+      action: async (input) => {
+        // Data automatically encrypted in transit and at rest
+        return await $.Data.process(input)
+      },
+    },
+  ],
+})
+```
+
+## Testing Strategies
+
+### Unit Testing
+
+Test individual workflow steps:
+
+```typescript
+import { test, expect } from 'vitest'
+
+test('order validation step', async () => {
+  const validateStep = orderWorkflow.getStep('ValidateOrder')
+
+  const result = await validateStep.execute({
+    orderId: '12345',
+    items: [{ id: 1, quantity: 2 }],
+  })
+
+  expect(result.validated).toBe(true)
+})
+```
+
+### Integration Testing
+
+Test complete workflows:
+
+```typescript
+test('complete order workflow', async () => {
+  const result = await orderWorkflow.execute({
+    customerId: 'cust_123',
+    items: [{ productId: 'prod_1', quantity: 1 }],
+  })
+
+  expect(result.status).toBe('fulfilled')
+  expect(result.paymentStatus).toBe('completed')
+})
+```
+
+### Mocking
+
+Mock workflow dependencies:
+
+```typescript
+import { workflow, mock } from 'sdk.do'
+
+test('workflow with mocked dependencies', async () => {
+  // Mock external service
+  mock($.PaymentService.process, async () => ({
+    status: 'success',
+    transactionId: 'txn_123',
+  }))
+
+  const result = await orderWorkflow.execute(testOrder)
+
+  expect(result.paymentStatus).toBe('completed')
+})
+```
+
+## Best Practices
+
+1. **Design for failure**: Assume steps can fail and handle gracefully
+2. **Make workflows idempotent**: Safe to retry
+3. **Use compensation for rollbacks**: Don't rely on database transactions
+4. **Monitor everything**: Metrics, logs, traces
+5. **Version workflows**: Support migration between versions
+6. **Persist long-running workflows**: Don't lose state
+7. **Set timeouts everywhere**: Prevent hanging workflows
+8. **Use semantic patterns**: Clear, maintainable code
+9. **Test thoroughly**: Unit, integration, and chaos testing
+10. **Document workflows**: Make intent clear
+
+## Summary
+
+Advanced orchestration enables:
+
+- **Distributed workflows** across microservices
+- **Long-running processes** with durability
+- **Sophisticated scheduling** with priorities
+- **Dynamic generation** from templates
+- **Version management** and migration
+- **Performance optimization** with caching and parallelism
+- **Comprehensive monitoring** and observability
+- **Enterprise security** with encryption and authorization
+
+Choose strategies based on your scale, complexity, and requirements.
+
+## Next Steps
+
+- [API Reference](../api/index.mdx) - Complete API documentation
+- [Examples](../examples/) - Practical orchestration examples
+- [Workflow Patterns](./workflow-patterns.mdx) - Common patterns
+
+## Resources
+
+- [workflows.do](https://workflows.do)
+- [Temporal Documentation](https://docs.temporal.io)
+- [AWS Step Functions](https://docs.aws.amazon.com/step-functions/)
+- [Camunda BPMN](https://docs.camunda.org)

@@ -1,0 +1,731 @@
+---
+$id: https://benchmarks.do/docs/architecture
+$type: TechArticle
+title: Benchmarks.do Architecture
+description: Architecture and design patterns for performance benchmarking, load testing, and statistical analysis in the .do platform
+keywords: [architecture, benchmarking, system design, metrics collection, statistical analysis, distributed testing]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Architecture
+
+Understanding the architecture of benchmarks.do helps you build sophisticated performance testing systems with advanced metrics collection, statistical analysis, and regression detection capabilities.
+
+## Overview
+
+benchmarks.do is a comprehensive benchmarking platform that combines:
+
+1. **Metrics Collection Engine**: Real-time collection of performance metrics with minimal overhead
+2. **Statistical Analysis System**: Advanced statistical methods for analyzing benchmark results
+3. **Distributed Test Execution**: Run benchmarks across multiple regions and workers
+4. **Result Storage**: Time-series storage optimized for benchmark data
+5. **Comparison Engine**: Compare results and detect regressions automatically
+6. **Reporting System**: Generate reports and visualizations
+
+## System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     Application Layer                            │
+│                  (Your Benchmarking Code)                        │
+└─────────────────┬───────────────────────────────────────────────┘
+                  │
+                  │ Benchmarks API
+                  │
+┌─────────────────▼───────────────────────────────────────────────┐
+│                    Benchmarks Core                               │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │              Execution Coordinator                         │ │
+│  │  • Benchmark scheduling                                    │ │
+│  │  • Worker allocation                                       │ │
+│  │  • Load generation                                         │ │
+│  │  │  Progress monitoring                                    │ │
+│  └────────────────────────────────────────────────────────────┘ │
+│                               │                                  │
+│         ┌─────────────────────┼──────────────────┐              │
+│         │                     │                  │              │
+│  ┌──────▼────────┐  ┌─────────▼────────┐  ┌─────▼──────┐      │
+│  │    Metrics    │  │   Statistical    │  │ Comparison │      │
+│  │   Collection  │  │     Analysis     │  │   Engine   │      │
+│  └──────┬────────┘  └─────────┬────────┘  └─────┬──────┘      │
+│         │                     │                  │              │
+│  ┌──────▼────────┐  ┌─────────▼────────┐  ┌─────▼──────┐      │
+│  │   Result      │  │    Regression    │  │  Reporting │      │
+│  │   Storage     │  │    Detection     │  │   System   │      │
+│  └──────┬────────┘  └─────────┬────────┘  └─────┬──────┘      │
+│         │                     │                  │              │
+│  ┌──────▼──────────────────────▼──────────────────▼──────┐     │
+│  │                  Time-Series Database                  │     │
+│  │  • Benchmark results (latency, throughput, errors)     │     │
+│  │  • Resource metrics (CPU, memory, network)             │     │
+│  │  • Statistical summaries                               │     │
+│  └────────────────────────────────────────────────────────┘     │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+## Core Components
+
+### 1. Execution Coordinator
+
+The execution coordinator manages benchmark execution and resource allocation:
+
+```typescript
+interface ExecutionCoordinator {
+  // Schedule benchmark execution
+  schedule(benchmark: Benchmark): Promise<ExecutionPlan>
+
+  // Allocate workers
+  allocateWorkers(plan: ExecutionPlan): Promise<Worker[]>
+
+  // Generate load
+  generateLoad(workers: Worker[], config: LoadConfig): Promise<void>
+
+  // Monitor progress
+  monitor(execution: ExecutionContext): AsyncIterator<ExecutionStatus>
+}
+
+class BenchmarkExecutionCoordinator implements ExecutionCoordinator {
+  async schedule(benchmark: Benchmark): Promise<ExecutionPlan> {
+    // Analyze benchmark requirements
+    const requirements = this.analyzeRequirements(benchmark)
+
+    // Determine execution strategy
+    const strategy = this.selectStrategy(requirements)
+
+    // Create execution plan
+    return {
+      strategy,
+      workers: this.calculateWorkerCount(requirements),
+      stages: this.planStages(benchmark.load),
+      duration: this.estimateDuration(benchmark),
+    }
+  }
+
+  async allocateWorkers(plan: ExecutionPlan): Promise<Worker[]> {
+    // Allocate workers based on plan
+    const workers = await this.workerPool.allocate(plan.workers)
+
+    // Initialize workers with benchmark code
+    await Promise.all(workers.map((w) => w.initialize(plan)))
+
+    return workers
+  }
+
+  async generateLoad(workers: Worker[], config: LoadConfig): Promise<void> {
+    // Implement load generation strategy
+    switch (config.type) {
+      case 'constant':
+        await this.constantLoad(workers, config)
+        break
+      case 'gradual':
+        await this.gradualLoad(workers, config)
+        break
+      case 'spike':
+        await this.spikeLoad(workers, config)
+        break
+    }
+  }
+
+  private async constantLoad(workers: Worker[], config: LoadConfig): Promise<void> {
+    const usersPerWorker = Math.ceil(config.users / workers.length)
+
+    await Promise.all(
+      workers.map((worker) =>
+        worker.execute({
+          concurrency: usersPerWorker,
+          duration: config.duration,
+        })
+      )
+    )
+  }
+
+  private async gradualLoad(workers: Worker[], config: LoadConfig): Promise<void> {
+    for (const stage of config.stages) {
+      const usersPerWorker = Math.ceil(stage.target / workers.length)
+
+      await this.rampTo(workers, usersPerWorker, stage.duration)
+    }
+  }
+}
+```
+
+### 2. Metrics Collection Engine
+
+Real-time metrics collection with minimal overhead:
+
+```typescript
+interface MetricsCollector {
+  // Start collecting metrics
+  start(benchmark: Benchmark): void
+
+  // Record metric
+  record(metric: string, value: number, timestamp?: number): void
+
+  // Stop collecting
+  stop(): MetricsSnapshot
+
+  // Get current metrics
+  snapshot(): MetricsSnapshot
+}
+
+class HighPerformanceMetricsCollector implements MetricsCollector {
+  private metrics: Map<string, RingBuffer>
+  private startTime: number
+  private histogram: Map<string, Histogram>
+
+  start(benchmark: Benchmark): void {
+    this.startTime = Date.now()
+    this.metrics = new Map()
+    this.histogram = new Map()
+
+    // Initialize metrics buffers
+    for (const metric of benchmark.metrics) {
+      this.metrics.set(metric, new RingBuffer(1000000)) // 1M samples
+      this.histogram.set(metric, new Histogram())
+    }
+  }
+
+  record(metric: string, value: number, timestamp?: number): void {
+    const ts = timestamp ?? Date.now()
+    const buffer = this.metrics.get(metric)
+    const hist = this.histogram.get(metric)
+
+    if (buffer && hist) {
+      buffer.push({ value, timestamp: ts })
+      hist.record(value)
+    }
+  }
+
+  stop(): MetricsSnapshot {
+    const snapshot: MetricsSnapshot = {
+      duration: Date.now() - this.startTime,
+      metrics: {},
+    }
+
+    for (const [metric, buffer] of this.metrics.entries()) {
+      const hist = this.histogram.get(metric)!
+
+      snapshot.metrics[metric] = {
+        count: buffer.length,
+        min: hist.min,
+        max: hist.max,
+        mean: hist.mean,
+        stdDev: hist.stdDev,
+        p50: hist.percentile(50),
+        p75: hist.percentile(75),
+        p90: hist.percentile(90),
+        p95: hist.percentile(95),
+        p99: hist.percentile(99),
+        p999: hist.percentile(99.9),
+      }
+    }
+
+    return snapshot
+  }
+}
+```
+
+### 3. Statistical Analysis System
+
+Advanced statistical analysis with confidence intervals:
+
+```typescript
+interface StatisticalAnalyzer {
+  // Analyze benchmark results
+  analyze(results: BenchmarkResults): StatisticalAnalysis
+
+  // Detect outliers
+  detectOutliers(data: number[]): OutlierAnalysis
+
+  // Test distribution
+  testDistribution(data: number[]): DistributionTest
+
+  // Calculate confidence intervals
+  confidenceInterval(data: number[], level: number): ConfidenceInterval
+}
+
+class AdvancedStatisticalAnalyzer implements StatisticalAnalyzer {
+  analyze(results: BenchmarkResults): StatisticalAnalysis {
+    const data = results.metrics.latency.samples
+
+    return {
+      descriptive: this.descriptiveStats(data),
+      outliers: this.detectOutliers(data),
+      distribution: this.testDistribution(data),
+      confidence: this.confidenceInterval(data, 0.95),
+    }
+  }
+
+  detectOutliers(data: number[]): OutlierAnalysis {
+    // Use IQR method
+    const sorted = [...data].sort((a, b) => a - b)
+    const q1 = this.percentile(sorted, 25)
+    const q3 = this.percentile(sorted, 75)
+    const iqr = q3 - q1
+    const lowerBound = q1 - 1.5 * iqr
+    const upperBound = q3 + 1.5 * iqr
+
+    const outliers = data.filter((v) => v < lowerBound || v > upperBound)
+
+    return {
+      count: outliers.length,
+      percentage: (outliers.length / data.length) * 100,
+      values: outliers,
+      lowerBound,
+      upperBound,
+    }
+  }
+
+  testDistribution(data: number[]): DistributionTest {
+    // Shapiro-Wilk test for normality
+    const n = data.length
+    const sorted = [...data].sort((a, b) => a - b)
+    const mean = data.reduce((a, b) => a + b) / n
+
+    // Calculate W statistic
+    const { w, p } = this.shapiroWilk(sorted, mean)
+
+    return {
+      test: 'shapiro_wilk',
+      statistic: w,
+      pValue: p,
+      isNormal: p > 0.05,
+      distribution: p > 0.05 ? 'normal' : 'non_normal',
+    }
+  }
+
+  confidenceInterval(data: number[], level: number): ConfidenceInterval {
+    const n = data.length
+    const mean = data.reduce((a, b) => a + b) / n
+    const stdDev = Math.sqrt(data.map((x) => Math.pow(x - mean, 2)).reduce((a, b) => a + b) / (n - 1))
+
+    // T-distribution critical value
+    const df = n - 1
+    const alpha = 1 - level
+    const tCrit = this.tDistribution(df, alpha / 2)
+
+    const margin = tCrit * (stdDev / Math.sqrt(n))
+
+    return {
+      level,
+      mean,
+      lower: mean - margin,
+      upper: mean + margin,
+      margin,
+    }
+  }
+}
+```
+
+### 4. Comparison Engine
+
+Compare benchmark results and detect regressions:
+
+```typescript
+interface ComparisonEngine {
+  // Compare two benchmarks
+  compare(baseline: BenchmarkResults, current: BenchmarkResults): Comparison
+
+  // Detect regression
+  detectRegression(comparison: Comparison, thresholds: RegressionThresholds): RegressionAnalysis
+
+  // Statistical significance test
+  significanceTest(baseline: number[], current: number[], test: string): SignificanceTest
+}
+
+class BenchmarkComparisonEngine implements ComparisonEngine {
+  compare(baseline: BenchmarkResults, current: BenchmarkResults): Comparison {
+    const comparison: Comparison = {
+      baseline: baseline.id,
+      current: current.id,
+      metrics: {},
+    }
+
+    // Compare each metric
+    for (const metric of Object.keys(baseline.metrics)) {
+      const baseValue = baseline.metrics[metric].mean
+      const currValue = current.metrics[metric].mean
+      const change = ((currValue - baseValue) / baseValue) * 100
+
+      comparison.metrics[metric] = {
+        baseline: baseValue,
+        current: currValue,
+        change,
+        direction: change > 0 ? 'increase' : change < 0 ? 'decrease' : 'stable',
+      }
+    }
+
+    return comparison
+  }
+
+  detectRegression(comparison: Comparison, thresholds: RegressionThresholds): RegressionAnalysis {
+    const regressions: Regression[] = []
+
+    for (const [metric, data] of Object.entries(comparison.metrics)) {
+      const threshold = thresholds[metric]
+      if (!threshold) continue
+
+      const isRegression =
+        (data.direction === 'increase' && threshold.max && Math.abs(data.change) > threshold.max * 100) ||
+        (data.direction === 'decrease' && threshold.min && Math.abs(data.change) > (1 - threshold.min) * 100)
+
+      if (isRegression) {
+        regressions.push({
+          metric,
+          baseline: data.baseline,
+          current: data.current,
+          change: data.change,
+          threshold: threshold.max || threshold.min,
+          direction: data.direction,
+        })
+      }
+    }
+
+    return {
+      detected: regressions.length > 0,
+      regressions,
+      timestamp: new Date().toISOString(),
+    }
+  }
+
+  significanceTest(baseline: number[], current: number[], test: string): SignificanceTest {
+    switch (test) {
+      case 't_test':
+        return this.tTest(baseline, current)
+      case 'mann_whitney':
+        return this.mannWhitney(baseline, current)
+      case 'welch_t_test':
+        return this.welchTTest(baseline, current)
+      default:
+        throw new Error(`Unknown test: ${test}`)
+    }
+  }
+
+  private mannWhitney(baseline: number[], current: number[]): SignificanceTest {
+    // Mann-Whitney U test (non-parametric)
+    const n1 = baseline.length
+    const n2 = current.length
+
+    // Combine and rank
+    const combined = [...baseline.map((v) => ({ value: v, group: 1 })), ...current.map((v) => ({ value: v, group: 2 }))]
+    combined.sort((a, b) => a.value - b.value)
+
+    // Assign ranks
+    const ranks = this.assignRanks(combined.map((x) => x.value))
+
+    // Calculate U statistic
+    const r1 = combined.filter((x) => x.group === 1).reduce((sum, x, i) => sum + ranks[i], 0)
+    const u1 = n1 * n2 + (n1 * (n1 + 1)) / 2 - r1
+    const u2 = n1 * n2 - u1
+    const u = Math.min(u1, u2)
+
+    // Calculate z-score and p-value
+    const meanU = (n1 * n2) / 2
+    const stdU = Math.sqrt((n1 * n2 * (n1 + n2 + 1)) / 12)
+    const z = (u - meanU) / stdU
+    const p = this.normalCDF(Math.abs(z)) * 2
+
+    return {
+      test: 'mann_whitney',
+      statistic: u,
+      zScore: z,
+      pValue: p,
+      significant: p < 0.05,
+    }
+  }
+}
+```
+
+### 5. Result Storage
+
+Time-series optimized storage for benchmark results:
+
+```typescript
+interface ResultStorage {
+  // Store benchmark result
+  store(result: BenchmarkResults): Promise<string>
+
+  // Retrieve result
+  get(id: string): Promise<BenchmarkResults>
+
+  // Query results
+  query(filter: ResultFilter): Promise<BenchmarkResults[]>
+
+  // Get time-series data
+  timeSeries(benchmarkId: string, metric: string, range: TimeRange): Promise<TimeSeriesData>
+}
+
+class TimeSeriesResultStorage implements ResultStorage {
+  private db: TimeSeriesDB
+
+  async store(result: BenchmarkResults): Promise<string> {
+    const id = this.generateId()
+
+    // Store metadata
+    await this.db.put(`benchmark:${id}:meta`, {
+      id,
+      name: result.name,
+      timestamp: result.timestamp,
+      duration: result.duration,
+    })
+
+    // Store metrics as time series
+    for (const [metric, data] of Object.entries(result.metrics)) {
+      await this.db.timeSeries(`benchmark:${id}:${metric}`, {
+        timestamp: result.timestamp,
+        values: data,
+      })
+    }
+
+    // Index by benchmark name and timestamp
+    await this.db.index(`benchmark:name:${result.name}`, id, result.timestamp)
+
+    return id
+  }
+
+  async query(filter: ResultFilter): Promise<BenchmarkResults[]> {
+    // Query by name and time range
+    const ids = await this.db.queryIndex(`benchmark:name:${filter.name}`, {
+      start: filter.startTime,
+      end: filter.endTime,
+    })
+
+    // Fetch results
+    return Promise.all(ids.map((id) => this.get(id)))
+  }
+
+  async timeSeries(benchmarkId: string, metric: string, range: TimeRange): Promise<TimeSeriesData> {
+    return this.db.getTimeSeries(`benchmark:${benchmarkId}:${metric}`, range)
+  }
+}
+```
+
+## Data Flow
+
+### 1. Benchmark Execution Flow
+
+```typescript
+// 1. Create benchmark
+const benchmark = await benchmarks.create({
+  name: 'API Performance',
+  target: { url: 'https://api.example.com' },
+  load: { users: 100, duration: '5m' },
+})
+
+// 2. Execution coordinator schedules benchmark
+const plan = await coordinator.schedule(benchmark)
+// → Analyzes requirements
+// → Determines worker count
+// → Plans load stages
+
+// 3. Allocate workers
+const workers = await coordinator.allocateWorkers(plan)
+// → Spawns worker processes
+// → Initializes with benchmark code
+
+// 4. Generate load
+await coordinator.generateLoad(workers, benchmark.load)
+// → Workers execute benchmark target
+// → Metrics collected in real-time
+
+// 5. Collect and aggregate metrics
+const metrics = await metricsCollector.stop()
+// → Aggregates metrics from all workers
+// → Calculates statistics
+
+// 6. Store results
+const resultId = await storage.store(metrics)
+// → Stores in time-series database
+// → Indexes by name and timestamp
+
+// 7. Return results
+return await storage.get(resultId)
+```
+
+### 2. Comparison and Regression Detection Flow
+
+```typescript
+// 1. Run current benchmark
+const current = await benchmarks.run(benchmarkId)
+
+// 2. Fetch baseline
+const baseline = await storage.get(baselineId)
+
+// 3. Compare results
+const comparison = await comparisonEngine.compare(baseline, current)
+// → Calculates change for each metric
+// → Determines direction (increase/decrease)
+
+// 4. Test statistical significance
+const significance = await comparisonEngine.significanceTest(baseline.samples, current.samples, 'mann_whitney')
+// → Performs Mann-Whitney U test
+// → Determines if difference is significant
+
+// 5. Detect regressions
+const regression = await comparisonEngine.detectRegression(comparison, thresholds)
+// → Checks if changes exceed thresholds
+// → Identifies regressions
+
+// 6. Generate report
+const report = await reportingSystem.generate(comparison, regression)
+// → Creates visual report
+// → Includes charts and statistics
+
+return { comparison, regression, report }
+```
+
+## Scalability
+
+### Horizontal Scaling
+
+benchmarks.do scales horizontally by distributing load across workers:
+
+```typescript
+// Distributed benchmark execution
+const distributedBench = await benchmarks.create({
+  name: 'Global Load Test',
+
+  distribution: {
+    regions: ['us-east-1', 'us-west-2', 'eu-west-1', 'ap-southeast-1'],
+    workersPerRegion: 10,
+  },
+
+  load: {
+    users: 1000, // 1000 total users across all regions
+    duration: '10m',
+  },
+})
+
+// Execution coordinator distributes work
+// → 250 users per region (1000 / 4 regions)
+// → 25 users per worker (250 / 10 workers)
+// → Results aggregated from all workers
+```
+
+### Performance Optimization
+
+Minimize overhead with efficient data structures:
+
+```typescript
+// Ring buffer for high-throughput metrics
+class RingBuffer {
+  private buffer: Float64Array
+  private head: number = 0
+  private tail: number = 0
+  private count: number = 0
+
+  push(value: number): void {
+    this.buffer[this.tail] = value
+    this.tail = (this.tail + 1) % this.buffer.length
+    this.count = Math.min(this.count + 1, this.buffer.length)
+  }
+
+  // O(1) operations
+}
+
+// HDR Histogram for accurate percentiles
+class Histogram {
+  private counts: Uint32Array
+  private min: number = Infinity
+  private max: number = -Infinity
+
+  record(value: number): void {
+    const index = this.valueToIndex(value)
+    this.counts[index]++
+    this.min = Math.min(this.min, value)
+    this.max = Math.max(this.max, value)
+  }
+
+  percentile(p: number): number {
+    // O(log n) percentile calculation
+    return this.indexToValue(this.findIndex(p))
+  }
+}
+```
+
+## Integration Points
+
+### Event System
+
+```typescript
+import { $, benchmarks, on, send } from 'sdk.do'
+
+// React to benchmark events
+on($.Benchmark.started, async (benchmark) => {
+  console.log('Benchmark started:', benchmark.name)
+})
+
+on($.Benchmark.completed, async (result) => {
+  // Store result
+  await db.create($.BenchmarkResult, result)
+
+  // Publish completion event
+  await send($.Metric.created, {
+    type: 'benchmark_latency',
+    value: result.p95Latency,
+  })
+})
+
+on($.Regression.detected, async (regression) => {
+  // Alert on regression
+  await send($.Alert.created, {
+    severity: 'high',
+    message: 'Performance regression detected',
+    details: regression,
+  })
+})
+```
+
+### CI/CD Integration
+
+```typescript
+// GitHub Actions workflow
+on($.Deployment.started, async (deployment) => {
+  // Run benchmark before deployment
+  const preBench = await benchmarks.run(benchmarkId)
+
+  // Store as baseline
+  await db.update($.Benchmark, benchmarkId, {
+    baselineId: preBench.id,
+  })
+})
+
+on($.Deployment.completed, async (deployment) => {
+  // Run benchmark after deployment
+  const postBench = await benchmarks.run(benchmarkId)
+
+  // Compare to baseline
+  const comparison = await benchmarks.compare({
+    baseline: deployment.baselineId,
+    current: postBench.id,
+  })
+
+  if (comparison.regression) {
+    // Rollback deployment
+    await send($.Deployment.rollback, {
+      deploymentId: deployment.id,
+      reason: 'Performance regression detected',
+    })
+  }
+})
+```
+
+## Best Practices
+
+1. **Minimize Overhead**: Use efficient data structures (ring buffers, HDR histograms)
+2. **Distributed Execution**: Scale horizontally across workers and regions
+3. **Statistical Rigor**: Use proper statistical tests for comparing results
+4. **Time-Series Storage**: Store results in time-series optimized database
+5. **Event-Driven**: Integrate with event system for reactive workflows
+
+## Next Steps
+
+- **[Best Practices](./best-practices.mdx)** - Learn benchmarking best practices
+- **[Troubleshooting](./troubleshooting.mdx)** - Debug common issues
+- **[API Reference](../api/reference.mdx)** - Complete API documentation
+
+---
+
+Continue exploring with [Best Practices](./best-practices.mdx) to learn how to design effective benchmarks.

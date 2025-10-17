@@ -1,0 +1,219 @@
+---
+$id: https://integrations.do/activecampaign
+$type: Integration
+name: ActiveCampaign
+service: activecampaign
+description: Marketing automation and CRM platform
+category: marketing
+sdkBased: false
+baseUrl: https://youraccountname.api-us1.com/api/3
+
+auth:
+  type: api-key
+  location: header
+  headerName: Api-Token
+
+resources:
+  - name: Contact
+    plural: Contacts
+    description: Manage email contacts
+    operations:
+      - name: create
+        method: POST
+        path: /contacts
+        params:
+          - name: email
+            type: string
+            required: true
+            description: Contact email
+          - name: firstName
+            type: string
+            required: false
+            description: First name
+          - name: lastName
+            type: string
+            required: false
+            description: Last name
+        returns: Contact
+
+      - name: get
+        method: GET
+        path: /contacts/{contact_id}
+        params:
+          - name: contact_id
+            type: string
+            required: true
+            description: Contact ID
+        returns: Contact
+
+      - name: update
+        method: PUT
+        path: /contacts/{contact_id}
+        params:
+          - name: contact_id
+            type: string
+            required: true
+            description: Contact ID
+          - name: email
+            type: string
+            required: false
+            description: Updated email
+        returns: Contact
+
+      - name: delete
+        method: DELETE
+        path: /contacts/{contact_id}
+        params:
+          - name: contact_id
+            type: string
+            required: true
+            description: Contact ID
+        returns: boolean
+
+      - name: list
+        method: GET
+        path: /contacts
+        params:
+          - name: limit
+            type: number
+            required: false
+            description: Results per page
+        returns: Contact[]
+
+  - name: Campaign
+    plural: Campaigns
+    description: Manage email campaigns
+    operations:
+      - name: create
+        method: POST
+        path: /campaigns
+        params:
+          - name: name
+            type: string
+            required: true
+            description: Campaign name
+          - name: type
+            type: string
+            required: true
+            description: Campaign type
+        returns: Campaign
+
+      - name: get
+        method: GET
+        path: /campaigns/{campaign_id}
+        params:
+          - name: campaign_id
+            type: string
+            required: true
+            description: Campaign ID
+        returns: Campaign
+
+      - name: list
+        method: GET
+        path: /campaigns
+        params: []
+        returns: Campaign[]
+
+  - name: List
+    plural: Lists
+    description: Manage contact lists
+    operations:
+      - name: create
+        method: POST
+        path: /lists
+        params:
+          - name: name
+            type: string
+            required: true
+            description: List name
+        returns: List
+
+      - name: get
+        method: GET
+        path: /lists/{list_id}
+        params:
+          - name: list_id
+            type: string
+            required: true
+            description: List ID
+        returns: List
+
+      - name: list
+        method: GET
+        path: /lists
+        params: []
+        returns: List[]
+
+webhooks:
+  enabled: true
+  verificationMethod: none
+  events:
+    - name: subscribe
+      type: subscribe
+      description: Contact subscribed
+    - name: unsubscribe
+      type: unsubscribe
+      description: Contact unsubscribed
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: true
+  scenarios:
+    - name: Contact Management
+      description: Test contact CRUD operations
+      steps:
+        - action: create
+          resource: Contact
+        - action: retrieve
+          resource: Contact
+        - action: update
+          resource: Contact
+        - action: list
+          resource: Contact
+        - action: delete
+          resource: Contact
+
+docs:
+  homepage: https://www.activecampaign.com
+  apiDocs: https://developers.activecampaign.com/reference/overview
+---
+
+# ActiveCampaign Integration
+
+Marketing automation and CRM platform for email marketing and customer engagement.
+
+## Quick Start
+
+```typescript
+import { ActiveCampaignClient } from '@dotdo/sdk.do/integrations/activecampaign'
+
+const activecampaign = new ActiveCampaignClient({
+  apiKey: process.env.ACTIVECAMPAIGN_API_KEY,
+  accountName: 'youraccountname',
+})
+
+const contact = await activecampaign.contact.create({
+  email: 'customer@example.com',
+  firstName: 'John',
+  lastName: 'Doe',
+})
+```
+
+## License
+
+MIT

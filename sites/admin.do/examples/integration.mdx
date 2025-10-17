@@ -1,0 +1,58 @@
+---
+$id: https://admin.do/examples/integration
+$type: TechArticle
+title: admin.do Integration Examples
+description: Integration examples for admin.do
+keywords: [admin, integration]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Integration Examples
+
+Examples of integrating admin.do with other services.
+
+## SSO Integration
+
+```typescript
+import { admin } from 'admin.do'
+
+await admin.sso.configure({
+  provider: 'okta',
+  clientId: process.env.OKTA_CLIENT_ID,
+  clientSecret: process.env.OKTA_CLIENT_SECRET,
+  domain: 'company.okta.com',
+})
+```
+
+## Slack Notifications
+
+```typescript
+import { admin, send } from 'admin.do'
+
+on(admin.users.created, async (event) => {
+  await send($.Notification.slack, {
+    channel: '#admin-alerts',
+    message: `New user created: ${event.user.email}`,
+  })
+})
+```
+
+## Monitoring Integration
+
+```typescript
+import { admin, on } from 'admin.do'
+
+on(admin.metrics.threshold_exceeded, async (event) => {
+  await send($.Alert.created, {
+    severity: 'warning',
+    message: `${event.metric} exceeded threshold`,
+    value: event.value,
+  })
+})
+```
+
+## License
+
+MIT (Open Source)

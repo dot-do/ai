@@ -1,0 +1,891 @@
+---
+$id: https://services.do/docs/management
+$type: TechArticle
+title: Service Management
+description: Learn how to manage, scale, monitor, and maintain services in production
+keywords: [service-management, scaling, monitoring, observability, maintenance, cloudflare-workers]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Service Management
+
+Comprehensive guide to managing services in production, including scaling, monitoring, version management, and maintenance operations.
+
+## Service Lifecycle
+
+### Service States
+
+Services progress through different states:
+
+```typescript
+enum ServiceState {
+  Deploying = 'deploying',
+  Active = 'active',
+  Scaling = 'scaling',
+  Updating = 'updating',
+  Degraded = 'degraded',
+  Failed = 'failed',
+  Terminated = 'terminated',
+}
+```
+
+### Check Service Status
+
+```typescript
+import { service } from 'sdk.do'
+
+// Get service status
+const status = await service.status('UserService')
+console.log('Service state:', status.state)
+console.log('Health:', status.health)
+console.log('Version:', status.version)
+console.log('Uptime:', status.uptime)
+```
+
+### Service Information
+
+```typescript
+// Get detailed service information
+const info = await service.info('UserService')
+
+console.log('Service:', info.name)
+console.log('Version:', info.version)
+console.log('Deployed:', info.deployedAt)
+console.log('Instances:', info.instances)
+console.log('Resources:', info.resources)
+console.log('Dependencies:', info.dependencies)
+console.log('Endpoints:', info.endpoints)
+```
+
+## Scaling
+
+### Manual Scaling
+
+Scale service instances manually:
+
+```typescript
+import { service } from 'sdk.do'
+
+// Scale to specific number of instances
+await service.scale('OrderService', {
+  instances: 10,
+})
+
+// Scale with resource adjustments
+await service.scale('OrderService', {
+  instances: 20,
+  resources: {
+    cpu: 200,
+    memory: 256,
+  },
+})
+```
+
+### Auto-Scaling
+
+Configure automatic scaling based on metrics:
+
+```typescript
+await service.configure('APIService', {
+  scaling: {
+    enabled: true,
+    min: 2, // Minimum instances
+    max: 100, // Maximum instances
+
+    // Scaling metrics
+    metrics: [
+      {
+        type: 'cpu',
+        threshold: 70, // Scale up at 70% CPU
+        scaleUp: {
+          increment: 2, // Add 2 instances
+          cooldown: 60, // Wait 60s before next scale
+        },
+        scaleDown: {
+          decrement: 1, // Remove 1 instance
+          cooldown: 300, // Wait 5min before next scale
+        },
+      },
+      {
+        type: 'memory',
+        threshold: 80,
+        scaleUp: { increment: 1, cooldown: 60 },
+        scaleDown: { decrement: 1, cooldown: 300 },
+      },
+      {
+        type: 'requests',
+        threshold: 1000, // Requests per second
+        scaleUp: { increment: 3, cooldown: 30 },
+        scaleDown: { decrement: 1, cooldown: 180 },
+      },
+      {
+        type: 'latency',
+        threshold: 500, // ms
+        scaleUp: { increment: 2, cooldown: 60 },
+      },
+    ],
+
+    // Scaling policies
+    policy: {
+      strategy: 'predictive', // or 'reactive'
+      warmup: 120, // Warmup time for new instances
+      smoothing: 5, // Average over 5 data points
+      scaleUpAggressiveness: 'medium',
+      scaleDownAggressiveness: 'conservative',
+    },
+  },
+})
+```
+
+### Scheduled Scaling
+
+Scale based on schedule:
+
+```typescript
+await service.configure('UserService', {
+  scaling: {
+    enabled: true,
+    min: 2,
+    max: 50,
+    schedule: [
+      {
+        // Peak hours: 9 AM - 5 PM
+        cron: '0 9 * * *',
+        instances: 20,
+        resources: { cpu: 200, memory: 256 },
+      },
+      {
+        // Off-peak: 5 PM - 9 AM
+        cron: '0 17 * * *',
+        instances: 5,
+        resources: { cpu: 100, memory: 128 },
+      },
+      {
+        // Weekend minimum
+        cron: '0 0 * * 0',
+        instances: 3,
+      },
+    ],
+  },
+})
+```
+
+### Scaling Events
+
+Monitor scaling events:
+
+```typescript
+import { on } from 'sdk.do'
+
+// Listen to scaling events
+on($.Service.scaling, async (event) => {
+  console.log('Scaling event:', event.type)
+  console.log('Service:', event.service)
+  console.log('From:', event.from, 'instances')
+  console.log('To:', event.to, 'instances')
+  console.log('Reason:', event.reason)
+  console.log('Metrics:', event.metrics)
+})
+
+on($.Service.scaled, async (event) => {
+  console.log('Scaling completed')
+  console.log('Current instances:', event.instances)
+})
+```
+
+## Monitoring
+
+### Metrics Collection
+
+Enable comprehensive metrics:
+
+```typescript
+await service.configure('APIService', {
+  monitoring: {
+    enabled: true,
+
+    // Metrics to collect
+    metrics: {
+      // Request metrics
+      requests: true,
+      requestRate: true,
+      requestDuration: true,
+
+      // Error metrics
+      errors: true,
+      errorRate: true,
+      errorTypes: true,
+
+      // Performance metrics
+      latency: true,
+      latencyPercentiles: [50, 90, 95, 99],
+      throughput: true,
+
+      // Resource metrics
+      cpu: true,
+      memory: true,
+      connections: true,
+
+      // Custom metrics
+      custom: ['orders_processed', 'payments_completed', 'users_active'],
+    },
+
+    // Collection interval
+    interval: 60, // Collect every 60 seconds
+
+    // Retention
+    retention: {
+      raw: '1h', // Keep raw data for 1 hour
+      aggregated: '30d', // Keep aggregated for 30 days
+    },
+  },
+})
+```
+
+### Query Metrics
+
+```typescript
+import { metrics } from 'sdk.do'
+
+// Get current metrics
+const current = await metrics.current('APIService')
+console.log('Current metrics:', current)
+
+// Query metrics over time range
+const historical = await metrics.query({
+  service: 'APIService',
+  metrics: ['request_rate', 'error_rate', 'latency_p99'],
+  from: Date.now() - 3600000, // Last hour
+  to: Date.now(),
+  interval: 60, // 1 minute resolution
+})
+
+// Aggregate metrics
+const aggregated = await metrics.aggregate({
+  service: 'APIService',
+  metric: 'request_rate',
+  aggregation: 'sum', // or 'avg', 'min', 'max', 'count'
+  groupBy: ['region', 'status_code'],
+  from: Date.now() - 86400000, // Last 24 hours
+})
+```
+
+### Custom Metrics
+
+Emit custom metrics from your service:
+
+```typescript
+import { metrics } from 'sdk.do'
+
+// In your service handler
+const handler = async (request) => {
+  // Increment counter
+  metrics.increment('orders_processed')
+
+  // Record gauge value
+  metrics.gauge('active_connections', currentConnections)
+
+  // Record histogram
+  metrics.histogram('order_value', order.total)
+
+  // Record timing
+  const start = Date.now()
+  await processOrder(order)
+  metrics.timing('order_processing_time', Date.now() - start)
+
+  return Response.json({ success: true })
+}
+```
+
+### Logging
+
+Configure structured logging:
+
+```typescript
+await service.configure('APIService', {
+  logging: {
+    enabled: true,
+    level: 'info', // debug, info, warn, error
+    format: 'json',
+
+    // Include context
+    includeContext: {
+      requestId: true,
+      userId: true,
+      service: true,
+      version: true,
+      timestamp: true,
+    },
+
+    // Sampling
+    sampling: {
+      enabled: true,
+      rate: 0.1, // Sample 10% of logs
+    },
+
+    // Destinations
+    destinations: [
+      {
+        type: 'cloudflare',
+        minLevel: 'info',
+      },
+      {
+        type: 'http',
+        url: 'https://logs.example.com',
+        minLevel: 'warn',
+        batch: true,
+      },
+    ],
+  },
+})
+```
+
+### Log from Service
+
+```typescript
+import { log } from 'sdk.do'
+
+// In your service
+const handler = async (request) => {
+  log.info('Processing request', {
+    path: request.url,
+    method: request.method,
+  })
+
+  try {
+    const result = await processRequest(request)
+
+    log.debug('Request processed successfully', { result })
+
+    return Response.json(result)
+  } catch (error) {
+    log.error('Request processing failed', {
+      error: error.message,
+      stack: error.stack,
+    })
+
+    throw error
+  }
+}
+```
+
+### Tracing
+
+Enable distributed tracing:
+
+```typescript
+await service.configure('OrderService', {
+  tracing: {
+    enabled: true,
+    samplingRate: 0.1, // Trace 10% of requests
+
+    // Include spans
+    includeSpans: ['http_request', 'database_query', 'service_call', 'cache_operation'],
+
+    // Export to tracing backend
+    exporter: {
+      type: 'opentelemetry',
+      endpoint: 'https://trace.example.com',
+      headers: {
+        Authorization: 'Bearer token',
+      },
+    },
+  },
+})
+```
+
+## Alerting
+
+### Configure Alerts
+
+```typescript
+await service.configure('PaymentService', {
+  alerts: [
+    {
+      name: 'high_error_rate',
+      condition: 'error_rate > 0.05',
+      duration: 300, // Alert if condition true for 5 minutes
+      severity: 'critical',
+      channels: ['email', 'slack', 'pagerduty'],
+      actions: [
+        {
+          type: 'scale',
+          params: { instances: 10 },
+        },
+        {
+          type: 'notify',
+          params: { team: 'platform' },
+        },
+      ],
+    },
+    {
+      name: 'high_latency',
+      condition: 'latency_p99 > 1000',
+      duration: 180,
+      severity: 'warning',
+      channels: ['slack'],
+    },
+    {
+      name: 'low_availability',
+      condition: 'availability < 0.99',
+      duration: 60,
+      severity: 'critical',
+      channels: ['email', 'pagerduty'],
+    },
+    {
+      name: 'deployment_failed',
+      condition: 'deployment.status == "failed"',
+      severity: 'critical',
+      channels: ['slack', 'pagerduty'],
+    },
+  ],
+})
+```
+
+### Alert Channels
+
+```typescript
+// Configure notification channels
+await service.configureAlertChannels({
+  email: {
+    recipients: ['team@example.com', 'oncall@example.com'],
+  },
+  slack: {
+    webhook: 'https://hooks.slack.com/services/...',
+    channel: '#alerts',
+  },
+  pagerduty: {
+    integrationKey: 'your-integration-key',
+    severity: 'critical',
+  },
+  webhook: {
+    url: 'https://alerts.example.com/webhook',
+    headers: {
+      Authorization: 'Bearer token',
+    },
+  },
+})
+```
+
+## Version Management
+
+### List Versions
+
+```typescript
+import { service } from 'sdk.do'
+
+// List all deployed versions
+const versions = await service.versions('UserService')
+
+versions.forEach((version) => {
+  console.log('Version:', version.version)
+  console.log('Deployed:', version.deployedAt)
+  console.log('Status:', version.status)
+  console.log('Traffic:', version.trafficPercentage)
+  console.log('Instances:', version.instances)
+})
+```
+
+### Traffic Splitting
+
+Route traffic between versions:
+
+```typescript
+// Split traffic between versions
+await service.splitTraffic('UserService', {
+  '1.0.0': 20, // 20% traffic
+  '2.0.0': 80, // 80% traffic
+})
+
+// Gradually migrate traffic
+await service.migrateTraffic('UserService', {
+  from: '1.0.0',
+  to: '2.0.0',
+  duration: 3600, // 1 hour
+  steps: 10, // 10 steps
+})
+```
+
+### Version Cleanup
+
+```typescript
+// Remove old versions
+await service.pruneVersions('UserService', {
+  keep: 5, // Keep last 5 versions
+  olderThan: 30, // Remove versions older than 30 days
+})
+
+// Delete specific version
+await service.deleteVersion('UserService', '1.0.0')
+```
+
+## Health Checks
+
+### Configure Health Checks
+
+```typescript
+await service.configure('APIService', {
+  health: {
+    // HTTP health check
+    http: {
+      endpoint: '/health',
+      interval: 30, // Check every 30 seconds
+      timeout: 5,
+      healthyThreshold: 2, // 2 consecutive successes
+      unhealthyThreshold: 3, // 3 consecutive failures
+    },
+
+    // Deep health check
+    deep: {
+      enabled: true,
+      checks: [
+        {
+          name: 'database',
+          check: async () => {
+            const isHealthy = await db.ping()
+            return {
+              healthy: isHealthy,
+              latency: await db.latency(),
+            }
+          },
+        },
+        {
+          name: 'cache',
+          check: async () => {
+            return {
+              healthy: await cache.ping(),
+              hitRate: await cache.hitRate(),
+            }
+          },
+        },
+        {
+          name: 'external_api',
+          check: async () => {
+            const response = await fetch('https://api.example.com/health')
+            return { healthy: response.ok }
+          },
+        },
+      ],
+    },
+
+    // Liveness check
+    liveness: {
+      endpoint: '/live',
+      interval: 10,
+    },
+
+    // Readiness check
+    readiness: {
+      endpoint: '/ready',
+      interval: 15,
+    },
+  },
+})
+```
+
+### Query Health Status
+
+```typescript
+// Get current health status
+const health = await service.health('APIService')
+
+console.log('Overall health:', health.status)
+console.log('Checks:')
+health.checks.forEach((check) => {
+  console.log(`  ${check.name}: ${check.status}`)
+  if (check.message) {
+    console.log(`    Message: ${check.message}`)
+  }
+})
+```
+
+## Configuration Management
+
+### Update Configuration
+
+```typescript
+// Update service configuration without redeployment
+await service.config.update('OrderService', {
+  // Environment variables
+  vars: {
+    FEATURE_FLAG_NEW_CHECKOUT: 'true',
+    PAYMENT_TIMEOUT: '30000',
+    MAX_RETRIES: '3',
+  },
+
+  // Resource limits
+  resources: {
+    cpu: 200,
+    memory: 256,
+    timeout: 30,
+  },
+
+  // Rate limiting
+  rateLimit: {
+    requests: 1000,
+    window: 60,
+  },
+})
+```
+
+### Configuration Rollback
+
+```typescript
+// Rollback configuration to previous state
+await service.config.rollback('OrderService')
+
+// Rollback to specific version
+await service.config.rollback('OrderService', {
+  version: 'config-v5',
+})
+```
+
+### Configuration History
+
+```typescript
+// View configuration history
+const history = await service.config.history('OrderService')
+
+history.forEach((config) => {
+  console.log('Version:', config.version)
+  console.log('Updated:', config.updatedAt)
+  console.log('Updated by:', config.updatedBy)
+  console.log('Changes:', config.changes)
+})
+```
+
+## Service Dependencies
+
+### View Dependencies
+
+```typescript
+// Get service dependencies
+const deps = await service.dependencies('CheckoutService')
+
+console.log('Direct dependencies:', deps.direct)
+console.log('Transitive dependencies:', deps.transitive)
+
+// Dependency graph
+const graph = await service.dependencyGraph('CheckoutService')
+console.log('Dependency graph:', graph)
+```
+
+### Dependency Health
+
+```typescript
+// Check health of dependencies
+const depHealth = await service.checkDependencies('CheckoutService')
+
+depHealth.forEach((dep) => {
+  console.log(`${dep.name}: ${dep.status}`)
+  if (!dep.healthy) {
+    console.log(`  Issue: ${dep.reason}`)
+  }
+})
+```
+
+## Maintenance Operations
+
+### Service Restart
+
+```typescript
+// Graceful restart
+await service.restart('UserService', {
+  graceful: true,
+  drainTimeout: 30, // Allow 30s for requests to complete
+  waitForReady: true,
+})
+
+// Force restart
+await service.restart('UserService', {
+  graceful: false,
+})
+```
+
+### Service Pause/Resume
+
+```typescript
+// Pause service (stop accepting new requests)
+await service.pause('OrderService', {
+  drainExisting: true,
+  timeout: 60,
+})
+
+// Resume service
+await service.resume('OrderService')
+```
+
+### Service Termination
+
+```typescript
+// Gracefully terminate service
+await service.terminate('OldService', {
+  graceful: true,
+  timeout: 300,
+  cleanup: true, // Remove all resources
+})
+```
+
+## Cost Management
+
+### Monitor Costs
+
+```typescript
+// Get service costs
+const costs = await service.costs('APIService', {
+  from: Date.now() - 2592000000, // Last 30 days
+  to: Date.now(),
+})
+
+console.log('Total cost:', costs.total)
+console.log('Breakdown:')
+console.log('  Compute:', costs.compute)
+console.log('  Requests:', costs.requests)
+console.log('  Bandwidth:', costs.bandwidth)
+console.log('  Storage:', costs.storage)
+```
+
+### Cost Optimization
+
+```typescript
+await service.configure('APIService', {
+  costOptimization: {
+    enabled: true,
+
+    // Auto-scaling limits
+    maxCost: 1000, // Max $1000/month
+
+    // Resource optimization
+    rightsizing: {
+      enabled: true,
+      target: 70, // Target 70% utilization
+    },
+
+    // Request optimization
+    caching: {
+      enabled: true,
+      ttl: 300,
+    },
+  },
+})
+```
+
+## Best Practices
+
+### 1. Monitor Key Metrics
+
+Always monitor:
+
+- Request rate and latency
+- Error rate and types
+- Resource utilization (CPU, memory)
+- Availability and uptime
+
+### 2. Set Up Alerts
+
+Configure alerts for:
+
+- High error rates
+- Elevated latency
+- Resource exhaustion
+- Deployment failures
+
+### 3. Implement Health Checks
+
+- Liveness checks (is service running?)
+- Readiness checks (can service accept traffic?)
+- Deep checks (are dependencies healthy?)
+
+### 4. Use Auto-Scaling
+
+Configure auto-scaling to:
+
+- Handle traffic spikes
+- Reduce costs during low traffic
+- Maintain performance SLAs
+
+### 5. Version Management
+
+- Keep multiple versions deployed
+- Use traffic splitting for gradual rollouts
+- Prune old versions regularly
+
+### 6. Regular Maintenance
+
+- Restart services periodically
+- Update configurations as needed
+- Review and optimize costs
+- Clean up unused resources
+
+## Troubleshooting
+
+### High Error Rate
+
+```typescript
+// Check recent errors
+const errors = await service.errors('APIService', {
+  from: Date.now() - 3600000, // Last hour
+  groupBy: 'type',
+})
+
+// Check service health
+const health = await service.health('APIService')
+
+// Check dependencies
+const deps = await service.checkDependencies('APIService')
+
+// Review recent deployments
+const deployments = await service.deploymentHistory('APIService')
+```
+
+### High Latency
+
+```typescript
+// Analyze latency distribution
+const latency = await metrics.query({
+  service: 'APIService',
+  metrics: ['latency_p50', 'latency_p90', 'latency_p99'],
+  from: Date.now() - 3600000,
+})
+
+// Check resource utilization
+const resources = await service.resources('APIService')
+
+// Review traces
+const traces = await service.traces('APIService', {
+  slowOnly: true,
+  threshold: 1000, // > 1 second
+})
+```
+
+### Memory Issues
+
+```typescript
+// Check memory usage
+const memory = await metrics.query({
+  service: 'APIService',
+  metrics: ['memory_used', 'memory_limit'],
+  from: Date.now() - 3600000,
+})
+
+// Increase memory limit
+await service.scale('APIService', {
+  resources: {
+    memory: 512, // Increase to 512 MB
+  },
+})
+```
+
+## Next Steps
+
+- [Deployment Strategies](./deployment.mdx) - Learn about deployment options
+- [API Reference](../api/) - Complete management API documentation
+- [Examples](../examples/) - Real-world management examples
+
+## Resources
+
+- [Cloudflare Workers Analytics](https://developers.cloudflare.com/workers/observability/logs-and-analytics/)
+- [Monitoring Best Practices](https://services.do/docs/monitoring)
+- [Cost Optimization Guide](https://services.do/docs/cost-optimization)

@@ -1,0 +1,190 @@
+---
+$id: https://auth.do/examples/advanced-patterns
+$type: HowTo
+title: Advanced Authentication Patterns
+description: Complex authentication scenarios with auth.do
+keywords: [auth, advanced, mfa, api-keys, oauth, patterns]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Advanced Authentication Patterns
+
+Complex authentication scenarios including MFA, API keys, OAuth, and role-based access control.
+
+## Multi-Factor Authentication
+
+```typescript
+import { $, auth, db } from 'sdk.do'
+
+// Enable MFA for user
+export async function setupMFA(userId: string) {
+  const mfaSetup = await auth.enableMFA({
+    method: 'totp',
+    userId,
+  })
+
+  // Store MFA config
+  await db.create($.MFAConfig, {
+    userId,
+    method: 'totp',
+    secret: mfaSetup.secret,
+    enabled: true,
+  })
+
+  return {
+    secret: mfaSetup.secret,
+    qrCode: mfaSetup.qrCode,
+    backupCodes: mfaSetup.backupCodes,
+  }
+}
+
+// Login with MFA
+export async function loginWithMFA(email: string, password: string, mfaCode: string) {
+  // Verify credentials first
+  const users = await db.list($.Person, { where: { email } })
+  if (users.length === 0) throw new Error('Invalid credentials')
+
+  const user = users[0]
+  const creds = await db.list($.Credentials, { where: { userId: user.$id } })
+  const isValid = await auth.verifyPassword(password, creds[0].passwordHash)
+
+  if (!isValid) throw new Error('Invalid credentials')
+
+  // Verify MFA code
+  const mfaValid = await auth.verifyMFA({
+    userId: user.$id,
+    code: mfaCode,
+  })
+
+  if (!mfaValid) throw new Error('Invalid MFA code')
+
+  // Generate tokens
+  return await auth.generateToken({ userId: user.$id, email: user.email })
+}
+```
+
+## API Key Authentication
+
+```typescript
+import { $, auth, db } from 'sdk.do'
+
+// Generate API key with scopes
+export async function createScopedApiKey(userId: string, scopes: string[]) {
+  const key = `sk_live_${generateRandomHex(32)}`
+  const hashedKey = await auth.hashApiKey(key)
+
+  await db.create($.ApiKey, {
+    userId,
+    name: 'Production API',
+    keyHash: hashedKey,
+    scopes,
+    createdAt: new Date(),
+  })
+
+  return { key, scopes }
+}
+
+// Middleware for API key auth
+export async function apiKeyMiddleware(request: Request) {
+  const apiKey = request.headers.get('X-API-Key')
+  if (!apiKey) throw new Error('API key required')
+
+  const hashedKey = await auth.hashApiKey(apiKey)
+  const keys = await db.list($.ApiKey, { where: { keyHash: hashedKey } })
+
+  if (keys.length === 0) throw new Error('Invalid API key')
+
+  return { userId: keys[0].userId, scopes: keys[0].scopes }
+}
+```
+
+## Role-Based Access Control
+
+```typescript
+import { $, auth } from 'sdk.do'
+
+// Define roles
+export async function setupRoles() {
+  await auth.defineRole({
+    name: 'admin',
+    permissions: ['*'],
+  })
+
+  await auth.defineRole({
+    name: 'editor',
+    permissions: ['create:Product', 'read:Product', 'update:Product'],
+  })
+
+  await auth.defineRole({
+    name: 'viewer',
+    permissions: ['read:Product', 'read:Order'],
+  })
+}
+
+// Check permission
+export async function requirePermission(action: string, resource: any) {
+  return async (handler: Function) => {
+    return async (request: Request) => {
+      const token = request.headers.get('Authorization')?.replace('Bearer ', '')
+      const payload = await auth.verifyToken(token)
+
+      const canAccess = await auth.authorize(action, resource)
+      if (!canAccess) {
+        return new Response('Forbidden', { status: 403 })
+      }
+
+      return handler(request, payload)
+    }
+  }
+}
+```
+
+## OAuth Integration
+
+```typescript
+import { $, auth, db } from 'sdk.do'
+
+// Start OAuth flow
+export async function startOAuth(provider: string) {
+  const state = generateRandomState()
+
+  const authUrl = await auth.oauth({
+    provider,
+    redirectUri: 'https://app.example.com/auth/callback',
+    scopes: ['email', 'profile'],
+    state,
+  })
+
+  return { authUrl, state }
+}
+
+// Handle callback
+export async function handleOAuthCallback(code: string, state: string) {
+  const oauthData = await auth.oauthCallback({ code, state })
+
+  let user = await db.list($.Person, { where: { email: oauthData.email } }).then((users) => users[0])
+
+  if (!user) {
+    user = await db.create($.Person, {
+      email: oauthData.email,
+      name: oauthData.name,
+      image: oauthData.picture,
+      emailVerified: true,
+    })
+  }
+
+  const token = await auth.generateToken({
+    userId: user.$id,
+    email: user.email,
+    role: user.role || 'user',
+  })
+
+  return { token, userId: user.$id }
+}
+```
+
+## License
+
+CC-BY-4.0 (Open Source)

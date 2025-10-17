@@ -1,0 +1,665 @@
+---
+$id: https://user.do
+$type: WebSite
+name: user.do
+description: User context, authentication, and permissions for Business-as-Code applications
+license: CC-BY-4.0
+keywords: [user, authentication, permissions, authorization, context, session, business-as-code]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# user.do
+
+**User context, authentication, and permissions for Business-as-Code applications**
+
+user.do provides the user management functionality in the `.do` platform's Business-as-Code SDK. It enables user context access, authentication state management, and permission checking with semantic patterns that are both human-readable and AI-understandable.
+
+## Quick Start
+
+```bash
+pnpm add sdk.do
+```
+
+```typescript
+import { user } from 'sdk.do'
+
+// Get current user context
+const currentUser = await user.current()
+
+console.log(currentUser.name) // "John Smith"
+console.log(currentUser.email) // "john@example.com"
+console.log(currentUser.role) // "admin"
+
+// Check if user is authenticated
+const isAuthenticated = await user.isAuthenticated()
+
+// Check user permissions
+const canEdit = await user.can('edit', 'Product')
+const canDelete = await user.can('delete', 'Order')
+
+// Get user session details
+const session = await user.session()
+console.log(session.expiresAt)
+console.log(session.isActive)
+```
+
+## Key Features
+
+### Current User Context
+
+Access the authenticated user's information throughout your application:
+
+```typescript
+import { user } from 'sdk.do'
+
+// Get full user object
+const currentUser = await user.current()
+
+console.log(currentUser)
+// {
+//   $id: "user_123",
+//   $type: "Person",
+//   name: "John Smith",
+//   email: "john@example.com",
+//   role: "admin",
+//   organization: { $id: "org_456", name: "Acme Corp" }
+// }
+
+// Access user properties
+console.log(currentUser.name) // "John Smith"
+console.log(currentUser.email) // "john@example.com"
+console.log(currentUser.role) // "admin"
+```
+
+### Authentication State
+
+Check and manage authentication state:
+
+```typescript
+import { user } from 'sdk.do'
+
+// Check if user is authenticated
+if (await user.isAuthenticated()) {
+  console.log('User is logged in')
+} else {
+  console.log('User is not logged in')
+}
+
+// Check if user has specific role
+if (await user.hasRole('admin')) {
+  console.log('User is an admin')
+}
+
+// Check if user belongs to organization
+if (await user.belongsTo('org_456')) {
+  console.log('User is part of organization')
+}
+```
+
+### Permission Checking
+
+Fine-grained permission checks for authorization:
+
+```typescript
+import { $, user } from 'sdk.do'
+
+// Check action permission on entity type
+const canEdit = await user.can('edit', $.Product)
+const canDelete = await user.can('delete', $.Order)
+const canCreate = await user.can('create', $.Business)
+
+// Check permission on specific entity
+const product = await db.get($.Product, 'prod_123')
+const canEditProduct = await user.can('edit', product)
+
+// Check multiple permissions
+const permissions = await user.permissions([
+  { action: 'edit', resource: $.Product },
+  { action: 'delete', resource: $.Order },
+  { action: 'create', resource: $.Business },
+])
+
+console.log(permissions)
+// {
+//   'edit:Product': true,
+//   'delete:Order': false,
+//   'create:Business': true
+// }
+```
+
+### Session Management
+
+Access and manage user sessions:
+
+```typescript
+import { user } from 'sdk.do'
+
+// Get session details
+const session = await user.session()
+
+console.log(session)
+// {
+//   id: "session_789",
+//   userId: "user_123",
+//   createdAt: "2025-10-10T12:00:00Z",
+//   expiresAt: "2025-10-11T12:00:00Z",
+//   isActive: true,
+//   metadata: { ... }
+// }
+
+// Refresh session
+await user.refreshSession()
+
+// End session (logout)
+await user.endSession()
+```
+
+## Features
+
+- **Current User Access**: Get authenticated user context anywhere in your application
+- **Authentication State**: Check if user is logged in and manage auth state
+- **Permission Checking**: Fine-grained authorization with `user.can()`
+- **Role-Based Access**: Check user roles and organization membership
+- **Session Management**: Access and manage user sessions
+- **Type Safety**: Full TypeScript support with Schema.org Person type
+- **Semantic Patterns**: Use `$.Subject.predicate.Object` patterns for permissions
+- **AI-Native**: Designed for AI agents to understand and execute
+
+## Documentation
+
+- [Getting Started](./docs/getting-started) - Installation and basic setup
+- [Authentication](./docs/authentication) - User authentication patterns
+- [Permissions](./docs/permissions) - Permission checking with `user.can()`
+- [API Reference](./api/) - Complete API documentation
+
+## Examples
+
+- [Basic User Context](./examples/basic-user) - Accessing current user
+- [Permission Checking](./examples/permissions) - Authorization patterns
+
+## Use Cases
+
+### Protected Routes and Actions
+
+Restrict access based on user permissions:
+
+```typescript
+import { $, user } from 'sdk.do'
+
+// Protect API endpoint
+export async function deleteProduct(productId: string) {
+  // Check if user can delete products
+  if (!(await user.can('delete', $.Product))) {
+    throw new Error('Unauthorized: Cannot delete products')
+  }
+
+  // Check if user can delete this specific product
+  const product = await db.get($.Product, productId)
+  if (!(await user.can('delete', product))) {
+    throw new Error('Unauthorized: Cannot delete this product')
+  }
+
+  // User has permission, proceed with deletion
+  await db.delete($.Product, productId)
+}
+```
+
+### Role-Based UI Rendering
+
+Show or hide UI elements based on user role:
+
+```typescript
+import { user } from 'sdk.do'
+
+export async function renderDashboard() {
+  const currentUser = await user.current()
+  const isAdmin = await user.hasRole('admin')
+  const canCreateProducts = await user.can('create', $.Product)
+
+  return `
+    <div>
+      <h1>Welcome, ${currentUser.name}</h1>
+
+      ${
+        isAdmin
+          ? `
+        <div class="admin-panel">
+          <h2>Admin Panel</h2>
+          <!-- Admin-only content -->
+        </div>
+      `
+          : ''
+      }
+
+      ${
+        canCreateProducts
+          ? `
+        <button onclick="createProduct()">Create Product</button>
+      `
+          : ''
+      }
+    </div>
+  `
+}
+```
+
+### Audit Logging with User Context
+
+Track who performed actions:
+
+```typescript
+import { $, db, user, on } from 'sdk.do'
+
+// Log all database changes with user context
+on('*.created', async (event) => {
+  const currentUser = await user.current()
+
+  await db.create($.AuditLog, {
+    action: 'create',
+    entityType: event.data.$type,
+    entityId: event.data.$id,
+    performedBy: currentUser.$id,
+    performedByName: currentUser.name,
+    performedByEmail: currentUser.email,
+    timestamp: new Date(),
+    metadata: event.data,
+  })
+})
+
+on('*.updated', async (event) => {
+  const currentUser = await user.current()
+
+  await db.create($.AuditLog, {
+    action: 'update',
+    entityType: event.data.$type,
+    entityId: event.data.$id,
+    performedBy: currentUser.$id,
+    performedByName: currentUser.name,
+    performedByEmail: currentUser.email,
+    timestamp: new Date(),
+    metadata: event.data,
+  })
+})
+```
+
+### Multi-Tenant Data Filtering
+
+Automatically filter data based on user's organization:
+
+```typescript
+import { $, db, user } from 'sdk.do'
+
+// Get products visible to current user's organization
+export async function getUserProducts() {
+  const currentUser = await user.current()
+
+  // Automatically filter by user's organization
+  const products = await db.list($.Product, {
+    where: {
+      organization: currentUser.organization.$id,
+    },
+  })
+
+  return products
+}
+
+// Middleware to ensure user can only access their org's data
+export async function checkOrganizationAccess(entityId: string) {
+  const currentUser = await user.current()
+  const entity = await db.get(entityId)
+
+  if (entity.organization?.$id !== currentUser.organization?.$id) {
+    throw new Error('Unauthorized: Cannot access entity from different organization')
+  }
+
+  return entity
+}
+```
+
+### Event Publishing with User Context
+
+Include user information in events:
+
+```typescript
+import { $, user, send } from 'sdk.do'
+
+// Publish order created event with user context
+export async function createOrder(orderData) {
+  const currentUser = await user.current()
+
+  const order = await db.create($.Order, {
+    ...orderData,
+    createdBy: currentUser.$id,
+    createdByName: currentUser.name,
+    organization: currentUser.organization,
+  })
+
+  // Send event with user context
+  await send($.Order.created, {
+    order,
+    createdBy: {
+      $id: currentUser.$id,
+      name: currentUser.name,
+      email: currentUser.email,
+      role: currentUser.role,
+    },
+  })
+
+  return order
+}
+```
+
+## Integration with `.do` Platform
+
+user.do integrates seamlessly with other `.do` platform services:
+
+```typescript
+import { $, user, db, on, send } from 'sdk.do'
+
+// Database operations with user context
+const products = await db.list($.Product, {
+  where: {
+    owner: (await user.current()).$id,
+  },
+})
+
+// Event listeners with permission checks
+on($.Product.updated, async (event) => {
+  if (await user.can('view', event.data)) {
+    console.log('Product updated:', event.data)
+  }
+})
+
+// Conditional event publishing
+if (await user.can('send', $.Notification)) {
+  await send($.Notification.sent, {
+    recipient: (await user.current()).$id,
+    message: 'Your order has shipped!',
+  })
+}
+```
+
+## Semantic Patterns
+
+user.do uses `$.Subject.predicate.Object` patterns for semantic operations:
+
+```typescript
+import { $, user } from 'sdk.do'
+
+// Permission patterns
+await user.can('edit', $.Product)
+await user.can('delete', $.Order)
+await user.can('create', $.Business)
+await user.can('view', $.Report)
+
+// Role patterns
+await user.hasRole('admin')
+await user.hasRole('editor')
+await user.hasRole('viewer')
+
+// Relationship patterns
+await user.belongsTo(organization)
+await user.worksFor(business)
+await user.manages(team)
+```
+
+## Configuration
+
+### Environment Variables
+
+```bash
+# Session configuration
+SESSION_SECRET=your-secret-key
+SESSION_DURATION=86400000  # 24 hours in milliseconds
+
+# Authentication provider
+AUTH_PROVIDER=oauth         # oauth, saml, local
+AUTH_DOMAIN=auth.example.com
+
+# JWT configuration (if using JWT)
+JWT_SECRET=your-jwt-secret
+JWT_ALGORITHM=HS256
+JWT_EXPIRES_IN=24h
+```
+
+### User Context Provider
+
+Configure user context in your application:
+
+```typescript
+import { user } from 'sdk.do'
+
+// Set user context provider
+user.setProvider(async (context) => {
+  // Extract user from context (e.g., request headers, cookies, etc.)
+  const token = context.headers.get('Authorization')?.replace('Bearer ', '')
+
+  if (!token) {
+    return null
+  }
+
+  // Validate token and return user
+  const decoded = await validateToken(token)
+  return await db.get($.Person, decoded.userId)
+})
+```
+
+## Authentication Methods
+
+user.do supports multiple authentication methods:
+
+### OAuth 2.0
+
+```typescript
+import { user } from 'sdk.do'
+
+// OAuth login
+await user.login({
+  provider: 'oauth',
+  redirectUri: 'https://app.example.com/auth/callback',
+})
+```
+
+### Email/Password
+
+```typescript
+import { user } from 'sdk.do'
+
+// Email/password login
+await user.login({
+  email: 'john@example.com',
+  password: 'secure-password',
+})
+```
+
+### Magic Link
+
+```typescript
+import { user } from 'sdk.do'
+
+// Magic link login
+await user.sendMagicLink({
+  email: 'john@example.com',
+  redirectUri: 'https://app.example.com/auth/verify',
+})
+```
+
+### API Key
+
+```typescript
+import { user } from 'sdk.do'
+
+// API key authentication
+await user.authenticateApiKey('api_key_123')
+```
+
+## Permission Models
+
+### Role-Based Access Control (RBAC)
+
+```typescript
+import { user } from 'sdk.do'
+
+// Define roles with permissions
+const roles = {
+  admin: ['*'],
+  editor: ['create:Product', 'edit:Product', 'view:Product'],
+  viewer: ['view:Product'],
+}
+
+// Check role-based permissions
+if (await user.hasRole('editor')) {
+  // User can edit products
+}
+```
+
+### Attribute-Based Access Control (ABAC)
+
+```typescript
+import { user } from 'sdk.do'
+
+// Check permissions based on attributes
+const currentUser = await user.current()
+const product = await db.get($.Product, 'prod_123')
+
+// Check if user owns the product
+if (product.owner?.$id === currentUser.$id) {
+  // User owns this product
+}
+
+// Check if user is in same organization
+if (product.organization?.$id === currentUser.organization?.$id) {
+  // User can access this product
+}
+```
+
+## Best Practices
+
+### 1. Always Check Permissions
+
+Never assume a user has permission to perform an action:
+
+```typescript
+// Good: Check permission before action
+if (await user.can('delete', product)) {
+  await db.delete(product.$id)
+} else {
+  throw new Error('Unauthorized')
+}
+
+// Bad: No permission check
+await db.delete(product.$id)
+```
+
+### 2. Use Specific Permissions
+
+Be specific about what action is being checked:
+
+```typescript
+// Good: Specific action
+await user.can('edit', $.Product)
+await user.can('delete', $.Product)
+
+// Bad: Generic permission
+await user.can('access', $.Product)
+```
+
+### 3. Cache User Context
+
+Cache user context when making multiple checks:
+
+```typescript
+// Good: Cache user
+const currentUser = await user.current()
+console.log(currentUser.name)
+console.log(currentUser.email)
+console.log(currentUser.role)
+
+// Bad: Multiple lookups
+console.log((await user.current()).name)
+console.log((await user.current()).email)
+console.log((await user.current()).role)
+```
+
+### 4. Handle Unauthenticated State
+
+Always handle cases where user is not logged in:
+
+```typescript
+try {
+  const currentUser = await user.current()
+  // Proceed with authenticated logic
+} catch (error) {
+  if (error.code === 'UNAUTHENTICATED') {
+    // Redirect to login or show login prompt
+    return redirectToLogin()
+  }
+  throw error
+}
+```
+
+### 5. Include User Context in Logs
+
+Always include user context in audit logs:
+
+```typescript
+const currentUser = await user.current()
+
+await db.create($.AuditLog, {
+  action: 'delete',
+  resource: product.$id,
+  performedBy: currentUser.$id,
+  performedByName: currentUser.name,
+  timestamp: new Date(),
+})
+```
+
+## License
+
+user.do is released under the [Creative Commons Attribution 4.0 International License (CC-BY-4.0)](https://creativecommons.org/licenses/by/4.0/).
+
+This means you are free to:
+
+- **Share**: Copy and redistribute the material in any medium or format
+- **Adapt**: Remix, transform, and build upon the material for any purpose, even commercially
+
+Under the following terms:
+
+- **Attribution**: You must give appropriate credit, provide a link to the license, and indicate if changes were made
+
+## Resources
+
+- [sdk.do](https://sdk.do) - Core SDK documentation
+- [schema.org.ai](https://schema.org.ai) - Schema.org Person type
+- [db.do](https://db.do) - Database operations
+- [on.do](https://on.do) - Event listeners
+- [`.do` Platform](https://do)
+
+## Related Domains
+
+- **[sdk.do](https://sdk.do)** - Core SDK with `user` service
+- **[db.do](https://db.do)** - Database operations
+- **[on.do](https://on.do)** - Event listeners
+- **[send.do](https://send.do)** - Event publishing
+- **[api.do](https://api.do)** - API integration
+
+## Contributing
+
+user.do is part of the [`.do` platform](https://do) ecosystem. Contributions are welcome!
+
+See the [ai repository](https://github.com/dot-do/ai) for contribution guidelines.
+
+## Acknowledgments
+
+user.do builds upon:
+
+- [Schema.org Person](https://schema.org/Person) - Person entity definition
+- [JSON-LD](https://www.w3.org/TR/json-ld11/) - Linked data format
+- [OAuth 2.0](https://oauth.net/2/) - Authentication standard
+- [JWT](https://jwt.io/) - JSON Web Tokens
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

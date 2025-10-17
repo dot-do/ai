@@ -1,0 +1,709 @@
+---
+$id: https://functions.do/api
+$type: APIReference
+title: Functions API Reference
+description: Complete API reference for functions.do including all functions, utilities, and type definitions
+keywords: [api, reference, functions, types, utilities]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Functions API Reference
+
+Complete reference for all functions.do APIs, utilities, and type definitions.
+
+## Core Functions
+
+### `fn()`
+
+Creates a new function with semantic metadata and type safety.
+
+**Signature:**
+
+```typescript
+function fn<T extends (...args: any[]) => any>(type: string | FunctionMetadata, implementation: T): T & { $type: string; $id?: string }
+```
+
+**Parameters:**
+
+- `type`: Semantic type identifier (e.g., `$.ProcessOrder`) or full metadata object
+- `implementation`: The function implementation
+
+**Returns:** Enhanced function with metadata
+
+**Examples:**
+
+```typescript
+// Simple form
+const add = fn($.Add, (a: number, b: number) => a + b)
+
+// With metadata
+const add = fn(
+  {
+    $type: 'Function',
+    $id: 'https://example.com/functions/add',
+    name: 'Add',
+    description: 'Adds two numbers',
+  },
+  (a: number, b: number) => a + b
+)
+```
+
+## Composition Functions
+
+### `pipe()`
+
+Composes functions left-to-right (execution order).
+
+**Signature:**
+
+```typescript
+function pipe<T>(...fns: Array<(arg: any) => any>): (arg: T) => any
+```
+
+**Parameters:**
+
+- `...fns`: Functions to compose in execution order
+
+**Returns:** Composed function
+
+**Example:**
+
+```typescript
+const workflow = pipe(
+  step1, // Executes first
+  step2, // Executes second
+  step3 // Executes third
+)
+
+const result = workflow(input)
+```
+
+### `compose()`
+
+Composes functions right-to-left (mathematical composition).
+
+**Signature:**
+
+```typescript
+function compose<T>(...fns: Array<(arg: any) => any>): (arg: T) => any
+```
+
+**Parameters:**
+
+- `...fns`: Functions to compose in reverse execution order
+
+**Returns:** Composed function
+
+**Example:**
+
+```typescript
+const workflow = compose(
+  step3, // Executes third
+  step2, // Executes second
+  step1 // Executes first
+)
+
+const result = workflow(input)
+```
+
+### `parallel()`
+
+Executes multiple functions in parallel.
+
+**Signature:**
+
+```typescript
+function parallel<T extends Record<string, Function>>(fns: T): (arg: any) => Promise<{ [K in keyof T]: ReturnType<T[K]> }>
+
+function parallel<T>(fns: Array<(arg: any) => T>): (arg: any) => Promise<T[]>
+```
+
+**Parameters:**
+
+- `fns`: Object or array of functions to execute in parallel
+
+**Returns:** Function that executes all in parallel and returns results
+
+**Examples:**
+
+```typescript
+// Object form
+const fetchProfile = parallel({
+  user: fetchUser,
+  orders: fetchOrders,
+  preferences: fetchPreferences,
+})
+
+const profile = await fetchProfile(userId)
+// { user: {...}, orders: [...], preferences: {...} }
+
+// Array form
+const results = await parallel([fetchData1, fetchData2, fetchData3])(input)
+// [result1, result2, result3]
+```
+
+### `sequential()`
+
+Executes functions sequentially with explicit ordering.
+
+**Signature:**
+
+```typescript
+function sequential<T>(...fns: Array<(arg: any) => any>): (arg: T) => any
+```
+
+**Parameters:**
+
+- `...fns`: Functions to execute sequentially
+
+**Returns:** Composed function
+
+**Example:**
+
+```typescript
+const workflow = sequential(step1, step2, step3)
+
+const result = await workflow(input)
+```
+
+## Conditional Functions
+
+### `when()`
+
+Executes a function only when a condition is true.
+
+**Signature:**
+
+```typescript
+function when<T>(predicate: (arg: T) => boolean, fn: (arg: T) => any): (arg: T) => T | ReturnType<typeof fn>
+```
+
+**Parameters:**
+
+- `predicate`: Function that returns true to execute
+- `fn`: Function to execute if predicate is true
+
+**Returns:** Conditional function
+
+**Example:**
+
+```typescript
+const applyDiscount = when(
+  (order) => order.total > 100,
+  (order) => ({ ...order, discount: order.total * 0.1 })
+)
+```
+
+### `ifElse()`
+
+Executes one of two functions based on a condition.
+
+**Signature:**
+
+```typescript
+function ifElse<T>(predicate: (arg: T) => boolean, trueFn: (arg: T) => any, falseFn: (arg: T) => any): (arg: T) => any
+```
+
+**Parameters:**
+
+- `predicate`: Function that determines which branch to take
+- `trueFn`: Function to execute if predicate is true
+- `falseFn`: Function to execute if predicate is false
+
+**Returns:** Conditional function
+
+**Example:**
+
+```typescript
+const handleOrder = ifElse((order) => order.total > 1000, processLargeOrder, processSmallOrder)
+```
+
+### `match()`
+
+Pattern matching for multiple conditions.
+
+**Signature:**
+
+```typescript
+function match<T, K extends string | number>(selector: (arg: T) => K, patterns: Record<K | '_', (arg: T) => any>): (arg: T) => any
+```
+
+**Parameters:**
+
+- `selector`: Function that returns the key to match
+- `patterns`: Object mapping keys to handler functions (use `'_'` for default)
+
+**Returns:** Pattern matching function
+
+**Example:**
+
+```typescript
+const handleOrderStatus = match((order) => order.status, {
+  pending: processPending,
+  paid: processPaid,
+  shipped: processShipped,
+  _: handleUnknown,
+})
+```
+
+### `branch()`
+
+Creates branching workflows based on runtime values.
+
+**Signature:**
+
+```typescript
+function branch<T>(predicate: (arg: T) => boolean | string, branches: Record<string | 'true' | 'false', (arg: T) => any>): (arg: T) => any
+```
+
+**Parameters:**
+
+- `predicate`: Function that determines which branch to take
+- `branches`: Object mapping branch keys to handler functions
+
+**Returns:** Branching function
+
+**Example:**
+
+```typescript
+const processPayment = branch((payment) => payment.isValid, {
+  true: pipe(chargePayment, sendReceipt),
+  false: pipe(logFailure, notifyCustomer),
+})
+```
+
+## Utility Functions
+
+### `withRetry()`
+
+Adds automatic retry logic to a function.
+
+**Signature:**
+
+```typescript
+function withRetry<T extends (...args: any[]) => any>(
+  fn: T,
+  options?: {
+    attempts?: number
+    backoff?: 'linear' | 'exponential'
+    delayMs?: number
+  }
+): T
+```
+
+**Parameters:**
+
+- `fn`: Function to add retry logic to
+- `options`: Retry configuration
+  - `attempts`: Maximum retry attempts (default: 3)
+  - `backoff`: Backoff strategy (default: 'exponential')
+  - `delayMs`: Initial delay in milliseconds (default: 1000)
+
+**Returns:** Function with retry logic
+
+**Example:**
+
+```typescript
+const robustFetch = withRetry(
+  fn($.FetchData, async (url) => {
+    const response = await fetch(url)
+    return response.json()
+  }),
+  { attempts: 5, backoff: 'exponential', delayMs: 1000 }
+)
+```
+
+### `withTimeout()`
+
+Adds timeout to a function.
+
+**Signature:**
+
+```typescript
+function withTimeout<T extends (...args: any[]) => Promise<any>>(fn: T, timeoutMs: number): T
+```
+
+**Parameters:**
+
+- `fn`: Async function to add timeout to
+- `timeoutMs`: Timeout in milliseconds
+
+**Returns:** Function with timeout
+
+**Example:**
+
+```typescript
+const fetchWithTimeout = withTimeout(
+  fn($.FetchData, fetchDataImpl),
+  5000 // 5 second timeout
+)
+```
+
+### `withLogging()`
+
+Adds logging to a function.
+
+**Signature:**
+
+```typescript
+function withLogging<T extends (...args: any[]) => any>(
+  fn: T,
+  options?: {
+    level?: 'debug' | 'info' | 'warn' | 'error'
+    name?: string
+    logInput?: boolean
+    logOutput?: boolean
+  }
+): T
+```
+
+**Parameters:**
+
+- `fn`: Function to add logging to
+- `options`: Logging configuration
+  - `level`: Log level (default: 'info')
+  - `name`: Function name for logs (default: function name)
+  - `logInput`: Log input arguments (default: true)
+  - `logOutput`: Log output result (default: true)
+
+**Returns:** Function with logging
+
+**Example:**
+
+```typescript
+const processWithLogging = withLogging(fn($.ProcessData, processDataImpl), { level: 'info', name: 'ProcessData' })
+```
+
+### `memoize()`
+
+Caches function results for performance.
+
+**Signature:**
+
+```typescript
+function memoize<T extends (...args: any[]) => any>(
+  fn: T,
+  options?: {
+    maxSize?: number
+    ttl?: number
+    keyFn?: (...args: Parameters<T>) => string
+  }
+): T
+```
+
+**Parameters:**
+
+- `fn`: Function to memoize
+- `options`: Memoization configuration
+  - `maxSize`: Maximum cache size (default: 100)
+  - `ttl`: Time to live in milliseconds (default: no expiry)
+  - `keyFn`: Function to generate cache key (default: JSON.stringify)
+
+**Returns:** Memoized function
+
+**Example:**
+
+```typescript
+const expensiveCalc = memoize(fn($.Calculate, calculateImpl), { maxSize: 1000, ttl: 60000 })
+```
+
+### `curry()`
+
+Creates a curried version of a function.
+
+**Signature:**
+
+```typescript
+function curry<T extends (...args: any[]) => any>(fn: T): Curried<T>
+```
+
+**Parameters:**
+
+- `fn`: Function to curry
+
+**Returns:** Curried function
+
+**Example:**
+
+```typescript
+const add = fn($.Add, (a: number, b: number, c: number) => a + b + c)
+const curriedAdd = curry(add)
+
+const add5 = curriedAdd(5)
+const add5and10 = add5(10)
+const result = add5and10(2) // 17
+```
+
+### `debounce()`
+
+Debounces a function to limit execution rate.
+
+**Signature:**
+
+```typescript
+function debounce<T extends (...args: any[]) => any>(fn: T, delayMs: number): T
+```
+
+**Parameters:**
+
+- `fn`: Function to debounce
+- `delayMs`: Delay in milliseconds
+
+**Returns:** Debounced function
+
+**Example:**
+
+```typescript
+const debouncedSearch = debounce(
+  fn($.Search, searchImpl),
+  300 // 300ms delay
+)
+```
+
+### `throttle()`
+
+Throttles a function to limit execution frequency.
+
+**Signature:**
+
+```typescript
+function throttle<T extends (...args: any[]) => any>(fn: T, intervalMs: number): T
+```
+
+**Parameters:**
+
+- `fn`: Function to throttle
+- `intervalMs`: Minimum interval between executions
+
+**Returns:** Throttled function
+
+**Example:**
+
+```typescript
+const throttledUpdate = throttle(
+  fn($.Update, updateImpl),
+  1000 // Max once per second
+)
+```
+
+### `recover()`
+
+Adds error recovery to a function.
+
+**Signature:**
+
+```typescript
+function recover<T extends (...args: any[]) => any>(fn: T, recoveryFn: (error: Error, ...args: Parameters<T>) => ReturnType<T>): T
+```
+
+**Parameters:**
+
+- `fn`: Function to add recovery to
+- `recoveryFn`: Function to handle errors and return fallback value
+
+**Returns:** Function with error recovery
+
+**Example:**
+
+```typescript
+const safeOperation = recover(fn($.RiskyOp, riskyOpImpl), (error, ...args) => {
+  console.error('Operation failed, using fallback')
+  return fallbackValue
+})
+```
+
+### `lazy()`
+
+Creates a lazy-evaluated function.
+
+**Signature:**
+
+```typescript
+function lazy<T>(factory: () => T): () => T
+```
+
+**Parameters:**
+
+- `factory`: Function that creates the value
+
+**Returns:** Function that returns the lazily-evaluated value
+
+**Example:**
+
+```typescript
+const lazyData = lazy(() => {
+  console.log('Computing expensive data...')
+  return expensiveComputation()
+})
+
+// Only computes when called
+const data = lazyData()
+```
+
+## Type Definitions
+
+### `FunctionMetadata`
+
+Metadata for function definitions.
+
+```typescript
+interface FunctionMetadata {
+  $type: 'Function'
+  $id?: string
+  name?: string
+  description?: string
+  version?: string
+  author?: {
+    $type: 'Person' | 'Organization'
+    name: string
+    email?: string
+  }
+  tags?: string[]
+  input?: JSONSchema
+  output?: JSONSchema
+  dependencies?: string[]
+  sideEffects?: string[]
+  rateLimits?: {
+    perMinute?: number
+    perHour?: number
+    perDay?: number
+  }
+}
+```
+
+### `Result<T, E>`
+
+Result type for error handling.
+
+```typescript
+type Result<T, E = Error> = { success: true; value: T } | { success: false; error: E }
+```
+
+**Example:**
+
+```typescript
+const safeOperation = fn($.SafeOperation, async (input: string): Promise<Result<Data>> => {
+  try {
+    const data = await riskyOperation(input)
+    return { success: true, value: data }
+  } catch (error) {
+    return { success: false, error }
+  }
+})
+```
+
+### `ValidationResult`
+
+Result type for validation functions.
+
+```typescript
+interface ValidationResult {
+  valid: boolean
+  errors: Array<{
+    field: string
+    message: string
+  }>
+  data?: any
+}
+```
+
+## Constants
+
+### Semantic Type Proxy `$`
+
+The semantic type proxy for creating function identifiers.
+
+```typescript
+const $ = new Proxy(
+  {},
+  {
+    get: (target, prop) => Symbol.for(String(prop)),
+  }
+)
+
+// Usage
+const myFunction = fn($.MyFunction, implementation)
+```
+
+## Best Practices
+
+### Function Naming
+
+Use semantic, descriptive names:
+
+```typescript
+// Good
+const validateCustomerEmail = fn($.ValidateCustomerEmail, ...)
+const processOrderPayment = fn($.ProcessOrderPayment, ...)
+
+// Avoid
+const validate = fn($.Validate, ...)
+const process = fn($.Process, ...)
+```
+
+### Type Annotations
+
+Always include TypeScript types:
+
+```typescript
+// Good
+const processOrder = fn($.ProcessOrder, async (order: $.Order): Promise<$.ProcessedOrder> => {
+  // Implementation
+})
+
+// Avoid
+const processOrder = fn($.ProcessOrder, async (order) => {
+  // Implementation
+})
+```
+
+### Error Handling
+
+Handle errors explicitly:
+
+```typescript
+const safeFunction = fn($.SafeFunction, async (input: any) => {
+  try {
+    return await riskyOperation(input)
+  } catch (error) {
+    console.error('Operation failed:', error)
+    return fallbackValue
+  }
+})
+```
+
+### Composition
+
+Prefer composition over large functions:
+
+```typescript
+// Good
+const workflow = pipe(validate, transform, save)
+
+// Avoid
+const workflow = fn($.Workflow, (data) => {
+  // 100+ lines of code
+})
+```
+
+## Examples
+
+See the [examples directory](../examples/) for complete working examples:
+
+- [Basic Functions](../examples/basic-function) - Simple function examples
+- [Workflow Functions](../examples/workflow-functions) - Complete workflows
+- [Error Handling](../examples/error-handling) - Error handling patterns
+
+## Related Documentation
+
+- [Getting Started](../docs/getting-started) - Introduction and installation
+- [Creating Functions](../docs/creating-functions) - Detailed function creation
+- [Composition Patterns](../docs/composition) - Function composition guide
+
+## Support
+
+- [GitHub Issues](https://github.com/dot-do/platform/issues) - Report bugs
+- [Documentation](https://functions.do) - Full documentation
+- [Discord Community](https://discord.gg/dot-do) - Community support

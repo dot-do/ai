@@ -1,0 +1,579 @@
+---
+$id: https://benchmarks.do/docs/getting-started
+$type: TechArticle
+title: Getting Started with benchmarks.do
+description: Learn how to benchmark performance, run load tests, and track system metrics with benchmarks.do
+keywords: [getting started, tutorial, setup, benchmarks, performance testing, load testing]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Getting Started with benchmarks.do
+
+This guide will walk you through setting up benchmarks.do and running your first performance benchmark. You'll learn how to measure system performance, run load tests, and track key metrics.
+
+## Prerequisites
+
+Before you begin, ensure you have:
+
+- Node.js 18+ installed
+- pnpm package manager
+- Access to the `.do` platform
+- A system or API endpoint to benchmark
+
+## Installation
+
+Install the SDK via pnpm:
+
+```bash
+pnpm add sdk.do
+```
+
+Or with npm:
+
+```bash
+npm install sdk.do
+```
+
+## Basic Setup
+
+Import the benchmarks module from sdk.do:
+
+```typescript
+import $, { benchmarks } from 'sdk.do'
+
+// Verify installation
+console.log('benchmarks.do ready')
+```
+
+## Your First Benchmark
+
+### Simple Function Benchmark
+
+Let's start with a simple function performance benchmark:
+
+```typescript
+import $, { benchmarks } from 'sdk.do'
+
+// Create a simple performance benchmark
+const simpleBench = await benchmarks.create({
+  name: 'Array Sorting Performance',
+  description: 'Benchmark array sort operations',
+  $type: $.PerformanceBenchmark,
+
+  target: async () => {
+    // Function to benchmark
+    const arr = Array.from({ length: 10000 }, () => Math.random())
+    return arr.sort((a, b) => a - b)
+  },
+
+  iterations: 100,
+  warmup: 10,
+
+  metrics: ['latency', 'throughput', 'memory_usage'],
+})
+
+// Run the benchmark
+const results = await benchmarks.run(simpleBench.id)
+
+console.log('Performance Results:')
+console.log('- Average Latency:', results.avgLatency, 'ms')
+console.log('- Min Latency:', results.minLatency, 'ms')
+console.log('- Max Latency:', results.maxLatency, 'ms')
+console.log('- P95 Latency:', results.p95, 'ms')
+console.log('- P99 Latency:', results.p99, 'ms')
+console.log('- Throughput:', results.throughput, 'ops/sec')
+console.log('- Memory Usage:', results.memoryUsage, 'MB')
+```
+
+### HTTP Endpoint Benchmark
+
+Benchmark an HTTP API endpoint:
+
+```typescript
+import $, { benchmarks } from 'sdk.do'
+
+// Create HTTP endpoint benchmark
+const apiBench = await benchmarks.create({
+  name: 'API Endpoint Performance',
+  description: 'Benchmark /api/users endpoint',
+  $type: $.HTTPBenchmark,
+
+  target: {
+    url: 'https://api.example.com/users',
+    method: 'GET',
+    headers: {
+      Authorization: 'Bearer YOUR_TOKEN',
+      'Content-Type': 'application/json',
+    },
+  },
+
+  load: {
+    users: 10, // Concurrent users
+    duration: '1m', // Test duration
+    rampUp: '10s', // Ramp up time
+  },
+
+  assertions: [
+    { metric: 'p95_latency', operator: 'lt', value: 500 }, // p95 < 500ms
+    { metric: 'error_rate', operator: 'lt', value: 0.01 }, // < 1% errors
+  ],
+})
+
+// Run the benchmark
+const results = await benchmarks.run(apiBench.id)
+
+// Check if assertions passed
+if (results.passed) {
+  console.log('✓ All assertions passed')
+} else {
+  console.error('✗ Some assertions failed:')
+  results.failures.forEach((failure) => {
+    console.error(`- ${failure.metric}: ${failure.actual} (expected ${failure.operator} ${failure.expected})`)
+  })
+}
+
+// Display results
+console.log('\nBenchmark Results:')
+console.log('- Duration:', results.duration, 'ms')
+console.log('- Total Requests:', results.totalRequests)
+console.log('- Throughput:', results.throughput, 'rps')
+console.log('- Avg Latency:', results.avgLatency, 'ms')
+console.log('- P95 Latency:', results.p95Latency, 'ms')
+console.log('- P99 Latency:', results.p99Latency, 'ms')
+console.log('- Error Rate:', results.errorRate)
+```
+
+## Core Concepts
+
+### Benchmark Types
+
+benchmarks.do supports several types of benchmarks:
+
+1. **Performance Benchmarks**: Measure function or operation performance
+2. **Load Tests**: Simulate realistic user load
+3. **Stress Tests**: Find system breaking points
+4. **Latency Tests**: Track response time distributions
+5. **Throughput Tests**: Measure processing capacity
+
+### Key Metrics
+
+Understanding the metrics benchmarks.do tracks:
+
+- **Latency**: Time to complete a single operation
+  - Average, min, max, median
+  - Percentiles (p50, p75, p90, p95, p99, p99.9)
+- **Throughput**: Operations per second (ops/sec or rps)
+- **Error Rate**: Percentage of failed operations
+- **Resource Usage**: CPU, memory, network utilization
+- **Concurrency**: Number of concurrent operations
+
+### Load Patterns
+
+Different load patterns for different scenarios:
+
+```typescript
+// Constant load
+load: {
+  users: 50,
+  duration: '5m'
+}
+
+// Gradual ramp
+load: {
+  type: 'gradual',
+  stages: [
+    { duration: '1m', target: 10 },
+    { duration: '2m', target: 50 },
+    { duration: '2m', target: 100 }
+  ]
+}
+
+// Spike test
+load: {
+  type: 'spike',
+  stages: [
+    { duration: '2m', target: 50 },
+    { duration: '30s', target: 500 },
+    { duration: '2m', target: 50 }
+  ]
+}
+```
+
+## Running Load Tests
+
+### Simple Load Test
+
+Run a basic load test:
+
+```typescript
+import $, { benchmarks } from 'sdk.do'
+
+const loadTest = await benchmarks.create({
+  name: 'API Load Test',
+  type: 'load',
+
+  target: {
+    url: 'https://api.example.com/products',
+    method: 'GET',
+  },
+
+  load: {
+    users: 50,
+    duration: '3m',
+    rampUp: '30s',
+  },
+
+  thresholds: {
+    http_req_duration: ['p(95)<500', 'p(99)<1000'],
+    http_req_failed: ['rate<0.01'],
+    http_reqs: ['rate>10'],
+  },
+})
+
+const results = await benchmarks.run(loadTest.id)
+
+// Analyze results
+console.log('Load Test Summary:')
+console.log('- Peak RPS:', results.peakRPS)
+console.log('- Avg Latency:', results.avgLatency, 'ms')
+console.log('- Total Requests:', results.totalRequests)
+console.log('- Success Rate:', (1 - results.errorRate) * 100, '%')
+```
+
+### Multi-Scenario Load Test
+
+Test multiple user scenarios:
+
+```typescript
+import $, { benchmarks } from 'sdk.do'
+
+const multiScenario = await benchmarks.create({
+  name: 'E-commerce Load Test',
+  type: 'load',
+
+  scenarios: [
+    {
+      name: 'Browse Products',
+      weight: 0.6, // 60% of users
+      steps: [
+        { request: 'GET /api/products' },
+        { think: 2000 }, // 2s pause
+        { request: 'GET /api/products/:id' },
+      ],
+    },
+    {
+      name: 'Add to Cart',
+      weight: 0.3, // 30% of users
+      steps: [{ request: 'GET /api/products/:id' }, { think: 1000 }, { request: 'POST /api/cart' }],
+    },
+    {
+      name: 'Checkout',
+      weight: 0.1, // 10% of users
+      steps: [{ request: 'GET /api/cart' }, { request: 'POST /api/checkout' }],
+    },
+  ],
+
+  load: {
+    users: 100,
+    duration: '5m',
+  },
+})
+
+const results = await benchmarks.run(multiScenario.id)
+
+// Per-scenario results
+results.scenarios.forEach((scenario) => {
+  console.log(`\n${scenario.name}:`)
+  console.log('- Executions:', scenario.executions)
+  console.log('- Avg Duration:', scenario.avgDuration, 'ms')
+  console.log('- Success Rate:', scenario.successRate, '%')
+})
+```
+
+## Assertions and Thresholds
+
+### Defining Assertions
+
+Set performance expectations:
+
+```typescript
+assertions: [
+  // Latency assertions
+  { metric: 'avg_latency', operator: 'lt', value: 200 },
+  { metric: 'p95_latency', operator: 'lt', value: 500 },
+  { metric: 'p99_latency', operator: 'lt', value: 1000 },
+
+  // Throughput assertions
+  { metric: 'throughput', operator: 'gt', value: 100 },
+
+  // Error rate assertions
+  { metric: 'error_rate', operator: 'lt', value: 0.01 },
+
+  // Custom assertions
+  { metric: 'memory_usage', operator: 'lt', value: 512 },
+]
+```
+
+### Threshold Syntax
+
+More advanced threshold expressions:
+
+```typescript
+thresholds: {
+  'http_req_duration': [
+    'p(95)<500',     // 95th percentile < 500ms
+    'p(99)<1000',    // 99th percentile < 1000ms
+    'avg<300'        // Average < 300ms
+  ],
+  'http_req_failed': [
+    'rate<0.01'      // Error rate < 1%
+  ],
+  'http_reqs': [
+    'count>1000',    // At least 1000 requests
+    'rate>10'        // At least 10 rps
+  ]
+}
+```
+
+## Viewing Results
+
+### Result Object Structure
+
+Understanding the result object:
+
+```typescript
+{
+  id: 'bench_abc123',
+  name: 'API Load Test',
+  status: 'completed',
+  startTime: '2025-10-10T10:00:00Z',
+  endTime: '2025-10-10T10:05:00Z',
+  duration: 300000,  // ms
+
+  // Summary metrics
+  totalRequests: 15000,
+  successfulRequests: 14850,
+  failedRequests: 150,
+
+  // Latency metrics
+  avgLatency: 245.5,
+  minLatency: 12.3,
+  maxLatency: 1234.5,
+  p50: 230.0,
+  p75: 310.0,
+  p90: 420.0,
+  p95: 485.0,
+  p99: 890.0,
+  p999: 1150.0,
+
+  // Throughput
+  throughput: 50.0,  // rps
+  peakThroughput: 75.0,
+
+  // Error metrics
+  errorRate: 0.01,
+  errorTypes: {
+    'timeout': 100,
+    '500': 30,
+    '503': 20
+  },
+
+  // Resource usage
+  avgCPU: 45.2,
+  peakCPU: 78.5,
+  avgMemory: 256.8,
+  peakMemory: 412.3,
+
+  // Assertions
+  passed: false,
+  assertions: [
+    { metric: 'p95_latency', expected: 'lt 500', actual: 485, passed: true },
+    { metric: 'error_rate', expected: 'lt 0.005', actual: 0.01, passed: false }
+  ]
+}
+```
+
+### Generating Reports
+
+Create visual reports:
+
+```typescript
+import $, { benchmarks } from 'sdk.do'
+
+// Run benchmark
+const results = await benchmarks.run(benchId)
+
+// Generate HTML report
+const report = await benchmarks.report(results.id, {
+  format: 'html',
+  include: {
+    summary: true,
+    charts: true,
+    timeSeries: true,
+    distributions: true,
+  },
+})
+
+// Save report
+await report.save('./reports/load-test-report.html')
+
+// Generate JSON export
+const jsonReport = await benchmarks.report(results.id, {
+  format: 'json',
+})
+
+await jsonReport.save('./reports/results.json')
+```
+
+## Comparing Benchmarks
+
+Compare performance across runs:
+
+```typescript
+import $, { benchmarks } from 'sdk.do'
+
+// Run two benchmarks
+const baseline = await benchmarks.run(benchId1)
+const current = await benchmarks.run(benchId2)
+
+// Compare results
+const comparison = await benchmarks.compare({
+  baseline: baseline.id,
+  current: current.id,
+  metrics: ['latency', 'throughput', 'error_rate'],
+})
+
+// Display comparison
+console.log('Performance Comparison:')
+console.log('Latency:', comparison.latency.change, '%')
+console.log('Throughput:', comparison.throughput.change, '%')
+console.log('Error Rate:', comparison.errorRate.change, '%')
+
+if (comparison.regression) {
+  console.error('⚠ Performance regression detected')
+}
+```
+
+## Next Steps
+
+Now that you've run your first benchmarks, explore more advanced features:
+
+- **[Architecture](./architecture.mdx)** - Understand how benchmarks.do works
+- **[Best Practices](./best-practices.mdx)** - Learn benchmarking best practices
+- **[Basic Examples](../examples/basic-usage.mdx)** - See 10 common benchmark patterns
+- **[Advanced Patterns](../examples/advanced-patterns.mdx)** - Complex scenarios
+- **[Integration](../examples/integration.mdx)** - CI/CD integration
+- **[API Reference](../api/reference.mdx)** - Complete API documentation
+
+## Common Patterns
+
+### Database Query Benchmark
+
+```typescript
+const dbBench = await benchmarks.create({
+  name: 'Database Query Performance',
+
+  target: async () => {
+    return await db.query('SELECT * FROM users WHERE status = $1', ['active'])
+  },
+
+  iterations: 1000,
+  warmup: 100,
+})
+```
+
+### Worker Function Benchmark
+
+```typescript
+const workerBench = await benchmarks.create({
+  name: 'Worker Processing Performance',
+
+  target: async () => {
+    const job = await queue.dequeue()
+    await processJob(job)
+  },
+
+  mode: 'sustained',
+  duration: '5m',
+})
+```
+
+### Microservice Benchmark
+
+```typescript
+const microserviceBench = await benchmarks.create({
+  name: 'Microservice Integration Test',
+
+  scenarios: [
+    {
+      name: 'Create Order',
+      steps: [
+        { request: 'POST /orders', payload: { items: [...] } },
+        { request: 'GET /orders/:id' }
+      ]
+    }
+  ],
+
+  load: {
+    users: 50,
+    duration: '3m'
+  }
+})
+```
+
+## Troubleshooting
+
+### Benchmark Doesn't Start
+
+Ensure your target is valid:
+
+```typescript
+// ✓ Correct
+target: async () => {
+  return await myFunction()
+}
+
+// ✗ Incorrect - missing async
+target: () => {
+  return myFunction()
+}
+```
+
+### High Error Rates
+
+Check your assertions and system capacity:
+
+```typescript
+// Add more detailed error tracking
+const results = await benchmarks.run(benchId, {
+  captureErrors: true,
+  errorSampling: 1.0, // Capture all errors
+})
+
+console.log('Error details:', results.errors)
+```
+
+### Inconsistent Results
+
+Increase warmup iterations:
+
+```typescript
+{
+  iterations: 1000,
+  warmup: 100,  // Increase warmup
+  cooldown: 50  // Add cooldown
+}
+```
+
+## Getting Help
+
+- **Documentation**: [benchmarks.do](https://benchmarks.do)
+- **Examples**: [/examples](../examples/)
+- **Issues**: [GitHub Issues](https://github.com/dot-do/platform/issues)
+- **Community**: [Discord](https://discord.gg/dotdo)
+
+---
+
+Continue learning with [Architecture](./architecture.mdx) to understand how benchmarks.do works under the hood.

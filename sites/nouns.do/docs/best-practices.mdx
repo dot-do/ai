@@ -1,0 +1,718 @@
+---
+$id: https://nouns.do/docs/best-practices
+$type: TechArticle
+title: nouns.do Best Practices
+description: Recommended patterns and best practices for working with semantic entity types in Business-as-Code
+keywords: [best practices, patterns, guidelines, recommendations, entity types]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# nouns.do Best Practices
+
+This guide covers recommended patterns and best practices for working with semantic entity types in Business-as-Code applications.
+
+## General Principles
+
+### 1. Always Use Semantic Types
+
+Use `$.TypeName` instead of strings for type safety:
+
+```typescript
+// ✓ Good - semantic and type-safe
+const person = await db.create($.Person, data)
+const people = await db.list($.Person)
+
+// ✗ Avoid - string-based, error-prone
+const person = await db.create('Person', data)
+const people = await db.list('Person')
+```
+
+**Why?** Semantic types provide:
+
+- TypeScript autocomplete and validation
+- Runtime type checking
+- Better IDE support
+- Self-documenting code
+- AI agent understanding
+
+### 2. Include $type Property
+
+Always explicitly set the `$type` property:
+
+```typescript
+// ✓ Good - explicit type
+const person = await db.create($.Person, {
+  $type: 'Person',
+  name: 'Jane Smith',
+  email: 'jane@example.com',
+})
+
+// ⚠ Risky - implicit type (may cause issues)
+const person = await db.create($.Person, {
+  name: 'Jane Smith',
+  email: 'jane@example.com',
+})
+```
+
+**Why?** Explicit `$type` ensures:
+
+- Clear entity type identification
+- Proper validation
+- Correct serialization/deserialization
+- Linked data compatibility
+
+### 3. Use TypeScript Types
+
+Leverage TypeScript types for safety:
+
+```typescript
+import type { Person, Organization, Product } from 'schema.org.ai'
+
+// ✓ Good - typed function
+async function createEmployee(data: Person): Promise<Person> {
+  return await db.create($.Person, data)
+}
+
+// ✗ Avoid - untyped (loses IDE support)
+async function createEmployee(data: any): Promise<any> {
+  return await db.create($.Person, data)
+}
+```
+
+### 4. Validate Before Storage
+
+Always validate entities before creating or updating:
+
+```typescript
+import { validate } from 'sdk.do'
+
+// ✓ Good - validate first
+async function createPerson(data: any) {
+  const validation = validate(data, $.Person)
+
+  if (!validation.valid) {
+    throw new Error(`Invalid person data: ${validation.errors.map((e) => e.message).join(', ')}`)
+  }
+
+  return await db.create($.Person, data)
+}
+
+// ✗ Avoid - no validation
+async function createPerson(data: any) {
+  return await db.create($.Person, data) // May fail or create invalid data
+}
+```
+
+## Entity Design
+
+### Use Appropriate Types
+
+Choose the most specific type for your entities:
+
+```typescript
+// ✓ Good - specific type
+const corporation = await db.create($.Corporation, {
+  $type: 'Corporation',
+  legalName: 'Acme Corp Inc.',
+  taxID: '12-3456789',
+})
+
+// ⚠ Less specific but acceptable
+const organization = await db.create($.Organization, {
+  $type: 'Organization',
+  name: 'Acme Corp',
+})
+
+// ✗ Too generic (loses semantics)
+const thing = await db.create($.Thing, {
+  $type: 'Thing',
+  name: 'Acme Corp',
+})
+```
+
+### Follow Type Hierarchies
+
+Respect Schema.org inheritance:
+
+```typescript
+// ✓ Good - follows hierarchy
+interface Employee extends Person {
+  $type: 'Employee'
+  employeeId: string
+  department: string
+  hireDate: string
+}
+
+// ✗ Avoid - breaks hierarchy
+interface Employee {
+  $type: 'Employee'
+  name: string // Duplicates Person.name
+  email: string // Duplicates Person.email
+  employeeId: string
+}
+```
+
+### Use Composition Over Duplication
+
+Reference entities instead of duplicating data:
+
+```typescript
+// ✓ Good - composition
+const order = await db.create($.Order, {
+  $type: 'Order',
+  orderNumber: 'ORD-001',
+  customer: {
+    $id: person.$id,
+    $type: 'Person',
+  },
+  orderedItem: {
+    $id: product.$id,
+    $type: 'Product',
+  },
+})
+
+// ✗ Avoid - duplication
+const order = await db.create($.Order, {
+  $type: 'Order',
+  orderNumber: 'ORD-001',
+  customerName: 'John Doe', // Duplicates person data
+  customerEmail: 'john@example.com',
+  productName: 'Widget', // Duplicates product data
+  productPrice: 99.99,
+})
+```
+
+## Linked Data
+
+### Use $id for Identity
+
+Always include unique identifiers:
+
+```typescript
+// ✓ Good - with $id
+const person = {
+  $id: 'https://example.com/people/jane-smith',
+  $type: 'Person',
+  name: 'Jane Smith',
+}
+
+// Or use auto-generated IDs
+const person = await db.create($.Person, {
+  $type: 'Person',
+  name: 'Jane Smith',
+})
+console.log(person.$id) // 'person-abc123'
+```
+
+### Use Full URLs When Possible
+
+Use full URLs for better linked data:
+
+```typescript
+// ✓ Best - full URLs
+const person = {
+  $id: 'https://example.com/people/jane-smith',
+  $type: 'Person',
+  name: 'Jane Smith',
+  worksFor: {
+    $id: 'https://example.com/orgs/acme',
+    $type: 'Organization',
+  },
+}
+
+// ✓ Good - short IDs (converted to URLs)
+const person = {
+  $id: 'person-123',
+  $type: 'Person',
+  name: 'Jane Smith',
+}
+```
+
+### Reference, Don't Embed
+
+Reference entities by $id when appropriate:
+
+```typescript
+// ✓ Good for large objects - reference
+const article = {
+  $type: 'Article',
+  headline: 'News Story',
+  author: {
+    $id: 'person-123',
+    $type: 'Person',
+  },
+}
+
+// ✓ Good for small objects - embed
+const article = {
+  $type: 'Article',
+  headline: 'News Story',
+  author: {
+    $type: 'Person',
+    name: 'Jane Smith',
+  },
+}
+```
+
+## Property Patterns
+
+### Use Optional Chaining
+
+Handle optional properties safely:
+
+```typescript
+// ✓ Good - safe access
+const email = person.email?.toLowerCase()
+const streetAddress = person.address?.streetAddress
+
+// ✗ Avoid - may throw error
+const email = person.email.toLowerCase() // Error if email is undefined
+```
+
+### Provide Defaults
+
+Use defaults for optional properties:
+
+```typescript
+// ✓ Good - with defaults
+function getPersonDisplayName(person: Person): string {
+  return person.name || person.email || 'Unknown Person'
+}
+
+// ✗ Avoid - may return undefined
+function getPersonDisplayName(person: Person): string {
+  return person.name // Might be undefined
+}
+```
+
+### Normalize Data
+
+Normalize data for consistency:
+
+```typescript
+// ✓ Good - normalized
+async function createPerson(data: Person) {
+  return await db.create($.Person, {
+    ...data,
+    email: data.email?.toLowerCase(),
+    telephone: normalizePhone(data.telephone),
+    name: data.name?.trim(),
+  })
+}
+
+// Helper function
+function normalizePhone(phone?: string): string | undefined {
+  if (!phone) return undefined
+  return phone.replace(/\D/g, '') // Remove non-digits
+}
+```
+
+## Querying
+
+### Use Specific Queries
+
+Query with specific criteria:
+
+```typescript
+// ✓ Good - specific query
+const engineers = await db.list($.Person, {
+  where: {
+    jobTitle: { $contains: 'Engineer' },
+    email: { $ne: null },
+  },
+  limit: 10,
+  orderBy: { name: 'asc' },
+})
+
+// ⚠ Less efficient - broad query
+const allPeople = await db.list($.Person)
+const engineers = allPeople.filter((p) => p.jobTitle?.includes('Engineer') && p.email)
+```
+
+### Limit Result Sets
+
+Always limit query results:
+
+```typescript
+// ✓ Good - with limit
+const people = await db.list($.Person, { limit: 100 })
+
+// ✗ Avoid - unbounded (may return millions)
+const people = await db.list($.Person)
+```
+
+### Use Indexes
+
+Ensure indexed properties for common queries:
+
+```typescript
+// If frequently querying by email
+const person = await db.list($.Person, {
+  where: { email: 'jane@example.com' },
+})
+
+// Ensure index exists (in schema)
+// CREATE INDEX idx_person_email ON entities((data->>'email'))
+//   WHERE type = 'Person'
+```
+
+## Relationships
+
+### Use Semantic Predicates
+
+Use meaningful relationship predicates:
+
+```typescript
+// ✓ Good - semantic predicate
+await db.relate(person, $.worksFor, organization)
+await db.relate(organization, $.owns, brand)
+await db.relate(person, $.knows, otherPerson)
+
+// ✗ Avoid - generic predicate
+await db.relate(person, 'related-to', organization)
+```
+
+### Bi-directional Relationships
+
+Consider both directions:
+
+```typescript
+// Create both directions if needed
+await db.relate(person, $.worksFor, organization)
+await db.relate(organization, $.employs, person)
+
+// Query either direction
+const employer = await db.related(person, $.worksFor, $.Organization)
+const employees = await db.related(organization, $.employs, $.Person)
+```
+
+### Clean Up Relationships
+
+Remove relationships when entities are deleted:
+
+```typescript
+async function deletePerson(person: Person) {
+  // Remove relationships first
+  await db.unrelate(person, $.worksFor)
+  await db.unrelate(person, $.knows)
+
+  // Then delete entity
+  await db.delete(person)
+}
+```
+
+## Performance
+
+### Batch Operations
+
+Use batch operations for multiple entities:
+
+```typescript
+// ✓ Good - batch create
+const people = await Promise.all([db.create($.Person, { name: 'Alice' }), db.create($.Person, { name: 'Bob' }), db.create($.Person, { name: 'Carol' })])
+
+// ✗ Avoid - sequential (slower)
+const people = []
+people.push(await db.create($.Person, { name: 'Alice' }))
+people.push(await db.create($.Person, { name: 'Bob' }))
+people.push(await db.create($.Person, { name: 'Carol' }))
+```
+
+### Cache Type Definitions
+
+Cache type metadata:
+
+```typescript
+// ✓ Good - cache types
+const typeCache = new Map<string, TypeDefinition>()
+
+function getType(name: string): TypeDefinition {
+  if (!typeCache.has(name)) {
+    typeCache.set(name, registry.getType(name))
+  }
+  return typeCache.get(name)!
+}
+
+// ✗ Avoid - repeated lookups
+function getType(name: string): TypeDefinition {
+  return registry.getType(name) // Lookup every time
+}
+```
+
+### Paginate Large Results
+
+Use pagination for large datasets:
+
+```typescript
+// ✓ Good - paginated
+async function* getPeople() {
+  let offset = 0
+  const limit = 100
+
+  while (true) {
+    const page = await db.list($.Person, { limit, offset })
+    if (page.length === 0) break
+
+    yield* page
+    offset += limit
+  }
+}
+
+// Usage
+for await (const person of getPeople()) {
+  console.log(person.name)
+}
+```
+
+## Error Handling
+
+### Graceful Degradation
+
+Handle errors gracefully:
+
+```typescript
+// ✓ Good - graceful error handling
+async function getPersonEmail(personId: string): Promise<string | null> {
+  try {
+    const person = await db.get($.Person, personId)
+    return person.email || null
+  } catch (error) {
+    console.error('Failed to get person:', error)
+    return null
+  }
+}
+
+// ✗ Avoid - crashes on error
+async function getPersonEmail(personId: string): Promise<string> {
+  const person = await db.get($.Person, personId)
+  return person.email // Crashes if person not found or email is undefined
+}
+```
+
+### Validate Input
+
+Validate before processing:
+
+```typescript
+// ✓ Good - validate input
+async function updatePerson(id: string, data: Partial<Person>) {
+  if (!id) {
+    throw new Error('Person ID is required')
+  }
+
+  const validation = validate(data, $.Person)
+  if (!validation.valid) {
+    throw new ValidationError(validation.errors)
+  }
+
+  return await db.update($.Person, id, data)
+}
+```
+
+### Provide Context
+
+Include context in errors:
+
+```typescript
+// ✓ Good - contextual error
+try {
+  await db.create($.Person, data)
+} catch (error) {
+  throw new Error(`Failed to create person "${data.name}": ${error.message}`)
+}
+
+// ✗ Avoid - generic error
+try {
+  await db.create($.Person, data)
+} catch (error) {
+  throw error
+}
+```
+
+## Testing
+
+### Test with Valid Data
+
+Create test fixtures:
+
+```typescript
+// Test fixtures
+export const testPerson: Person = {
+  $type: 'Person',
+  name: 'Test User',
+  email: 'test@example.com',
+  jobTitle: 'Software Engineer',
+}
+
+export const testOrganization: Organization = {
+  $type: 'Organization',
+  name: 'Test Corp',
+  industry: 'Technology',
+}
+
+// Usage in tests
+describe('Person operations', () => {
+  it('creates a person', async () => {
+    const person = await db.create($.Person, testPerson)
+    expect(person.$type).toBe('Person')
+    expect(person.name).toBe(testPerson.name)
+  })
+})
+```
+
+### Test Validation
+
+Test validation logic:
+
+```typescript
+describe('Person validation', () => {
+  it('validates email format', () => {
+    const invalid = { $type: 'Person', name: 'John', email: 'invalid' }
+    const result = validate(invalid, $.Person)
+    expect(result.valid).toBe(false)
+    expect(result.errors).toContainEqual(expect.objectContaining({ path: 'email' }))
+  })
+
+  it('allows valid person', () => {
+    const valid = { $type: 'Person', name: 'John', email: 'john@example.com' }
+    const result = validate(valid, $.Person)
+    expect(result.valid).toBe(true)
+  })
+})
+```
+
+### Mock External Dependencies
+
+Mock database operations:
+
+```typescript
+import { jest } from '@jest/globals'
+
+describe('Person service', () => {
+  beforeEach(() => {
+    jest.spyOn(db, 'create').mockResolvedValue(testPerson)
+    jest.spyOn(db, 'list').mockResolvedValue([testPerson])
+  })
+
+  afterEach(() => {
+    jest.restoreAllMocks()
+  })
+
+  it('creates person via service', async () => {
+    const person = await personService.create(testPerson)
+    expect(db.create).toHaveBeenCalledWith($.Person, testPerson)
+  })
+})
+```
+
+## Documentation
+
+### Document Custom Types
+
+Document custom type definitions:
+
+````typescript
+/**
+ * Lead represents a potential customer in the sales pipeline.
+ *
+ * @extends Person
+ * @example
+ * ```typescript
+ * const lead: Lead = {
+ *   $type: 'Lead',
+ *   name: 'Potential Customer',
+ *   email: 'customer@example.com',
+ *   leadSource: 'Website',
+ *   leadScore: 85,
+ *   leadStatus: 'Qualified'
+ * }
+ * ```
+ */
+interface Lead extends Person {
+  $type: 'Lead'
+  leadSource: 'Website' | 'Referral' | 'Event' | 'Cold Call'
+  leadScore: number // 0-100
+  leadStatus: 'New' | 'Qualified' | 'Converted' | 'Lost'
+  assignedTo?: string
+}
+````
+
+### Add Type Comments
+
+Comment non-obvious properties:
+
+```typescript
+interface Product {
+  $type: 'Product'
+  name: string
+  sku: string // Stock Keeping Unit - unique product identifier
+  gtin: string // Global Trade Item Number (barcode)
+  price: number // Price in smallest currency unit (e.g., cents)
+  availability: 'InStock' | 'OutOfStock' | 'PreOrder'
+}
+```
+
+## Migration Strategies
+
+### Version Your Types
+
+Track type versions:
+
+```typescript
+interface PersonV1 {
+  $type: 'Person'
+  $version: 1
+  name: string
+  email: string
+}
+
+interface PersonV2 {
+  $type: 'Person'
+  $version: 2
+  givenName: string // Split from name
+  familyName: string
+  email: string
+}
+
+// Migration function
+function migratePerson(person: PersonV1): PersonV2 {
+  const [givenName, familyName] = person.name.split(' ', 2)
+  return {
+    $type: 'Person',
+    $version: 2,
+    givenName,
+    familyName: familyName || '',
+    email: person.email,
+  }
+}
+```
+
+### Backward Compatibility
+
+Support old and new formats:
+
+```typescript
+function getPersonName(person: Person): string {
+  // Support both formats
+  if (person.name) {
+    return person.name
+  }
+  if (person.givenName || person.familyName) {
+    return [person.givenName, person.familyName].filter(Boolean).join(' ')
+  }
+  return 'Unknown'
+}
+```
+
+## Related Documentation
+
+- [Getting Started](./getting-started) - Basic usage
+- [Architecture](./architecture) - System design
+- [Troubleshooting](./troubleshooting) - Common issues
+- [API Reference](../api/reference) - Complete API
+
+---
+
+**Next**: Learn about [Troubleshooting](./troubleshooting) common issues.

@@ -1,0 +1,87 @@
+---
+$id: https://nouns.do/examples/integration
+$type: HowTo
+title: Integration Examples
+description: Integrating nouns.do with other platform components
+keywords: [integration, platform, verbs, resources, graphdl]
+---
+
+# Integration Examples
+
+Examples of integrating nouns.do with other platform components.
+
+## Integration with verbs.do
+
+```typescript
+import $, { db } from 'sdk.do'
+
+// Nouns define entities
+const person = await db.get($.Person, 'person-123')
+const organization = await db.get($.Organization, 'org-456')
+
+// Verbs define actions
+await $.assign(person, organization)
+await $.notify(person, { message: 'Welcome!' })
+await $.create($.Order, { customer: person })
+```
+
+## Integration with resources.do
+
+```typescript
+// Nouns define types
+$.Person // Type definition
+
+// Resources are instances
+const people = await db.list($.Person) // Resource instances
+
+people.forEach((person) => {
+  console.log(`Resource ${person.$id} of type ${person.$type}`)
+})
+```
+
+## Integration with graphdl.do
+
+```typescript
+import { graph } from 'graphdl.do'
+
+const businessGraph = graph`
+  ${person: $.Person} -[${$.worksFor}]-> ${org: $.Organization}
+  ${org} -[${$.owns}]-> ${brand: $.Brand}
+  ${brand} -[${$.manufactures}]-> ${product: $.Product}
+`
+
+const results = await businessGraph.query({
+  person: { name: 'John Doe' }
+})
+```
+
+## Integration with AI
+
+```typescript
+import { ai } from 'sdk.do'
+
+const enrichedPerson = await ai.generate(`Enrich this person profile: ${JSON.stringify(person)}`, { schema: $.Person })
+
+await db.update(person, enrichedPerson)
+```
+
+## Integration with Events
+
+```typescript
+import { on, send } from 'sdk.do'
+
+on($.Person.created, async (person) => {
+  console.log('New person:', person.name)
+
+  await db.create($.Task, {
+    $type: 'Task',
+    title: 'Welcome new person',
+    assignee: person.$id,
+  })
+})
+
+const person = await db.create($.Person, { name: 'Jane' })
+send($.Person.created, person)
+```
+
+See [Real-World Use Case](./real-world-use-case) for a complete application example.

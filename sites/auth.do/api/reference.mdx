@@ -1,0 +1,668 @@
+---
+$id: https://auth.do/api
+$type: APIReference
+title: Authentication API Reference
+description: Complete API reference for auth.do authentication framework
+keywords: [auth, api, reference, documentation, functions]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Authentication API Reference
+
+Complete API reference for auth.do authentication framework.
+
+## Core Functions
+
+### auth.login()
+
+Authenticate a user with email and password.
+
+**Signature:**
+
+```typescript
+function login(credentials: LoginCredentials): Promise<Session>
+```
+
+**Parameters:**
+
+```typescript
+interface LoginCredentials {
+  email: string
+  password: string
+  mfaCode?: string
+}
+```
+
+**Returns:**
+
+```typescript
+interface Session {
+  token: string
+  refreshToken: string
+  userId: string
+  expiresAt: string
+}
+```
+
+**Example:**
+
+```typescript
+const session = await auth.login({
+  email: 'user@example.com',
+  password: 'secure-password',
+})
+```
+
+### auth.register()
+
+Register a new user account.
+
+**Signature:**
+
+```typescript
+function register(data: RegistrationData): Promise<User>
+```
+
+**Parameters:**
+
+```typescript
+interface RegistrationData {
+  email: string
+  password: string
+  name: string
+}
+```
+
+**Example:**
+
+```typescript
+const user = await auth.register({
+  email: 'user@example.com',
+  password: 'secure-password',
+  name: 'John Smith',
+})
+```
+
+### auth.logout()
+
+End the current session.
+
+**Signature:**
+
+```typescript
+function logout(sessionId: string): Promise<void>
+```
+
+**Example:**
+
+```typescript
+await auth.logout(sessionId)
+```
+
+## Token Management
+
+### auth.generateToken()
+
+Generate a JWT access token.
+
+**Signature:**
+
+```typescript
+function generateToken(payload: TokenPayload): Promise<string>
+```
+
+**Parameters:**
+
+```typescript
+interface TokenPayload {
+  userId: string
+  email: string
+  role: string
+  expiresIn?: string
+}
+```
+
+**Example:**
+
+```typescript
+const token = await auth.generateToken({
+  userId: 'user_123',
+  email: 'user@example.com',
+  role: 'admin',
+  expiresIn: '15m',
+})
+```
+
+### auth.verifyToken()
+
+Verify and decode a JWT token.
+
+**Signature:**
+
+```typescript
+function verifyToken(token: string): Promise<TokenPayload>
+```
+
+**Example:**
+
+```typescript
+const payload = await auth.verifyToken(token)
+console.log(payload.userId) // "user_123"
+```
+
+### auth.refreshToken()
+
+Refresh an expired access token.
+
+**Signature:**
+
+```typescript
+function refreshToken(refreshToken: string): Promise<Session>
+```
+
+**Example:**
+
+```typescript
+const newSession = await auth.refreshToken(refreshToken)
+```
+
+### auth.revokeToken()
+
+Revoke a token (add to blacklist).
+
+**Signature:**
+
+```typescript
+function revokeToken(token: string): Promise<void>
+```
+
+**Example:**
+
+```typescript
+await auth.revokeToken(token)
+```
+
+## Password Management
+
+### auth.hashPassword()
+
+Hash a password using bcrypt.
+
+**Signature:**
+
+```typescript
+function hashPassword(password: string, rounds?: number): Promise<string>
+```
+
+**Example:**
+
+```typescript
+const hashedPassword = await auth.hashPassword('user-password', 12)
+```
+
+### auth.verifyPassword()
+
+Verify a password against a hash.
+
+**Signature:**
+
+```typescript
+function verifyPassword(password: string, hash: string): Promise<boolean>
+```
+
+**Example:**
+
+```typescript
+const isValid = await auth.verifyPassword('user-password', hashedPassword)
+```
+
+### auth.changePassword()
+
+Change user password.
+
+**Signature:**
+
+```typescript
+function changePassword(userId: string, oldPassword: string, newPassword: string): Promise<void>
+```
+
+**Example:**
+
+```typescript
+await auth.changePassword('user_123', 'old-password', 'new-password')
+```
+
+### auth.resetPassword()
+
+Initiate password reset flow.
+
+**Signature:**
+
+```typescript
+function resetPassword(email: string): Promise<ResetToken>
+```
+
+**Example:**
+
+```typescript
+const resetToken = await auth.resetPassword('user@example.com')
+```
+
+## API Key Management
+
+### auth.createApiKey()
+
+Generate a new API key.
+
+**Signature:**
+
+```typescript
+function createApiKey(options: ApiKeyOptions): Promise<ApiKey>
+```
+
+**Parameters:**
+
+```typescript
+interface ApiKeyOptions {
+  userId: string
+  name: string
+  scopes: string[]
+}
+```
+
+**Returns:**
+
+```typescript
+interface ApiKey {
+  key: string
+  name: string
+  scopes: string[]
+  createdAt: string
+}
+```
+
+**Example:**
+
+```typescript
+const apiKey = await auth.createApiKey({
+  userId: 'user_123',
+  name: 'Production API',
+  scopes: ['read:products', 'write:products'],
+})
+```
+
+### auth.authenticateApiKey()
+
+Authenticate using an API key.
+
+**Signature:**
+
+```typescript
+function authenticateApiKey(key: string): Promise<ApiKeyData>
+```
+
+**Returns:**
+
+```typescript
+interface ApiKeyData {
+  userId: string
+  scopes: string[]
+}
+```
+
+**Example:**
+
+```typescript
+const keyData = await auth.authenticateApiKey('sk_live_abc123...')
+```
+
+### auth.listApiKeys()
+
+List all API keys for a user.
+
+**Signature:**
+
+```typescript
+function listApiKeys(userId: string): Promise<ApiKey[]>
+```
+
+**Example:**
+
+```typescript
+const keys = await auth.listApiKeys('user_123')
+```
+
+### auth.revokeApiKey()
+
+Revoke an API key.
+
+**Signature:**
+
+```typescript
+function revokeApiKey(keyId: string): Promise<void>
+```
+
+**Example:**
+
+```typescript
+await auth.revokeApiKey('key_123')
+```
+
+## Multi-Factor Authentication
+
+### auth.enableMFA()
+
+Enable MFA for a user.
+
+**Signature:**
+
+```typescript
+function enableMFA(options: MFAOptions): Promise<MFASetup>
+```
+
+**Parameters:**
+
+```typescript
+interface MFAOptions {
+  method: 'totp' | 'sms'
+  userId: string
+}
+```
+
+**Returns:**
+
+```typescript
+interface MFASetup {
+  secret: string
+  qrCode: string
+  backupCodes: string[]
+}
+```
+
+**Example:**
+
+```typescript
+const mfaSetup = await auth.enableMFA({
+  method: 'totp',
+  userId: 'user_123',
+})
+```
+
+### auth.verifyMFA()
+
+Verify an MFA code.
+
+**Signature:**
+
+```typescript
+function verifyMFA(options: MFAVerifyOptions): Promise<boolean>
+```
+
+**Parameters:**
+
+```typescript
+interface MFAVerifyOptions {
+  userId: string
+  code: string
+  window?: number
+}
+```
+
+**Example:**
+
+```typescript
+const isValid = await auth.verifyMFA({
+  userId: 'user_123',
+  code: '123456',
+})
+```
+
+### auth.disableMFA()
+
+Disable MFA for a user.
+
+**Signature:**
+
+```typescript
+function disableMFA(options: { userId: string }): Promise<void>
+```
+
+**Example:**
+
+```typescript
+await auth.disableMFA({ userId: 'user_123' })
+```
+
+## Permissions
+
+### auth.authorize()
+
+Check if user has permission.
+
+**Signature:**
+
+```typescript
+function authorize(action: string, resource: SchemaType | Entity): Promise<boolean>
+```
+
+**Example:**
+
+```typescript
+const canEdit = await auth.authorize('edit', $.Product)
+```
+
+### auth.checkPermissions()
+
+Check multiple permissions at once.
+
+**Signature:**
+
+```typescript
+function checkPermissions(checks: PermissionCheck[]): Promise<Record<string, boolean>>
+```
+
+**Parameters:**
+
+```typescript
+interface PermissionCheck {
+  action: string
+  resource: SchemaType | Entity
+}
+```
+
+**Example:**
+
+```typescript
+const permissions = await auth.checkPermissions([
+  { action: 'read', resource: $.Product },
+  { action: 'write', resource: $.Product },
+])
+```
+
+### auth.defineRole()
+
+Define a new role with permissions.
+
+**Signature:**
+
+```typescript
+function defineRole(role: RoleDefinition): Promise<Role>
+```
+
+**Parameters:**
+
+```typescript
+interface RoleDefinition {
+  name: string
+  permissions: string[]
+}
+```
+
+**Example:**
+
+```typescript
+await auth.defineRole({
+  name: 'editor',
+  permissions: ['create:Product', 'read:Product', 'update:Product'],
+})
+```
+
+### auth.assignRole()
+
+Assign a role to a user.
+
+**Signature:**
+
+```typescript
+function assignRole(userId: string, roleName: string): Promise<void>
+```
+
+**Example:**
+
+```typescript
+await auth.assignRole('user_123', 'editor')
+```
+
+### auth.removeRole()
+
+Remove a role from a user.
+
+**Signature:**
+
+```typescript
+function removeRole(userId: string, roleName: string): Promise<void>
+```
+
+**Example:**
+
+```typescript
+await auth.removeRole('user_123', 'editor')
+```
+
+### auth.getUserRoles()
+
+Get all roles for a user.
+
+**Signature:**
+
+```typescript
+function getUserRoles(userId: string): Promise<string[]>
+```
+
+**Example:**
+
+```typescript
+const roles = await auth.getUserRoles('user_123')
+```
+
+### auth.hasRole()
+
+Check if user has a specific role.
+
+**Signature:**
+
+```typescript
+function hasRole(userId: string, roleName: string): Promise<boolean>
+```
+
+**Example:**
+
+```typescript
+const isAdmin = await auth.hasRole('user_123', 'admin')
+```
+
+## OAuth
+
+### auth.oauth()
+
+Initiate OAuth flow.
+
+**Signature:**
+
+```typescript
+function oauth(options: OAuthOptions): Promise<OAuthUrl>
+```
+
+**Parameters:**
+
+```typescript
+interface OAuthOptions {
+  provider: string
+  redirectUri: string
+  scopes?: string[]
+  state?: string
+}
+```
+
+**Example:**
+
+```typescript
+const authUrl = await auth.oauth({
+  provider: 'google',
+  redirectUri: 'https://app.example.com/auth/callback',
+  scopes: ['email', 'profile'],
+})
+```
+
+### auth.oauthCallback()
+
+Handle OAuth callback.
+
+**Signature:**
+
+```typescript
+function oauthCallback(params: OAuthCallback): Promise<OAuthData>
+```
+
+**Parameters:**
+
+```typescript
+interface OAuthCallback {
+  code: string
+  state: string
+}
+```
+
+**Returns:**
+
+```typescript
+interface OAuthData {
+  email: string
+  name: string
+  picture?: string
+}
+```
+
+**Example:**
+
+```typescript
+const oauthData = await auth.oauthCallback({
+  code: 'auth_code',
+  state: 'state_token',
+})
+```
+
+## Error Codes
+
+All functions may throw errors with the following codes:
+
+- `INVALID_CREDENTIALS` - Invalid email or password
+- `TOKEN_EXPIRED` - Token has expired
+- `INVALID_TOKEN` - Token is invalid or malformed
+- `MFA_REQUIRED` - MFA code required
+- `INVALID_MFA_CODE` - MFA code is invalid
+- `ACCOUNT_LOCKED` - Account has been locked
+- `ACCOUNT_DISABLED` - Account has been disabled
+- `INVALID_API_KEY` - API key is invalid
+- `TOKEN_REVOKED` - Token has been revoked
+- `UNAUTHORIZED` - User lacks required permission
+
+## Type Definitions
+
+See full type definitions in the [TypeScript SDK](https://sdk.do).
+
+## License
+
+CC-BY-4.0 (Open Source)

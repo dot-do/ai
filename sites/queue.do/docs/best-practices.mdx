@@ -1,0 +1,766 @@
+---
+$id: https://queue.do/docs/best-practices
+$type: TechArticle
+title: queue.do Best Practices
+description: Production-ready patterns and best practices for building reliable task queue systems with queue.do.
+keywords: [queue, best practices, production, reliability, performance, scalability]
+---
+
+# queue.do Best Practices
+
+Learn production-ready patterns for building reliable, scalable task queue systems.
+
+## Task Design
+
+### 1. Keep Tasks Small and Focused
+
+```typescript
+// Good - single responsibility
+await queue.enqueue($.SendEmailTask, {
+  to: user.email,
+  template: 'welcome',
+})
+
+await queue.enqueue($.CreateUserProfileTask, {
+  userId: user.id,
+})
+
+// Avoid - doing too much
+await queue.enqueue($.UserOnboardingTask, {
+  sendEmail: true,
+  createProfile: true,
+  sendSlackNotification: true,
+  updateAnalytics: true,
+})
+```
+
+### 2. Make Tasks Idempotent
+
+Ensure tasks can be safely retried:
+
+```typescript
+await queue.worker($.ProcessOrderTask, async (task) => {
+  const { orderId } = task.data
+
+  // Check if already processed
+  const existing = await db.get($.ProcessedOrder, orderId)
+  if (existing) {
+    console.log(`Order ${orderId} already processed`)
+    return { skipped: true, reason: 'duplicate' }
+  }
+
+  // Process order
+  const result = await processOrder(orderId)
+
+  // Mark as processed (idempotency key)
+  await db.create($.ProcessedOrder, {
+    $id: orderId,
+    processedAt: new Date(),
+    result,
+  })
+
+  return result
+})
+```
+
+### 3. Store Minimal Data
+
+```typescript
+// Good - store reference
+await queue.enqueue($.ProcessImageTask, {
+  imageId: 'img-123',
+  url: 's3://bucket/image.jpg',
+})
+
+// Avoid - storing large data
+await queue.enqueue($.ProcessImageTask, {
+  imageData: base64EncodedImage, // Large payload
+})
+```
+
+## Priority Management
+
+### Use Appropriate Priorities
+
+```typescript
+// Critical - system health, security, payments
+await queue.enqueue($.PaymentProcessTask, data, {
+  priority: 'critical',
+})
+
+// High - user-facing, time-sensitive
+await queue.enqueue($.NotificationTask, data, {
+  priority: 'high',
+})
+
+// Normal - regular operations (default)
+await queue.enqueue($.EmailTask, data, {
+  priority: 'normal',
+})
+
+// Low - analytics, cleanup, maintenance
+await queue.enqueue($.AnalyticsTask, data, {
+  priority: 'low',
+})
+```
+
+### Avoid Priority Inflation
+
+Don't mark everything as high priority:
+
+```typescript
+// Anti-pattern
+await queue.enqueue($.Task, data, { priority: 'critical' })
+await queue.enqueue($.Task, data, { priority: 'critical' })
+await queue.enqueue($.Task, data, { priority: 'critical' })
+// Everything is critical = nothing is critical
+
+// Better - differentiate
+await queue.enqueue($.PaymentTask, data, { priority: 'critical' })
+await queue.enqueue($.EmailTask, data, { priority: 'normal' })
+await queue.enqueue($.AnalyticsTask, data, { priority: 'low' })
+```
+
+## Error Handling
+
+### Configure Appropriate Retries
+
+```typescript
+// Transient failures - aggressive retries
+await queue.enqueue($.ApiCallTask, data, {
+  retries: 5,
+  retryDelay: 1000,
+  retryBackoff: 'exponential', // 1s, 2s, 4s, 8s, 16s
+})
+
+// Non-transient operations - limited retries
+await queue.enqueue($.CreateUserTask, data, {
+  retries: 1,
+  retryDelay: 5000,
+})
+
+// Non-retriable - no retries
+await queue.enqueue($.LogEventTask, data, {
+  retries: 0,
+})
+```
+
+### Implement Dead Letter Queue Monitoring
+
+Always monitor and process failed tasks:
+
+```typescript
+// Alert on failures
+await queue.worker('$.Task.failed', async (task) => {
+  // Log for investigation
+  console.error('Task failed permanently:', {
+    id: task.id,
+    type: task.$type,
+    attempts: task.attempts,
+    error: task.error,
+    data: task.data,
+  })
+
+  // Alert ops team
+  await alertOps({
+    severity: 'high',
+    title: 'Task Failed',
+    message: `Task ${task.id} failed after ${task.attempts} attempts`,
+    error: task.error,
+  })
+
+  // Store for manual review
+  await db.create($.FailedTask, {
+    taskId: task.id,
+    type: task.$type,
+    data: task.data,
+    error: task.error,
+    failedAt: new Date(),
+  })
+})
+
+// Regular dead letter queue review
+every($.Daily, async () => {
+  const failedCount = await queue.count('$.Task.failed')
+
+  if (failedCount > 100) {
+    await alertOps({
+      severity: 'critical',
+      title: 'High Failed Task Count',
+      message: `${failedCount} tasks in dead letter queue`,
+    })
+  }
+})
+```
+
+### Handle Partial Failures
+
+```typescript
+await queue.worker($.BatchProcessTask, async (task) => {
+  const { items } = task.data
+  const results = []
+  const failures = []
+
+  for (const item of items) {
+    try {
+      const result = await processItem(item)
+      results.push({ item, result, status: 'success' })
+    } catch (error) {
+      failures.push({ item, error, status: 'failed' })
+
+      // Enqueue individual retry
+      await queue.enqueue($.ProcessItemTask, {
+        item,
+        originalBatch: task.id,
+      })
+    }
+  }
+
+  return {
+    total: items.length,
+    succeeded: results.length,
+    failed: failures.length,
+    results,
+    failures,
+  }
+})
+```
+
+## Performance Optimization
+
+### Use Batch Operations
+
+```typescript
+// Good - batch enqueue
+const tasks = users.map((user) => ({
+  type: $.EmailTask,
+  data: { to: user.email },
+}))
+await queue.enqueueBatch(tasks)
+
+// Avoid - individual enqueue
+for (const user of users) {
+  await queue.enqueue($.EmailTask, { to: user.email })
+}
+```
+
+### Set Appropriate Concurrency
+
+```typescript
+// CPU-intensive - limit to CPU count
+await queue.worker($.ImageProcessTask, handler, {
+  concurrency: os.cpus().length,
+})
+
+// I/O-bound - higher concurrency
+await queue.worker($.ApiCallTask, handler, {
+  concurrency: 50,
+})
+
+// Memory-intensive - very limited
+await queue.worker($.ReportGenerationTask, handler, {
+  concurrency: 2,
+})
+
+// Rate-limited external API
+await queue.worker($.ThirdPartyApiTask, handler, {
+  concurrency: 10, // API allows 10 req/s
+  rateLimit: { requests: 10, per: 1000 },
+})
+```
+
+### Implement Graceful Shutdown
+
+```typescript
+let isShuttingDown = false
+
+process.on('SIGTERM', async () => {
+  console.log('Received SIGTERM, starting graceful shutdown')
+  isShuttingDown = true
+
+  // Stop accepting new tasks
+  await worker.pause()
+
+  // Wait for current tasks to complete
+  await worker.drain({ timeout: 30000 })
+
+  // Cleanup and exit
+  await worker.stop()
+  process.exit(0)
+})
+
+// Check in worker
+await queue.worker($.Task, async (task) => {
+  if (isShuttingDown) {
+    // Requeue task
+    await queue.enqueue(task.$type, task.data)
+    return { requeued: true }
+  }
+
+  return await processTask(task)
+})
+```
+
+### Use Connection Pooling
+
+```typescript
+// Redis connection pool
+const redis = new Redis({
+  host: 'localhost',
+  port: 6379,
+  maxRetriesPerRequest: 3,
+  lazyConnect: true,
+  // Connection pool
+  connectionName: 'queue-worker',
+  keepAlive: 30000,
+})
+
+// Database connection pool
+const db = new Pool({
+  host: 'localhost',
+  port: 5432,
+  max: 20, // Maximum pool size
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
+})
+```
+
+## Monitoring and Observability
+
+### Track Key Metrics
+
+```typescript
+// Instrument workers
+await queue.worker(
+  $.Task,
+  async (task) => {
+    const startTime = Date.now()
+
+    try {
+      const result = await processTask(task)
+
+      // Track success
+      metrics.increment('queue.task.completed', {
+        type: task.$type,
+        priority: task.priority,
+      })
+
+      metrics.histogram('queue.task.duration', Date.now() - startTime, {
+        type: task.$type,
+      })
+
+      return result
+    } catch (error) {
+      // Track failure
+      metrics.increment('queue.task.failed', {
+        type: task.$type,
+        error: error.constructor.name,
+      })
+
+      throw error
+    }
+  },
+  {
+    onRetry: (task, attempt, error) => {
+      metrics.increment('queue.task.retry', {
+        type: task.$type,
+        attempt,
+      })
+    },
+  }
+)
+```
+
+### Monitor Queue Health
+
+```typescript
+// Periodic health checks
+every('*/5 * * * *', async () => {
+  // Every 5 minutes
+  const metrics = await queue.metrics()
+
+  // Alert on high pending count
+  if (metrics.pending > 10000) {
+    await alertOps({
+      severity: 'warning',
+      title: 'High Pending Task Count',
+      message: `${metrics.pending} tasks pending`,
+    })
+  }
+
+  // Alert on low throughput
+  if (metrics.throughput < 10) {
+    await alertOps({
+      severity: 'warning',
+      title: 'Low Task Throughput',
+      message: `Only ${metrics.throughput} tasks/s`,
+    })
+  }
+
+  // Alert on high error rate
+  if (metrics.errorRate > 0.1) {
+    await alertOps({
+      severity: 'critical',
+      title: 'High Error Rate',
+      message: `${(metrics.errorRate * 100).toFixed(1)}% error rate`,
+    })
+  }
+})
+```
+
+### Add Structured Logging
+
+```typescript
+await queue.worker($.Task, async (task) => {
+  logger.info('Task started', {
+    taskId: task.id,
+    type: task.$type,
+    priority: task.priority,
+    attempt: task.attempts,
+  })
+
+  try {
+    const result = await processTask(task)
+
+    logger.info('Task completed', {
+      taskId: task.id,
+      duration: Date.now() - task.startedAt.getTime(),
+      result,
+    })
+
+    return result
+  } catch (error) {
+    logger.error('Task failed', {
+      taskId: task.id,
+      attempt: task.attempts,
+      error: error.message,
+      stack: error.stack,
+    })
+
+    throw error
+  }
+})
+```
+
+## Resource Management
+
+### Set Appropriate Timeouts
+
+```typescript
+// Short timeout for simple tasks
+await queue.worker($.ValidateEmailTask, handler, {
+  timeout: 5000, // 5 seconds
+})
+
+// Medium timeout for API calls
+await queue.worker($.ThirdPartyApiTask, handler, {
+  timeout: 30000, // 30 seconds
+})
+
+// Long timeout for heavy processing
+await queue.worker($.ReportGenerationTask, handler, {
+  timeout: 300000, // 5 minutes
+})
+
+// Handle timeouts
+await queue.worker(
+  $.Task,
+  async (task) => {
+    try {
+      return await processTask(task)
+    } catch (error) {
+      if (error.name === 'TimeoutError') {
+        logger.warn('Task timed out', { taskId: task.id })
+        // Optionally requeue with longer timeout
+      }
+      throw error
+    }
+  },
+  {
+    timeout: 30000,
+  }
+)
+```
+
+### Implement Memory Management
+
+```typescript
+// Monitor memory usage
+await queue.worker($.Task, async (task) => {
+  const beforeMem = process.memoryUsage().heapUsed
+
+  try {
+    return await processTask(task)
+  } finally {
+    const afterMem = process.memoryUsage().heapUsed
+    const memoryDelta = afterMem - beforeMem
+
+    if (memoryDelta > 50 * 1024 * 1024) {
+      // 50MB
+      logger.warn('High memory usage', {
+        taskId: task.id,
+        memoryDelta: `${(memoryDelta / 1024 / 1024).toFixed(2)}MB`,
+      })
+    }
+
+    // Force garbage collection if needed
+    if (global.gc && afterMem > 500 * 1024 * 1024) {
+      global.gc()
+    }
+  }
+})
+```
+
+### Limit Queue Size
+
+```typescript
+// Prevent unbounded growth
+const MAX_QUEUE_SIZE = 100000
+
+async function enqueueWithLimit(type, data, options) {
+  const queueSize = await queue.size()
+
+  if (queueSize >= MAX_QUEUE_SIZE) {
+    if (options?.priority === 'critical') {
+      // Always accept critical tasks
+      return await queue.enqueue(type, data, options)
+    } else {
+      // Reject non-critical tasks
+      throw new Error('Queue full')
+    }
+  }
+
+  return await queue.enqueue(type, data, options)
+}
+```
+
+## Testing
+
+### Unit Test Handlers
+
+```typescript
+import { describe, it, expect } from 'vitest'
+
+describe('EmailSendTask', () => {
+  it('should send email', async () => {
+    const task = {
+      id: 'task-123',
+      data: {
+        to: 'test@example.com',
+        subject: 'Test',
+        body: 'Test email',
+      },
+    }
+
+    const result = await emailHandler(task)
+
+    expect(result.sent).toBe(true)
+  })
+
+  it('should retry on failure', async () => {
+    const task = {
+      id: 'task-123',
+      data: { to: 'invalid-email' },
+      attempts: 1,
+    }
+
+    await expect(emailHandler(task)).rejects.toThrow()
+  })
+})
+```
+
+### Integration Test Queues
+
+```typescript
+describe('Queue Integration', () => {
+  it('should process task end-to-end', async () => {
+    // Setup
+    const results = []
+    await queue.worker($.TestTask, async (task) => {
+      results.push(task.data)
+      return { processed: true }
+    })
+
+    // Enqueue
+    await queue.enqueue($.TestTask, { value: 'test' })
+
+    // Wait for processing
+    await sleep(1000)
+
+    // Assert
+    expect(results).toHaveLength(1)
+    expect(results[0].value).toBe('test')
+  })
+})
+```
+
+### Test Retry Logic
+
+```typescript
+describe('Retry Logic', () => {
+  it('should retry failed tasks', async () => {
+    let attempts = 0
+
+    await queue.worker(
+      $.Task,
+      async (task) => {
+        attempts++
+        if (attempts < 3) {
+          throw new Error('Temporary failure')
+        }
+        return { success: true }
+      },
+      {
+        retries: 3,
+      }
+    )
+
+    await queue.enqueue($.Task, { action: 'test' })
+
+    await sleep(5000) // Wait for retries
+
+    expect(attempts).toBe(3)
+  })
+})
+```
+
+## Deployment
+
+### Use Health Checks
+
+```typescript
+// Health check endpoint
+app.get('/health', async (req, res) => {
+  try {
+    // Check queue connection
+    await queue.ping()
+
+    // Check metrics
+    const metrics = await queue.metrics()
+
+    res.json({
+      status: 'healthy',
+      queue: {
+        pending: metrics.pending,
+        processing: metrics.processing,
+        workers: metrics.workers,
+      },
+    })
+  } catch (error) {
+    res.status(503).json({
+      status: 'unhealthy',
+      error: error.message,
+    })
+  }
+})
+```
+
+### Configure for High Availability
+
+```typescript
+// Multiple worker instances
+// worker-1.js
+await queue.worker($.Task, handler, {
+  workerId: 'worker-1',
+  concurrency: 10,
+})
+
+// worker-2.js
+await queue.worker($.Task, handler, {
+  workerId: 'worker-2',
+  concurrency: 10,
+})
+
+// worker-3.js
+await queue.worker($.Task, handler, {
+  workerId: 'worker-3',
+  concurrency: 10,
+})
+
+// Load balancing across workers happens automatically
+```
+
+### Use Environment Configuration
+
+```typescript
+// config.ts
+export const queueConfig = {
+  backend: process.env.QUEUE_BACKEND || 'redis',
+  redisUrl: process.env.QUEUE_REDIS_URL,
+  concurrency: parseInt(process.env.QUEUE_CONCURRENCY || '10'),
+  timeout: parseInt(process.env.QUEUE_TIMEOUT || '30000'),
+  retries: parseInt(process.env.QUEUE_RETRIES || '3'),
+  retryBackoff: process.env.QUEUE_RETRY_BACKOFF || 'exponential',
+}
+
+// Use in application
+await queue.worker($.Task, handler, queueConfig)
+```
+
+## Anti-Patterns
+
+### Don't Block the Worker
+
+```typescript
+// Bad - synchronous blocking
+await queue.worker($.Task, async (task) => {
+  // Blocking operation
+  const hash = crypto.pbkdf2Sync(password, salt, 100000, 64, 'sha512')
+  return { hash }
+})
+
+// Good - use async operations
+await queue.worker($.Task, async (task) => {
+  const hash = await crypto.pbkdf2(password, salt, 100000, 64, 'sha512')
+  return { hash }
+})
+```
+
+### Don't Ignore Errors
+
+```typescript
+// Bad - swallowing errors
+await queue.worker($.Task, async (task) => {
+  try {
+    await processTask(task)
+  } catch (error) {
+    console.log('Error:', error)
+    // Task marked as success despite failure!
+  }
+})
+
+// Good - propagate errors
+await queue.worker($.Task, async (task) => {
+  try {
+    return await processTask(task)
+  } catch (error) {
+    logger.error('Task failed', { error, taskId: task.id })
+    throw error // Let queue handle retry
+  }
+})
+```
+
+### Don't Mix Concerns
+
+```typescript
+// Bad - mixing multiple responsibilities
+await queue.worker($.Task, async (task) => {
+  await sendEmail(task.data)
+  await updateDatabase(task.data)
+  await callExternalAPI(task.data)
+  await generateReport(task.data)
+})
+
+// Good - separate task types
+await queue.worker($.EmailTask, sendEmailHandler)
+await queue.worker($.DatabaseUpdateTask, updateDatabaseHandler)
+await queue.worker($.ApiCallTask, callApiHandler)
+await queue.worker($.ReportTask, generateReportHandler)
+```
+
+## Related
+
+- [Getting Started](./getting-started)
+- [Architecture](./architecture)
+- [Troubleshooting](./troubleshooting)
+- [API Reference](../api/)

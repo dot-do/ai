@@ -1,0 +1,106 @@
+---
+$id: https://integrations.do/facebook
+$type: Integration
+name: Facebook
+service: facebook
+description: Facebook is a social media and advertising platform used by individuals and businesses to connect, share content, and promote products or services. Only supports Facebook Pages, not Facebook Personal accounts.
+category: marketing
+sdkBased: false
+baseUrl: https://api.facebook.com
+
+auth:
+  type: oauth2
+  authorizationUrl: https://www.facebook.com/v20.0/dialog/oauth
+  tokenUrl: https://graph.facebook.com/v20.0/oauth/access_token
+  scopes:
+    - public_profile
+    - email
+    - pages_show_list
+    - pages_read_engagement
+    - pages_manage_posts
+    - pages_manage_engagement
+    - pages_read_user_content
+    - pages_manage_metadata
+    - pages_messaging
+    - read_insights
+    - business_management
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Facebook actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: false
+  events: []
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://www.facebook.com/
+  apiDocs: https://www.facebook.com/
+---
+
+# Facebook Integration
+
+Facebook is a social media and advertising platform used by individuals and businesses to connect, share content, and promote products or services. Only supports Facebook Pages, not Facebook Personal accounts.
+
+## Quick Start
+
+```typescript
+import { FacebookClient } from '@dotdo/sdk.do/integrations/facebook'
+
+const facebook = new FacebookClient({
+  apiKey: process.env.FACEBOOK_API_KEY,
+})
+
+const result = await facebook.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Facebook provides 44 actions through the Composio API.
+
+## License
+
+MIT

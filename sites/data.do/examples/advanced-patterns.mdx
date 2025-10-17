@@ -1,0 +1,717 @@
+---
+$id: https://data.do/examples/advanced-patterns
+$type: https://schema.org/TechArticle
+name: data.do Advanced Patterns
+description: Complex transformations, data pipelines, ETL workflows, and aggregations
+author:
+  $type: https://schema.org/Organization
+  name: .do
+  url: https://do.inc
+license:
+  documentation: CC-BY-4.0
+  code: MIT
+---
+
+# Advanced Patterns
+
+This guide demonstrates advanced data.do patterns including complex transformations, data pipelines, ETL workflows, and aggregations.
+
+## Complex Transformations
+
+### Chained Transformations
+
+Chain multiple transformations together for complex data processing.
+
+```typescript
+import { $, transform } from 'sdk.do/data'
+
+// Chain transformations with pipeline
+const processed = await transform(rawData)
+  .normalize($.Customer)
+  .validate($.Customer)
+  .enrich(['geocode', 'creditScore'])
+  .map((customer) => ({
+    ...customer,
+    fullName: `${customer.firstName} ${customer.lastName}`,
+    tier: calculateTier(customer),
+  }))
+  .filter((customer) => customer.tier !== 'inactive')
+  .execute()
+
+console.log(`Processed ${processed.length} customers`)
+```
+
+### Custom Transform Pipeline
+
+Build custom transformation pipelines with error handling.
+
+```typescript
+import { $, transform } from 'sdk.do/data'
+
+async function buildCustomerPipeline(rawCustomers: any[]) {
+  const results = {
+    successful: [],
+    failed: [],
+    errors: [],
+  }
+
+  for (const raw of rawCustomers) {
+    try {
+      // Step 1: Normalize structure
+      const normalized = await transform(raw, {
+        name: (v) => v?.trim(),
+        email: (v) => v?.toLowerCase().trim(),
+        phone: (v) => formatPhone(v),
+      })
+
+      // Step 2: Validate
+      const validationResult = await validate(normalized, $.Customer, { detailed: true })
+      if (!validationResult.valid) {
+        results.failed.push(raw)
+        results.errors.push({ record: raw, errors: validationResult.errors })
+        continue
+      }
+
+      // Step 3: Enrich with external data
+      const enriched = await enrichCustomer(normalized)
+
+      // Step 4: Calculate derived fields
+      const final = {
+        ...enriched,
+        tier: calculateTier(enriched),
+        ltv: await calculateLifetimeValue(enriched),
+        segment: classifySegment(enriched),
+      }
+
+      results.successful.push(final)
+    } catch (error) {
+      results.failed.push(raw)
+      results.errors.push({ record: raw, error: error.message })
+    }
+  }
+
+  return results
+}
+
+// Usage
+const result = await buildCustomerPipeline(rawCustomers)
+console.log(`Success: ${result.successful.length}, Failed: ${result.failed.length}`)
+```
+
+### Multi-Format Transformation
+
+Transform data between multiple formats.
+
+```typescript
+import { $, transform } from 'sdk.do/data'
+
+// JSON to CSV
+const csvData = await transform(jsonOrders, {
+  from: 'json',
+  to: 'csv',
+  options: {
+    headers: true,
+    delimiter: ',',
+    flatten: true, // Flatten nested objects
+  },
+})
+
+// CSV to JSON
+const jsonData = await transform(csvData, {
+  from: 'csv',
+  to: 'json',
+  options: {
+    headers: true,
+    skipEmptyLines: true,
+    cast: {
+      total: 'number',
+      createdAt: 'date',
+    },
+  },
+})
+
+// JSON to XML
+const xmlData = await transform(jsonOrders, {
+  from: 'json',
+  to: 'xml',
+  options: {
+    rootElement: 'orders',
+    itemElement: 'order',
+    attributeFields: ['id', 'status'],
+  },
+})
+
+// XML to JSON
+const parsedOrders = await transform(xmlData, {
+  from: 'xml',
+  to: 'json',
+  options: {
+    explicitArray: false,
+    mergeAttrs: true,
+  },
+})
+```
+
+## Data Pipelines
+
+### ETL Pipeline
+
+Build a complete Extract-Transform-Load pipeline.
+
+```typescript
+import { $, pipeline } from 'sdk.do/data'
+
+await pipeline()
+  // Extract: Multiple sources
+  .extract([
+    { source: 'csv', path: './data/customers.csv' },
+    { source: 'json', path: './data/orders.json' },
+    { source: 'api', url: 'https://api.example.com/products' },
+  ])
+
+  // Transform: Process each dataset
+  .transform({
+    customers: [transform.normalize($.Customer), transform.validate($.Customer), transform.enrich(['geocode', 'preferences'])],
+    orders: [transform.normalize($.Order), transform.validate($.Order), transform.enrich(['customer', 'shipping'])],
+    products: [transform.normalize($.Product), transform.validate($.Product)],
+  })
+
+  // Join: Combine datasets
+  .join({
+    orders: { customerId: 'customers.id' },
+    orderItems: { productId: 'products.id' },
+  })
+
+  // Aggregate: Calculate metrics
+  .aggregate({
+    customerMetrics: {
+      groupBy: 'customerId',
+      metrics: {
+        totalOrders: { $count: 'orders' },
+        totalSpent: { $sum: 'orders.total' },
+        avgOrderValue: { $avg: 'orders.total' },
+      },
+    },
+  })
+
+  // Load: Store results
+  .load({
+    destination: 'database',
+    schema: 'analytics',
+    tables: {
+      customers: 'customers',
+      orders: 'orders',
+      metrics: 'customer_metrics',
+    },
+    mode: 'upsert',
+  })
+
+  // Execute pipeline
+  .execute()
+
+console.log('ETL pipeline completed')
+```
+
+### Streaming Pipeline
+
+Process streaming data in real-time.
+
+```typescript
+import { $, pipeline } from 'sdk.do/data'
+
+// Real-time event processing pipeline
+await pipeline()
+  // Stream from Kafka
+  .stream({
+    source: 'kafka',
+    topic: 'events',
+    deserializer: 'json',
+  })
+
+  // Filter events
+  .filter((event) => event.type === 'purchase')
+
+  // Transform
+  .transform([transform.normalize($.Order), transform.validate($.Order), transform.enrich(['customer', 'inventory'])])
+
+  // Branch based on conditions
+  .branch({
+    highValue: {
+      condition: (order) => order.total > 1000,
+      actions: [
+        // Send to high-value queue
+        async (order) => {
+          await send($.Order.highValue, order)
+          await notify($.Sales, { type: 'high-value-order', order })
+        },
+      ],
+    },
+    standard: {
+      actions: [
+        // Send to standard queue
+        async (order) => {
+          await send($.Order.standard, order)
+        },
+      ],
+    },
+  })
+
+  // Load to database
+  .load({
+    destination: 'database',
+    table: 'orders',
+  })
+
+  // Start streaming
+  .run()
+
+console.log('Streaming pipeline started')
+```
+
+### Incremental Pipeline
+
+Process data incrementally with checkpointing.
+
+```typescript
+import { $, pipeline } from 'sdk.do/data'
+
+await pipeline()
+  // Extract incrementally
+  .extract({
+    source: 'database',
+    table: 'events',
+    incremental: {
+      field: 'createdAt',
+      checkpoint: await getLastCheckpoint(),
+    },
+  })
+
+  // Transform
+  .transform([transform.normalize($.Event), transform.validate($.Event)])
+
+  // Load
+  .load({
+    destination: 'datawarehouse',
+    table: 'events',
+  })
+
+  // Update checkpoint
+  .checkpoint(async (lastProcessed) => {
+    await saveCheckpoint(lastProcessed)
+  })
+
+  // Execute
+  .execute()
+
+console.log('Incremental pipeline completed')
+```
+
+## Complex Queries
+
+### Multi-level Joins
+
+Query with complex nested relationships.
+
+```typescript
+import { $, query } from 'sdk.do/data'
+
+const ordersWithDetails = await query($.Order)
+  .where({ status: 'pending' })
+  .include({
+    // Include customer with nested addresses
+    customer: query($.Customer).include({
+      addresses: query($.Address).where({ type: 'shipping' }),
+      preferences: true,
+    }),
+
+    // Include items with nested products
+    items: query($.OrderItem).include({
+      product: query($.Product).include({
+        category: true,
+        manufacturer: true,
+      }),
+    }),
+
+    // Include shipping with nested carrier
+    shipping: query($.Shipment).include({
+      carrier: true,
+      tracking: true,
+    }),
+
+    // Include payments
+    payments: query($.Payment).orderBy('createdAt', 'desc'),
+  })
+  .execute()
+
+console.log(`Found ${ordersWithDetails.length} orders with complete details`)
+```
+
+### Complex Aggregations
+
+Perform sophisticated aggregations with grouping.
+
+```typescript
+import { $, query } from 'sdk.do/data'
+
+// Sales report with multiple dimensions
+const salesReport = await query($.Order)
+  .where({
+    status: 'completed',
+    createdAt: { $gte: '2025-01-01', $lte: '2025-12-31' },
+  })
+  .aggregate({
+    // Revenue metrics
+    revenue: { $sum: 'total' },
+    avgOrderValue: { $avg: 'total' },
+    minOrder: { $min: 'total' },
+    maxOrder: { $max: 'total' },
+
+    // Count metrics
+    orderCount: { $count: '*' },
+    uniqueCustomers: { $countDistinct: 'customerId' },
+
+    // Product metrics
+    topProducts: {
+      $groupBy: 'items.productId',
+      $sum: 'items.quantity',
+      $orderBy: 'desc',
+      $limit: 10,
+    },
+
+    // Time-based metrics
+    dailyRevenue: {
+      $groupBy: { $dayOfYear: 'createdAt' },
+      $sum: 'total',
+    },
+  })
+  .groupBy(['month', 'category', 'region'])
+  .having({
+    revenue: { $gte: 10000 },
+  })
+  .execute()
+
+console.log('Sales report:', salesReport)
+```
+
+### Window Functions
+
+Use window functions for advanced analytics.
+
+```typescript
+import { $, query } from 'sdk.do/data'
+
+// Calculate running totals and rankings
+const orderAnalytics = await query($.Order)
+  .select([
+    'id',
+    'customerId',
+    'total',
+    'createdAt',
+    {
+      // Running total per customer
+      runningTotal: {
+        $sum: 'total',
+        $over: {
+          partitionBy: 'customerId',
+          orderBy: 'createdAt',
+        },
+      },
+    },
+    {
+      // Rank orders by total
+      rank: {
+        $rank: {},
+        $over: {
+          partitionBy: 'customerId',
+          orderBy: { total: 'desc' },
+        },
+      },
+    },
+    {
+      // Moving average (last 3 orders)
+      movingAvg: {
+        $avg: 'total',
+        $over: {
+          partitionBy: 'customerId',
+          orderBy: 'createdAt',
+          rows: { preceding: 2, following: 0 },
+        },
+      },
+    },
+  ])
+  .execute()
+```
+
+## Batch Processing
+
+### Parallel Batch Processing
+
+Process large datasets in parallel with progress tracking.
+
+```typescript
+import { $, batch } from 'sdk.do/data'
+
+// Process 1 million records efficiently
+await batch.transform(
+  records,
+  async (record) => {
+    // Transform each record
+    const normalized = await transform(record, $.Customer.normalize)
+    const validated = await validate(normalized, $.Customer)
+
+    if (!validated) return null
+
+    // Enrich with external data
+    const enriched = await enrichCustomer(normalized)
+
+    return enriched
+  },
+  {
+    batchSize: 1000, // Process 1000 at a time
+    concurrency: 10, // 10 parallel workers
+    errorHandling: 'continue', // Continue on errors
+
+    onProgress: (processed, total) => {
+      const percent = ((processed / total) * 100).toFixed(2)
+      console.log(`Progress: ${processed}/${total} (${percent}%)`)
+    },
+
+    onError: (error, record, index) => {
+      console.error(`Error processing record ${index}:`, error.message)
+      // Log to error tracking
+      logError({ record, error, index })
+    },
+
+    onComplete: (results) => {
+      const successful = results.filter((r) => r !== null)
+      console.log(`Completed: ${successful.length}/${results.length} successful`)
+    },
+  }
+)
+```
+
+### Batch with Retries
+
+Implement retry logic for failed batch operations.
+
+```typescript
+import { $, batch } from 'sdk.do/data'
+
+async function batchWithRetry(records: any[], maxRetries = 3) {
+  let failedRecords = []
+  let attempt = 0
+
+  while (attempt < maxRetries) {
+    const toProcess = attempt === 0 ? records : failedRecords
+    failedRecords = []
+
+    await batch.create($.Customer, toProcess, {
+      batchSize: 100,
+      errorHandling: 'continue',
+      onError: (error, record) => {
+        failedRecords.push(record)
+      },
+    })
+
+    if (failedRecords.length === 0) {
+      console.log('All records processed successfully')
+      break
+    }
+
+    attempt++
+    console.log(`Attempt ${attempt}: ${failedRecords.length} records failed, retrying...`)
+
+    // Exponential backoff
+    await sleep(Math.pow(2, attempt) * 1000)
+  }
+
+  if (failedRecords.length > 0) {
+    console.error(`Failed to process ${failedRecords.length} records after ${maxRetries} attempts`)
+    return failedRecords
+  }
+
+  return []
+}
+```
+
+## Data Quality
+
+### Automated Data Quality Checks
+
+Implement comprehensive data quality monitoring.
+
+```typescript
+import { $, quality } from 'sdk.do/data'
+
+// Define quality rules
+await quality.define($.Customer, {
+  completeness: {
+    required: ['name', 'email', 'phone', 'address'],
+    threshold: 0.98
+  },
+  accuracy: {
+    email: { format: 'email' },
+    phone: { format: 'e164' },
+    zipCode: { format: 'postal' }
+  },
+  consistency: {
+    state: { values: ['AL', 'AK', 'AZ', ...] },
+    country: { default: 'US' }
+  },
+  timeliness: {
+    lastUpdated: { maxAge: '30d' }
+  },
+  uniqueness: {
+    email: { duplicates: 'error' },
+    phone: { duplicates: 'warn' }
+  }
+})
+
+// Run quality check
+const report = await quality.check($.Customer, {
+  sample: 0.1, // Check 10% sample
+  detailed: true
+})
+
+console.log('Quality Report:', {
+  score: report.score,
+  completeness: report.completeness,
+  accuracy: report.accuracy,
+  consistency: report.consistency,
+  timeliness: report.timeliness,
+  uniqueness: report.uniqueness
+})
+
+// Auto-fix issues
+if (report.score < 0.95) {
+  console.log('Quality below threshold, auto-fixing...')
+
+  const fixed = await quality.fix($.Customer, {
+    strategies: ['normalize', 'validate', 'deduplicate'],
+    dryRun: false
+  })
+
+  console.log(`Fixed ${fixed.count} issues`)
+}
+```
+
+### Data Deduplication
+
+Identify and merge duplicate records.
+
+```typescript
+import { $, data, deduplicate } from 'sdk.do/data'
+
+// Find duplicates
+const duplicates = await deduplicate($.Customer, {
+  keys: ['email', 'phone'],
+  fuzzy: {
+    name: { threshold: 0.8 }, // 80% similarity
+    address: { threshold: 0.7 },
+  },
+})
+
+console.log(`Found ${duplicates.length} duplicate groups`)
+
+// Merge duplicates
+for (const group of duplicates) {
+  // Select master record (most complete)
+  const master = group.sort((a, b) => {
+    const scoreA = calculateCompletenessScore(a)
+    const scoreB = calculateCompletenessScore(b)
+    return scoreB - scoreA
+  })[0]
+
+  // Merge data from duplicates
+  const merged = {
+    ...master,
+    // Take non-null values from duplicates
+    ...mergeNonNull(group),
+  }
+
+  // Update master
+  await data.update(master.$id, merged)
+
+  // Delete duplicates
+  for (const duplicate of group.slice(1)) {
+    await data.delete(duplicate.$id, {
+      reason: `Merged into ${master.$id}`,
+    })
+  }
+
+  console.log(`Merged ${group.length} duplicates into ${master.$id}`)
+}
+```
+
+## Performance Optimization
+
+### Query Optimization
+
+Optimize queries with indexes and caching.
+
+```typescript
+import { $, query, index } from 'sdk.do/data'
+
+// Create composite indexes
+await index.create($.Order, ['customerId', 'status', 'createdAt'], {
+  type: 'btree',
+})
+
+await index.create($.Product, ['category', 'price'], {
+  type: 'btree',
+})
+
+// Optimized query using indexes
+const orders = await query($.Order)
+  .where({
+    customerId: 'customer-123', // Indexed
+    status: 'pending', // Indexed
+    createdAt: { $gte: '2025-01-01' }, // Indexed
+  })
+  .select(['id', 'total', 'status']) // Only needed fields
+  .hint('idx_order_customer_status_created') // Use specific index
+  .cache({ ttl: '5m' }) // Cache results
+  .execute()
+
+// Check query plan
+const plan = await query($.Order).where({ customerId: 'customer-123' }).explain()
+
+console.log('Query plan:', plan)
+// {
+//   indexUsed: 'idx_order_customer_status_created',
+//   estimatedRows: 100,
+//   scanType: 'index_scan',
+//   cost: 5.2
+// }
+```
+
+### Connection Pooling
+
+Configure connection pooling for optimal performance.
+
+```typescript
+import { configure } from 'sdk.do/data'
+
+configure({
+  connection: {
+    pool: {
+      min: 5, // Minimum connections
+      max: 20, // Maximum connections
+      acquireTimeout: 30000, // Wait up to 30s for connection
+      idleTimeout: 60000, // Close idle connections after 60s
+      reapInterval: 1000, // Check for idle connections every 1s
+    },
+  },
+
+  // Enable statement caching
+  cache: {
+    statements: true,
+    maxSize: 100,
+  },
+})
+```
+
+## License
+
+- Documentation: [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/)
+- Code Examples: [MIT](https://opensource.org/licenses/MIT)

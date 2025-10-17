@@ -1,0 +1,534 @@
+---
+$id: https://benchmarks.do
+$type: WebSite
+title: benchmarks.do - Performance Benchmarking and Load Testing Framework
+description: Benchmark system performance, run load tests, track latency and throughput. Ensure your platform meets performance SLAs with comprehensive benchmarking.
+keywords: [benchmarks, performance testing, load testing, latency, throughput, performance monitoring, stress testing]
+author:
+  $type: Organization
+  name: .do Platform
+license: MIT
+---
+
+# benchmarks.do
+
+**Performance Benchmarking and Load Testing Framework**
+
+benchmarks.do provides comprehensive benchmarking capabilities for the `.do` platform. Measure performance, run load tests, track latency and throughput, and ensure your systems meet performance requirements.
+
+## What is benchmarks.do?
+
+benchmarks.do is the benchmarking framework for performance validation:
+
+- **Performance Benchmarks**: Measure system performance metrics
+- **Load Testing**: Simulate high traffic and load
+- **Stress Testing**: Find breaking points and limits
+- **Latency Tracking**: Monitor response times and percentiles
+- **Throughput Measurement**: Track requests per second
+- **Resource Monitoring**: CPU, memory, network usage
+- **Regression Detection**: Identify performance degradation
+
+## Quick Start
+
+```bash
+pnpm add sdk.do
+```
+
+```typescript
+import $, { benchmarks } from 'sdk.do'
+
+// Create benchmark
+const benchmark = await benchmarks.create({
+  name: 'API Response Time',
+  description: 'Benchmark API endpoint performance',
+
+  target: {
+    url: 'https://api.example.com/users',
+    method: 'GET',
+  },
+
+  load: {
+    users: 100, // Concurrent users
+    duration: '5m', // Test duration
+    rampUp: '30s', // Ramp up time
+  },
+
+  assertions: [
+    { metric: 'p95_latency', operator: 'lt', value: 500 }, // p95 < 500ms
+    { metric: 'error_rate', operator: 'lt', value: 0.01 }, // < 1% errors
+    { metric: 'throughput', operator: 'gt', value: 100 }, // > 100 rps
+  ],
+})
+
+// Run benchmark
+const results = await benchmarks.run(benchmark.id)
+
+console.log('Benchmark Results:')
+console.log('- Duration:', results.duration, 'ms')
+console.log('- Total Requests:', results.totalRequests)
+console.log('- Throughput:', results.throughput, 'rps')
+console.log('- Avg Latency:', results.avgLatency, 'ms')
+console.log('- P95 Latency:', results.p95Latency, 'ms')
+console.log('- P99 Latency:', results.p99Latency, 'ms')
+console.log('- Error Rate:', results.errorRate)
+console.log('- Passed:', results.passed)
+```
+
+## Key Features
+
+### Performance Benchmarks
+
+Measure system performance:
+
+```typescript
+// Simple performance benchmark
+const perfBench = await benchmarks.create({
+  name: 'Database Query Performance',
+  type: 'performance',
+
+  target: async () => {
+    // Code to benchmark
+    const users = await db.list($.User, {
+      where: { status: 'active' },
+      limit: 100,
+    })
+    return users
+  },
+
+  iterations: 1000,
+  warmup: 100,
+
+  metrics: ['latency', 'throughput', 'memory_usage', 'cpu_usage'],
+})
+
+const results = await benchmarks.run(perfBench.id)
+
+console.log('Performance Results:')
+console.log('- Avg Latency:', results.avgLatency, 'ms')
+console.log('- Min Latency:', results.minLatency, 'ms')
+console.log('- Max Latency:', results.maxLatency, 'ms')
+console.log('- P50:', results.p50, 'ms')
+console.log('- P95:', results.p95, 'ms')
+console.log('- P99:', results.p99, 'ms')
+console.log('- Throughput:', results.throughput, 'ops/sec')
+```
+
+### Load Testing
+
+Simulate realistic load:
+
+```typescript
+// Load test
+const loadTest = await benchmarks.create({
+  name: 'API Load Test',
+  type: 'load',
+
+  scenarios: [
+    {
+      name: 'Browse Products',
+      weight: 0.6, // 60% of traffic
+      steps: [
+        { request: 'GET /api/products' },
+        { think: 2000 }, // 2s think time
+        { request: 'GET /api/products/:id' },
+      ],
+    },
+    {
+      name: 'Checkout',
+      weight: 0.3, // 30% of traffic
+      steps: [{ request: 'POST /api/cart/add' }, { think: 1000 }, { request: 'POST /api/checkout' }],
+    },
+    {
+      name: 'Search',
+      weight: 0.1, // 10% of traffic
+      steps: [{ request: 'GET /api/search?q=laptop' }],
+    },
+  ],
+
+  load: {
+    type: 'gradual',
+    stages: [
+      { duration: '1m', target: 10 }, // Ramp to 10 users
+      { duration: '3m', target: 50 }, // Ramp to 50 users
+      { duration: '5m', target: 100 }, // Ramp to 100 users
+      { duration: '5m', target: 100 }, // Hold at 100 users
+      { duration: '2m', target: 0 }, // Ramp down
+    ],
+  },
+
+  thresholds: {
+    http_req_duration: ['p(95)<500'], // 95th percentile < 500ms
+    http_req_failed: ['rate<0.01'], // Error rate < 1%
+  },
+})
+
+const results = await benchmarks.run(loadTest.id)
+```
+
+### Stress Testing
+
+Find system limits:
+
+```typescript
+// Stress test
+const stressTest = await benchmarks.create({
+  name: 'API Stress Test',
+  type: 'stress',
+
+  target: {
+    url: 'https://api.example.com/users',
+    method: 'POST',
+  },
+
+  load: {
+    type: 'spike',
+    stages: [
+      { duration: '2m', target: 50 }, // Normal load
+      { duration: '1m', target: 500 }, // Spike to 500
+      { duration: '2m', target: 500 }, // Hold spike
+      { duration: '1m', target: 50 }, // Back to normal
+      { duration: '5m', target: 1000 }, // Extreme load
+      { duration: '5m', target: 1000 }, // Hold extreme
+    ],
+  },
+
+  objectives: ['find_max_throughput', 'find_breaking_point', 'measure_recovery_time'],
+})
+
+const results = await benchmarks.run(stressTest.id)
+
+console.log('Stress Test Results:')
+console.log('- Max Throughput:', results.maxThroughput, 'rps')
+console.log('- Breaking Point:', results.breakingPoint, 'users')
+console.log('- System Degraded At:', results.degradationPoint, 'users')
+console.log('- Recovery Time:', results.recoveryTime, 'seconds')
+```
+
+### Latency Analysis
+
+Track response times:
+
+```typescript
+// Latency benchmark
+const latencyBench = await benchmarks.create({
+  name: 'Endpoint Latency Analysis',
+
+  endpoints: ['GET /api/users', 'GET /api/products', 'POST /api/orders', 'GET /api/analytics'],
+
+  load: {
+    users: 50,
+    duration: '10m',
+  },
+
+  latencyMetrics: {
+    percentiles: [50, 75, 90, 95, 99, 99.9],
+    buckets: [10, 50, 100, 250, 500, 1000, 2500, 5000, 10000],
+  },
+})
+
+const results = await benchmarks.run(latencyBench.id)
+
+// Latency heatmap
+const heatmap = await benchmarks.latencyHeatmap(results.id, {
+  interval: '1m',
+})
+
+// Per-endpoint breakdown
+results.endpoints.forEach((endpoint) => {
+  console.log(`\n${endpoint.path}:`)
+  console.log('- P50:', endpoint.p50, 'ms')
+  console.log('- P95:', endpoint.p95, 'ms')
+  console.log('- P99:', endpoint.p99, 'ms')
+  console.log('- P99.9:', endpoint.p999, 'ms')
+})
+```
+
+### Throughput Measurement
+
+Measure processing capacity:
+
+```typescript
+// Throughput benchmark
+const throughputBench = await benchmarks.create({
+  name: 'Queue Processing Throughput',
+
+  target: async () => {
+    // Process queue item
+    const item = await queue.pop()
+    await processItem(item)
+  },
+
+  mode: 'sustained',
+  duration: '5m',
+
+  metrics: [
+    'throughput', // Items/second
+    'queue_depth', // Backlog size
+    'processing_time', // Time per item
+    'utilization', // Worker utilization
+  ],
+})
+
+const results = await benchmarks.run(throughputBench.id)
+
+console.log('Throughput Results:')
+console.log('- Avg Throughput:', results.avgThroughput, 'items/sec')
+console.log('- Peak Throughput:', results.peakThroughput, 'items/sec')
+console.log('- Total Processed:', results.totalProcessed)
+console.log('- Avg Queue Depth:', results.avgQueueDepth)
+```
+
+### Resource Monitoring
+
+Monitor system resources:
+
+```typescript
+// Resource monitoring
+const resourceBench = await benchmarks.create({
+  name: 'Resource Usage Benchmark',
+
+  target: {
+    service: 'api-server',
+    environment: 'production',
+  },
+
+  monitoring: {
+    interval: '1s',
+    metrics: ['cpu_usage', 'memory_usage', 'network_io', 'disk_io', 'goroutines', 'heap_usage'],
+  },
+
+  load: {
+    users: 100,
+    duration: '10m',
+  },
+})
+
+const results = await benchmarks.run(resourceBench.id)
+
+console.log('Resource Usage:')
+console.log('- Avg CPU:', results.avgCPU, '%')
+console.log('- Peak CPU:', results.peakCPU, '%')
+console.log('- Avg Memory:', results.avgMemory, 'MB')
+console.log('- Peak Memory:', results.peakMemory, 'MB')
+console.log('- Network In:', results.networkIn, 'MB')
+console.log('- Network Out:', results.networkOut, 'MB')
+```
+
+### Comparative Benchmarks
+
+Compare performance across configurations:
+
+```typescript
+// Compare configurations
+const comparison = await benchmarks.compare({
+  name: 'Database Driver Comparison',
+
+  configurations: [
+    { name: 'PostgreSQL', driver: 'pg' },
+    { name: 'MySQL', driver: 'mysql2' },
+    { name: 'MongoDB', driver: 'mongodb' },
+  ],
+
+  benchmark: {
+    operations: [
+      { type: 'insert', count: 10000 },
+      { type: 'select', count: 10000 },
+      { type: 'update', count: 5000 },
+      { type: 'delete', count: 2000 },
+    ],
+  },
+
+  metrics: ['latency', 'throughput', 'memory_usage'],
+})
+
+// Results by configuration
+comparison.results.forEach((result) => {
+  console.log(`\n${result.name}:`)
+  console.log('- Avg Latency:', result.avgLatency, 'ms')
+  console.log('- Throughput:', result.throughput, 'ops/sec')
+  console.log('- Memory:', result.memoryUsage, 'MB')
+})
+
+console.log('\nWinner:', comparison.winner.name)
+```
+
+### Regression Detection
+
+Detect performance regressions:
+
+```typescript
+// Regression detection
+const regression = await benchmarks.regression({
+  name: 'API Performance Regression',
+
+  baseline: {
+    version: 'v1.0.0',
+    results: baselineResults,
+  },
+
+  current: {
+    version: 'v1.1.0',
+    benchmark: currentBenchmark,
+  },
+
+  thresholds: {
+    latency: {
+      p50: { max: 1.1 }, // Max 10% increase
+      p95: { max: 1.15 }, // Max 15% increase
+      p99: { max: 1.2 }, // Max 20% increase
+    },
+    throughput: {
+      min: 0.9, // Min 90% of baseline
+    },
+    errorRate: {
+      max: 1.5, // Max 50% increase
+    },
+  },
+})
+
+if (regression.detected) {
+  console.error('Performance Regression Detected:')
+  regression.regressions.forEach((reg) => {
+    console.error(`- ${reg.metric}: ${reg.baseline} → ${reg.current}`)
+    console.error(`  Change: ${reg.change}`)
+  })
+
+  // Fail CI
+  process.exit(1)
+}
+
+console.log('✓ No regression detected')
+```
+
+## Semantic Patterns
+
+benchmarks.do uses semantic `$.Subject.predicate.Object` patterns:
+
+```typescript
+import $ from 'sdk.do'
+
+// Benchmark types
+$.Benchmark
+$.LoadTest
+$.StressTest
+$.PerformanceTest
+$.LatencyTest
+
+// Benchmark operations
+$.Benchmark.measures.Performance
+$.LoadTest.simulates.Traffic
+$.StressTest.finds.Limits
+$.System.handles.Load
+
+// Benchmark patterns
+$.System.performs.under.Load
+$.Latency.increases.with.Load
+$.Throughput.peaks.at.Limit
+```
+
+## Integration with .do Platform
+
+benchmarks.do integrates with analytics and monitoring:
+
+```typescript
+import $, { benchmarks, analytics, db, every } from 'sdk.do'
+
+// Track benchmark results
+on($.Benchmark.completed, async (result) => {
+  await analytics.track($.Benchmark.completed, {
+    benchmarkId: result.id,
+    avgLatency: result.avgLatency,
+    throughput: result.throughput,
+    passed: result.passed,
+  })
+
+  await analytics.metric($.BenchmarkLatency, {
+    value: result.p95Latency,
+    dimensions: {
+      benchmark: result.name,
+      version: result.version,
+    },
+  })
+})
+
+// Continuous benchmarking
+await every($.Daily, async () => {
+  const benchmarks = await db.list($.Benchmark, {
+    where: { continuous: true },
+  })
+
+  for (const benchmark of benchmarks) {
+    const results = await benchmarks.run(benchmark.id)
+
+    // Alert on regression
+    if (results.regression) {
+      await alert({
+        title: 'Performance Regression',
+        benchmark: benchmark.name,
+        details: results.regression,
+      })
+    }
+  }
+})
+```
+
+## Documentation
+
+- [Getting Started](./docs/getting-started.mdx) - Setup and first benchmark
+- [Architecture](./docs/architecture.mdx) - System design
+- [Best Practices](./docs/best-practices.mdx) - Recommended patterns
+- [Troubleshooting](./docs/troubleshooting.mdx) - Common issues
+- [API Reference](./api/reference.mdx) - Complete API
+
+## Examples
+
+- [Basic Usage](./examples/basic-usage.mdx) - Simple benchmarks
+- [Advanced Patterns](./examples/advanced-patterns.mdx) - Complex scenarios
+- [Integration](./examples/integration.mdx) - CI/CD integration
+- [Real-World Use Case](./examples/real-world-use-case.mdx) - Production setup
+
+## Use Cases
+
+### Performance Validation
+
+Ensure new releases meet performance requirements.
+
+### Capacity Planning
+
+Determine system capacity and scaling needs.
+
+### Optimization
+
+Identify bottlenecks and optimization opportunities.
+
+### SLA Verification
+
+Verify system meets SLA commitments.
+
+### Continuous Monitoring
+
+Track performance trends over time.
+
+## Best Practices
+
+1. **Establish Baselines**: Create performance baselines for comparison
+2. **Realistic Scenarios**: Use production-like workloads
+3. **Warmup Period**: Allow system to warm up before measuring
+4. **Multiple Runs**: Run benchmarks multiple times for consistency
+5. **Monitor Resources**: Track CPU, memory, and network usage
+6. **Automate**: Integrate benchmarks into CI/CD pipelines
+
+## Related Projects
+
+- [analytics.do](https://analytics.do) - Analytics and tracking
+- [evals.do](https://evals.do) - AI evaluation framework
+- [experiments.do](https://experiments.do) - A/B testing
+- [sdk.do](https://sdk.do) - Core SDK
+
+## License
+
+MIT (Open Source)
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

@@ -1,0 +1,363 @@
+---
+$id: https://database.do
+$type: WebSite
+name: database.do
+title: database.do - Semantic Database Operations
+description: Semantic database operations with $.Subject.predicate.Object patterns for Business-as-Code
+keywords: [database, semantic, graphdl, crud, queries, relationships, business-as-code]
+author:
+  $type: Organization
+  name: .do Platform
+license: MIT
+---
+
+# database.do
+
+**Semantic database operations with `$.Subject.predicate.Object` patterns**
+
+database.do provides a semantic database interface that enables AI agents and developers to work with data using natural language patterns and Business-as-Code principles. Built on GraphDL semantic patterns, it supports CRUD operations, relationships, and advanced queries.
+
+## Quick Start
+
+```bash
+pnpm add sdk.do
+```
+
+```typescript
+import $, { db } from 'sdk.do'
+
+// List all businesses in the Technology industry
+const businesses = await db.list($.Business, {
+  where: { industry: 'Technology' },
+})
+
+// Get a specific business by ID
+const business = await db.get($.Business, 'biz_123')
+
+// Create a new business
+const newBusiness = await db.create($.Business, {
+  name: 'Acme Corp',
+  industry: 'Technology',
+  foundedDate: '2025-01-01',
+})
+
+// Update a business
+await db.update($.Business, 'biz_123', {
+  industry: 'Software',
+})
+
+// Delete a business
+await db.delete($.Business, 'biz_123')
+
+// Query semantic relationships
+const brands = await db.relate(business, $.owns, $.Brand)
+```
+
+## Features
+
+- **Semantic Operations** - Use `$.Subject.predicate.Object` patterns for intuitive data access
+- **Type Safety** - Full TypeScript support with Schema.org types
+- **CRUD Operations** - Create, read, update, delete with semantic context
+- **Relationships** - Query semantic relationships between entities
+- **Advanced Queries** - Filter, sort, paginate, and search with natural patterns
+- **Schema.org Integration** - Built-in support for 800+ Schema.org types
+- **AI-Native** - Designed for AI agents to understand and execute
+
+## Core Concepts
+
+### Semantic Patterns
+
+database.do uses GraphDL semantic patterns to provide natural, intuitive database operations:
+
+```typescript
+// Collections (plural) - Multiple items
+$.Businesses
+$.Orders
+$.Customers
+
+// Items (singular) - Single entity
+$.Business
+$.Order
+$.Customer
+
+// Actions (infinitive) - Operations to perform
+$.Business.create
+$.Order.update
+$.Customer.delete
+
+// Events (past tense) - Completed operations
+$.Business.created
+$.Order.updated
+$.Customer.deleted
+
+// Relationships (predicates) - Connections between entities
+$.owns
+$.employs
+$.serves
+```
+
+### Database Operations
+
+Five core operations for working with semantic data:
+
+1. **list** - Get multiple entities with filters
+2. **get** - Retrieve a single entity by ID
+3. **create** - Create a new entity
+4. **update** - Modify an existing entity
+5. **delete** - Remove an entity
+6. **relate** - Query relationships between entities
+
+### Entity Types
+
+All entities use Schema.org types via `$.TypeName`:
+
+```typescript
+// Business entities
+$.Business
+$.Organization
+$.Corporation
+
+// People
+$.Person
+$.Employee
+$.Customer
+
+// Products
+$.Product
+$.Service
+$.Offer
+
+// Events
+$.Event
+$.Action
+$.Transaction
+```
+
+## Documentation
+
+- [Getting Started](./docs/getting-started) - Installation and first steps
+- [Operations](./docs/operations) - CRUD operations reference
+- [Querying](./docs/querying) - Advanced query patterns
+- [API Reference](./api/) - Complete API documentation
+
+## Examples
+
+- [Basic CRUD](./examples/basic-crud) - Create, read, update, delete operations
+- [Relationships](./examples/relationships) - Working with semantic relationships
+- [Advanced Queries](./examples/queries) - Filtering, sorting, pagination
+
+## Use Cases
+
+### Business Data Management
+
+```typescript
+import $, { db } from 'sdk.do'
+
+// Query all organizations in San Francisco
+const orgs = await db.list($.Organization, {
+  where: {
+    address: {
+      addressLocality: 'San Francisco',
+    },
+  },
+})
+
+// Get organization with its employees
+const org = await db.get($.Organization, 'org_123', {
+  include: ['employees'],
+})
+
+// Find all products owned by an organization
+const products = await db.relate(org, $.owns, $.Product)
+```
+
+### E-Commerce Operations
+
+```typescript
+// Find all orders for a customer
+const orders = await db.list($.Order, {
+  where: {
+    customer: { $id: 'customer_123' },
+  },
+  orderBy: { orderDate: 'desc' },
+})
+
+// Create a new order with items
+const order = await db.create($.Order, {
+  $type: 'Order',
+  customer: { $id: 'customer_123' },
+  orderItems: [
+    {
+      $type: 'OrderItem',
+      orderedItem: { $id: 'product_456' },
+      orderQuantity: 2,
+    },
+  ],
+})
+```
+
+### Knowledge Graph Queries
+
+```typescript
+// Find all brands owned by a business
+const brands = await db.relate(business, $.owns, $.Brand)
+
+// Find all employees of an organization
+const employees = await db.relate(org, $.employs, $.Person)
+
+// Find all customers served by a business
+const customers = await db.relate(business, $.serves, $.Customer)
+
+// Multi-hop relationship query
+const brandProducts = await db.relate(brand, $.offers, $.Product)
+```
+
+## Integration with .do Platform
+
+database.do is part of the `.do` platform's semantic ecosystem:
+
+- **[sdk.do](https://sdk.do)** - Core SDK with `db` service
+- **[graphdl](https://graphdl.do)** - Semantic graph patterns
+- **[schema.org.ai](https://schema.org.ai)** - 800+ type definitions
+- **[mdxld.org](https://mdxld.org)** - Linked data in MDX
+
+## Semantic Database vs Traditional SQL
+
+| Traditional SQL                                         | Semantic Database                                     |
+| ------------------------------------------------------- | ----------------------------------------------------- |
+| `SELECT * FROM businesses WHERE industry = 'Tech'`      | `db.list($.Business, { where: { industry: 'Tech' }})` |
+| `INSERT INTO businesses (name, industry) VALUES (?, ?)` | `db.create($.Business, { name, industry })`           |
+| `UPDATE businesses SET industry = ? WHERE id = ?`       | `db.update($.Business, id, { industry })`             |
+| `DELETE FROM businesses WHERE id = ?`                   | `db.delete($.Business, id)`                           |
+| `SELECT * FROM brands WHERE business_id = ?`            | `db.relate(business, $.owns, $.Brand)`                |
+
+## Best Practices
+
+### Use Semantic Types
+
+Always use Schema.org types via the `$` proxy:
+
+```typescript
+// Good - semantic type
+const business = await db.get($.Business, 'biz_123')
+
+// Avoid - string namespace
+const business = await db.get('businesses', 'biz_123')
+```
+
+### Include Relationships
+
+Fetch related data efficiently:
+
+```typescript
+// Include related entities in query
+const business = await db.get($.Business, 'biz_123', {
+  include: ['brands', 'employees', 'address'],
+})
+```
+
+### Use Filters
+
+Apply filters for precise queries:
+
+```typescript
+// Filter by multiple conditions
+const businesses = await db.list($.Business, {
+  where: {
+    industry: 'Technology',
+    foundingDate: { $gte: '2020-01-01' },
+  },
+})
+```
+
+### Handle Errors
+
+Always handle potential errors:
+
+```typescript
+try {
+  const business = await db.get($.Business, 'biz_123')
+} catch (error) {
+  if (error.code === 'NOT_FOUND') {
+    // Handle missing entity
+  }
+  throw error
+}
+```
+
+## Architecture
+
+database.do is built on several key technologies:
+
+- **GraphDL** - Semantic graph patterns and types
+- **Schema.org** - Standardized entity definitions
+- **JSON-LD** - Linked data format
+- **RPC** - Cloudflare Workers RPC communication
+- **D1** - Cloudflare's SQL database (backend)
+- **Durable Objects** - Distributed state management
+
+## Performance
+
+### Caching
+
+database.do automatically caches frequently accessed entities:
+
+```typescript
+// First call - hits database
+const business = await db.get($.Business, 'biz_123')
+
+// Subsequent calls - served from cache
+const sameBusiness = await db.get($.Business, 'biz_123')
+```
+
+### Batch Operations
+
+Perform multiple operations efficiently:
+
+```typescript
+// Batch create
+const businesses = await db.createMany($.Business, [
+  { name: 'Acme Corp', industry: 'Tech' },
+  { name: 'Globex Inc', industry: 'Manufacturing' },
+])
+
+// Batch update
+await db.updateMany($.Business, {
+  where: { industry: 'Tech' },
+  data: { verified: true },
+})
+```
+
+### Pagination
+
+Handle large result sets with pagination:
+
+```typescript
+const businesses = await db.list($.Business, {
+  limit: 50,
+  offset: 0,
+  orderBy: { name: 'asc' },
+})
+```
+
+## License
+
+MIT (Open Source)
+
+All code and documentation is open-source and free to use, modify, and distribute.
+
+## Resources
+
+- [Getting Started Guide](./docs/getting-started)
+- [API Reference](./api/)
+- [GraphDL Semantics](https://graphdl.do)
+- [Schema.org Types](https://schema.org.ai)
+- [SDK Documentation](https://sdk.do)
+
+## Contributing
+
+database.do is part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem. Contributions are welcome!
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

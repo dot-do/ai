@@ -1,0 +1,101 @@
+---
+$id: https://integrations.do/reddit
+$type: Integration
+name: Reddit
+service: reddit
+description: Reddit is a social news platform with user-driven communities (subreddits), offering content sharing, discussions, and viral marketing opportunities for brands
+category: marketing
+sdkBased: false
+baseUrl: https://api.reddit.com
+
+auth:
+  type: oauth2
+  authorizationUrl: https://www.reddit.com/api/v1/authorize
+  tokenUrl: https://www.reddit.com/api/v1/access_token
+  scopes:
+    - identity
+    - read
+    - vote
+    - submit
+    - flair
+    - edit
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Reddit actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: false
+  events: []
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://www.reddit.com
+  apiDocs: https://www.reddit.com
+---
+
+# Reddit Integration
+
+Reddit is a social news platform with user-driven communities (subreddits), offering content sharing, discussions, and viral marketing opportunities for brands
+
+## Quick Start
+
+```typescript
+import { RedditClient } from '@dotdo/sdk.do/integrations/reddit'
+
+const reddit = new RedditClient({
+  apiKey: process.env.REDDIT_API_KEY,
+})
+
+const result = await reddit.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Reddit provides 10 actions through the Composio API.
+
+## License
+
+MIT

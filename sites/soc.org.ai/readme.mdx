@@ -1,0 +1,455 @@
+---
+$id: https://soc.org.ai
+$type: WebSite
+name: soc.org.ai
+description: An MDXLD-based AI-native superset of O*NET and Standard Occupational Classification
+license: CC-BY-4.0
+---
+
+# soc.org.ai
+
+**An MDXLD-based AI-native superset of [O\*NET](https://www.onetcenter.org/) and Standard Occupational Classification**
+
+soc.org.ai provides a modern, AI-native approach to occupational data by extending the U.S. Department of Labor's O\*NET (Occupational Information Network) with MDXLD linked data features. It offers tree-shakeable, type-safe access to comprehensive occupational information including skills, abilities, knowledge, work activities, and work context.
+
+## Key Features
+
+### 🔗 Linked Data with `$` Prefix
+
+Following the MDXLD convention, soc.org.ai uses the `$` prefix for linked data properties:
+
+```typescript
+// Traditional occupational data
+{
+  "code": "15-1252.00",
+  "title": "Software Developers",
+  "description": "Research, design, and develop computer applications..."
+}
+
+// soc.org.ai (MDXLD)
+{
+  "$type": "Occupation",
+  "$id": "https://soc.org.ai/occupations/15-1252.00",
+  "onetCode": "15-1252.00",
+  "title": "Software Developers",
+  "description": "Research, design, and develop computer applications...",
+  "skills": [
+    { "$ref": "https://soc.org.ai/skills/2.B.4.a" }
+  ]
+}
+```
+
+### 🤖 AI-Native Design
+
+soc.org.ai is optimized for AI systems and modern applications:
+
+- **Tree-shakeable**: Import only the occupational data you need
+- **TypeScript-first**: Full type safety with generated TypeScript definitions
+- **MDX Integration**: Embed occupational data directly in MDX documents
+- **Semantic Relationships**: Linked data structure for skills, abilities, and knowledge
+
+### 📊 Comprehensive Occupational Data
+
+Access the full breadth of O\*NET data:
+
+- **1,000+ Occupations**: Complete O\*NET occupation database
+- **Skills & Abilities**: Detailed skill and ability requirements
+- **Knowledge Areas**: Organized knowledge domains
+- **Work Activities**: Job behaviors and tasks
+- **Work Context**: Physical and social work environment factors
+
+## Core Concepts
+
+### Occupations
+
+Each occupation includes:
+
+```typescript
+interface Occupation {
+  $type: 'Occupation'
+  $id: string
+  onetCode: string // e.g., "15-1252.00"
+  title: string
+  description: string
+  alternativeTitles?: string[]
+  tasks?: Task[]
+  skills?: Reference<Skill>[]
+  abilities?: Reference<Ability>[]
+  knowledge?: Reference<Knowledge>[]
+}
+```
+
+### Skills
+
+Developed capacities that facilitate learning or performance:
+
+```typescript
+interface Skill {
+  $type: 'Skill'
+  $id: string
+  elementId: string
+  name: string
+  description: string
+  category: 'Basic Skills' | 'Cross-Functional Skills'
+}
+```
+
+### Abilities
+
+Enduring attributes of the individual that influence performance:
+
+```typescript
+interface Ability {
+  $type: 'Ability'
+  $id: string
+  elementId: string
+  name: string
+  description: string
+  category: 'Cognitive' | 'Physical' | 'Psychomotor' | 'Sensory'
+}
+```
+
+### Knowledge
+
+Organized sets of principles and facts applying to general domains:
+
+```typescript
+interface Knowledge {
+  $type: 'Knowledge'
+  $id: string
+  elementId: string
+  name: string
+  description: string
+}
+```
+
+## Installation
+
+```bash
+pnpm add soc.org.ai
+```
+
+## Usage
+
+### Basic Occupation Lookup
+
+```typescript
+import { getOccupation, getOccupationsByTitle } from 'soc.org.ai'
+
+// Get a specific occupation by O*NET code
+const softwareDev = getOccupation('15-1252.00')
+console.log(softwareDev?.title) // Software Developers
+
+// Search by title
+const nurses = getOccupationsByTitle('nurse')
+```
+
+### Tree-Shakeable Imports
+
+Import only what you need to minimize bundle size:
+
+```typescript
+// Only imports occupation data and functions
+import { getOccupation } from 'soc.org.ai/occupations'
+
+// Only imports skill data
+import { getSkill, getAllSkills } from 'soc.org.ai/skills'
+
+// Only imports ability data
+import { getAbility, getAllAbilities } from 'soc.org.ai/abilities'
+
+// Only imports knowledge data
+import { getKnowledge, getAllKnowledge } from 'soc.org.ai/knowledge'
+
+// Import only types (compile-time, zero runtime cost)
+import type { Occupation, Skill, Ability } from 'soc.org.ai/types'
+```
+
+### MDXLD Integration
+
+Embed occupational data in MDX documents:
+
+```mdx
+---
+$type: JobPosting
+$id: https://example.com/jobs/senior-developer
+title: Senior Software Developer
+occupation:
+  $type: Occupation
+  $ref: https://soc.org.ai/occupations/15-1252.00
+requiredSkills:
+  - $type: Skill
+    $ref: https://soc.org.ai/skills/2.B.5.a
+    name: Programming
+  - $type: Skill
+    $ref: https://soc.org.ai/skills/2.A.2.a
+    name: Critical Thinking
+salaryRange:
+  minValue: 120000
+  maxValue: 180000
+  currency: USD
+---
+
+# Senior Software Developer
+
+We're seeking an experienced software developer...
+```
+
+## Use Cases
+
+### Career Planning & Job Matching
+
+Help users understand career paths and match skills to occupations:
+
+```typescript
+import { getOccupation, getAllOccupations } from 'soc.org.ai'
+import { getSkill } from 'soc.org.ai/skills'
+
+// Find occupations requiring specific skills
+const programmingSkill = getSkill('2.B.5.a')
+const occupations = getAllOccupations().filter((occ) => occ.skills?.some((s) => s.elementId === programmingSkill?.elementId))
+```
+
+### Job Posting Enhancement
+
+Create rich, semantically-enhanced job postings:
+
+```typescript
+import type { Occupation } from 'soc.org.ai/types'
+import { getOccupation } from 'soc.org.ai'
+
+const occupation = getOccupation('15-1252.00')
+
+const jobPosting = {
+  $type: 'JobPosting',
+  $id: 'https://example.com/jobs/123',
+  title: 'Software Developer',
+  occupation: {
+    $type: 'Occupation',
+    $ref: `https://soc.org.ai/occupations/${occupation.onetCode}`,
+    name: occupation.title,
+  },
+  skills: occupation.skills?.map((skill) => ({
+    $type: 'DefinedTerm',
+    name: skill.name,
+  })),
+}
+```
+
+### Workforce Analytics
+
+Analyze workforce trends and skill gaps:
+
+```typescript
+import { getAllOccupations } from 'soc.org.ai'
+import { getAllSkills } from 'soc.org.ai/skills'
+
+// Identify most in-demand skills
+const skillDemand = new Map()
+getAllOccupations().forEach((occ) => {
+  occ.skills?.forEach((skill) => {
+    skillDemand.set(skill.elementId, (skillDemand.get(skill.elementId) || 0) + 1)
+  })
+})
+```
+
+### AI Agent Integration
+
+Enable AI agents to understand and work with occupational data:
+
+```typescript
+import { getOccupation, getOccupationsByTitle } from 'soc.org.ai'
+
+// AI agent processing natural language query
+async function findRelatedOccupations(query: string) {
+  // Search for occupations matching the query
+  const results = getOccupationsByTitle(query)
+
+  // Return structured data for AI processing
+  return results.map((occ) => ({
+    id: occ.$id,
+    title: occ.title,
+    description: occ.description,
+    skills: occ.skills?.map((s) => s.name),
+  }))
+}
+```
+
+## API Reference
+
+### Occupation Lookup
+
+```typescript
+import { getOccupation, getAllOccupations, getOccupationsByTitle, getOccupationsByJobZone, getOccupationsByCodePrefix } from 'soc.org.ai'
+
+// Get specific occupation by O*NET code
+const occupation = getOccupation('15-1252.00')
+
+// Get all occupations
+const allOccupations = getAllOccupations()
+
+// Search by title (case-insensitive, partial match)
+const occupations = getOccupationsByTitle('software')
+
+// Filter by job zone (1-5, indicating education/experience level)
+const entryLevel = getOccupationsByJobZone(2)
+
+// Get occupations by SOC code prefix
+const computerOccupations = getOccupationsByCodePrefix('15-')
+```
+
+### Skills Lookup
+
+```typescript
+import { getSkill, getAllSkills } from 'soc.org.ai/skills'
+
+// Get specific skill by element ID
+const skill = getSkill('2.B.5.a')
+
+// Get all skills
+const allSkills = getAllSkills()
+```
+
+### Abilities Lookup
+
+```typescript
+import { getAbility, getAllAbilities } from 'soc.org.ai/abilities'
+
+// Get specific ability by element ID
+const ability = getAbility('1.A.1.a')
+
+// Get all abilities
+const allAbilities = getAllAbilities()
+```
+
+### Knowledge Lookup
+
+```typescript
+import { getKnowledge, getAllKnowledge } from 'soc.org.ai/knowledge'
+
+// Get specific knowledge area by element ID
+const knowledge = getKnowledge('2.C.3')
+
+// Get all knowledge areas
+const allKnowledge = getAllKnowledge()
+```
+
+## Comparison with O\*NET
+
+| Feature              | O\*NET                     | soc.org.ai                                 |
+| -------------------- | -------------------------- | ------------------------------------------ |
+| Format               | XML, Excel, Database dumps | MDXLD + JSON + TypeScript                  |
+| Linked Data          | No                         | Yes (`$` prefix)                           |
+| Type Safety          | No                         | Yes (TypeScript)                           |
+| Tree-shaking         | No                         | Yes                                        |
+| MDX Support          | No                         | Native                                     |
+| AI-native            | No                         | Yes                                        |
+| Bundle Size          | N/A                        | Import only what you need                  |
+| Developer Experience | Download & parse files     | `pnpm add soc.org.ai` and import functions |
+
+## Integration with Related Ontologies
+
+soc.org.ai is part of a broader ecosystem of AI-native ontologies:
+
+- **[schema.org.ai](https://schema.org.ai)**: AI-native superset of schema.org for structured data
+- **[actions.org.ai](https://actions.org.ai)**: Ontology of triggers and actions for Business-as-Code
+- **[agents.org.ai](https://agents.org.ai)**: Ontology for AI agent definitions and capabilities
+
+### Cross-Ontology Usage
+
+```typescript
+import type { Occupation } from 'soc.org.ai/types'
+import type { JobPosting } from 'schema.org.ai/types'
+
+const jobPosting: JobPosting = {
+  $type: 'JobPosting',
+  $id: 'https://example.com/jobs/123',
+  title: 'Senior Software Developer',
+  occupationalCategory: {
+    $type: 'CategoryCode',
+    $ref: 'https://soc.org.ai/occupations/15-1252.00',
+    codeValue: '15-1252.00',
+    inCodeSet: {
+      $type: 'CategoryCodeSet',
+      name: 'O*NET-SOC',
+    },
+  },
+}
+```
+
+## Data Updates
+
+To update to the latest O\*NET data:
+
+```bash
+cd ai/packages/soc.org.ai
+pnpm import
+```
+
+This will fetch the latest O\*NET database and regenerate type definitions and data exports.
+
+## Why AI-Native Occupational Data?
+
+Traditional occupational classification systems like O\*NET provide invaluable data but were designed for human consumption through reports and web interfaces. soc.org.ai transforms this data for the AI era:
+
+1. **Machine-Readable**: Structured JSON with linked data semantics
+2. **Type-Safe**: TypeScript definitions prevent runtime errors
+3. **Efficient**: Tree-shakeable exports minimize bundle size
+4. **Semantic**: Linked data enables AI systems to understand relationships
+5. **Modern DX**: Simple npm install and import, no file parsing needed
+
+## License
+
+soc.org.ai is released under the [Creative Commons Attribution 4.0 International License (CC-BY-4.0)](https://creativecommons.org/licenses/by/4.0/).
+
+This means you are free to:
+
+- **Share**: Copy and redistribute the material in any medium or format
+- **Adapt**: Remix, transform, and build upon the material for any purpose, even commercially
+
+Under the following terms:
+
+- **Attribution**: You must give appropriate credit, provide a link to the license, and indicate if changes were made
+
+## Data Source & Attribution
+
+Occupational data is sourced from O\*NET (Occupational Information Network), developed under the sponsorship of the U.S. Department of Labor, Employment and Training Administration (USDOL/ETA).
+
+- **O\*NET Online**: https://www.onetcenter.org/
+- **Database License**: Public domain (U.S. Government work)
+- **Version**: O\*NET 28.0 (or latest available)
+
+soc.org.ai transforms this data into modern, AI-native formats while maintaining full attribution to the original source.
+
+## Resources
+
+- [O\*NET Online](https://www.onetcenter.org/)
+- [O\*NET Database Documentation](https://www.onetcenter.org/database.html)
+- [Standard Occupational Classification (SOC)](https://www.bls.gov/soc/)
+- [MDXLD documentation](https://mdxld.org)
+- [schema.org.ai](https://schema.org.ai)
+- [`.do` Platform](https://do)
+
+## Contributing
+
+soc.org.ai is part of the [`.do` platform](https://do) ecosystem. Contributions are welcome!
+
+The occupational data is sourced from official O*NET releases and transformed to use MDXLD conventions. Type definitions are automatically generated from the O*NET data model.
+
+## Related Projects
+
+- **sdk.do**: TypeScript SDK for Business-as-Code
+- **schema.org.ai**: AI-native superset of schema.org
+- **actions.org.ai**: Ontology of triggers and actions
+- **agents.org.ai**: AI agent ontology
+
+## Acknowledgments
+
+soc.org.ai builds upon the foundational work of:
+
+- The U.S. Department of Labor, Employment and Training Administration
+- O*NET Program and National Center for O*NET Development
+- Standard Occupational Classification (SOC) Policy Committee
+- The broader semantic web and linked data community
+
+We transform their excellent public domain data into modern, AI-native formats that serve developers and AI systems while maintaining full transparency and attribution.

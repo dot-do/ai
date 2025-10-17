@@ -1,0 +1,443 @@
+---
+$id: https://workers.do
+$type: WebSite
+title: workers.do - Worker Fleet Management and Orchestration
+description: Manage and orchestrate fleets of worker agents with the .do platform. Scale, monitor, and coordinate multiple workers for enterprise automation.
+keywords: [worker fleet, fleet management, orchestration, scaling, worker coordination, team management]
+author:
+  $type: Organization
+  name: .do Platform
+license: MIT
+---
+
+# workers.do
+
+**Worker Fleet Management and Orchestration**
+
+workers.do enables you to manage and orchestrate fleets of worker agents at scale. Coordinate hundreds of workers, balance workloads, monitor performance, and ensure efficient operation of your autonomous workforce.
+
+## What is Worker Fleet Management?
+
+Worker fleet management provides:
+
+- **Scaling**: Dynamically scale worker count based on demand
+- **Load Balancing**: Distribute work evenly across workers
+- **Monitoring**: Track performance across entire fleet
+- **Coordination**: Orchestrate complex multi-worker workflows
+- **Resource Management**: Optimize resource allocation
+
+## Quick Start
+
+```typescript
+import $, { workers } from 'sdk.do'
+
+// Create a worker fleet
+const salesFleet = await workers.createFleet({
+  $type: 'WorkerFleet',
+  name: 'Sales Development Fleet',
+  workerTemplate: {
+    role: $.SalesDevelopmentRepresentative,
+    capabilities: ['research', 'outreach', 'qualification'],
+    model: 'claude-sonnet-4.5',
+  },
+  scaling: {
+    min: 5,
+    max: 50,
+    metric: 'queue_depth',
+    target: 100, // Scale when queue > 100 leads per worker
+  },
+})
+
+// Assign work to fleet
+await salesFleet.assignWork({
+  leads: leadList,
+  strategy: 'round-robin', // or 'least-loaded' or 'skill-based'
+})
+```
+
+## Key Features
+
+### Fleet Creation and Scaling
+
+Create and scale worker fleets:
+
+```typescript
+const fleet = await workers.createFleet({
+  name: 'Customer Support Fleet',
+  workerTemplate: {
+    role: $.CustomerSupportRepresentative,
+    capabilities: ['ticket_triage', 'issue_resolution'],
+    skills: ['technical_support', 'customer_communication'],
+  },
+  scaling: {
+    mode: 'auto',
+    min: 10,
+    max: 100,
+    rules: [
+      {
+        metric: 'queue_depth',
+        threshold: 50,
+        action: 'scale_up',
+        increment: 5,
+      },
+      {
+        metric: 'avg_utilization',
+        threshold: 0.3,
+        action: 'scale_down',
+        decrement: 2,
+      },
+      {
+        metric: 'response_time',
+        threshold: 300, // seconds
+        action: 'scale_up',
+        increment: 10,
+      },
+    ],
+    cooldown: 300, // Wait 5 minutes between scaling actions
+  },
+})
+
+// Manual scaling
+await fleet.scale({ count: 25 })
+
+// Get fleet size
+const size = await fleet.getSize() // 25
+
+// Scale up/down
+await fleet.scaleUp(5) // Add 5 workers
+await fleet.scaleDown(3) // Remove 3 workers
+```
+
+### Load Balancing
+
+Distribute work across fleet:
+
+```typescript
+// Round-robin distribution
+await fleet.assignWork({
+  tasks: taskList,
+  strategy: 'round-robin',
+})
+
+// Least-loaded distribution
+await fleet.assignWork({
+  tasks: taskList,
+  strategy: 'least-loaded', // Assign to workers with least work
+})
+
+// Skill-based distribution
+await fleet.assignWork({
+  tasks: taskList,
+  strategy: 'skill-based', // Match task requirements to worker skills
+  skillMatching: {
+    required: ['technical_knowledge'],
+    preferred: ['product_expertise'],
+  },
+})
+
+// Priority-based distribution
+await fleet.assignWork({
+  tasks: taskList,
+  strategy: 'priority',
+  priorityRules: [
+    { if: 'task.priority === "critical"', assignTo: 'most_experienced' },
+    { if: 'task.priority === "high"', assignTo: 'available_experienced' },
+    { if: 'task.priority === "normal"', assignTo: 'available' },
+  ],
+})
+
+// Custom distribution
+await fleet.assignWork({
+  tasks: taskList,
+  strategy: 'custom',
+  distributor: async (task, workers) => {
+    // Custom logic to select worker
+    return selectBestWorker(task, workers)
+  },
+})
+```
+
+### Fleet Monitoring
+
+Monitor fleet performance:
+
+```typescript
+// Get fleet metrics
+const metrics = await fleet.getMetrics()
+// {
+//   totalWorkers: 25,
+//   activeWorkers: 23,
+//   idleWorkers: 2,
+//   avgUtilization: 0.75,
+//   totalTasksCompleted: 5420,
+//   avgCompletionTime: 234000, // ms
+//   successRate: 0.97,
+//   errorRate: 0.03
+// }
+
+// Get per-worker metrics
+const workerMetrics = await fleet.getWorkerMetrics()
+// [
+//   { workerId: 'w1', tasksCompleted: 234, successRate: 0.98, ... },
+//   { workerId: 'w2', tasksCompleted: 210, successRate: 0.96, ... },
+//   ...
+// ]
+
+// Get real-time status
+const status = await fleet.getRealtimeStatus()
+// {
+//   queueDepth: 432,
+//   processing: 23,
+//   completed: 5420,
+//   failed: 18,
+//   avgWaitTime: 45000, // ms
+//   healthScore: 0.95
+// }
+
+// Set up monitoring dashboard
+await fleet.enableDashboard({
+  metrics: ['throughput', 'latency', 'error_rate', 'utilization'],
+  refreshInterval: 30000, // 30 seconds
+  alerts: {
+    errorRate: { threshold: 0.05, channel: 'slack' },
+    queueDepth: { threshold: 1000, channel: 'pagerduty' },
+    utilization: { threshold: 0.9, channel: 'email' },
+  },
+})
+```
+
+### Team Coordination
+
+Coordinate workers in teams:
+
+```typescript
+// Create specialized teams
+const salesTeam = await fleet.createTeam({
+  name: 'Enterprise Sales Team',
+  workers: {
+    researchers: 5,
+    outreach: 10,
+    closers: 3,
+  },
+  workflow: {
+    type: 'pipeline',
+    stages: [
+      {
+        team: 'researchers',
+        task: 'research_account',
+        output: 'research_report',
+      },
+      {
+        team: 'outreach',
+        task: 'initial_outreach',
+        input: 'research_report',
+        output: 'meeting_booked',
+      },
+      {
+        team: 'closers',
+        task: 'demo_and_close',
+        input: 'meeting_booked',
+        output: 'deal',
+      },
+    ],
+  },
+})
+
+// Process through team
+const result = await salesTeam.process({
+  account: enterpriseAccount,
+})
+```
+
+### Shift Management
+
+Manage worker shifts:
+
+```typescript
+// Configure shifts
+await fleet.configureShifts({
+  timezone: 'America/Los_Angeles',
+  shifts: [
+    {
+      name: 'Morning Shift',
+      hours: '8:00-16:00',
+      workers: 20,
+      days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
+    },
+    {
+      name: 'Afternoon Shift',
+      hours: '16:00-24:00',
+      workers: 15,
+      days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
+    },
+    {
+      name: 'Night Shift',
+      hours: '0:00-8:00',
+      workers: 10,
+      days: ['all'],
+    },
+    {
+      name: 'Weekend Shift',
+      hours: '8:00-20:00',
+      workers: 8,
+      days: ['saturday', 'sunday'],
+    },
+  ],
+  handoff: {
+    duration: 15, // 15 minute overlap
+    briefing: true, // Outgoing shift briefs incoming
+  },
+})
+
+// Get current shift
+const shift = await fleet.getCurrentShift()
+// { name: 'Morning Shift', workers: 20, startTime: '8:00', endTime: '16:00' }
+```
+
+## Semantic Patterns
+
+workers.do uses semantic `$.Subject.predicate.Object` patterns:
+
+```typescript
+import $ from 'sdk.do'
+
+// Fleet types
+$.WorkerFleet
+$.WorkerTeam
+$.WorkerShift
+$.FleetMetrics
+
+// Fleet operations
+$.Fleet.scales.Workers
+$.Fleet.balances.Load
+$.Fleet.monitors.Performance
+$.Fleet.coordinates.Teams
+$.Fleet.manages.Shifts
+
+// Fleet events
+$.Fleet.scaled
+$.Fleet.rebalanced
+$.Fleet.alert.triggered
+$.Worker.assigned
+$.Worker.completed.task
+```
+
+## Use Cases
+
+### Customer Support Fleet
+
+```typescript
+const supportFleet = await workers.createFleet({
+  name: 'Customer Support Fleet',
+  workerTemplate: {
+    role: $.CustomerSupportRepresentative,
+    capabilities: ['ticket_triage', 'issue_resolution', 'escalation'],
+  },
+  scaling: {
+    min: 10,
+    max: 50,
+    schedule: [
+      { hours: '8:00-20:00', target: 30 }, // Business hours
+      { hours: '20:00-8:00', target: 10 }, // After hours
+    ],
+  },
+  sla: {
+    responseTime: 300, // 5 minutes
+    resolutionTime: 3600, // 1 hour
+  },
+})
+```
+
+### Data Processing Fleet
+
+```typescript
+const processingFleet = await workers.createFleet({
+  name: 'Data Processing Fleet',
+  workerTemplate: {
+    role: $.DataProcessor,
+    capabilities: ['etl', 'validation', 'transformation'],
+  },
+  scaling: {
+    min: 5,
+    max: 100,
+    metric: 'queue_depth',
+    aggressive: true, // Scale quickly for batch jobs
+  },
+  resourceLimits: {
+    cpuPerWorker: '2000m',
+    memoryPerWorker: '4Gi',
+  },
+})
+```
+
+### Sales Development Fleet
+
+```typescript
+const sdrFleet = await workers.createFleet({
+  name: 'SDR Fleet',
+  workerTemplate: {
+    role: $.SalesDevelopmentRepresentative,
+    capabilities: ['research', 'outreach', 'qualification'],
+  },
+  teams: {
+    enterprise: { workers: 10, focus: 'enterprise_accounts' },
+    midmarket: { workers: 15, focus: 'midmarket_accounts' },
+    smb: { workers: 20, focus: 'smb_accounts' },
+  },
+  quotas: {
+    leadsPerWorker: 100, // per month
+    meetingsPerWorker: 50, // per month
+  },
+})
+```
+
+## Integration with .do Platform
+
+```typescript
+import $, { workers, db, on, send, every } from 'sdk.do'
+
+// Fleet with database access
+const fleet = await workers.createFleet({
+  name: 'Database Fleet',
+  tools: { database: db },
+})
+
+// Fleet responds to events
+await on($.Lead.created, async (lead) => {
+  await fleet.assignWork({ task: 'qualify_lead', data: lead })
+})
+
+// Fleet publishes events
+await fleet.onTaskComplete(async (task, result) => {
+  await send($.Task.completed, { fleetId: fleet.id, task, result })
+})
+
+// Fleet scheduled operations
+await every($.Hourly, async () => {
+  await fleet.rebalance()
+})
+```
+
+## Documentation
+
+- [Getting Started](./docs/getting-started) - Create your first fleet
+- [Architecture](./docs/architecture) - Fleet architecture and design
+- [Best Practices](./docs/best-practices) - Fleet management guidelines
+- [Troubleshooting](./docs/troubleshooting) - Common issues and solutions
+- [API Reference](./api/) - Complete API documentation
+- [Examples](./examples/) - Real-world fleet examples
+
+## Related Projects
+
+- [bots.do](https://bots.do) - Digital worker bots
+- [worker.do](https://worker.do) - Individual worker management
+- [agents.do](https://agents.do) - Agent framework
+- [sdk.do](https://sdk.do) - Core SDK
+
+## License
+
+MIT (Open Source)
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

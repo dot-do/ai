@@ -1,0 +1,539 @@
+---
+$id: https://workflows.do/examples/basic-workflow
+$type: HowTo
+title: Basic Workflow Example
+description: Learn how to create a simple sequential workflow with error handling
+keywords: [workflow, example, tutorial, sequential, error-handling]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Basic Workflow Example
+
+This example demonstrates how to create a simple sequential workflow with error handling, retries, and monitoring.
+
+## Overview
+
+We'll build a workflow that processes user registration:
+
+1. Validate user input
+2. Create user account
+3. Send welcome email
+4. Log registration event
+
+## Complete Example
+
+```typescript
+import { $, workflow, db, send } from 'sdk.do'
+
+// Define workflow
+const userRegistrationWorkflow = workflow({
+  name: 'UserRegistration',
+  description: 'Register new users and send welcome email',
+  version: '1.0.0',
+  steps: [
+    {
+      name: 'ValidateInput',
+      action: async (input) => {
+        console.log('Validating user input...')
+
+        // Validate required fields
+        if (!input.email || !input.password) {
+          throw new Error('Email and password are required')
+        }
+
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+        if (!emailRegex.test(input.email)) {
+          throw new Error('Invalid email format')
+        }
+
+        // Validate password strength
+        if (input.password.length < 8) {
+          throw new Error('Password must be at least 8 characters')
+        }
+
+        console.log('✓ Input validated')
+        return { ...input, validated: true }
+      },
+      timeout: 5000,
+      onSuccess: 'CreateUser',
+    },
+    {
+      name: 'CreateUser',
+      action: async (input) => {
+        console.log('Creating user account...')
+
+        // Check if user already exists
+        const existingUser = await db.get($.User, {
+          where: { email: input.email },
+        })
+
+        if (existingUser) {
+          throw new Error('User already exists')
+        }
+
+        // Create user in database
+        const user = await db.create($.User, {
+          email: input.email,
+          passwordHash: await hashPassword(input.password),
+          name: input.name,
+          createdAt: new Date(),
+          status: 'active',
+        })
+
+        console.log(`✓ User created: ${user.id}`)
+        return { ...input, userId: user.id, user }
+      },
+      timeout: 10000,
+      retryPolicy: {
+        maxAttempts: 3,
+        backoff: 'exponential',
+        initialDelay: 1000,
+      },
+      onSuccess: 'SendWelcomeEmail',
+      onFailure: 'HandleRegistrationError',
+    },
+    {
+      name: 'SendWelcomeEmail',
+      action: async (input) => {
+        console.log('Sending welcome email...')
+
+        await send($.Email.send, {
+          to: input.email,
+          subject: 'Welcome to Our Platform!',
+          template: 'welcome',
+          data: {
+            name: input.name || input.email,
+            userId: input.userId,
+          },
+        })
+
+        console.log('✓ Welcome email sent')
+        return { ...input, emailSent: true }
+      },
+      timeout: 15000,
+      retryPolicy: {
+        maxAttempts: 3,
+        backoff: 'exponential',
+      },
+      onSuccess: 'LogRegistration',
+      onFailure: 'LogEmailFailure', // Continue even if email fails
+    },
+    {
+      name: 'LogRegistration',
+      action: async (input) => {
+        console.log('Logging registration event...')
+
+        await db.create($.Event, {
+          type: 'user.registered',
+          userId: input.userId,
+          timestamp: new Date(),
+          metadata: {
+            email: input.email,
+            emailSent: input.emailSent,
+          },
+        })
+
+        console.log('✓ Registration logged')
+        return {
+          success: true,
+          userId: input.userId,
+          message: 'Registration completed successfully',
+        }
+      },
+    },
+    {
+      name: 'LogEmailFailure',
+      action: async (input) => {
+        console.log('Logging email failure...')
+
+        await db.create($.Event, {
+          type: 'email.failed',
+          userId: input.userId,
+          timestamp: new Date(),
+          metadata: {
+            email: input.email,
+            reason: 'Failed to send welcome email',
+          },
+        })
+
+        // Still return success - email failure is not critical
+        return {
+          success: true,
+          userId: input.userId,
+          message: 'Registration completed (email failed)',
+        }
+      },
+    },
+    {
+      name: 'HandleRegistrationError',
+      action: async (input, error) => {
+        console.error('Registration failed:', error.message)
+
+        await db.create($.Event, {
+          type: 'registration.failed',
+          timestamp: new Date(),
+          metadata: {
+            email: input.email,
+            error: error.message,
+          },
+        })
+
+        return {
+          success: false,
+          error: error.message,
+        }
+      },
+    },
+  ],
+})
+
+// Helper function
+async function hashPassword(password) {
+  // In production, use bcrypt or similar
+  return `hashed_${password}`
+}
+
+// Execute workflow
+const result = await userRegistrationWorkflow.execute({
+  email: 'user@example.com',
+  password: 'SecurePassword123',
+  name: 'John Doe',
+})
+
+console.log('Registration result:', result)
+```
+
+## Explanation
+
+### Step 1: Validate Input
+
+```typescript
+{
+  name: 'ValidateInput',
+  action: async (input) => {
+    // Validate email, password, etc.
+    if (!input.email || !input.password) {
+      throw new Error('Email and password are required')
+    }
+    return { ...input, validated: true }
+  },
+  timeout: 5000,
+  onSuccess: 'CreateUser'
+}
+```
+
+**Key Points:**
+
+- Validates all required fields
+- Checks email format and password strength
+- Sets a 5-second timeout
+- Passes data to next step on success
+
+### Step 2: Create User
+
+```typescript
+{
+  name: 'CreateUser',
+  action: async (input) => {
+    // Check if user exists
+    const existingUser = await db.get($.User, {
+      where: { email: input.email }
+    })
+
+    if (existingUser) {
+      throw new Error('User already exists')
+    }
+
+    // Create user
+    const user = await db.create($.User, { ... })
+    return { ...input, userId: user.id, user }
+  },
+  retryPolicy: {
+    maxAttempts: 3,
+    backoff: 'exponential'
+  }
+}
+```
+
+**Key Points:**
+
+- Checks for duplicate users
+- Creates user in database
+- Automatically retries up to 3 times with exponential backoff
+- Adds userId to workflow context
+
+### Step 3: Send Welcome Email
+
+```typescript
+{
+  name: 'SendWelcomeEmail',
+  action: async (input) => {
+    await send($.Email.send, {
+      to: input.email,
+      subject: 'Welcome to Our Platform!',
+      template: 'welcome',
+      data: { name: input.name, userId: input.userId }
+    })
+    return { ...input, emailSent: true }
+  },
+  onFailure: 'LogEmailFailure' // Continue even if email fails
+}
+```
+
+**Key Points:**
+
+- Sends welcome email
+- Uses retry policy for transient failures
+- If email fails, logs failure but continues workflow
+- Non-critical step doesn't block registration
+
+### Step 4: Log Registration
+
+```typescript
+{
+  name: 'LogRegistration',
+  action: async (input) => {
+    await db.create($.Event, {
+      type: 'user.registered',
+      userId: input.userId,
+      timestamp: new Date()
+    })
+    return {
+      success: true,
+      userId: input.userId,
+      message: 'Registration completed successfully'
+    }
+  }
+}
+```
+
+**Key Points:**
+
+- Logs successful registration event
+- Returns final workflow result
+- Includes userId for reference
+
+## Running the Workflow
+
+### Basic Execution
+
+```typescript
+const result = await userRegistrationWorkflow.execute({
+  email: 'user@example.com',
+  password: 'SecurePassword123',
+  name: 'John Doe',
+})
+
+console.log(result)
+// {
+//   success: true,
+//   userId: 'user_123',
+//   message: 'Registration completed successfully'
+// }
+```
+
+### With Error Handling
+
+```typescript
+try {
+  const result = await userRegistrationWorkflow.execute({
+    email: 'invalid-email',
+    password: '123', // Too short
+  })
+} catch (error) {
+  console.error('Workflow failed:', error.message)
+}
+```
+
+### With Monitoring
+
+```typescript
+// Add event listeners
+userRegistrationWorkflow.on('step.started', (step) => {
+  console.log(`Started: ${step.name}`)
+})
+
+userRegistrationWorkflow.on('step.completed', (step, result) => {
+  console.log(`Completed: ${step.name}`, result)
+})
+
+userRegistrationWorkflow.on('error', (error) => {
+  console.error('Workflow error:', error)
+})
+
+// Execute
+await userRegistrationWorkflow.execute({
+  email: 'user@example.com',
+  password: 'SecurePassword123',
+})
+```
+
+## Testing
+
+### Unit Test for Validation Step
+
+```typescript
+import { test, expect } from 'vitest'
+
+test('validates user input correctly', async () => {
+  const validateStep = userRegistrationWorkflow.getStep('ValidateInput')
+
+  // Valid input
+  const validResult = await validateStep.execute({
+    email: 'user@example.com',
+    password: 'SecurePassword123',
+  })
+  expect(validResult.validated).toBe(true)
+
+  // Invalid email
+  await expect(
+    validateStep.execute({
+      email: 'invalid',
+      password: 'SecurePassword123',
+    })
+  ).rejects.toThrow('Invalid email format')
+
+  // Short password
+  await expect(
+    validateStep.execute({
+      email: 'user@example.com',
+      password: '123',
+    })
+  ).rejects.toThrow('Password must be at least 8 characters')
+})
+```
+
+### Integration Test
+
+```typescript
+test('complete registration workflow', async () => {
+  const result = await userRegistrationWorkflow.execute({
+    email: 'test@example.com',
+    password: 'TestPassword123',
+    name: 'Test User',
+  })
+
+  expect(result.success).toBe(true)
+  expect(result.userId).toBeDefined()
+  expect(result.message).toBe('Registration completed successfully')
+
+  // Verify user was created
+  const user = await db.get($.User, { where: { email: 'test@example.com' } })
+  expect(user).toBeDefined()
+  expect(user.status).toBe('active')
+})
+```
+
+## Variations
+
+### With Semantic Patterns
+
+Use `$.Subject.predicate.Object` patterns for cleaner code:
+
+```typescript
+const semanticWorkflow = workflow({
+  name: 'UserRegistration',
+  steps: [$.User.validate, $.User.create, $.Email.sendWelcome, $.Event.log],
+})
+```
+
+### With Parallel Steps
+
+Send multiple notifications in parallel:
+
+```typescript
+{
+  $type: 'ParallelStep',
+  name: 'SendNotifications',
+  branches: [
+    {
+      name: 'SendWelcomeEmail',
+      action: $.Email.sendWelcome
+    },
+    {
+      name: 'SendSMS',
+      action: $.SMS.sendWelcome
+    },
+    {
+      name: 'NotifyAdmin',
+      action: $.Admin.notify
+    }
+  ]
+}
+```
+
+### With State Persistence
+
+Persist workflow state to database:
+
+```typescript
+const persistentWorkflow = workflow({
+  name: 'UserRegistration',
+  durable: true, // Automatically persist state
+  steps: [...]
+})
+```
+
+## Common Issues
+
+### Issue: "User already exists" error
+
+**Solution**: Add check before creating user
+
+```typescript
+const existingUser = await db.get($.User, {
+  where: { email: input.email },
+})
+if (existingUser) {
+  throw new Error('User already exists')
+}
+```
+
+### Issue: Email fails but workflow continues
+
+**Expected behavior**: Email failure is non-critical, workflow should continue
+
+```typescript
+{
+  name: 'SendWelcomeEmail',
+  onFailure: 'LogEmailFailure' // Continue on failure
+}
+```
+
+### Issue: Workflow hangs
+
+**Solution**: Set timeouts on all steps
+
+```typescript
+{
+  name: 'CreateUser',
+  timeout: 10000, // 10 seconds
+  action: async (input) => { ... }
+}
+```
+
+## Best Practices
+
+1. **Validate input early**: Catch errors before expensive operations
+2. **Set timeouts**: Prevent hanging workflows
+3. **Use retry policies**: Handle transient failures
+4. **Log important events**: Audit trail for debugging
+5. **Make steps idempotent**: Safe to retry
+6. **Handle errors gracefully**: Don't fail entire workflow for non-critical steps
+7. **Return meaningful results**: Include success status and relevant data
+8. **Add monitoring**: Track workflow execution
+
+## Next Steps
+
+- [Order Fulfillment Example](./order-fulfillment.mdx) - More complex workflow with parallel steps
+- [Approval Workflow Example](./approval-workflow.mdx) - Human-in-the-loop workflow
+- [Workflow Patterns](../docs/workflow-patterns.mdx) - Learn more patterns
+
+## Resources
+
+- [Getting Started](../docs/getting-started.mdx)
+- [API Reference](../api/index.mdx)
+- [workflows.do](https://workflows.do)

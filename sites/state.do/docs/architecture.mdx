@@ -1,0 +1,831 @@
+---
+$id: https://state.do/docs/architecture
+$type: TechArticle
+title: state.do Architecture
+description: Understanding how Cloudflare Durable Objects provide distributed state management with strong consistency
+keywords: [architecture, durable objects, distributed systems, consistency, storage, websockets]
+author:
+  $type: Organization
+  name: .do Platform
+license: CC-BY-4.0
+---
+
+# state.do Architecture
+
+Understanding how Cloudflare Durable Objects provide distributed state management with strong consistency.
+
+## Overview
+
+state.do is built on Cloudflare Durable Objects, a distributed computing primitive that provides:
+
+- **Strong Consistency** - Single-writer guarantee per object
+- **Global Distribution** - Objects created near users automatically
+- **Persistent Storage** - Durable key-value storage per object
+- **Real-time Communication** - WebSocket support built-in
+- **Automatic Scaling** - Handles millions of objects effortlessly
+
+## Core Architecture
+
+### Durable Objects Model
+
+Each Durable Object is:
+
+```typescript
+import { DurableObject } from 'cloudflare:workers'
+
+export class Counter extends DurableObject {
+  // Persistent storage
+  async fetch(request: Request) {
+    const count = (await this.ctx.storage.get<number>('count')) || 0
+    await this.ctx.storage.put('count', count + 1)
+    return new Response(JSON.stringify({ count: count + 1 }))
+  }
+}
+```
+
+**Key Properties:**
+
+1. **Unique Identity** - Each object has a unique ID
+2. **Single Instance** - Only one instance exists globally at a time
+3. **Single Location** - Runs in one datacenter (near users)
+4. **Single Writer** - All requests serialized through one instance
+5. **Persistent State** - Storage survives across requests
+
+### Single-Writer Consistency Model
+
+The single-writer model guarantees consistency:
+
+```typescript
+export class BankAccount extends DurableObject {
+  async fetch(request: Request) {
+    const url = new URL(request.url)
+
+    if (url.pathname === '/transfer') {
+      // All transfers are serialized - no race conditions!
+      const balance = (await this.ctx.storage.get<number>('balance')) || 0
+      const { amount } = await request.json()
+
+      if (balance < amount) {
+        return new Response('Insufficient funds', { status: 400 })
+      }
+
+      await this.ctx.storage.put('balance', balance - amount)
+      return new Response(JSON.stringify({ balance: balance - amount }))
+    }
+
+    return new Response('Not found', { status: 404 })
+  }
+}
+```
+
+**Why This Works:**
+
+- **No Locks Needed** - Single writer eliminates race conditions
+- **Simple Reasoning** - Code executes sequentially
+- **Atomic Operations** - Transactions are naturally atomic
+- **No Distributed Coordination** - No consensus protocols needed
+
+### Object Lifecycle
+
+```
+┌──────────────┐
+│ Object ID    │
+│ Generated    │
+└──────┬───────┘
+       │
+       ▼
+┌──────────────┐
+│ First        │
+│ Request      │──────┐
+└──────┬───────┘      │
+       │              │ Cold Start
+       ▼              │ (0-50ms)
+┌──────────────┐      │
+│ Object       │◄─────┘
+│ Instantiated │
+└──────┬───────┘
+       │
+       ▼
+┌──────────────┐
+│ Subsequent   │──────┐
+│ Requests     │      │
+└──────┬───────┘      │ Hot Path
+       │              │ (0-10ms)
+       ▼              │
+┌──────────────┐      │
+│ Object       │◄─────┘
+│ Active       │
+└──────┬───────┘
+       │
+       │ (30 seconds idle)
+       ▼
+┌──────────────┐
+│ Object       │
+│ Hibernated   │
+└──────────────┘
+```
+
+**Lifecycle Phases:**
+
+1. **Instantiation** - Object created on first request
+2. **Active** - Processing requests in memory
+3. **Hibernation** - Suspended after 30s idle, state persisted
+4. **Reactivation** - Restored from storage on next request
+5. **Migration** - Moved to different location if needed
+
+## Global Distribution and Routing
+
+### Automatic Location Selection
+
+Objects are created near users automatically:
+
+```typescript
+// User in Tokyo makes request
+const id = env.COUNTER.idFromName('user-123')
+const stub = env.COUNTER.get(id)
+const response = await stub.fetch(request)
+// Object created in Tokyo datacenter
+```
+
+```typescript
+// Same user travels to London, makes another request
+const id = env.COUNTER.idFromName('user-123')
+const stub = env.COUNTER.get(id)
+const response = await stub.fetch(request)
+// Object migrated to London datacenter (if beneficial)
+```
+
+### Location Hints
+
+Control object location with hints:
+
+```typescript
+// Create object in specific location
+const id = env.COUNTER.idFromName('eu-users')
+const stub = env.COUNTER.get(id, { locationHint: 'weur' }) // West Europe
+
+// Create object near specific user
+const stub = env.COUNTER.get(id, { locationHint: 'enam' }) // East North America
+```
+
+**Available Regions:**
+
+- `wnam` - Western North America
+- `enam` - Eastern North America
+- `sam` - South America
+- `weur` - Western Europe
+- `eeur` - Eastern Europe
+- `apac` - Asia-Pacific
+- `oc` - Oceania
+- `afr` - Africa
+- `me` - Middle East
+
+### Request Routing
+
+```
+┌─────────────┐
+│ Worker      │
+│ (Any Edge)  │
+└──────┬──────┘
+       │
+       │ 1. Get Object Stub
+       ▼
+┌──────────────────────────┐
+│ Durable Object Namespace │
+└──────┬───────────────────┘
+       │
+       │ 2. Route to Object Location
+       ▼
+┌──────────────┐
+│ Durable      │
+│ Object       │
+│ (Tokyo DC)   │
+└──────┬───────┘
+       │
+       │ 3. Execute Request
+       ▼
+┌──────────────┐
+│ Response     │
+└──────────────┘
+```
+
+## Storage Persistence Mechanisms
+
+### Key-Value Storage API
+
+```typescript
+export class DataStore extends DurableObject {
+  async fetch(request: Request) {
+    const url = new URL(request.url)
+
+    // Get single value
+    if (url.pathname === '/get') {
+      const value = await this.ctx.storage.get('key')
+      return new Response(JSON.stringify({ value }))
+    }
+
+    // Put single value
+    if (url.pathname === '/put') {
+      const { key, value } = await request.json()
+      await this.ctx.storage.put(key, value)
+      return new Response('OK')
+    }
+
+    // Get multiple values
+    if (url.pathname === '/getMany') {
+      const values = await this.ctx.storage.get(['key1', 'key2', 'key3'])
+      return new Response(JSON.stringify(values))
+    }
+
+    // Put multiple values
+    if (url.pathname === '/putMany') {
+      const data = await request.json()
+      await this.ctx.storage.put(data) // { key1: val1, key2: val2 }
+      return new Response('OK')
+    }
+
+    // Delete
+    if (url.pathname === '/delete') {
+      await this.ctx.storage.delete('key')
+      return new Response('OK')
+    }
+
+    // List with prefix
+    if (url.pathname === '/list') {
+      const entries = await this.ctx.storage.list({ prefix: 'user:' })
+      return new Response(JSON.stringify(Array.from(entries)))
+    }
+
+    return new Response('Not found', { status: 404 })
+  }
+}
+```
+
+### Storage Operations
+
+**Supported Types:**
+
+- `string` - Text data
+- `number` - Numeric values
+- `boolean` - True/false
+- `ArrayBuffer` - Binary data
+- `Date` - Timestamps
+- `Map` - Key-value collections
+- `Set` - Unique value collections
+- `Array` - Ordered lists
+- `Object` - Structured data
+
+**Size Limits:**
+
+- **Single value**: 128 KB
+- **Total storage per object**: 1 GB
+- **Keys per object**: Unlimited
+- **Key length**: 2048 bytes
+
+### Transactional Storage
+
+Ensure atomicity with transactions:
+
+```typescript
+export class AtomicCounter extends DurableObject {
+  async fetch(request: Request) {
+    const url = new URL(request.url)
+
+    if (url.pathname === '/increment') {
+      // All operations in transaction are atomic
+      await this.ctx.storage.transaction(async (txn) => {
+        const count = (await txn.get<number>('count')) || 0
+        const history = (await txn.get<number[]>('history')) || []
+
+        // Both updates succeed or both fail
+        await txn.put('count', count + 1)
+        await txn.put('history', [...history, count + 1])
+      })
+
+      return new Response('OK')
+    }
+
+    return new Response('Not found', { status: 404 })
+  }
+}
+```
+
+**Transaction Guarantees:**
+
+- **Atomicity** - All operations succeed or all fail
+- **Consistency** - Storage remains in valid state
+- **Isolation** - No concurrent access during transaction
+- **Durability** - Changes persisted before commit
+
+### Storage Performance
+
+```typescript
+export class PerformanceTest extends DurableObject {
+  async fetch(request: Request) {
+    const start = Date.now()
+
+    // Single get: ~1ms
+    const value = await this.ctx.storage.get('key')
+    console.log('Get:', Date.now() - start, 'ms')
+
+    // Single put: ~2ms
+    const start2 = Date.now()
+    await this.ctx.storage.put('key', 'value')
+    console.log('Put:', Date.now() - start2, 'ms')
+
+    // Batch get: ~3ms for 100 keys
+    const start3 = Date.now()
+    const keys = Array.from({ length: 100 }, (_, i) => `key${i}`)
+    const values = await this.ctx.storage.get(keys)
+    console.log('Batch get:', Date.now() - start3, 'ms')
+
+    // Batch put: ~5ms for 100 keys
+    const start4 = Date.now()
+    const data = Object.fromEntries(keys.map((k, i) => [k, `value${i}`]))
+    await this.ctx.storage.put(data)
+    console.log('Batch put:', Date.now() - start4, 'ms')
+
+    return new Response('OK')
+  }
+}
+```
+
+**Typical Latencies:**
+
+- Single `get()`: 1-3ms
+- Single `put()`: 2-5ms
+- Batch `get()` (100 keys): 3-8ms
+- Batch `put()` (100 keys): 5-15ms
+- `transaction()`: 5-20ms
+- `list()`: 10-50ms (depends on count)
+
+## WebSocket Connection Handling
+
+### WebSocket Architecture
+
+```typescript
+export class RealtimeChat extends DurableObject {
+  private sessions: Set<WebSocket> = new Set()
+
+  async fetch(request: Request) {
+    // Check for WebSocket upgrade
+    if (request.headers.get('Upgrade') === 'websocket') {
+      return this.handleWebSocket(request)
+    }
+
+    // Regular HTTP request
+    return new Response('OK')
+  }
+
+  async handleWebSocket(request: Request) {
+    // Create WebSocket pair
+    const pair = new WebSocketPair()
+    const [client, server] = Object.values(pair)
+
+    // Accept WebSocket
+    server.accept()
+
+    // Store connection
+    this.sessions.add(server)
+
+    // Handle messages
+    server.addEventListener('message', async (event) => {
+      const message = JSON.parse(event.data as string)
+      await this.broadcast(message)
+    })
+
+    // Handle close
+    server.addEventListener('close', () => {
+      this.sessions.delete(server)
+    })
+
+    // Return client to worker
+    return new Response(null, {
+      status: 101,
+      webSocket: client,
+    })
+  }
+
+  async broadcast(message: any) {
+    const data = JSON.stringify(message)
+
+    for (const session of this.sessions) {
+      try {
+        session.send(data)
+      } catch (error) {
+        // Connection closed, remove it
+        this.sessions.delete(session)
+      }
+    }
+  }
+}
+```
+
+### WebSocket Hibernation
+
+Reduce memory usage with hibernation:
+
+```typescript
+export class HibernatingChat extends DurableObject {
+  async fetch(request: Request) {
+    if (request.headers.get('Upgrade') === 'websocket') {
+      const pair = new WebSocketPair()
+      const [client, server] = Object.values(pair)
+
+      // Enable hibernation
+      this.ctx.acceptWebSocket(server)
+
+      return new Response(null, {
+        status: 101,
+        webSocket: client,
+      })
+    }
+
+    return new Response('OK')
+  }
+
+  // Called when message received (object awakened automatically)
+  async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer) {
+    const data = typeof message === 'string' ? message : new TextDecoder().decode(message)
+    const parsed = JSON.parse(data)
+
+    // Broadcast to all hibernated connections
+    const connections = this.ctx.getWebSockets()
+    for (const conn of connections) {
+      conn.send(data)
+    }
+  }
+
+  // Called when connection closed
+  async webSocketClose(ws: WebSocket, code: number, reason: string) {
+    console.log('Connection closed:', code, reason)
+  }
+}
+```
+
+**Hibernation Benefits:**
+
+- **Lower Memory** - Connections stored off-heap
+- **More Connections** - Support 10,000+ connections per object
+- **Auto-Wakeup** - Object wakes on incoming message
+- **Message Buffering** - Messages queued during hibernation
+
+### WebSocket State Management
+
+```typescript
+export class StatefulWebSocket extends DurableObject {
+  private sessions: Map<string, WebSocket> = new Map()
+
+  async fetch(request: Request) {
+    if (request.headers.get('Upgrade') === 'websocket') {
+      const url = new URL(request.url)
+      const userId = url.searchParams.get('userId')
+
+      const pair = new WebSocketPair()
+      const [client, server] = Object.values(pair)
+
+      server.accept()
+
+      // Store with user ID
+      this.sessions.set(userId, server)
+
+      // Load user state
+      const state = await this.ctx.storage.get(`user:${userId}`)
+      server.send(JSON.stringify({ type: 'state', state }))
+
+      server.addEventListener('message', async (event) => {
+        const message = JSON.parse(event.data as string)
+
+        // Update state
+        await this.ctx.storage.put(`user:${userId}`, message.state)
+
+        // Broadcast to other users
+        for (const [id, session] of this.sessions) {
+          if (id !== userId) {
+            session.send(JSON.stringify({ type: 'update', userId, state: message.state }))
+          }
+        }
+      })
+
+      server.addEventListener('close', () => {
+        this.sessions.delete(userId)
+      })
+
+      return new Response(null, {
+        status: 101,
+        webSocket: client,
+      })
+    }
+
+    return new Response('OK')
+  }
+}
+```
+
+## Alarm Scheduling System
+
+### Alarm Basics
+
+Schedule future execution:
+
+```typescript
+export class ScheduledTask extends DurableObject {
+  async fetch(request: Request) {
+    const url = new URL(request.url)
+
+    if (url.pathname === '/schedule') {
+      const { delayMs, task } = await request.json()
+
+      // Store task data
+      await this.ctx.storage.put('task', task)
+
+      // Schedule alarm
+      const scheduledTime = Date.now() + delayMs
+      await this.ctx.storage.setAlarm(scheduledTime)
+
+      return new Response(JSON.stringify({ scheduledTime }))
+    }
+
+    return new Response('Not found', { status: 404 })
+  }
+
+  // Called when alarm fires
+  async alarm() {
+    const task = await this.ctx.storage.get('task')
+
+    console.log('Executing scheduled task:', task)
+
+    // Execute task logic
+    await this.executeTask(task)
+
+    // Clean up
+    await this.ctx.storage.delete('task')
+  }
+
+  async executeTask(task: any) {
+    // Task execution logic
+  }
+}
+```
+
+### Recurring Alarms
+
+Implement recurring tasks:
+
+```typescript
+export class RecurringTask extends DurableObject {
+  async fetch(request: Request) {
+    if (request.url.includes('/start')) {
+      // Schedule first alarm
+      await this.ctx.storage.setAlarm(Date.now() + 60000) // 1 minute
+      return new Response('Started')
+    }
+
+    if (request.url.includes('/stop')) {
+      // Delete alarm
+      await this.ctx.storage.deleteAlarm()
+      return new Response('Stopped')
+    }
+
+    return new Response('OK')
+  }
+
+  async alarm() {
+    // Execute recurring task
+    console.log('Recurring task executed at', new Date().toISOString())
+
+    // Schedule next execution (1 minute)
+    await this.ctx.storage.setAlarm(Date.now() + 60000)
+  }
+}
+```
+
+### Alarm Patterns
+
+**One-time Alarm:**
+
+```typescript
+// Schedule once
+await this.ctx.storage.setAlarm(Date.now() + 3600000) // 1 hour
+
+async alarm() {
+  // Execute once
+  await doWork()
+  // No rescheduling
+}
+```
+
+**Recurring Alarm:**
+
+```typescript
+// Schedule first execution
+await this.ctx.storage.setAlarm(Date.now() + 60000) // 1 minute
+
+async alarm() {
+  // Execute work
+  await doWork()
+
+  // Reschedule
+  await this.ctx.storage.setAlarm(Date.now() + 60000) // Next minute
+}
+```
+
+**Conditional Alarm:**
+
+```typescript
+// Schedule based on state
+const needsWork = await this.ctx.storage.get('needsWork')
+if (needsWork) {
+  await this.ctx.storage.setAlarm(Date.now() + 60000)
+}
+
+async alarm() {
+  const needsWork = await this.ctx.storage.get('needsWork')
+
+  if (needsWork) {
+    await doWork()
+    await this.ctx.storage.setAlarm(Date.now() + 60000) // Reschedule
+  }
+  // Otherwise, no reschedule
+}
+```
+
+### Alarm Guarantees
+
+**Delivery Guarantees:**
+
+- **At Least Once** - Alarm will fire at least once
+- **At Most Once per Schedule** - Won't fire multiple times for single schedule
+- **Near Scheduled Time** - Fires within seconds of scheduled time
+- **Survives Restarts** - Persisted, survives hibernation/migration
+
+**Limitations:**
+
+- **One Alarm per Object** - Only one active alarm at a time
+- **Minimum Delay** - 1 second minimum
+- **Maximum Delay** - No practical limit
+- **No Cancellation** - Use `deleteAlarm()` to cancel
+
+## Performance Characteristics
+
+### Request Latency
+
+```
+Cold Start (First Request):
+┌──────────────────────────────────┐
+│ Object Instantiation: 20-50ms    │
+│ Storage Read: 5-15ms             │
+│ Code Execution: 1-10ms           │
+│ Storage Write: 5-15ms            │
+└──────────────────────────────────┘
+Total: 30-90ms
+
+Warm Request (Subsequent):
+┌──────────────────────────────────┐
+│ Code Execution: 1-10ms           │
+│ Storage Read: 1-5ms              │
+│ Storage Write: 2-8ms             │
+└──────────────────────────────────┘
+Total: 4-23ms
+```
+
+### Throughput Limits
+
+**Per Object:**
+
+- **HTTP Requests**: 1,000+ req/sec
+- **WebSocket Messages**: 100+ msg/sec per connection
+- **Storage Operations**: 10,000+ ops/sec
+- **Concurrent Connections**: 10,000 WebSockets
+
+**Per Account:**
+
+- **Objects**: Millions
+- **Total Throughput**: Hundreds of thousands of req/sec
+- **Storage**: Petabytes
+
+### Optimization Strategies
+
+**1. Batch Operations:**
+
+```typescript
+// Bad: Multiple roundtrips
+const val1 = await this.ctx.storage.get('key1')
+const val2 = await this.ctx.storage.get('key2')
+const val3 = await this.ctx.storage.get('key3')
+
+// Good: Single roundtrip
+const values = await this.ctx.storage.get(['key1', 'key2', 'key3'])
+```
+
+**2. In-Memory Caching:**
+
+```typescript
+export class CachedObject extends DurableObject {
+  private cache: Map<string, any> = new Map()
+
+  async get(key: string) {
+    // Check cache first
+    if (this.cache.has(key)) {
+      return this.cache.get(key)
+    }
+
+    // Load from storage
+    const value = await this.ctx.storage.get(key)
+    this.cache.set(key, value)
+    return value
+  }
+}
+```
+
+**3. Lazy Loading:**
+
+```typescript
+export class LazyLoader extends DurableObject {
+  private data: any = null
+
+  async getData() {
+    if (this.data === null) {
+      // Load on first access
+      this.data = await this.ctx.storage.get('data')
+    }
+    return this.data
+  }
+}
+```
+
+## Comparison with Other Systems
+
+### vs. Traditional Databases
+
+| Feature          | state.do              | Database                     |
+| ---------------- | --------------------- | ---------------------------- |
+| **Consistency**  | Single-writer, strong | Eventually consistent (most) |
+| **Latency**      | 1-10ms                | 50-200ms                     |
+| **Scalability**  | Per-object horizontal | Vertical + sharding          |
+| **Transactions** | Built-in, free        | Expensive, limited           |
+| **Location**     | Near users            | Fixed datacenter             |
+
+### vs. Redis/Memcached
+
+| Feature          | state.do    | Redis              |
+| ---------------- | ----------- | ------------------ |
+| **Persistence**  | Automatic   | Optional           |
+| **Distribution** | Global      | Single region      |
+| **Cost**         | Per-request | Always-on instance |
+| **Consistency**  | Strong      | Eventual (cluster) |
+| **WebSockets**   | Built-in    | External           |
+
+### vs. Actor Model
+
+| Feature            | state.do    | Actors (Akka/Orleans) |
+| ------------------ | ----------- | --------------------- |
+| **Location**       | Global edge | Single cluster        |
+| **Persistence**    | Automatic   | Optional              |
+| **Cold Start**     | 20-50ms     | 100-500ms             |
+| **Infrastructure** | Serverless  | Self-managed          |
+| **Cost**           | Pay-per-use | Always-on cluster     |
+
+## Semantic Patterns
+
+state.do integrates with semantic patterns:
+
+```typescript
+import { $, state } from 'sdk.do'
+
+// State types
+$.State
+$.Session
+$.Cache
+$.Lock
+$.Queue
+
+// State operations
+$.state.get(id)
+$.state.save(object)
+$.state.delete(id)
+$.state.alarm(object, time)
+
+// State events
+on($.State.created, handler)
+on($.State.updated, handler)
+on($.State.deleted, handler)
+on($.Session.expired, handler)
+```
+
+## Next Steps
+
+- Learn [Best Practices](./best-practices) for production deployments
+- Explore [Advanced Patterns](../examples/advanced-patterns) for complex use cases
+- Review [Troubleshooting Guide](./troubleshooting) for common issues
+- Check [API Reference](../api/reference) for complete documentation
+
+## Resources
+
+- [Cloudflare Durable Objects Docs](https://developers.cloudflare.com/durable-objects/)
+- [Workers Runtime API](https://developers.cloudflare.com/workers/runtime-apis/)
+- [sdk.do Documentation](https://sdk.do)
+
+---
+
+Documentation licensed under [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/).

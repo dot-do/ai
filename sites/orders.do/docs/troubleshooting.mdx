@@ -1,0 +1,764 @@
+---
+$id: https://orders.do/docs/troubleshooting
+$type: TechArticle
+title: Order Management Troubleshooting
+description: Solutions to common issues and errors in order management systems. Debug order processing, payment failures, inventory issues, and more.
+keywords: [troubleshooting, debugging, errors, issues, solutions, order management]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Order Management Troubleshooting
+
+This guide helps you diagnose and fix common issues in order management systems.
+
+## Order Creation Issues
+
+### Problem: Order Not Saving
+
+**Symptoms:**
+
+- Order creation fails silently
+- No error message returned
+- Order doesn't appear in database
+
+**Solutions:**
+
+1. **Check required fields:**
+
+```typescript
+// Ensure all required fields are present
+const order = await db.create($.Order, {
+  $type: 'Order', // Required
+  orderNumber: 'ORD-2025-001', // Required
+  orderDate: new Date().toISOString(), // Required
+  orderStatus: 'OrderProcessing', // Required
+  customer: customerData, // Required
+  orderedItem: items, // Required (non-empty array)
+})
+```
+
+2. **Validate Schema.org types:**
+
+```typescript
+// Correct
+const order = await db.create($.Order, {
+  $type: 'Order', // ✓ Correct Schema.org type
+  // ...
+})
+
+// Incorrect
+const order = await db.create($.Order, {
+  $type: 'order', // ✗ Wrong case
+  // ...
+})
+```
+
+3. **Check database connection:**
+
+```typescript
+try {
+  const order = await db.create($.Order, orderData)
+} catch (error) {
+  console.error('Database error:', error.message)
+  // Check connection status
+  const status = await db.status()
+  console.log('DB Status:', status)
+}
+```
+
+### Problem: Invalid Order Number
+
+**Symptoms:**
+
+- Duplicate order numbers
+- Order number format errors
+- Order number not unique
+
+**Solutions:**
+
+1. **Use sequential numbering:**
+
+```typescript
+async function generateOrderNumber(): Promise<string> {
+  const lastOrder = await db.list($.Order, {
+    sort: { orderNumber: -1 },
+    limit: 1,
+  })
+
+  if (!lastOrder.length) {
+    return 'ORD-2025-000001'
+  }
+
+  const lastNum = parseInt(lastOrder[0].orderNumber.split('-').pop())
+  const nextNum = String(lastNum + 1).padStart(6, '0')
+  return `ORD-2025-${nextNum}`
+}
+```
+
+2. **Handle race conditions:**
+
+```typescript
+async function createOrderSafely(orderData: Partial<Order>) {
+  let attempts = 0
+  const maxAttempts = 5
+
+  while (attempts < maxAttempts) {
+    const orderNumber = await generateOrderNumber()
+
+    try {
+      return await db.create($.Order, {
+        ...orderData,
+        orderNumber,
+      })
+    } catch (error) {
+      if (error.code === 'DUPLICATE_KEY') {
+        attempts++
+        continue // Try again with new number
+      }
+      throw error
+    }
+  }
+
+  throw new Error('Failed to create order after multiple attempts')
+}
+```
+
+## Order Status Issues
+
+### Problem: Invalid Status Transition
+
+**Symptoms:**
+
+- Status update fails
+- Error: "Invalid status transition"
+- Order stuck in current status
+
+**Solutions:**
+
+1. **Check valid transitions:**
+
+```typescript
+const validTransitions = {
+  OrderPending: ['OrderProcessing', 'OrderCancelled'],
+  OrderProcessing: ['OrderInTransit', 'OrderProblem', 'OrderCancelled'],
+  OrderInTransit: ['OrderDelivered', 'OrderProblem'],
+  OrderDelivered: ['OrderReturned'],
+  // ...
+}
+
+function canTransition(from: OrderStatus, to: OrderStatus): boolean {
+  return validTransitions[from]?.includes(to) ?? false
+}
+
+// Validate before updating
+if (!canTransition(order.orderStatus, newStatus)) {
+  console.error(`Cannot transition from ${order.orderStatus} to ${newStatus}`)
+  return
+}
+```
+
+2. **Force status update (use with caution):**
+
+```typescript
+// Only use in exceptional cases with proper authorization
+async function forceStatusUpdate(order: Order, newStatus: OrderStatus, reason: string) {
+  await db.update(order, {
+    orderStatus: newStatus,
+    statusOverridden: true,
+    statusOverrideReason: reason,
+    statusOverrideAt: new Date().toISOString(),
+  })
+
+  // Log the override
+  await logOrderEvent(order, 'warn', 'Status forcibly updated', {
+    from: order.orderStatus,
+    to: newStatus,
+    reason,
+  })
+}
+```
+
+### Problem: Order Stuck in Processing
+
+**Symptoms:**
+
+- Order remains in "OrderProcessing" for extended time
+- No progress in fulfillment workflow
+- Customer inquiries about order status
+
+**Solutions:**
+
+1. **Check fulfillment queue:**
+
+```typescript
+async function checkOrderProgress(orderId: string) {
+  const order = await db.get($.Order, orderId)
+
+  // Check if fulfillment task exists
+  const task = await db.list($.Task, {
+    where: {
+      $type: 'FulfillmentTask',
+      order: orderId,
+    },
+  })
+
+  if (!task.length) {
+    console.error('No fulfillment task found for order')
+    // Recreate fulfillment task
+    await createFulfillmentTask(order)
+  } else {
+    console.log('Task status:', task[0].status)
+  }
+}
+```
+
+2. **Retry failed processing:**
+
+```typescript
+async function retryOrderProcessing(orderId: string) {
+  const order = await db.get($.Order, orderId)
+
+  // Reset to pending and reprocess
+  await db.update(order, {
+    orderStatus: 'OrderPending',
+    processingRetries: (order.processingRetries || 0) + 1,
+  })
+
+  // Trigger reprocessing
+  await send({
+    $type: 'OrderProcessingRequest',
+    order: orderId,
+  })
+}
+```
+
+## Payment Issues
+
+### Problem: Payment Declined
+
+**Symptoms:**
+
+- Order status: "OrderProblem"
+- orderProblem: "Payment declined"
+- Customer unable to complete purchase
+
+**Solutions:**
+
+1. **Validate payment method:**
+
+```typescript
+async function validatePaymentMethod(paymentMethod: PaymentMethod) {
+  // Check expiration
+  if (paymentMethod.$type === 'PaymentCard') {
+    const expiry = new Date(paymentMethod.expiryDate)
+    if (expiry < new Date()) {
+      throw new Error('Payment card has expired')
+    }
+  }
+
+  // Verify with payment processor
+  const verification = await verifyPaymentMethod(paymentMethod)
+  if (!verification.valid) {
+    throw new Error(verification.error)
+  }
+}
+```
+
+2. **Implement payment retry:**
+
+```typescript
+async function retryPayment(order: Order) {
+  const maxRetries = 3
+  const retries = order.paymentRetries || 0
+
+  if (retries >= maxRetries) {
+    // Send email to customer
+    await send({
+      $type: 'EmailMessage',
+      recipient: order.customer.email,
+      subject: 'Payment Issue',
+      text: 'Please update your payment method.',
+    })
+    return
+  }
+
+  // Wait before retry
+  await new Promise((resolve) => setTimeout(resolve, 5000))
+
+  try {
+    await processPayment(order)
+  } catch (error) {
+    await db.update(order, {
+      paymentRetries: retries + 1,
+    })
+  }
+}
+```
+
+### Problem: Payment Processed But Order Not Updated
+
+**Symptoms:**
+
+- Payment successful but order still shows as pending
+- Customer charged but no order confirmation
+- Discrepancy between payment and order status
+
+**Solutions:**
+
+1. **Reconcile payment and order:**
+
+```typescript
+async function reconcilePayment(orderId: string) {
+  const order = await db.get($.Order, orderId)
+
+  // Check payment status
+  const payment = await getPaymentStatus(order.paymentTransactionId)
+
+  if (payment.status === 'completed' && order.paymentStatus !== 'PaymentComplete') {
+    // Update order to match payment
+    await db.update(order, {
+      paymentStatus: 'PaymentComplete',
+      orderStatus: 'OrderProcessing',
+    })
+
+    // Trigger fulfillment
+    await send({
+      $type: 'OrderValidated',
+      order: orderId,
+    })
+  }
+}
+```
+
+2. **Implement idempotent payment processing:**
+
+```typescript
+async function processPaymentIdempotent(order: Order) {
+  // Check if already processed
+  if (order.paymentStatus === 'PaymentComplete') {
+    console.log('Payment already processed')
+    return
+  }
+
+  // Use idempotency key
+  const idempotencyKey = `payment-${order.$id}`
+
+  const result = await processPayment({
+    order,
+    idempotencyKey,
+  })
+
+  await db.update(order, {
+    paymentStatus: 'PaymentComplete',
+    paymentTransactionId: result.transactionId,
+  })
+}
+```
+
+## Inventory Issues
+
+### Problem: Insufficient Inventory
+
+**Symptoms:**
+
+- Order fails with "Insufficient inventory"
+- orderProblem: "Out of stock"
+- Products show as available but aren't
+
+**Solutions:**
+
+1. **Check inventory accuracy:**
+
+```typescript
+async function verifyInventory(productId: string) {
+  const product = await db.get($.Product, productId)
+
+  console.log('Inventory Status:')
+  console.log('  On Hand:', product.quantityOnHand)
+  console.log('  Reserved:', product.quantityReserved)
+  console.log('  Available:', product.quantityAvailable)
+
+  // Verify accuracy
+  const expected = product.quantityOnHand - product.quantityReserved
+  if (expected !== product.quantityAvailable) {
+    console.error('Inventory mismatch! Syncing...')
+    await db.update(product, {
+      quantityAvailable: expected,
+    })
+  }
+}
+```
+
+2. **Implement backorder handling:**
+
+```typescript
+async function handleBackorder(order: Order) {
+  const unavailableItems = []
+
+  for (const item of order.orderedItem) {
+    const product = await db.get($.Product, item.orderedItem.$id)
+
+    if (product.quantityAvailable < item.orderQuantity) {
+      unavailableItems.push({
+        product: item.orderedItem,
+        requested: item.orderQuantity,
+        available: product.quantityAvailable,
+        backorder: item.orderQuantity - product.quantityAvailable,
+      })
+    }
+  }
+
+  if (unavailableItems.length > 0) {
+    // Update order with backorder status
+    await db.update(order, {
+      orderStatus: 'OrderProblem',
+      orderProblem: 'Partial backorder',
+      backorderItems: unavailableItems,
+    })
+
+    // Notify customer
+    await send({
+      $type: 'EmailMessage',
+      recipient: order.customer.email,
+      subject: 'Backorder Notification',
+      text: 'Some items are on backorder.',
+    })
+  }
+}
+```
+
+### Problem: Inventory Not Released on Cancellation
+
+**Symptoms:**
+
+- Cancelled order but inventory still reserved
+- Available quantity doesn't increase
+- Products appear out of stock
+
+**Solutions:**
+
+1. **Ensure inventory release:**
+
+```typescript
+async function cancelOrderWithInventoryRelease(orderId: string) {
+  const order = await db.get($.Order, orderId)
+
+  // Release all reserved inventory
+  for (const item of order.orderedItem) {
+    const product = await db.get($.Product, item.orderedItem.$id)
+
+    await db.update(product, {
+      quantityAvailable: product.quantityAvailable + item.orderQuantity,
+      quantityReserved: product.quantityReserved - item.orderQuantity,
+    })
+
+    console.log(`Released ${item.orderQuantity} units of ${product.name}`)
+  }
+
+  // Update order
+  await db.update(order, {
+    orderStatus: 'OrderCancelled',
+    cancelledAt: new Date().toISOString(),
+  })
+}
+```
+
+2. **Implement inventory cleanup job:**
+
+```typescript
+import { every } from 'sdk.do'
+
+// Run hourly to cleanup stale reservations
+await every('0 * * * *', async () => {
+  // Find orders with stale reservations
+  const staleOrders = await db.list($.Order, {
+    where: {
+      orderStatus: 'OrderCancelled',
+      inventoryReleased: { $ne: true },
+      cancelledAt: {
+        $lte: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      },
+    },
+  })
+
+  for (const order of staleOrders) {
+    await releaseInventory(order.orderedItem)
+    await db.update(order, { inventoryReleased: true })
+  }
+
+  console.log(`Released inventory for ${staleOrders.length} orders`)
+})
+```
+
+## Delivery Issues
+
+### Problem: Missing Tracking Information
+
+**Symptoms:**
+
+- Order status "OrderInTransit" but no tracking number
+- Customer can't track package
+- No delivery estimate
+
+**Solutions:**
+
+1. **Verify shipping integration:**
+
+```typescript
+async function ensureTrackingInfo(orderId: string) {
+  const order = await db.get($.Order, orderId)
+
+  if (order.orderStatus === 'OrderInTransit' && !order.orderDelivery?.trackingNumber) {
+    // Check if shipping label was generated
+    const label = await getShippingLabel(orderId)
+
+    if (label) {
+      await db.update(order, {
+        orderDelivery: {
+          ...order.orderDelivery,
+          trackingNumber: label.trackingNumber,
+          trackingUrl: label.trackingUrl,
+          carrier: label.carrier,
+        },
+      })
+    } else {
+      // Regenerate shipping label
+      const newLabel = await createShippingLabel(order)
+      await db.update(order, {
+        orderDelivery: {
+          ...order.orderDelivery,
+          ...newLabel,
+        },
+      })
+    }
+  }
+}
+```
+
+### Problem: Order Delivered But Status Not Updated
+
+**Symptoms:**
+
+- Package delivered but order shows "OrderInTransit"
+- Customer received order but system doesn't reflect it
+- Can't request review or process warranty
+
+**Solutions:**
+
+1. **Poll carrier for delivery confirmation:**
+
+```typescript
+import { every } from 'sdk.do'
+
+// Check for delivered orders every 15 minutes
+await every('*/15 * * * *', async () => {
+  const inTransitOrders = await db.list($.Order, {
+    where: { orderStatus: 'OrderInTransit' },
+  })
+
+  for (const order of inTransitOrders) {
+    const tracking = await getTrackingStatus(order.orderDelivery.trackingNumber)
+
+    if (tracking.status === 'delivered') {
+      await db.update(order, {
+        orderStatus: 'OrderDelivered',
+        deliveredAt: tracking.deliveredAt,
+      })
+
+      // Send delivery notification
+      await send({
+        $type: 'EmailMessage',
+        recipient: order.customer.email,
+        subject: 'Order Delivered',
+        text: 'Your order has been delivered!',
+      })
+    }
+  }
+})
+```
+
+## Performance Issues
+
+### Problem: Slow Order Queries
+
+**Symptoms:**
+
+- Order list loading slowly
+- Timeout errors on order search
+- High database load
+
+**Solutions:**
+
+1. **Add indexes:**
+
+```typescript
+// Create indexes for common queries
+await db.createIndex($.Order, { orderNumber: 1 }, { unique: true })
+await db.createIndex($.Order, { 'customer.$id': 1 })
+await db.createIndex($.Order, { orderStatus: 1 })
+await db.createIndex($.Order, { orderDate: -1 })
+```
+
+2. **Optimize queries:**
+
+```typescript
+// Bad: Fetch all fields
+const orders = await db.list($.Order)
+
+// Good: Select only needed fields
+const orders = await db.list($.Order, {
+  select: ['orderNumber', 'orderDate', 'orderStatus', 'customer.name', 'priceSpecification.price'],
+})
+
+// Better: Paginate results
+const orders = await db.list($.Order, {
+  select: ['orderNumber', 'orderDate', 'orderStatus'],
+  limit: 50,
+  offset: 0,
+})
+```
+
+3. **Implement caching:**
+
+```typescript
+import { cache } from 'sdk.do'
+
+async function getOrderWithCache(orderId: string): Promise<Order> {
+  const cacheKey = `order:${orderId}`
+
+  // Check cache
+  const cached = await cache.get(cacheKey)
+  if (cached) return cached
+
+  // Fetch from database
+  const order = await db.get($.Order, orderId)
+
+  // Cache for 5 minutes
+  await cache.set(cacheKey, order, { ttl: 300 })
+
+  return order
+}
+```
+
+## Event Handler Issues
+
+### Problem: Event Handler Not Triggering
+
+**Symptoms:**
+
+- Order created but no confirmation email
+- Status changed but no notifications
+- Workflows not executing
+
+**Solutions:**
+
+1. **Verify event registration:**
+
+```typescript
+// Make sure handlers are registered before events fire
+await on($.Order.created, async (order) => {
+  console.log('Order created:', order.$id)
+})
+
+// Then create orders
+const order = await db.create($.Order, orderData)
+```
+
+2. **Check event syntax:**
+
+```typescript
+// Correct
+await on($.Order.created, handler)
+
+// Incorrect
+await on('Order.created', handler) // Missing $
+await on($.Order.create, handler) // Wrong tense
+```
+
+3. **Add error handling:**
+
+```typescript
+await on($.Order.created, async (order) => {
+  try {
+    await sendConfirmationEmail(order)
+  } catch (error) {
+    console.error('Failed to send email:', error)
+    // Don't let email failure block order creation
+  }
+})
+```
+
+## Debugging Tips
+
+### Enable Debug Logging
+
+```typescript
+// Set debug mode
+process.env.DEBUG = 'orders:*'
+
+// Add detailed logging
+await on($.Order.created, async (order) => {
+  console.log('[DEBUG] Order created event triggered')
+  console.log('[DEBUG] Order data:', JSON.stringify(order, null, 2))
+
+  // Log each step
+  console.log('[DEBUG] Validating order...')
+  const valid = await validateOrder(order)
+  console.log('[DEBUG] Validation result:', valid)
+
+  console.log('[DEBUG] Processing payment...')
+  const payment = await processPayment(order)
+  console.log('[DEBUG] Payment result:', payment)
+})
+```
+
+### Use Order Inspection Tool
+
+```typescript
+async function inspectOrder(orderId: string) {
+  const order = await db.get($.Order, orderId)
+
+  console.log('Order Inspection Report')
+  console.log('======================')
+  console.log('Order Number:', order.orderNumber)
+  console.log('Status:', order.orderStatus)
+  console.log('Created:', order.orderDate)
+  console.log('Customer:', order.customer.name)
+  console.log('Items:', order.orderedItem.length)
+  console.log('Total:', calculateOrderTotal(order).total)
+  console.log('\nStatus History:')
+  order.statusHistory?.forEach((entry) => {
+    console.log(`  ${entry.timestamp}: ${entry.status} (${entry.changedBy})`)
+  })
+  console.log('\nLogs:')
+  order.logs?.forEach((log) => {
+    console.log(`  [${log.level}] ${log.event}:`, log.details)
+  })
+}
+```
+
+## Getting Help
+
+If you're still experiencing issues:
+
+1. Check the [API Reference](../api/) for correct usage
+2. Review [Examples](../examples/) for working code
+3. Search [GitHub Issues](https://github.com/dot-do/platform/issues)
+4. Ask in [Discord Community](https://discord.gg/dotdo)
+
+## See Also
+
+- [Getting Started](./getting-started)
+- [Architecture](./architecture)
+- [Best Practices](./best-practices)
+- [API Reference](../api/)
+
+## License
+
+MIT (Open Source)
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

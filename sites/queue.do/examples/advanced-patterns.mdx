@@ -1,0 +1,243 @@
+---
+$id: https://queue.do/examples/advanced-patterns
+$type: HowTo
+title: Advanced Queue Patterns
+description: Advanced patterns for task queue management including dead letter queues, scheduled tasks, and monitoring.
+keywords: [queue, advanced, patterns, dead letter queue, scheduled tasks, monitoring]
+---
+
+# Advanced Queue Patterns
+
+## Dead Letter Queue
+
+```typescript
+import { queue } from 'sdk.do'
+
+// Configure dead letter queue
+await queue.enqueue(
+  $.PaymentTask,
+  {
+    orderId: 'order-123',
+    amount: 99.99,
+  },
+  {
+    retries: 3,
+    deadLetterQueue: '$.Task.failed',
+  }
+)
+
+// Monitor failed tasks
+await queue.worker('$.Task.failed', async (task) => {
+  console.error('Task permanently failed:', {
+    id: task.id,
+    type: task.$type,
+    attempts: task.attempts,
+    error: task.error,
+    data: task.data,
+  })
+
+  // Alert ops team
+  await notify({
+    channel: 'ops',
+    severity: 'high',
+    message: `Task ${task.id} failed after ${task.attempts} attempts`,
+    error: task.error,
+  })
+
+  // Store for manual review
+  await db.create($.FailedTask, {
+    originalTaskId: task.id,
+    type: task.$type,
+    data: task.data,
+    error: task.error?.message,
+    failedAt: new Date(),
+  })
+})
+```
+
+## Scheduled Tasks
+
+```typescript
+import { queue } from 'sdk.do'
+
+// Delay execution
+await queue.enqueue(
+  $.ReminderTask,
+  {
+    userId: 'user-123',
+    message: 'Complete your profile',
+  },
+  {
+    delay: 3600000, // 1 hour delay
+  }
+)
+
+// Schedule for specific time
+await queue.enqueue(
+  $.ReportTask,
+  {
+    reportType: 'monthly_sales',
+    month: '2025-10',
+  },
+  {
+    runAt: new Date('2025-11-01T09:00:00Z'),
+  }
+)
+```
+
+## Task Status Tracking
+
+```typescript
+// Enqueue and track
+const taskId = await queue.enqueue($.Task, {
+  action: 'generate_report',
+})
+
+// Check status
+const status = await queue.status(taskId)
+console.log('Task status:', status.state)
+
+// Wait for completion
+try {
+  const result = await queue.wait(taskId, {
+    timeout: 60000, // 1 minute timeout
+  })
+  console.log('Task completed:', result)
+} catch (error) {
+  console.error('Task failed or timed out')
+}
+```
+
+## Conditional Processing
+
+```typescript
+await queue.worker($.Task, async (task) => {
+  const { action, data } = task.data
+
+  switch (action) {
+    case 'send_email':
+      return await sendEmail(data)
+
+    case 'process_payment':
+      return await processPayment(data)
+
+    case 'generate_report':
+      return await generateReport(data)
+
+    default:
+      throw new Error(`Unknown action: ${action}`)
+  }
+})
+```
+
+## Parallel Processing
+
+```typescript
+// Process multiple task types concurrently
+await Promise.all([
+  queue.worker($.EmailTask, emailHandler, { concurrency: 20 }),
+  queue.worker($.PaymentTask, paymentHandler, { concurrency: 5 }),
+  queue.worker($.ReportTask, reportHandler, { concurrency: 2 }),
+])
+```
+
+## Circuit Breaker Pattern
+
+```typescript
+import CircuitBreaker from 'opossum'
+
+const breaker = new CircuitBreaker(externalAPICall, {
+  timeout: 10000,
+  errorThresholdPercentage: 50,
+  resetTimeout: 30000,
+})
+
+await queue.worker($.ApiCallTask, async (task) => {
+  try {
+    return await breaker.fire(task.data)
+  } catch (error) {
+    if (breaker.opened) {
+      // Circuit open, don't retry
+      task.retries = 0
+      throw new Error('Circuit breaker open')
+    }
+    throw error
+  }
+})
+```
+
+## Metrics and Monitoring
+
+```typescript
+import { metrics } from './monitoring'
+
+await queue.worker(
+  $.Task,
+  async (task) => {
+    const startTime = Date.now()
+
+    try {
+      const result = await processTask(task)
+
+      // Track success metrics
+      metrics.increment('queue.task.completed', {
+        type: task.$type,
+        priority: task.priority,
+      })
+
+      metrics.histogram('queue.task.duration', Date.now() - startTime, {
+        type: task.$type,
+      })
+
+      return result
+    } catch (error) {
+      // Track failure metrics
+      metrics.increment('queue.task.failed', {
+        type: task.$type,
+        error: error.constructor.name,
+      })
+
+      throw error
+    }
+  },
+  {
+    onRetry: (task, attempt, error) => {
+      metrics.increment('queue.task.retry', {
+        type: task.$type,
+        attempt,
+      })
+    },
+  }
+)
+```
+
+## Graceful Shutdown
+
+```typescript
+let isShuttingDown = false
+
+process.on('SIGTERM', async () => {
+  console.log('Graceful shutdown initiated')
+  isShuttingDown = true
+
+  // Stop accepting new tasks
+  await worker.pause()
+
+  // Wait for current tasks (max 30 seconds)
+  await worker.drain({ timeout: 30000 })
+
+  // Cleanup
+  await worker.stop()
+  process.exit(0)
+})
+
+await queue.worker($.Task, async (task) => {
+  if (isShuttingDown) {
+    // Requeue task for another worker
+    await queue.enqueue(task.$type, task.data)
+    return { requeued: true }
+  }
+
+  return await processTask(task)
+})
+```

@@ -1,0 +1,616 @@
+---
+$id: https://bots.do/api
+$type: APIReference
+title: bots.do API Reference
+description: Complete API reference for the bots.do digital worker bot framework.
+keywords: [API, reference, documentation, bots, functions, types]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# API Reference
+
+Complete API documentation for bots.do.
+
+## Core Functions
+
+### bot.create()
+
+Create a new bot instance.
+
+**Signature:**
+
+```typescript
+function create(config: BotConfig): Promise<Bot>
+```
+
+**Parameters:**
+
+- `config` - Bot configuration object
+
+**Returns:** Promise that resolves to a Bot instance
+
+**Example:**
+
+```typescript
+const bot = await bot.create({
+  $type: 'Bot',
+  name: 'My Bot',
+  task: 'Process data',
+  capabilities: ['processing'],
+  model: 'gpt-5-mini',
+})
+```
+
+### bot.createTeam()
+
+Create a team of bots with orchestrated workflow.
+
+**Signature:**
+
+```typescript
+function createTeam(config: BotTeamConfig): Promise<BotTeam>
+```
+
+**Parameters:**
+
+- `config` - Team configuration with bots and workflow
+
+**Returns:** Promise that resolves to a BotTeam instance
+
+**Example:**
+
+```typescript
+const team = await bot.createTeam({
+  name: 'Processing Team',
+  bots: [
+    { id: 'validator', bot: validatorBot },
+    { id: 'processor', bot: processorBot }
+  ],
+  workflow: {
+    type: 'sequential',
+    stages: [...]
+  }
+})
+```
+
+## Bot Instance Methods
+
+### bot.execute()
+
+Execute the bot with given input.
+
+**Signature:**
+
+```typescript
+execute(input: any): Promise<any>
+```
+
+**Parameters:**
+
+- `input` - Input data for the bot
+
+**Returns:** Promise that resolves to execution result
+
+**Example:**
+
+```typescript
+const result = await bot.execute({
+  action: 'process',
+  data: { ... }
+})
+```
+
+### bot.start()
+
+Start the bot to begin processing tasks.
+
+**Signature:**
+
+```typescript
+start(options?: StartOptions): Promise<void>
+```
+
+**Parameters:**
+
+- `options` - Optional start configuration
+
+**Returns:** Promise that resolves when bot is started
+
+**Example:**
+
+```typescript
+await bot.start({ debug: true })
+```
+
+### bot.stop()
+
+Stop the bot.
+
+**Signature:**
+
+```typescript
+stop(options?: StopOptions): Promise<void>
+```
+
+**Parameters:**
+
+- `options` - Optional stop configuration
+
+**Returns:** Promise that resolves when bot is stopped
+
+**Example:**
+
+```typescript
+await bot.stop({ graceful: true })
+```
+
+### bot.configure()
+
+Configure bot behavior.
+
+**Signature:**
+
+```typescript
+configure(config: BotRuntimeConfig): Promise<void>
+```
+
+**Parameters:**
+
+- `config` - Runtime configuration
+
+**Returns:** Promise that resolves when configured
+
+**Example:**
+
+```typescript
+await bot.configure({
+  concurrency: 5,
+  batchSize: 100,
+  retryPolicy: { attempts: 3 },
+})
+```
+
+### bot.getStatus()
+
+Get current bot status.
+
+**Signature:**
+
+```typescript
+getStatus(): Promise<BotStatus>
+```
+
+**Returns:** Promise that resolves to bot status
+
+**Example:**
+
+```typescript
+const status = await bot.getStatus()
+console.log(status.state) // 'running' | 'stopped' | 'error'
+```
+
+### bot.getMetrics()
+
+Get bot performance metrics.
+
+**Signature:**
+
+```typescript
+getMetrics(options?: MetricsOptions): Promise<BotMetrics>
+```
+
+**Parameters:**
+
+- `options` - Optional metrics filter
+
+**Returns:** Promise that resolves to metrics
+
+**Example:**
+
+```typescript
+const metrics = await bot.getMetrics({
+  period: 'last_hour',
+})
+```
+
+### bot.getLogs()
+
+Get bot logs.
+
+**Signature:**
+
+```typescript
+getLogs(options?: LogOptions): Promise<LogEntry[]>
+```
+
+**Parameters:**
+
+- `options` - Optional log filter
+
+**Returns:** Promise that resolves to log entries
+
+**Example:**
+
+```typescript
+const logs = await bot.getLogs({
+  level: 'error',
+  limit: 10,
+})
+```
+
+### bot.getHealth()
+
+Get bot health status.
+
+**Signature:**
+
+```typescript
+getHealth(): Promise<HealthStatus>
+```
+
+**Returns:** Promise that resolves to health status
+
+**Example:**
+
+```typescript
+const health = await bot.getHealth()
+console.log(health.status) // 'healthy' | 'unhealthy' | 'degraded'
+```
+
+## Event Handlers
+
+### bot.onTask()
+
+Register task handler.
+
+**Signature:**
+
+```typescript
+onTask(handler: TaskHandler): void
+```
+
+**Parameters:**
+
+- `handler` - Function to handle tasks
+
+**Example:**
+
+```typescript
+bot.onTask(async (task) => {
+  return await processTask(task)
+})
+```
+
+### bot.onError()
+
+Register error handler.
+
+**Signature:**
+
+```typescript
+onError(handler: ErrorHandler): void
+```
+
+**Parameters:**
+
+- `handler` - Function to handle errors
+
+**Example:**
+
+```typescript
+bot.onError(async (error, task) => {
+  console.error('Task failed:', error)
+})
+```
+
+### bot.onSchedule()
+
+Register schedule handler.
+
+**Signature:**
+
+```typescript
+onSchedule(handler: ScheduleHandler): void
+```
+
+**Parameters:**
+
+- `handler` - Function to run on schedule
+
+**Example:**
+
+```typescript
+bot.onSchedule(async () => {
+  await performScheduledTask()
+})
+```
+
+## Type Definitions
+
+### BotConfig
+
+```typescript
+interface BotConfig {
+  $type: 'Bot'
+  name: string
+  task: string
+  capabilities?: string[]
+  intelligence?: 'rules' | 'ai' | 'hybrid'
+  model?: string
+  rules?: Rule[]
+  triggers?: Trigger[]
+  schedule?: Schedule
+  concurrency?: number
+  batchSize?: number
+  timeout?: number
+  errorHandling?: ErrorHandlingConfig
+  validation?: ValidationConfig
+  monitoring?: MonitoringConfig
+  handler?: TaskHandler
+}
+```
+
+### Bot
+
+```typescript
+interface Bot {
+  $type: 'Bot'
+  $id: string
+  name: string
+  task: string
+  capabilities: string[]
+  state: BotState
+
+  // Methods
+  execute(input: any): Promise<any>
+  start(options?: StartOptions): Promise<void>
+  stop(options?: StopOptions): Promise<void>
+  configure(config: BotRuntimeConfig): Promise<void>
+  getStatus(): Promise<BotStatus>
+  getMetrics(options?: MetricsOptions): Promise<BotMetrics>
+  getLogs(options?: LogOptions): Promise<LogEntry[]>
+  getHealth(): Promise<HealthStatus>
+
+  // Event handlers
+  onTask(handler: TaskHandler): void
+  onError(handler: ErrorHandler): void
+  onSchedule(handler: ScheduleHandler): void
+}
+```
+
+### BotTeamConfig
+
+```typescript
+interface BotTeamConfig {
+  name: string
+  bots: TeamBot[]
+  workflow: Workflow
+}
+
+interface TeamBot {
+  id: string
+  bot: Bot
+  role?: string
+}
+
+interface Workflow {
+  type: 'sequential' | 'parallel' | 'conditional'
+  stages: WorkflowStage[]
+  errorHandling?: 'abort' | 'continue' | 'rollback'
+}
+
+interface WorkflowStage {
+  bot: string
+  continueOnSuccess: boolean
+  onFailure?: 'abort' | 'continue' | 'rollback' | 'alert'
+  rollback?: RollbackHandler
+  alert?: AlertHandler
+}
+```
+
+### BotStatus
+
+```typescript
+interface BotStatus {
+  state: 'starting' | 'running' | 'stopping' | 'stopped' | 'error'
+  uptime: number
+  tasksProcessed: number
+  successRate: number
+  avgProcessingTime: number
+  lastError: Error | null
+  lastProcessed: Date | null
+}
+```
+
+### BotMetrics
+
+```typescript
+interface BotMetrics {
+  throughput: number // Tasks per second
+  latency: {
+    min: number
+    max: number
+    avg: number
+    p50: number
+    p95: number
+    p99: number
+  }
+  errorRate: number // Percentage
+  successRate: number // Percentage
+  queueDepth: number
+  concurrency: number
+  memory: {
+    used: number
+    total: number
+    percentage: number
+  }
+}
+```
+
+### ErrorHandlingConfig
+
+```typescript
+interface ErrorHandlingConfig {
+  strategy?: 'retry' | 'circuit-breaker' | 'dlq'
+  retry?: RetryConfig
+  circuitBreaker?: CircuitBreakerConfig
+  deadLetterQueue?: DLQConfig
+  onFailure?: ErrorHandler
+}
+
+interface RetryConfig {
+  attempts: number
+  backoff: 'linear' | 'exponential'
+  multiplier?: number
+  maxDelay?: number
+  jitter?: boolean
+  retryOn?: string[]
+  onRetry?: RetryHandler
+}
+
+interface CircuitBreakerConfig {
+  threshold: number
+  timeout: number
+  halfOpenRequests: number
+  onOpen?: () => Promise<void>
+  onClose?: () => Promise<void>
+}
+
+interface DLQConfig {
+  name: string
+  maxRetries: number
+  retentionPeriod: number
+  onDLQ?: DLQHandler
+}
+```
+
+### ValidationConfig
+
+```typescript
+interface ValidationConfig {
+  schema?: JSONSchema
+  strict?: boolean
+  onValidationError?: ValidationErrorHandler
+}
+```
+
+### MonitoringConfig
+
+```typescript
+interface MonitoringConfig {
+  logging?: LoggingConfig
+  metrics?: MetricsConfig
+  tracing?: TracingConfig
+  health?: HealthConfig
+}
+
+interface LoggingConfig {
+  level: 'debug' | 'info' | 'warn' | 'error'
+  format: 'text' | 'json'
+  fields?: string[]
+  destination?: string
+}
+
+interface MetricsConfig {
+  enabled: boolean
+  collect: string[]
+  interval: number
+  destination?: string
+}
+
+interface TracingConfig {
+  enabled: boolean
+  provider: string
+  sampleRate: number
+  propagation?: string
+}
+
+interface HealthConfig {
+  enabled: boolean
+  interval: number
+  checks: HealthCheck[]
+}
+```
+
+## Helper Types
+
+### TaskHandler
+
+```typescript
+type TaskHandler = (task: any, context?: TaskContext) => Promise<any>
+```
+
+### ErrorHandler
+
+```typescript
+type ErrorHandler = (error: Error, task: any) => Promise<void>
+```
+
+### ScheduleHandler
+
+```typescript
+type ScheduleHandler = () => Promise<void>
+```
+
+### RetryHandler
+
+```typescript
+type RetryHandler = (error: Error, attempt: number, delay: number) => Promise<number | void>
+```
+
+### RollbackHandler
+
+```typescript
+type RollbackHandler = (data: any) => Promise<void>
+```
+
+### AlertHandler
+
+```typescript
+type AlertHandler = (data: any, error: Error) => Promise<void>
+```
+
+## Constants
+
+### Bot States
+
+```typescript
+const BotState = {
+  STARTING: 'starting',
+  RUNNING: 'running',
+  STOPPING: 'stopping',
+  STOPPED: 'stopped',
+  ERROR: 'error',
+} as const
+```
+
+### Intelligence Modes
+
+```typescript
+const IntelligenceMode = {
+  RULES: 'rules',
+  AI: 'ai',
+  HYBRID: 'hybrid',
+} as const
+```
+
+### Backoff Strategies
+
+```typescript
+const BackoffStrategy = {
+  LINEAR: 'linear',
+  EXPONENTIAL: 'exponential',
+} as const
+```
+
+## See Also
+
+- [Getting Started](../docs/getting-started) - Create your first bot
+- [Examples](../examples/) - Code examples
+- [Best Practices](../docs/best-practices) - Development guidelines
+
+---
+
+For more help, visit [bots.do](https://bots.do) or [open an issue](https://github.com/dot-do/platform/issues).

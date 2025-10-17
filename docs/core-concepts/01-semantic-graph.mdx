@@ -1,0 +1,408 @@
+---
+$id: /docs/core-concepts/semantic-graph
+$type: Documentation
+title: Semantic Graph & $.Subject.predicate.Object
+description: Understanding the semantic foundation of Business-as-Code
+keywords: [semantic web, graph, Subject predicate Object, Schema.org]
+author: .do Team
+lastUpdated: 2025-10-11
+readingTime: 8 min
+---
+
+# Semantic Graph & $.Subject.predicate.Object
+
+The `.do` platform is built on semantic web principles, using the `$.Subject.predicate.Object` pattern to represent business concepts that both humans and AI can understand.
+
+## What is a Semantic Graph?
+
+A **semantic graph** is a way of representing knowledge where:
+
+- **Nodes** represent entities (people, products, orders)
+- **Edges** represent relationships (owns, contains, created)
+- **Types** come from shared vocabularies (Schema.org, GS1, O\*NET)
+
+Traditional code:
+
+```typescript
+// Imperative: "How to do it"
+const order = {
+  id: '123',
+  customer_id: '456',
+  items: [{ product_id: '789', quantity: 2 }],
+  status: 'pending',
+}
+```
+
+Semantic code:
+
+```typescript
+// Declarative: "What it means"
+const order = await db.create($.Order, {
+  customer: $.Customer['456'],
+  orderedItem: [{ orderItem: $.Product['789'], orderQuantity: 2 }],
+  orderStatus: $.OrderStatus.pending,
+})
+```
+
+## The $ (Semantic Proxy)
+
+The `$` symbol is a **TypeScript Proxy** that creates semantic paths:
+
+```typescript
+import { $ } from '@dotdo/sdk.do'
+
+// Creates a semantic reference
+$.Business.name // → "Business.name"
+$.Order.created // → "Order.created"
+$.Customer['123'].orders // → "Customer.123.orders"
+```
+
+### How It Works
+
+```typescript
+// Simplified implementation
+const $ = new Proxy(
+  {},
+  {
+    get(target, subject) {
+      return new Proxy(
+        {},
+        {
+          get(_, predicate) {
+            return `${String(subject)}.${String(predicate)}`
+          },
+        }
+      )
+    },
+  }
+)
+
+// Usage
+$.Business.name // → "Business.name"
+```
+
+### Type Safety
+
+The `$` proxy provides **full TypeScript autocomplete**:
+
+```typescript
+// TypeScript knows all Schema.org types
+$.Organization.  // ← autocomplete: name, email, address, ...
+$.Person.        // ← autocomplete: givenName, familyName, ...
+$.Product.       // ← autocomplete: name, price, description, ...
+```
+
+## Subject.predicate.Object Pattern
+
+The pattern comes from **RDF (Resource Description Framework)**, the foundation of the semantic web.
+
+### Structure
+
+```
+Subject . predicate . Object
+   ↓          ↓          ↓
+ Entity    Relation   Value/Entity
+```
+
+### Examples
+
+```typescript
+// Simple property
+$.Person.name // Person → name → string
+
+// Relationship to another entity
+$.Order.customer // Order → customer → Person
+
+// Complex path
+$.Order.customer.address // Order → customer → Person → address → PostalAddress
+```
+
+## Schema.org Integration
+
+Schema.org provides **800+ standardized types** for business entities:
+
+```typescript
+import { $ } from '@dotdo/sdk.do'
+
+// Schema.org types are built-in
+$.Organization // https://schema.org/Organization
+$.Person // https://schema.org/Person
+$.Product // https://schema.org/Product
+$.Order // https://schema.org/Order
+$.Event // https://schema.org/Event
+$.Place // https://schema.org/Place
+```
+
+### Type Hierarchies
+
+Schema.org types form hierarchies:
+
+```
+Thing
+├── Organization
+│   ├── Corporation
+│   ├── EducationalOrganization
+│   └── LocalBusiness
+├── Person
+├── Product
+│   ├── IndividualProduct
+│   └── ProductModel
+└── CreativeWork
+    ├── Article
+    ├── Blog
+    └── SoftwareApplication
+```
+
+### Using Subtypes
+
+```typescript
+// General type
+const org = await db.create($.Organization, { name: 'Acme' })
+
+// Specific subtype
+const corp = await db.create($.Corporation, {
+  name: 'Acme Corp',
+  tickerSymbol: 'ACME',
+  founder: $.Person['john-doe'],
+})
+```
+
+## GS1 & Supply Chain
+
+GS1 provides **supply chain vocabularies** for logistics and retail:
+
+```typescript
+import { $ } from '@dotdo/gs1.org.ai'
+
+// EPCIS events
+await send($.ObjectEvent.created, {
+  eventType: $.EventType.ObjectEvent,
+  action: $.Action.OBSERVE,
+  bizStep: $.BizStep.shipping,
+  epcList: ['urn:epc:id:sgtin:0614141.107346.2017'],
+  readPoint: $.ReadPoint['urn:epc:id:sgln:0614141.00001.0'],
+})
+
+// Business location
+const warehouse = await db.create($.ReadPoint, {
+  id: 'urn:epc:id:sgln:0614141.00001.0',
+  address: $.PostalAddress,
+})
+```
+
+## O\*NET Occupations
+
+O\*NET provides **occupation types** for workforce and HR:
+
+```typescript
+import { $ } from '@dotdo/soc.org.ai'
+
+// Create job posting
+const job = await db.create($.JobPosting, {
+  title: 'Software Developer',
+  occupationalCategory: $.SOC['15-1252.00'], // Software Developers
+  skills: [
+    $.Skill['2.A.1.a'], // Reading Comprehension
+    $.Skill['2.B.1.a'], // Programming
+  ],
+  education: $.EducationalOccupationalCredential.BachelorDegree,
+})
+```
+
+## Benefits of Semantic Patterns
+
+### 1. AI Understanding
+
+AI models are trained on Schema.org and understand semantic patterns:
+
+```typescript
+// AI knows what this means
+const order = await db.create($.Order, {
+  customer: $.Customer['123'],
+  orderStatus: $.OrderStatus.pending,
+})
+
+// AI can automatically:
+// - Send confirmation email to customer
+// - Update inventory
+// - Track shipping
+// - Process payment
+await send($.Order.created, order)
+```
+
+### 2. Type Safety
+
+Full TypeScript support with autocomplete:
+
+```typescript
+// TypeScript autocomplete
+$.Person.
+//        ↑ givenName, familyName, email, address, ...
+
+// Compile-time checking
+const person = await db.create($.Person, {
+  givenName: 'John',
+  familyName: 'Doe',
+  // email: 123, // ← TypeScript error: number not assignable to string
+})
+```
+
+### 3. Interoperability
+
+Data is understood across systems:
+
+```typescript
+// Export to JSON-LD (standard format)
+const jsonld = await db.get($.Organization['acme'], { format: 'jsonld' })
+
+// Import from another system
+await db.create($.Product, externalProduct) // Just works if it follows Schema.org
+```
+
+### 4. Query Power
+
+Query by semantic relationships:
+
+```typescript
+// Find all orders for a customer
+const orders = await db.list($.Order, {
+  where: { customer: $.Customer['123'] },
+})
+
+// Find all products in a category
+const products = await db.list($.Product, {
+  where: { category: $.ProductCategory.Electronics },
+})
+
+// Complex graph queries
+const results = await db.query(`
+  SELECT ?order ?customer ?product
+  WHERE {
+    ?order rdf:type schema:Order .
+    ?order schema:customer ?customer .
+    ?order schema:orderedItem ?item .
+    ?item schema:orderedItem ?product .
+  }
+`)
+```
+
+## Advanced Patterns
+
+### Custom Types
+
+Extend Schema.org with your own types:
+
+```typescript
+// Define custom type
+interface CustomProduct extends $.Product {
+  sku: string
+  supplierCode: string
+  internal_notes?: string
+}
+
+// Use it
+const product = await db.create<CustomProduct>($.Product, {
+  name: 'Widget',
+  sku: 'WID-001',
+  supplierCode: 'SUP-123',
+  internal_notes: 'High margin item',
+})
+```
+
+### Relationships
+
+Model complex relationships:
+
+```typescript
+// Organization owns multiple businesses
+const holding = await db.create($.Organization, {
+  name: 'Holding Company',
+  owns: [$.Organization['subsidiary-1'], $.Organization['subsidiary-2']],
+})
+
+// Person has multiple roles
+const person = await db.create($.Person, {
+  givenName: 'Jane',
+  worksFor: $.Organization['acme'],
+  memberOf: $.Organization['board'],
+  knows: [$.Person['colleague-1'], $.Person['colleague-2']],
+})
+```
+
+### Computed Properties
+
+Use AI to compute derived values:
+
+```typescript
+const order = await db.create($.Order, {
+  customer: $.Customer['123'],
+  orderedItem: items,
+  // AI automatically computes:
+  // - totalPrice (sum of item prices)
+  // - estimatedDelivery (based on location + shipping)
+  // - recommendedProducts (based on order history)
+})
+```
+
+## Best Practices
+
+### 1. Use Standard Types
+
+Prefer Schema.org types over custom:
+
+```typescript
+// ✅ Good
+const org = await db.create($.Organization, { name: 'Acme' })
+
+// ❌ Avoid
+const org = await db.create($.CustomCompany, { company_name: 'Acme' })
+```
+
+### 2. Semantic Property Names
+
+Use Schema.org property names:
+
+```typescript
+// ✅ Good
+const person = await db.create($.Person, {
+  givenName: 'John',
+  familyName: 'Doe',
+  email: 'john@example.com',
+})
+
+// ❌ Avoid
+const person = await db.create($.Person, {
+  first_name: 'John',
+  last_name: 'Doe',
+  email_address: 'john@example.com',
+})
+```
+
+### 3. Link Entities
+
+Use semantic references instead of IDs:
+
+```typescript
+// ✅ Good
+const order = await db.create($.Order, {
+  customer: $.Customer['123'],
+  orderedItem: $.Product['456'],
+})
+
+// ❌ Avoid
+const order = await db.create($.Order, {
+  customer_id: '123',
+  product_id: '456',
+})
+```
+
+## Learn More
+
+- [Data Model →](./02-data-model.mdx)
+- [Database Operations →](./03-database-operations.mdx)
+- [GraphDL Package](../../packages/graphdl/README.md)
+- [Schema.org Types](../../packages/schema.org.ai/README.md)
+
+---
+
+**Was this page helpful?** [Yes](.) | [No](.) | [Report Issue](https://github.com/dot-do/platform/issues/new)

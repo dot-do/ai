@@ -1,0 +1,1174 @@
+---
+$id: https://context.do/docs/best-practices
+$type: https://schema.org/TechArticle
+name: Context Management Best Practices
+description: Optimization techniques, performance tips, and best practices for context.do
+version: 1.0.0
+license: CC-BY-4.0
+author:
+  $type: https://schema.org/Organization
+  name: .do
+  url: https://do.inc
+keywords:
+  - best practices
+  - optimization
+  - performance
+  - token management
+  - compression strategies
+---
+
+# Context Management Best Practices
+
+This guide provides optimization techniques, performance tips, and best practices for using `context.do` effectively in production applications.
+
+## Token Budget Management
+
+### 1. Always Leave Headroom
+
+Never use 100% of the model's context window. Leave 20-30% for response generation:
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Bad: Using full context window
+const context = await $.Context.create({
+  content: messages,
+  maxTokens: 128000, // Full GPT-5 limit
+})
+
+// Good: Leave 20% headroom
+const context = await $.Context.create({
+  content: messages,
+  maxTokens: 100000, // 80% of GPT-5 limit
+})
+
+// Best: Calculate headroom based on expected response
+const expectedResponseTokens = 2000
+const context = await $.Context.create({
+  content: messages,
+  maxTokens: 128000 - expectedResponseTokens - 1000, // Extra buffer
+})
+```
+
+**Why:**
+
+- AI models need tokens for response generation
+- Exceeding limits causes errors mid-generation
+- Buffer prevents edge cases and token counting inaccuracies
+
+### 2. Set Per-Request Budgets
+
+Allocate token budgets per request, not globally:
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Bad: Global shared budget
+const globalBudget = 100000
+let remainingBudget = globalBudget
+
+// Good: Per-request budget
+async function handleRequest(userId: string, message: string) {
+  const conversation = await $.db.get('Conversation', userId)
+
+  // Calculate budget for this request
+  const budget = {
+    context: 30000, // Context tokens
+    response: 2000, // Expected response
+    buffer: 1000, // Safety margin
+  }
+
+  // Create context within budget
+  const context = await $.Context.create({
+    content: conversation.messages,
+    maxTokens: budget.context,
+  })
+
+  // Generate response
+  const response = await $.ai.generate({
+    model: 'gpt-5',
+    messages: context.content,
+    maxTokens: budget.response,
+  })
+
+  return response
+}
+```
+
+### 3. Monitor Token Usage
+
+Track token consumption across your application:
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Track token metrics
+class TokenMonitor {
+  async trackContext(contextId: string, tokens: number, model: string): Promise<void> {
+    // Send to metrics service
+    await $.metrics.gauge('context.tokens', tokens, {
+      contextId: contextId,
+      model: model,
+    })
+
+    // Alert if approaching limits
+    const modelLimit = this.getModelLimit(model)
+    const utilizationPercent = (tokens / modelLimit) * 100
+
+    if (utilizationPercent > 80) {
+      await $.alerts.send({
+        level: 'warning',
+        message: `Context ${contextId} at ${utilizationPercent}% utilization`,
+      })
+    }
+
+    // Track costs
+    const costPerToken = this.getCostPerToken(model)
+    const cost = tokens * costPerToken
+
+    await $.metrics.counter('context.cost', cost, {
+      model: model,
+    })
+  }
+
+  private getModelLimit(model: string): number {
+    const limits: Record<string, number> = {
+      'gpt-5': 128000,
+      'claude-sonnet-4.5': 200000,
+      'gpt-5-nano': 32000,
+    }
+    return limits[model] ?? 128000
+  }
+
+  private getCostPerToken(model: string): number {
+    // OpenAI GPT-5 pricing: $0.20 per 1M input tokens
+    const costs: Record<string, number> = {
+      'gpt-5': 0.0000002, // $0.20 / 1M
+      'claude-sonnet-4.5': 0.0000003, // $0.30 / 1M
+      'gpt-5-nano': 0.00000005, // $0.05 / 1M
+    }
+    return costs[model] ?? 0.0000002
+  }
+}
+
+// Usage
+const monitor = new TokenMonitor()
+
+const context = await $.Context.create({
+  content: messages,
+  onTokenCountChange: async (tokens) => {
+    await monitor.trackContext(contextId, tokens, 'gpt-5')
+  },
+})
+```
+
+## Compression Strategy Selection
+
+### Choose Strategy Based on Use Case
+
+Different use cases require different compression strategies:
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Real-time chat: Sliding window
+async function handleChatMessage(conversationId: string, message: string) {
+  const compressed = await $.Context.compress({
+    messages: await getMessages(conversationId),
+    strategy: 'sliding',
+    windowSize: 10, // Keep last 10 messages
+  })
+
+  return $.ai.generate({
+    model: 'gpt-5',
+    messages: compressed.messages,
+    prompt: message,
+  })
+}
+
+// Customer support: Semantic memory
+async function handleSupportTicket(ticketId: string, message: string) {
+  const compressed = await $.Context.compress({
+    messages: await getTicketMessages(ticketId),
+    strategy: 'semantic',
+    extractFacts: true,
+    factTypes: ['$.Customer.Name', '$.Customer.Email', '$.Order.ID', '$.Issue.Type'],
+    preserveRecent: 3,
+  })
+
+  return $.ai.generate({
+    model: 'gpt-5',
+    messages: compressed.messages,
+    prompt: message,
+  })
+}
+
+// Document analysis: Hierarchical
+async function analyzeDocument(documentId: string) {
+  const document = await $.db.get('Document', documentId)
+
+  const compressed = await $.Context.compress({
+    messages: [
+      { role: 'system', content: 'Analyze this document' },
+      { role: 'user', content: document.content },
+    ],
+    strategy: 'hierarchical',
+    levels: {
+      recent: 3, // Last 3 sections: full detail
+      medium: 7, // Next 7 sections: moderate detail
+      old: 'summary', // Earlier sections: summarized
+    },
+  })
+
+  return $.ai.generate({
+    model: 'gpt-5',
+    messages: compressed.messages,
+  })
+}
+
+// Code review: Semantic + hierarchical hybrid
+async function reviewCode(prId: string) {
+  const pr = await $.db.get('PullRequest', prId)
+
+  const compressed = await $.Context.compress({
+    messages: [
+      { role: 'system', content: 'Review this code' },
+      { role: 'user', content: `Architecture:\n${pr.architecture}`, priority: 'high' },
+      { role: 'user', content: `Related files:\n${pr.relatedFiles}`, priority: 'medium' },
+      { role: 'user', content: `Changed files:\n${pr.changedFiles}`, priority: 'critical' },
+    ],
+    strategy: 'hierarchical',
+    prioritizeBy: 'priority',
+  })
+
+  return $.ai.generate({
+    model: 'gpt-5',
+    messages: compressed.messages,
+  })
+}
+```
+
+### Strategy Comparison Table
+
+| Strategy     | Best For         | Pros                                | Cons             | Latency   | Cost   |
+| ------------ | ---------------- | ----------------------------------- | ---------------- | --------- | ------ |
+| Sliding      | Real-time chat   | Fast, predictable                   | Loses history    | <10ms     | None   |
+| Semantic     | Customer support | Good compression, preserves meaning | Requires AI call | 1-2s      | Low    |
+| Hierarchical | Long documents   | Balanced detail                     | Complex config   | 100-500ms | Medium |
+| Memory       | Fact-heavy       | Perfect recall                      | Needs schema     | 500ms     | Low    |
+
+## Caching Strategies
+
+### 1. Cache Compressed Contexts
+
+Compression is expensive. Cache results:
+
+```typescript
+import { $ } from 'sdk.do'
+
+class ContextManager {
+  private cache = new Map<string, CompressedContext>()
+
+  async getCompressedContext(conversationId: string, messages: Message[]): Promise<CompressedContext> {
+    // Generate cache key
+    const messageHash = this.hashMessages(messages)
+    const cacheKey = `${conversationId}:${messageHash}`
+
+    // Check cache
+    const cached = this.cache.get(cacheKey)
+    if (cached) {
+      console.log('Cache hit')
+      return cached
+    }
+
+    console.log('Cache miss, compressing...')
+
+    // Compress
+    const compressed = await $.Context.compress({
+      messages: messages,
+      targetTokens: 4000,
+      strategy: 'semantic',
+    })
+
+    // Cache result
+    this.cache.set(cacheKey, compressed)
+
+    // Expire after 1 hour
+    setTimeout(() => {
+      this.cache.delete(cacheKey)
+    }, 3600000)
+
+    return compressed
+  }
+
+  private hashMessages(messages: Message[]): string {
+    const text = messages.map((m) => `${m.role}:${m.content.slice(0, 100)}`).join('|')
+    return this.simpleHash(text)
+  }
+
+  private simpleHash(str: string): string {
+    let hash = 0
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i)
+      hash = (hash << 5) - hash + char
+      hash = hash & hash
+    }
+    return hash.toString(36)
+  }
+}
+```
+
+### 2. Cache Token Counts
+
+Token counting can be slow for long texts:
+
+```typescript
+import { $ } from 'sdk.do'
+
+class TokenCounter {
+  private cache = new Map<string, number>()
+
+  async count(text: string, model: string): Promise<number> {
+    const cacheKey = `${model}:${this.hash(text)}`
+
+    if (this.cache.has(cacheKey)) {
+      return this.cache.get(cacheKey)!
+    }
+
+    const tokens = await $.Context.countTokens({ text, model })
+    this.cache.set(cacheKey, tokens)
+
+    return tokens
+  }
+
+  private hash(text: string): string {
+    // Use fast hash for cache key
+    return text.length + ':' + text.slice(0, 100)
+  }
+}
+```
+
+### 3. Implement LRU Cache
+
+Prevent unbounded cache growth:
+
+```typescript
+import { $ } from 'sdk.do'
+
+class LRUCache<K, V> {
+  private cache = new Map<K, V>()
+  private maxSize: number
+
+  constructor(maxSize: number) {
+    this.maxSize = maxSize
+  }
+
+  get(key: K): V | undefined {
+    const value = this.cache.get(key)
+    if (value !== undefined) {
+      // Move to end (most recently used)
+      this.cache.delete(key)
+      this.cache.set(key, value)
+    }
+    return value
+  }
+
+  set(key: K, value: V): void {
+    // Remove if exists
+    this.cache.delete(key)
+
+    // Add to end
+    this.cache.set(key, value)
+
+    // Evict oldest if over limit
+    if (this.cache.size > this.maxSize) {
+      const firstKey = this.cache.keys().next().value
+      this.cache.delete(firstKey)
+    }
+  }
+
+  clear(): void {
+    this.cache.clear()
+  }
+}
+
+// Usage
+const contextCache = new LRUCache<string, CompressedContext>(100) // Keep 100 entries
+```
+
+## Performance Optimization
+
+### 1. Batch Token Counting
+
+Count tokens in batches when possible:
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Bad: Count one at a time
+async function countMessagesIndividually(messages: Message[]): Promise<number> {
+  let total = 0
+  for (const message of messages) {
+    total += await $.Context.countTokens({
+      text: message.content,
+      model: 'gpt-5',
+    })
+  }
+  return total
+}
+
+// Good: Count in batch
+async function countMessagesBatch(messages: Message[]): Promise<number> {
+  const texts = messages.map((m) => m.content)
+
+  const results = await $.Context.countTokensBatch({
+    texts: texts,
+    model: 'gpt-5',
+  })
+
+  return results.reduce((sum, r) => sum + r.tokens, 0)
+}
+
+// Best: Count as message format (includes overhead)
+async function countMessagesNative(messages: Message[]): Promise<number> {
+  return $.Context.countTokens({
+    messages: messages,
+    model: 'gpt-5',
+  })
+}
+```
+
+### 2. Parallelize Compression
+
+Compress independent contexts in parallel:
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Bad: Compress sequentially
+async function compressConversationsSequentially(conversationIds: string[]): Promise<void> {
+  for (const id of conversationIds) {
+    const messages = await getMessages(id)
+    const compressed = await $.Context.compress({
+      messages: messages,
+      strategy: 'semantic',
+    })
+    await saveCompressed(id, compressed)
+  }
+}
+
+// Good: Compress in parallel
+async function compressConversationsParallel(conversationIds: string[]): Promise<void> {
+  await Promise.all(
+    conversationIds.map(async (id) => {
+      const messages = await getMessages(id)
+      const compressed = await $.Context.compress({
+        messages: messages,
+        strategy: 'semantic',
+      })
+      await saveCompressed(id, compressed)
+    })
+  )
+}
+```
+
+### 3. Lazy Compression
+
+Only compress when necessary:
+
+```typescript
+import { $ } from 'sdk.do'
+
+class ConversationManager {
+  private compressionThreshold = 15
+
+  async addMessage(conversationId: string, message: Message): Promise<void> {
+    const conversation = await this.getConversation(conversationId)
+
+    // Add message
+    conversation.messages.push(message)
+
+    // Only compress if over threshold
+    if (conversation.messages.length > this.compressionThreshold) {
+      conversation.messages = await this.compress(conversation.messages)
+    }
+
+    await this.saveConversation(conversationId, conversation)
+  }
+
+  private async compress(messages: Message[]): Promise<Message[]> {
+    const compressed = await $.Context.compress({
+      messages: messages,
+      strategy: 'semantic',
+      preserveRecent: 5,
+    })
+
+    return compressed.messages
+  }
+}
+```
+
+### 4. Stream Large Documents
+
+Process large documents in chunks:
+
+```typescript
+import { $ } from 'sdk.do'
+
+async function processLargeDocument(documentId: string): Promise<string> {
+  const document = await $.db.get('Document', documentId)
+  const content = document.content
+
+  // Split into chunks
+  const chunkSize = 8000 // tokens
+  const chunks = await this.splitIntoChunks(content, chunkSize)
+
+  // Process each chunk
+  const results: string[] = []
+
+  for (const chunk of chunks) {
+    const result = await $.ai.generate({
+      model: 'gpt-5',
+      messages: [
+        { role: 'system', content: 'Analyze this document section' },
+        { role: 'user', content: chunk },
+      ],
+    })
+
+    results.push(result.content)
+  }
+
+  // Combine results
+  return results.join('\n\n')
+}
+
+async function splitIntoChunks(text: string, maxTokens: number): Promise<string[]> {
+  const chunks: string[] = []
+  const sentences = text.split('. ')
+  let currentChunk = ''
+  let currentTokens = 0
+
+  for (const sentence of sentences) {
+    const sentenceTokens = await $.Context.countTokens({
+      text: sentence,
+      model: 'gpt-5',
+    })
+
+    if (currentTokens + sentenceTokens > maxTokens) {
+      chunks.push(currentChunk)
+      currentChunk = sentence
+      currentTokens = sentenceTokens
+    } else {
+      currentChunk += sentence + '. '
+      currentTokens += sentenceTokens
+    }
+  }
+
+  if (currentChunk) {
+    chunks.push(currentChunk)
+  }
+
+  return chunks
+}
+```
+
+## Multi-Turn Conversation Patterns
+
+### 1. Implement Sliding Window
+
+Keep conversation manageable:
+
+```typescript
+import { $ } from 'sdk.do'
+
+class ChatConversation {
+  private messages: Message[] = []
+  private systemPrompt: string
+  private windowSize = 10
+
+  constructor(systemPrompt: string) {
+    this.systemPrompt = systemPrompt
+  }
+
+  async addTurn(role: 'user' | 'assistant', content: string): Promise<void> {
+    this.messages.push({ role, content })
+
+    // Apply sliding window
+    if (this.messages.length > this.windowSize) {
+      this.messages = this.messages.slice(-this.windowSize)
+    }
+  }
+
+  async generate(): Promise<string> {
+    const context = [{ role: 'system' as const, content: this.systemPrompt }, ...this.messages]
+
+    const response = await $.ai.generate({
+      model: 'gpt-5',
+      messages: context,
+    })
+
+    await this.addTurn('assistant', response.content)
+
+    return response.content
+  }
+}
+```
+
+### 2. Extract and Preserve Facts
+
+Maintain semantic memory:
+
+```typescript
+import { $ } from 'sdk.do'
+
+class SupportConversation {
+  private messages: Message[] = []
+  private facts: Record<string, any> = {}
+  private systemPrompt: string
+
+  async addTurn(role: 'user' | 'assistant', content: string): Promise<void> {
+    this.messages.push({ role, content })
+
+    // Extract facts from user messages
+    if (role === 'user') {
+      const newFacts = await this.extractFacts(content)
+      this.facts = { ...this.facts, ...newFacts }
+    }
+
+    // Compress when needed
+    if (this.messages.length > 15) {
+      await this.compress()
+    }
+  }
+
+  private async compress(): Promise<void> {
+    // Keep recent messages + facts
+    const recentMessages = this.messages.slice(-5)
+
+    const factsMessage: Message = {
+      role: 'system',
+      content: this.formatFacts(this.facts),
+    }
+
+    this.messages = [factsMessage, ...recentMessages]
+  }
+
+  private async extractFacts(content: string): Promise<Record<string, any>> {
+    const extraction = await $.ai.generate({
+      model: 'gpt-5',
+      messages: [
+        {
+          role: 'system',
+          content: 'Extract customer name, email, order ID, and issue type. Return as JSON.',
+        },
+        {
+          role: 'user',
+          content: content,
+        },
+      ],
+      responseFormat: { type: 'json_object' },
+    })
+
+    return JSON.parse(extraction.content)
+  }
+
+  private formatFacts(facts: Record<string, any>): string {
+    const lines = ['Customer context:']
+    for (const [key, value] of Object.entries(facts)) {
+      lines.push(`- ${key}: ${value}`)
+    }
+    return lines.join('\n')
+  }
+}
+```
+
+### 3. Implement Context Summarization
+
+Periodic summarization for long conversations:
+
+```typescript
+import { $ } from 'sdk.do'
+
+class ManagedConversation {
+  private messages: Message[] = []
+  private summary: string | null = null
+  private summarizationThreshold = 20
+
+  async addTurn(message: Message): Promise<void> {
+    this.messages.push(message)
+
+    if (this.messages.length > this.summarizationThreshold) {
+      await this.summarize()
+    }
+  }
+
+  private async summarize(): Promise<void> {
+    // Summarize older messages
+    const toSummarize = this.messages.slice(0, -5)
+    const recent = this.messages.slice(-5)
+
+    const newSummary = await $.ai.generate({
+      model: 'gpt-5',
+      messages: [
+        {
+          role: 'system',
+          content: 'Summarize the following conversation, preserving key points and context.',
+        },
+        {
+          role: 'user',
+          content: toSummarize.map((m) => `${m.role}: ${m.content}`).join('\n\n'),
+        },
+      ],
+    })
+
+    // Combine old summary with new summary
+    if (this.summary) {
+      this.summary = `${this.summary}\n\n${newSummary.content}`
+    } else {
+      this.summary = newSummary.content
+    }
+
+    // Update messages
+    this.messages = recent
+  }
+
+  async getContext(): Promise<Message[]> {
+    const context: Message[] = []
+
+    if (this.summary) {
+      context.push({
+        role: 'system',
+        content: `Conversation summary:\n${this.summary}`,
+      })
+    }
+
+    context.push(...this.messages)
+
+    return context
+  }
+}
+```
+
+## Cost Optimization
+
+### 1. Use Batch API for Offline Processing
+
+OpenAI's Batch API offers 50% cost savings:
+
+```typescript
+import { $ } from 'sdk.do'
+
+async function compressManyConversations(conversationIds: string[]): Promise<void> {
+  // Prepare batch requests
+  const requests = await Promise.all(
+    conversationIds.map(async (id) => {
+      const messages = await getMessages(id)
+
+      return {
+        custom_id: id,
+        method: 'POST',
+        url: '/v1/chat/completions',
+        body: {
+          model: 'gpt-5',
+          messages: [
+            {
+              role: 'system',
+              content: 'Summarize this conversation in 500 tokens',
+            },
+            {
+              role: 'user',
+              content: messages.map((m) => `${m.role}: ${m.content}`).join('\n\n'),
+            },
+          ],
+        },
+      }
+    })
+  )
+
+  // Submit batch
+  const batch = await $.ai.batch.create({
+    requests: requests,
+    endpoint: '/v1/chat/completions',
+  })
+
+  // Wait for completion
+  await batch.wait()
+
+  // Process results
+  for (const result of batch.results) {
+    const conversationId = result.custom_id
+    const summary = result.response.choices[0].message.content
+
+    await saveCompressedContext(conversationId, summary)
+  }
+}
+```
+
+### 2. Choose Cost-Effective Models
+
+Use appropriate model for the task:
+
+```typescript
+import { $ } from 'sdk.do'
+
+async function generateResponse(complexity: 'simple' | 'complex', context: Message[]): Promise<string> {
+  // Simple tasks: use GPT-5 Nano (5x cheaper)
+  if (complexity === 'simple') {
+    const response = await $.ai.generate({
+      model: 'gpt-5-nano',
+      messages: context,
+    })
+    return response.content
+  }
+
+  // Complex tasks: use full GPT-5
+  const response = await $.ai.generate({
+    model: 'gpt-5',
+    messages: context,
+  })
+  return response.content
+}
+
+// Cost comparison:
+// GPT-5: $0.20 per 1M input tokens
+// GPT-5 Nano: $0.05 per 1M input tokens (75% savings)
+```
+
+### 3. Implement Token Budgets
+
+Control costs with per-user budgets:
+
+```typescript
+import { $ } from 'sdk.do'
+
+class TokenBudgetManager {
+  private budgets = new Map<string, { used: number; limit: number }>()
+
+  async checkBudget(userId: string, estimatedTokens: number): Promise<boolean> {
+    const budget = this.budgets.get(userId) ?? { used: 0, limit: 100000 }
+
+    if (budget.used + estimatedTokens > budget.limit) {
+      return false
+    }
+
+    return true
+  }
+
+  async recordUsage(userId: string, tokens: number): Promise<void> {
+    const budget = this.budgets.get(userId) ?? { used: 0, limit: 100000 }
+    budget.used += tokens
+
+    this.budgets.set(userId, budget)
+
+    // Persist to database
+    await $.db.update('UserBudget', userId, {
+      tokensUsed: budget.used,
+      updatedAt: new Date(),
+    })
+  }
+
+  async resetBudget(userId: string): Promise<void> {
+    this.budgets.set(userId, { used: 0, limit: 100000 })
+  }
+}
+```
+
+## Error Handling
+
+### 1. Handle Token Overflow Gracefully
+
+```typescript
+import { $ } from 'sdk.do'
+
+async function generateWithFallback(messages: Message[]): Promise<string> {
+  try {
+    // Try with full context
+    const response = await $.ai.generate({
+      model: 'gpt-5',
+      messages: messages,
+    })
+
+    return response.content
+  } catch (error) {
+    if (error.code === 'context_length_exceeded') {
+      // Fallback: compress and retry
+      const compressed = await $.Context.compress({
+        messages: messages,
+        targetTokens: 80000, // Leave more headroom
+        strategy: 'semantic',
+      })
+
+      const response = await $.ai.generate({
+        model: 'gpt-5',
+        messages: compressed.messages,
+      })
+
+      return response.content
+    }
+
+    throw error
+  }
+}
+```
+
+### 2. Implement Retry Logic
+
+```typescript
+import { $ } from 'sdk.do'
+
+async function generateWithRetry(messages: Message[], maxRetries = 3): Promise<string> {
+  let attempt = 0
+  let lastError: Error | null = null
+
+  while (attempt < maxRetries) {
+    try {
+      const response = await $.ai.generate({
+        model: 'gpt-5',
+        messages: messages,
+      })
+
+      return response.content
+    } catch (error) {
+      lastError = error
+      attempt++
+
+      if (error.code === 'context_length_exceeded') {
+        // Compress more aggressively on each retry
+        const targetTokens = 80000 - attempt * 10000
+
+        messages = (
+          await $.Context.compress({
+            messages: messages,
+            targetTokens: targetTokens,
+            strategy: 'semantic',
+          })
+        ).messages
+      } else if (error.code === 'rate_limit_exceeded') {
+        // Wait and retry
+        await new Promise((resolve) => setTimeout(resolve, 1000 * attempt))
+      } else {
+        throw error
+      }
+    }
+  }
+
+  throw lastError
+}
+```
+
+## Testing and Validation
+
+### 1. Test Token Counting Accuracy
+
+```typescript
+import { $ } from 'sdk.do'
+
+async function validateTokenCounting(): Promise<void> {
+  const testCases = [
+    { text: 'Hello world', expectedTokens: 2 },
+    { text: 'The quick brown fox jumps over the lazy dog', expectedTokens: 9 },
+    { text: 'AI context management is important', expectedTokens: 6 },
+  ]
+
+  for (const testCase of testCases) {
+    const actualTokens = await $.Context.countTokens({
+      text: testCase.text,
+      model: 'gpt-5',
+    })
+
+    const diff = Math.abs(actualTokens - testCase.expectedTokens)
+    const accuracy = 1 - diff / testCase.expectedTokens
+
+    console.log(`Text: "${testCase.text}"`)
+    console.log(`Expected: ${testCase.expectedTokens}, Actual: ${actualTokens}`)
+    console.log(`Accuracy: ${(accuracy * 100).toFixed(1)}%`)
+  }
+}
+```
+
+### 2. Validate Compression Quality
+
+```typescript
+import { $ } from 'sdk.do'
+
+async function validateCompressionQuality(messages: Message[]): Promise<void> {
+  const original = messages
+  const originalTokens = await $.Context.countTokens({
+    messages: original,
+    model: 'gpt-5',
+  })
+
+  // Compress
+  const compressed = await $.Context.compress({
+    messages: original,
+    targetTokens: originalTokens * 0.5,
+    strategy: 'semantic',
+  })
+
+  console.log('Compression Results:')
+  console.log(`- Original: ${originalTokens} tokens`)
+  console.log(`- Compressed: ${compressed.tokens} tokens`)
+  console.log(`- Reduction: ${((1 - compressed.tokens / originalTokens) * 100).toFixed(1)}%`)
+
+  // Validate semantic similarity (using embeddings)
+  const originalEmbedding = await $.ai.embed({
+    text: original.map((m) => m.content).join('\n'),
+    model: 'text-embedding-3-large',
+  })
+
+  const compressedEmbedding = await $.ai.embed({
+    text: compressed.messages.map((m) => m.content).join('\n'),
+    model: 'text-embedding-3-large',
+  })
+
+  const similarity = cosineSimilarity(originalEmbedding, compressedEmbedding)
+
+  console.log(`- Semantic similarity: ${(similarity * 100).toFixed(1)}%`)
+
+  if (similarity < 0.8) {
+    console.warn('Warning: Low semantic similarity after compression')
+  }
+}
+
+function cosineSimilarity(a: number[], b: number[]): number {
+  const dotProduct = a.reduce((sum, val, i) => sum + val * b[i], 0)
+  const magnitudeA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0))
+  const magnitudeB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0))
+  return dotProduct / (magnitudeA * magnitudeB)
+}
+```
+
+## Security Best Practices
+
+### 1. Sanitize Context Data
+
+```typescript
+import { $ } from 'sdk.do'
+
+async function sanitizeContext(messages: Message[]): Promise<Message[]> {
+  return messages.map((message) => ({
+    ...message,
+    content: sanitizeContent(message.content),
+  }))
+}
+
+function sanitizeContent(content: string): string {
+  let sanitized = content
+
+  // Remove PII
+  sanitized = sanitized.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '[EMAIL]')
+  sanitized = sanitized.replace(/\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/g, '[PHONE]')
+  sanitized = sanitized.replace(/\b\d{3}-\d{2}-\d{4}\b/g, '[SSN]')
+
+  // Remove secrets
+  sanitized = sanitized.replace(/\b[A-Za-z0-9_-]{32,}\b/g, '[REDACTED]')
+
+  return sanitized
+}
+```
+
+### 2. Implement Access Control
+
+```typescript
+import { $ } from 'sdk.do'
+
+async function getContextWithAuth(contextId: string, userId: string): Promise<Context | null> {
+  // Check permissions
+  const hasAccess = await $.db.query({
+    type: 'ContextPermission',
+    where: {
+      contextId: contextId,
+      userId: userId,
+    },
+  })
+
+  if (!hasAccess) {
+    throw new Error('Access denied')
+  }
+
+  // Return context
+  return $.db.get('Context', contextId)
+}
+```
+
+## Monitoring and Observability
+
+### 1. Track Compression Metrics
+
+```typescript
+import { $ } from 'sdk.do'
+
+async function trackCompressionMetrics(original: number, compressed: number, strategy: string, duration: number): Promise<void> {
+  const reduction = ((1 - compressed / original) * 100).toFixed(1)
+
+  await $.metrics.histogram('context.compression.ratio', parseFloat(reduction), {
+    strategy: strategy,
+  })
+
+  await $.metrics.histogram('context.compression.duration', duration, {
+    strategy: strategy,
+  })
+
+  await $.metrics.counter('context.compression.total', 1, {
+    strategy: strategy,
+  })
+}
+```
+
+### 2. Set Up Alerts
+
+```typescript
+import { $ } from 'sdk.do'
+
+async function setupContextAlerts(): Promise<void> {
+  // Alert on high token usage
+  $.alerts.on('context.tokens', {
+    condition: 'threshold',
+    threshold: 100000,
+    action: async (alert) => {
+      await $.notifications.send({
+        to: 'ops-team@example.com',
+        subject: 'High context token usage',
+        body: `Context ${alert.contextId} is using ${alert.value} tokens`,
+      })
+    },
+  })
+
+  // Alert on compression failures
+  $.alerts.on('context.compression.failed', {
+    action: async (alert) => {
+      await $.notifications.send({
+        to: 'ops-team@example.com',
+        subject: 'Context compression failed',
+        body: `Failed to compress context ${alert.contextId}: ${alert.error}`,
+      })
+    },
+  })
+}
+```
+
+## Summary Checklist
+
+- [ ] Leave 20-30% token headroom for responses
+- [ ] Choose compression strategy based on use case
+- [ ] Cache compressed contexts (1 hour TTL)
+- [ ] Cache token counts for repeated text
+- [ ] Monitor token usage and costs
+- [ ] Implement fallback compression on overflow
+- [ ] Use batch API for offline processing
+- [ ] Sanitize sensitive data before storage
+- [ ] Track compression metrics
+- [ ] Set up alerts for anomalies
+- [ ] Test compression quality periodically
+- [ ] Implement per-user token budgets
+
+## Related Resources
+
+- [Getting Started](./getting-started.mdx) - Basic setup and usage
+- [Architecture](./architecture.mdx) - Technical implementation details
+- [API Reference](../api/reference.mdx) - Complete API documentation
+- [Examples](../examples/) - Real-world usage examples
+
+---
+
+Built with [sdk.do](https://sdk.do) - The semantic SDK for Business-as-Code

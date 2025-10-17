@@ -1,0 +1,1051 @@
+---
+$id: https://apis.do/api
+$type: APIReference
+title: API Gateway Reference
+description: Complete API reference for the apis.do gateway
+keywords: [api, reference, documentation, endpoints, methods]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# API Gateway Reference
+
+Complete API reference for the apis.do gateway, including all endpoints, methods, parameters, and response formats.
+
+## Base URL
+
+```
+https://apis.do
+```
+
+## Authentication
+
+All requests require authentication using one of these methods:
+
+```http
+# API Key
+X-API-Key: your-api-key
+
+# Bearer Token
+Authorization: Bearer your-jwt-token
+
+# Service Credentials
+X-Service-ID: service-id
+X-Service-Secret: service-secret
+```
+
+## Common Headers
+
+```http
+Content-Type: application/json
+Accept: application/json
+API-Version: v1
+```
+
+## Rate Limiting
+
+Default rate limits:
+
+- **Standard**: 100 requests per minute
+- **Premium**: 1000 requests per minute
+- **Enterprise**: Unlimited
+
+Rate limit headers in responses:
+
+```http
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 99
+X-RateLimit-Reset: 1640995200
+```
+
+## Core Endpoints
+
+### Business Resources
+
+#### List Businesses
+
+```http
+GET /businesses
+```
+
+**Query Parameters**:
+
+- `industry` (string, optional) - Filter by industry
+- `status` (string, optional) - Filter by status (active, inactive)
+- `minRevenue` (number, optional) - Minimum revenue filter
+- `maxRevenue` (number, optional) - Maximum revenue filter
+- `limit` (number, optional) - Results per page (default: 20, max: 100)
+- `offset` (number, optional) - Pagination offset (default: 0)
+- `sort` (string, optional) - Sort field (name, revenue, foundingDate)
+- `order` (string, optional) - Sort order (asc, desc)
+
+**Response**: `200 OK`
+
+```json
+[
+  {
+    "$id": "business-123",
+    "$type": "Business",
+    "name": "Acme Corporation",
+    "industry": "Technology",
+    "foundingDate": "2020-01-15",
+    "revenue": 5000000,
+    "employees": 50,
+    "createdAt": "2025-01-01T00:00:00Z",
+    "updatedAt": "2025-01-10T00:00:00Z"
+  }
+]
+```
+
+#### Get Business
+
+```http
+GET /businesses/{id}
+```
+
+**Path Parameters**:
+
+- `id` (string, required) - Business ID
+
+**Response**: `200 OK`
+
+```json
+{
+  "$id": "business-123",
+  "$type": "Business",
+  "name": "Acme Corporation",
+  "industry": "Technology",
+  "foundingDate": "2020-01-15",
+  "revenue": 5000000,
+  "employees": 50,
+  "address": {
+    "street": "123 Tech Street",
+    "city": "San Francisco",
+    "state": "CA",
+    "postalCode": "94105",
+    "country": "US"
+  },
+  "contact": {
+    "email": "info@acme.com",
+    "phone": "+1-555-0100",
+    "website": "https://acme.com"
+  },
+  "createdAt": "2025-01-01T00:00:00Z",
+  "updatedAt": "2025-01-10T00:00:00Z"
+}
+```
+
+**Error Responses**:
+
+- `404 Not Found` - Business not found
+
+#### Create Business
+
+```http
+POST /businesses
+```
+
+**Request Body**:
+
+```json
+{
+  "name": "Tech Startup Inc",
+  "industry": "Technology",
+  "foundingDate": "2025-01-01",
+  "description": "Innovative tech company",
+  "address": {
+    "street": "456 Startup Ave",
+    "city": "San Francisco",
+    "state": "CA",
+    "postalCode": "94105",
+    "country": "US"
+  }
+}
+```
+
+**Response**: `201 Created`
+
+```json
+{
+  "$id": "business-456",
+  "$type": "Business",
+  "name": "Tech Startup Inc",
+  "industry": "Technology",
+  "foundingDate": "2025-01-01",
+  "description": "Innovative tech company",
+  "createdAt": "2025-10-10T12:00:00Z",
+  "updatedAt": "2025-10-10T12:00:00Z"
+}
+```
+
+**Error Responses**:
+
+- `400 Bad Request` - Invalid request data
+- `409 Conflict` - Business already exists
+
+#### Update Business
+
+```http
+PUT /businesses/{id}
+```
+
+**Path Parameters**:
+
+- `id` (string, required) - Business ID
+
+**Request Body**:
+
+```json
+{
+  "revenue": 2000000,
+  "employees": 75,
+  "description": "Leading tech innovator"
+}
+```
+
+**Response**: `200 OK`
+
+```json
+{
+  "$id": "business-456",
+  "$type": "Business",
+  "name": "Tech Startup Inc",
+  "industry": "Technology",
+  "revenue": 2000000,
+  "employees": 75,
+  "description": "Leading tech innovator",
+  "updatedAt": "2025-10-10T12:30:00Z"
+}
+```
+
+**Error Responses**:
+
+- `400 Bad Request` - Invalid request data
+- `404 Not Found` - Business not found
+
+#### Partial Update Business
+
+```http
+PATCH /businesses/{id}
+```
+
+**Path Parameters**:
+
+- `id` (string, required) - Business ID
+
+**Request Body**:
+
+```json
+{
+  "revenue": 2500000
+}
+```
+
+**Response**: `200 OK`
+
+#### Delete Business
+
+```http
+DELETE /businesses/{id}
+```
+
+**Path Parameters**:
+
+- `id` (string, required) - Business ID
+
+**Response**: `204 No Content`
+
+**Error Responses**:
+
+- `404 Not Found` - Business not found
+
+### Product Resources
+
+#### List Products
+
+```http
+GET /products
+```
+
+**Query Parameters**:
+
+- `category` (string, optional) - Filter by category
+- `minPrice` (number, optional) - Minimum price filter
+- `maxPrice` (number, optional) - Maximum price filter
+- `active` (boolean, optional) - Filter by active status
+- `limit` (number, optional) - Results per page (default: 20)
+- `offset` (number, optional) - Pagination offset (default: 0)
+
+**Response**: `200 OK`
+
+```json
+[
+  {
+    "$id": "product-123",
+    "$type": "Product",
+    "name": "Smart Widget",
+    "description": "Intelligent widget with AI",
+    "price": 99.99,
+    "category": "Electronics",
+    "active": true,
+    "stock": 150,
+    "createdAt": "2025-01-01T00:00:00Z"
+  }
+]
+```
+
+#### Get Product
+
+```http
+GET /products/{id}
+```
+
+#### Create Product
+
+```http
+POST /products
+```
+
+**Request Body**:
+
+```json
+{
+  "name": "Smart Widget",
+  "description": "Intelligent widget with AI",
+  "price": 99.99,
+  "category": "Electronics",
+  "stock": 150
+}
+```
+
+#### Update Product
+
+```http
+PUT /products/{id}
+```
+
+#### Delete Product
+
+```http
+DELETE /products/{id}
+```
+
+### Order Resources
+
+#### List Orders
+
+```http
+GET /orders
+```
+
+**Query Parameters**:
+
+- `status` (string, optional) - Filter by status (pending, processing, shipped, delivered, cancelled)
+- `customerId` (string, optional) - Filter by customer
+- `minTotal` (number, optional) - Minimum order total
+- `maxTotal` (number, optional) - Maximum order total
+- `startDate` (string, optional) - Filter by start date (ISO 8601)
+- `endDate` (string, optional) - Filter by end date (ISO 8601)
+- `limit` (number, optional) - Results per page (default: 20)
+- `offset` (number, optional) - Pagination offset (default: 0)
+
+**Response**: `200 OK`
+
+```json
+[
+  {
+    "$id": "order-123",
+    "$type": "Order",
+    "orderNumber": "ORD-001",
+    "customer": {
+      "$id": "customer-456",
+      "name": "John Doe",
+      "email": "john@example.com"
+    },
+    "items": [
+      {
+        "product": {
+          "$id": "product-789",
+          "name": "Smart Widget"
+        },
+        "quantity": 2,
+        "price": 99.99
+      }
+    ],
+    "total": 199.98,
+    "status": "pending",
+    "orderDate": "2025-10-10T12:00:00Z",
+    "createdAt": "2025-10-10T12:00:00Z"
+  }
+]
+```
+
+#### Get Order
+
+```http
+GET /orders/{id}
+```
+
+#### Create Order
+
+```http
+POST /orders
+```
+
+**Request Body**:
+
+```json
+{
+  "customerId": "customer-456",
+  "items": [
+    {
+      "productId": "product-789",
+      "quantity": 2
+    }
+  ],
+  "shippingAddress": {
+    "street": "789 Customer St",
+    "city": "New York",
+    "state": "NY",
+    "postalCode": "10001",
+    "country": "US"
+  }
+}
+```
+
+#### Update Order
+
+```http
+PUT /orders/{id}
+```
+
+#### Cancel Order
+
+```http
+POST /orders/{id}/cancel
+```
+
+**Request Body**:
+
+```json
+{
+  "reason": "customer request"
+}
+```
+
+**Response**: `200 OK`
+
+### User Resources
+
+#### Get Current User
+
+```http
+GET /users/me
+```
+
+**Response**: `200 OK`
+
+```json
+{
+  "$id": "user-123",
+  "$type": "Person",
+  "name": "John Doe",
+  "email": "john@example.com",
+  "jobTitle": "Software Engineer",
+  "permissions": ["read:businesses", "write:businesses"],
+  "createdAt": "2025-01-01T00:00:00Z"
+}
+```
+
+#### Update Current User
+
+```http
+PUT /users/me
+```
+
+**Request Body**:
+
+```json
+{
+  "name": "John Smith",
+  "jobTitle": "Senior Software Engineer"
+}
+```
+
+#### Get User
+
+```http
+GET /users/{id}
+```
+
+#### List Users
+
+```http
+GET /users
+```
+
+**Query Parameters**:
+
+- `role` (string, optional) - Filter by role
+- `status` (string, optional) - Filter by status (active, inactive)
+- `limit` (number, optional) - Results per page
+- `offset` (number, optional) - Pagination offset
+
+## AI Service Endpoints
+
+### Generate Content
+
+```http
+POST /ai/generate
+```
+
+**Request Body**:
+
+```json
+{
+  "prompt": "Create a product description for a smart widget",
+  "schema": "Product",
+  "temperature": 0.7,
+  "maxTokens": 500
+}
+```
+
+**Response**: `200 OK`
+
+```json
+{
+  "result": {
+    "name": "Smart Widget Pro",
+    "description": "Advanced intelligent widget with AI capabilities...",
+    "price": 99.99
+  },
+  "usage": {
+    "promptTokens": 50,
+    "completionTokens": 150,
+    "totalTokens": 200
+  }
+}
+```
+
+### Generate Embeddings
+
+```http
+POST /ai/embed
+```
+
+**Request Body**:
+
+```json
+{
+  "text": "Search query text",
+  "model": "text-embedding-3-small"
+}
+```
+
+**Response**: `200 OK`
+
+```json
+{
+  "embedding": [0.123, -0.456, 0.789, ...],
+  "dimensions": 1536
+}
+```
+
+### Batch AI Operations
+
+```http
+POST /ai/batch
+```
+
+**Request Body**:
+
+```json
+{
+  "operations": [
+    {
+      "type": "generate",
+      "prompt": "Analyze customer feedback 1"
+    },
+    {
+      "type": "generate",
+      "prompt": "Analyze customer feedback 2"
+    }
+  ]
+}
+```
+
+**Response**: `202 Accepted`
+
+```json
+{
+  "batchId": "batch-123",
+  "status": "processing",
+  "total": 2,
+  "completed": 0
+}
+```
+
+### Get Batch Status
+
+```http
+GET /ai/batch/{batchId}
+```
+
+## Event Service Endpoints
+
+### Publish Event
+
+```http
+POST /events/send
+```
+
+**Request Body**:
+
+```json
+{
+  "type": "Order.created",
+  "data": {
+    "orderId": "order-123",
+    "customerId": "customer-456",
+    "total": 199.98
+  },
+  "metadata": {
+    "source": "order-service",
+    "correlationId": "corr-789"
+  }
+}
+```
+
+**Response**: `201 Created`
+
+```json
+{
+  "eventId": "event-123",
+  "type": "Order.created",
+  "timestamp": "2025-10-10T12:00:00Z"
+}
+```
+
+### Get Event Stream
+
+```http
+GET /events/stream
+```
+
+**Query Parameters**:
+
+- `types` (string[], optional) - Filter by event types
+- `since` (string, optional) - Start timestamp (ISO 8601)
+
+**Response**: Server-Sent Events stream
+
+### Get Event History
+
+```http
+GET /events/history
+```
+
+**Query Parameters**:
+
+- `type` (string, optional) - Filter by event type
+- `since` (string, optional) - Start timestamp (ISO 8601)
+- `until` (string, optional) - End timestamp (ISO 8601)
+- `limit` (number, optional) - Results per page
+
+**Response**: `200 OK`
+
+```json
+[
+  {
+    "eventId": "event-123",
+    "type": "Order.created",
+    "data": { ... },
+    "timestamp": "2025-10-10T12:00:00Z"
+  }
+]
+```
+
+## Workflow Service Endpoints
+
+### Start Workflow
+
+```http
+POST /workflows/start
+```
+
+**Request Body**:
+
+```json
+{
+  "workflowId": "order-fulfillment",
+  "context": {
+    "orderId": "order-123",
+    "customerId": "customer-456"
+  }
+}
+```
+
+**Response**: `201 Created`
+
+```json
+{
+  "executionId": "exec-123",
+  "workflowId": "order-fulfillment",
+  "status": "running",
+  "startedAt": "2025-10-10T12:00:00Z"
+}
+```
+
+### Get Workflow Status
+
+```http
+GET /workflows/{executionId}
+```
+
+**Response**: `200 OK`
+
+```json
+{
+  "executionId": "exec-123",
+  "workflowId": "order-fulfillment",
+  "status": "completed",
+  "startedAt": "2025-10-10T12:00:00Z",
+  "completedAt": "2025-10-10T12:05:00Z",
+  "result": { ... }
+}
+```
+
+### Cancel Workflow
+
+```http
+POST /workflows/{executionId}/cancel
+```
+
+**Response**: `200 OK`
+
+### List Workflows
+
+```http
+GET /workflows
+```
+
+**Query Parameters**:
+
+- `workflowId` (string, optional) - Filter by workflow ID
+- `status` (string, optional) - Filter by status (running, completed, failed, cancelled)
+- `limit` (number, optional) - Results per page
+
+## GraphQL Endpoint
+
+### GraphQL Query/Mutation
+
+```http
+POST /graphql
+```
+
+**Request Body**:
+
+```json
+{
+  "query": "query { businesses { id name industry } }",
+  "variables": { ... },
+  "operationName": "GetBusinesses"
+}
+```
+
+**Response**: `200 OK`
+
+```json
+{
+  "data": {
+    "businesses": [
+      {
+        "id": "business-123",
+        "name": "Acme Corp",
+        "industry": "Technology"
+      }
+    ]
+  }
+}
+```
+
+## Batch Request Endpoint
+
+### Execute Batch Requests
+
+```http
+POST /batch
+```
+
+**Request Body**:
+
+```json
+{
+  "requests": [
+    {
+      "method": "GET",
+      "url": "/businesses",
+      "query": { "industry": "Technology" }
+    },
+    {
+      "method": "GET",
+      "url": "/products"
+    }
+  ]
+}
+```
+
+**Response**: `200 OK`
+
+```json
+[
+  {
+    "status": 200,
+    "data": [ ... ]
+  },
+  {
+    "status": 200,
+    "data": [ ... ]
+  }
+]
+```
+
+## Authentication Endpoints
+
+### Login
+
+```http
+POST /auth/login
+```
+
+**Request Body**:
+
+```json
+{
+  "email": "user@example.com",
+  "password": "secure-password"
+}
+```
+
+**Response**: `200 OK`
+
+```json
+{
+  "token": "jwt-token",
+  "refreshToken": "refresh-token",
+  "expiresIn": 3600,
+  "user": {
+    "$id": "user-123",
+    "name": "John Doe",
+    "email": "user@example.com"
+  }
+}
+```
+
+### Refresh Token
+
+```http
+POST /auth/refresh
+```
+
+**Request Body**:
+
+```json
+{
+  "refreshToken": "refresh-token"
+}
+```
+
+**Response**: `200 OK`
+
+```json
+{
+  "token": "new-jwt-token",
+  "expiresIn": 3600
+}
+```
+
+### Verify Token
+
+```http
+POST /auth/verify
+```
+
+**Request Body**:
+
+```json
+{
+  "token": "jwt-token"
+}
+```
+
+**Response**: `200 OK`
+
+```json
+{
+  "valid": true,
+  "userId": "user-123",
+  "permissions": ["read:businesses", "write:businesses"],
+  "expiresAt": "2025-10-10T13:00:00Z"
+}
+```
+
+### OAuth2 Authorization
+
+```http
+GET /oauth/authorize
+```
+
+**Query Parameters**:
+
+- `client_id` (string, required) - OAuth client ID
+- `redirect_uri` (string, required) - Redirect URI
+- `response_type` (string, required) - Response type (code)
+- `scope` (string, required) - Requested scopes
+- `state` (string, required) - State parameter
+
+**Response**: Redirect to authorization page
+
+### OAuth2 Token Exchange
+
+```http
+POST /oauth/token
+```
+
+**Request Body**:
+
+```json
+{
+  "grant_type": "authorization_code",
+  "code": "auth-code",
+  "client_id": "client-id",
+  "client_secret": "client-secret",
+  "redirect_uri": "https://app.com/callback"
+}
+```
+
+**Response**: `200 OK`
+
+```json
+{
+  "access_token": "access-token",
+  "refresh_token": "refresh-token",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "scope": "read:businesses write:businesses"
+}
+```
+
+## Utility Endpoints
+
+### Health Check
+
+```http
+GET /health
+```
+
+**Response**: `200 OK`
+
+```json
+{
+  "status": "healthy",
+  "version": "1.0.0",
+  "timestamp": "2025-10-10T12:00:00Z"
+}
+```
+
+### API Status
+
+```http
+GET /status
+```
+
+**Response**: `200 OK`
+
+```json
+{
+  "api": "operational",
+  "services": {
+    "database": "operational",
+    "ai": "operational",
+    "events": "operational",
+    "workflows": "operational"
+  }
+}
+```
+
+### Service Discovery
+
+```http
+GET /services
+```
+
+**Response**: `200 OK`
+
+```json
+[
+  {
+    "name": "database",
+    "url": "https://database.do",
+    "status": "healthy"
+  },
+  {
+    "name": "ai",
+    "url": "https://ai.do",
+    "status": "healthy"
+  }
+]
+```
+
+## Error Responses
+
+All error responses follow this format:
+
+```json
+{
+  "error": {
+    "code": "error_code",
+    "message": "Human-readable error message",
+    "details": { ... }
+  }
+}
+```
+
+### Common Error Codes
+
+- `400 Bad Request` - Invalid request data
+- `401 Unauthorized` - Authentication required or failed
+- `403 Forbidden` - Insufficient permissions
+- `404 Not Found` - Resource not found
+- `409 Conflict` - Resource conflict
+- `429 Too Many Requests` - Rate limit exceeded
+- `500 Internal Server Error` - Server error
+- `503 Service Unavailable` - Service temporarily unavailable
+
+## SDK Integration
+
+Use the TypeScript SDK for easier integration:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Automatically handles authentication, retries, and error handling
+const businesses = await api('https://apis.do/businesses', {
+  method: 'GET',
+  headers: {
+    Authorization: `Bearer ${process.env.APIS_API_KEY}`,
+  },
+})
+```
+
+## Related Documentation
+
+- [Getting Started](../docs/getting-started) - Setup guide
+- [Authentication](../docs/authentication) - Auth methods
+- [Routing](../docs/routing) - Routing patterns
+- [Examples](../examples/) - Code examples
+
+---
+
+For more information, visit [apis.do](https://apis.do).

@@ -1,0 +1,696 @@
+---
+$id: https://integrations.do/jira
+$type: Integration
+name: Jira
+service: jira
+description: Agile project management and issue tracking platform
+category: developer-tools
+sdkBased: true
+sdkPackage: 'jira-client'
+sdkVersion: ^8.2.2
+sdkImport: JiraApi
+
+auth:
+  type: oauth2
+  authorizationUrl: https://auth.atlassian.com/authorize
+  tokenUrl: https://auth.atlassian.com/oauth/token
+  scopes:
+    - read:jira-work
+    - write:jira-work
+    - manage:jira-project
+    - manage:jira-webhook
+
+resources:
+  - name: Issue
+    plural: Issues
+    description: Jira issue tracking
+    operations:
+      - name: create
+        method: POST
+        path: /rest/api/3/issue
+        params:
+          - name: fields
+            type: object
+            required: true
+            description: Issue fields (summary, project, issuetype, etc.)
+        returns: Issue
+
+      - name: get
+        method: GET
+        path: /rest/api/3/issue/{issue_id_or_key}
+        params:
+          - name: issue_id_or_key
+            type: string
+            required: true
+            description: Issue ID or key
+        returns: Issue
+
+      - name: update
+        method: PUT
+        path: /rest/api/3/issue/{issue_id_or_key}
+        params:
+          - name: issue_id_or_key
+            type: string
+            required: true
+            description: Issue ID or key
+          - name: fields
+            type: object
+            required: true
+            description: Updated fields
+        returns: Issue
+
+      - name: delete
+        method: DELETE
+        path: /rest/api/3/issue/{issue_id_or_key}
+        params:
+          - name: issue_id_or_key
+            type: string
+            required: true
+            description: Issue ID or key
+        returns: boolean
+
+      - name: list
+        method: GET
+        path: /rest/api/3/search
+        params:
+          - name: jql
+            type: string
+            required: false
+            description: JQL query string
+          - name: fields
+            type: array
+            required: false
+            description: Fields to return
+        returns: Issue[]
+        pagination:
+          type: offset
+          offsetField: startAt
+          limitField: maxResults
+          defaultLimit: 50
+          maxLimit: 100
+
+  - name: Project
+    plural: Projects
+    description: Jira project management
+    operations:
+      - name: create
+        method: POST
+        path: /rest/api/3/project
+        params:
+          - name: key
+            type: string
+            required: true
+            description: Project key
+          - name: name
+            type: string
+            required: true
+            description: Project name
+          - name: projectTypeKey
+            type: string
+            required: true
+            description: Project type (software, business, service_desk)
+          - name: leadAccountId
+            type: string
+            required: true
+            description: Project lead account ID
+        returns: Project
+
+      - name: get
+        method: GET
+        path: /rest/api/3/project/{project_id_or_key}
+        params:
+          - name: project_id_or_key
+            type: string
+            required: true
+            description: Project ID or key
+        returns: Project
+
+      - name: update
+        method: PUT
+        path: /rest/api/3/project/{project_id_or_key}
+        params:
+          - name: project_id_or_key
+            type: string
+            required: true
+            description: Project ID or key
+          - name: name
+            type: string
+            required: false
+            description: Updated name
+        returns: Project
+
+      - name: delete
+        method: DELETE
+        path: /rest/api/3/project/{project_id_or_key}
+        params:
+          - name: project_id_or_key
+            type: string
+            required: true
+            description: Project ID or key
+        returns: boolean
+
+      - name: list
+        method: GET
+        path: /rest/api/3/project/search
+        params:
+          - name: query
+            type: string
+            required: false
+            description: Search query
+        returns: Project[]
+        pagination:
+          type: offset
+          offsetField: startAt
+          limitField: maxResults
+          defaultLimit: 50
+          maxLimit: 100
+
+  - name: Sprint
+    plural: Sprints
+    description: Agile sprint management
+    operations:
+      - name: create
+        method: POST
+        path: /rest/agile/1.0/sprint
+        params:
+          - name: name
+            type: string
+            required: true
+            description: Sprint name
+          - name: originBoardId
+            type: number
+            required: true
+            description: Board ID
+          - name: startDate
+            type: string
+            required: false
+            description: Start date (ISO 8601)
+          - name: endDate
+            type: string
+            required: false
+            description: End date (ISO 8601)
+        returns: Sprint
+
+      - name: get
+        method: GET
+        path: /rest/agile/1.0/sprint/{sprint_id}
+        params:
+          - name: sprint_id
+            type: number
+            required: true
+            description: Sprint ID
+        returns: Sprint
+
+      - name: update
+        method: PUT
+        path: /rest/agile/1.0/sprint/{sprint_id}
+        params:
+          - name: sprint_id
+            type: number
+            required: true
+            description: Sprint ID
+          - name: name
+            type: string
+            required: false
+            description: Updated name
+          - name: state
+            type: string
+            required: false
+            description: Sprint state (future, active, closed)
+        returns: Sprint
+
+      - name: delete
+        method: DELETE
+        path: /rest/agile/1.0/sprint/{sprint_id}
+        params:
+          - name: sprint_id
+            type: number
+            required: true
+            description: Sprint ID
+        returns: boolean
+
+      - name: list
+        method: GET
+        path: /rest/agile/1.0/board/{board_id}/sprint
+        params:
+          - name: board_id
+            type: number
+            required: true
+            description: Board ID
+        returns: Sprint[]
+
+  - name: Board
+    plural: Boards
+    description: Agile board management
+    operations:
+      - name: create
+        method: POST
+        path: /rest/agile/1.0/board
+        params:
+          - name: name
+            type: string
+            required: true
+            description: Board name
+          - name: type
+            type: string
+            required: true
+            description: Board type (scrum or kanban)
+          - name: filterId
+            type: number
+            required: true
+            description: Filter ID
+        returns: Board
+
+      - name: get
+        method: GET
+        path: /rest/agile/1.0/board/{board_id}
+        params:
+          - name: board_id
+            type: number
+            required: true
+            description: Board ID
+        returns: Board
+
+      - name: delete
+        method: DELETE
+        path: /rest/agile/1.0/board/{board_id}
+        params:
+          - name: board_id
+            type: number
+            required: true
+            description: Board ID
+        returns: boolean
+
+      - name: list
+        method: GET
+        path: /rest/agile/1.0/board
+        params:
+          - name: type
+            type: string
+            required: false
+            description: Filter by type (scrum or kanban)
+        returns: Board[]
+        pagination:
+          type: offset
+          offsetField: startAt
+          limitField: maxResults
+          defaultLimit: 50
+          maxLimit: 100
+
+webhooks:
+  enabled: true
+  signatureHeader: X-Hub-Signature
+  signatureAlgorithm: sha256
+  verificationMethod: signature
+  events:
+    - name: jira:issue_created
+      type: jira:issue_created
+      description: Issue created
+    - name: jira:issue_updated
+      type: jira:issue_updated
+      description: Issue updated
+    - name: jira:issue_deleted
+      type: jira:issue_deleted
+      description: Issue deleted
+    - name: sprint_created
+      type: sprint_created
+      description: Sprint created
+    - name: sprint_started
+      type: sprint_started
+      description: Sprint started
+    - name: sprint_closed
+      type: sprint_closed
+      description: Sprint closed
+    - name: board_created
+      type: board_created
+      description: Board created
+    - name: board_updated
+      type: board_updated
+      description: Board updated
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 403
+      type: authorization
+      statusCode: 403
+      message: Forbidden
+      retryable: false
+    - code: 404
+      type: not_found
+      statusCode: 404
+      message: Resource not found
+      retryable: false
+    - code: 400
+      type: validation
+      statusCode: 400
+      message: Bad request
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+    - code: 500
+      type: server
+      statusCode: 500
+      message: Internal server error
+      retryable: true
+  retryable: [429, 500, 502, 503]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: true
+  scenarios:
+    - name: Issue Management
+      description: Test issue CRUD operations
+      steps:
+        - action: create
+          resource: Issue
+        - action: retrieve
+          resource: Issue
+        - action: update
+          resource: Issue
+        - action: list
+          resource: Issue
+        - action: delete
+          resource: Issue
+
+    - name: Project Management
+      description: Test project CRUD operations
+      steps:
+        - action: create
+          resource: Project
+        - action: retrieve
+          resource: Project
+        - action: update
+          resource: Project
+        - action: list
+          resource: Project
+        - action: delete
+          resource: Project
+
+    - name: Sprint Management
+      description: Test sprint operations
+      steps:
+        - action: create
+          resource: Sprint
+        - action: retrieve
+          resource: Sprint
+        - action: update
+          resource: Sprint
+        - action: list
+          resource: Sprint
+        - action: delete
+          resource: Sprint
+
+    - name: Board Management
+      description: Test board operations
+      steps:
+        - action: create
+          resource: Board
+        - action: retrieve
+          resource: Board
+        - action: list
+          resource: Board
+        - action: delete
+          resource: Board
+
+    - name: Webhook Verification
+      description: Test webhook HMAC signature verification
+      steps:
+        - action: assert
+          expects:
+            status: 200
+
+docs:
+  homepage: https://www.atlassian.com/software/jira
+  apiDocs: https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/
+  sdkDocs: https://www.npmjs.com/package/jira-client
+  guides:
+    quickstart: https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/
+    webhooks: https://developer.atlassian.com/cloud/jira/platform/webhooks/
+    authentication: https://developer.atlassian.com/cloud/jira/platform/oauth-2-3lo-apps/
+---
+
+# Jira Integration
+
+Jira is an agile project management and issue tracking platform for software teams.
+
+## Features
+
+- **Issues**: Issue tracking and management
+- **Projects**: Project organization and configuration
+- **Sprints**: Agile sprint planning and execution
+- **Boards**: Scrum and Kanban boards
+- **OAuth 2.0**: Secure authentication
+- **Webhooks**: Real-time event notifications with HMAC
+
+## Quick Start
+
+```typescript
+import { JiraClient } from '@dotdo/sdk.do/integrations/jira'
+
+const jira = new JiraClient({
+  host: 'your-instance.atlassian.net',
+  email: process.env.JIRA_EMAIL,
+  apiToken: process.env.JIRA_API_TOKEN,
+})
+
+// Create an issue
+const issue = await jira.issue.create({
+  fields: {
+    project: { key: 'PROJ' },
+    summary: 'Bug: Login fails',
+    issuetype: { name: 'Bug' },
+    description: 'Users cannot log in',
+  },
+})
+
+// Create a sprint
+const sprint = await jira.sprint.create({
+  name: 'Sprint 1',
+  originBoardId: 123,
+  startDate: '2025-10-13',
+  endDate: '2025-10-27',
+})
+```
+
+## Authentication
+
+Jira uses OAuth 2.0 or API tokens:
+
+```bash
+export JIRA_EMAIL=your_email@example.com
+export JIRA_API_TOKEN=your_api_token
+export JIRA_HOST=your-instance.atlassian.net
+```
+
+## Resources
+
+### Issues
+
+Track and manage issues:
+
+```typescript
+// Create issue
+const issue = await jira.issue.create({
+  fields: {
+    project: { key: 'PROJ' },
+    summary: 'Implement feature X',
+    issuetype: { name: 'Story' },
+    priority: { name: 'High' },
+  },
+})
+
+// Get issue
+const issue = await jira.issue.get({
+  issue_id_or_key: 'PROJ-123',
+})
+
+// Update issue
+await jira.issue.update({
+  issue_id_or_key: 'PROJ-123',
+  fields: {
+    summary: 'Updated: Implement feature X',
+  },
+})
+
+// Search issues with JQL
+const issues = await jira.issue.list({
+  jql: 'project = PROJ AND status = "In Progress"',
+  fields: ['summary', 'status', 'assignee'],
+})
+
+// Delete issue
+await jira.issue.delete({
+  issue_id_or_key: 'PROJ-123',
+})
+```
+
+### Projects
+
+Manage projects:
+
+```typescript
+// Create project
+const project = await jira.project.create({
+  key: 'NEWPROJ',
+  name: 'New Project',
+  projectTypeKey: 'software',
+  leadAccountId: 'account-id-here',
+})
+
+// Get project
+const project = await jira.project.get({
+  project_id_or_key: 'NEWPROJ',
+})
+
+// Update project
+await jira.project.update({
+  project_id_or_key: 'NEWPROJ',
+  name: 'Updated Project Name',
+})
+
+// List projects
+const projects = await jira.project.list({
+  query: 'software',
+})
+
+// Delete project
+await jira.project.delete({
+  project_id_or_key: 'NEWPROJ',
+})
+```
+
+### Sprints
+
+Manage agile sprints:
+
+```typescript
+// Create sprint
+const sprint = await jira.sprint.create({
+  name: 'Sprint 10',
+  originBoardId: 42,
+  startDate: '2025-10-13T09:00:00.000Z',
+  endDate: '2025-10-27T17:00:00.000Z',
+})
+
+// Get sprint
+const sprint = await jira.sprint.get({
+  sprint_id: 100,
+})
+
+// Update sprint
+await jira.sprint.update({
+  sprint_id: 100,
+  name: 'Sprint 10 Extended',
+  state: 'active',
+})
+
+// List sprints for board
+const sprints = await jira.sprint.list({
+  board_id: 42,
+})
+
+// Delete sprint
+await jira.sprint.delete({
+  sprint_id: 100,
+})
+```
+
+### Boards
+
+Manage Scrum/Kanban boards:
+
+```typescript
+// Create board
+const board = await jira.board.create({
+  name: 'Team Board',
+  type: 'scrum',
+  filterId: 10000,
+})
+
+// Get board
+const board = await jira.board.get({
+  board_id: 50,
+})
+
+// List boards
+const boards = await jira.board.list({
+  type: 'scrum',
+})
+
+// Delete board
+await jira.board.delete({
+  board_id: 50,
+})
+```
+
+## Webhooks
+
+Jira supports webhooks with HMAC-SHA256 signature verification:
+
+```typescript
+import { JiraWebhookHandler, WebhookEventRouter } from '@dotdo/sdk.do/integrations/jira'
+
+const handler = new JiraWebhookHandler(process.env.JIRA_WEBHOOK_SECRET)
+const event = await handler.handleRequest(request)
+
+const router = new WebhookEventRouter()
+router.onJiraIssueCreated(async (event) => {
+  console.log('Issue created:', event.data)
+})
+
+router.onJiraIssueUpdated(async (event) => {
+  console.log('Issue updated:', event.data)
+})
+
+router.onSprintStarted(async (event) => {
+  console.log('Sprint started:', event.data)
+})
+
+await router.route(event)
+```
+
+## Error Handling
+
+```typescript
+import { JiraError } from '@dotdo/sdk.do/integrations/jira'
+
+try {
+  await jira.issue.create({
+    /* ... */
+  })
+} catch (error) {
+  if (error instanceof JiraError) {
+    console.error('Jira Error:', error.code, error.message)
+    if (error.isRetriable()) {
+      // Retry logic
+    }
+  }
+}
+```
+
+## Best Practices
+
+1. **JQL**: Master Jira Query Language for powerful issue searches
+2. **Issue Keys**: Use project-key format (e.g., PROJ-123)
+3. **Fields**: Always specify required fields for issue creation
+4. **Pagination**: Use startAt and maxResults for large datasets
+5. **Webhooks**: Verify HMAC signatures for security
+6. **Rate Limits**: Jira Cloud has per-app rate limits
+7. **Agile API**: Use /rest/agile/1.0 for sprints and boards
+
+## API Reference
+
+Full API documentation: https://developer.atlassian.com/cloud/jira/platform/rest/v3/
+
+## License
+
+MIT

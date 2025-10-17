@@ -1,0 +1,104 @@
+---
+$id: https://integrations.do/pipedrive
+$type: Integration
+name: Pipedrive
+service: pipedrive
+description: Pipedrive is a sales management tool built around pipeline visualization, lead tracking, activity reminders, and automation to keep deals progressing
+category: crm
+sdkBased: false
+baseUrl: https://api.pipedrive.com
+
+auth:
+  type: oauth2
+  authorizationUrl: https://oauth.pipedrive.com/oauth/authorize
+  tokenUrl: https://oauth.pipedrive.com/oauth/token
+  scopes:
+    - contacts:full leads:full mail:full activities:full products:full projects:full
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Pipedrive actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: true
+  verificationMethod: none
+  events:
+    - name: generic_trigger
+      type: trigger
+      description: Generic webhook trigger
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://www.pipedrive.com/
+  apiDocs: https://www.pipedrive.com/
+---
+
+# Pipedrive Integration
+
+Pipedrive is a sales management tool built around pipeline visualization, lead tracking, activity reminders, and automation to keep deals progressing
+
+## Quick Start
+
+```typescript
+import { PipedriveClient } from '@dotdo/sdk.do/integrations/pipedrive'
+
+const pipedrive = new PipedriveClient({
+  apiKey: process.env.PIPEDRIVE_API_KEY,
+})
+
+const result = await pipedrive.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Pipedrive provides 276 actions through the Composio API.
+
+## Webhooks
+
+Pipedrive supports 3 webhook triggers for real-time event notifications.
+
+## License
+
+MIT

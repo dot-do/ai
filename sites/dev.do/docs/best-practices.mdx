@@ -1,0 +1,270 @@
+---
+$id: https://dev.do/docs/best-practices
+$type: TechArticle
+title: dev.do Best Practices
+description: Best practices and patterns for using dev.do effectively
+keywords: [dev, development, debug, test, tools, utilities, profiler, logger, best-practices, patterns, guidelines]
+---
+
+# dev.do Best Practices
+
+Recommended patterns and practices for using dev.do effectively.
+
+## General Guidelines
+
+### Use TypeScript
+
+Always use TypeScript for type safety:
+
+```typescript
+// Good - type-safe
+import type { Options } from 'dev.do'
+const options: Options = {
+  // Configuration
+}
+
+// Avoid - untyped
+const options = {
+  // Configuration
+}
+```
+
+### Handle Errors
+
+Implement comprehensive error handling:
+
+```typescript
+// Good - error handling
+try {
+  const result = await dev(data)
+  return result
+} catch (error) {
+  console.error('Operation failed:', error)
+  // Handle or rethrow
+  throw error
+}
+
+// Avoid - no error handling
+const result = await dev(data)
+```
+
+### Use Semantic Patterns
+
+Leverage semantic patterns for clarity:
+
+```typescript
+// Good - semantic
+import $ from 'dev.do'
+const result = await dev($.Data, options)
+
+// Avoid - generic
+const result = await dev('data', options)
+```
+
+## Configuration
+
+### Environment Variables
+
+Use environment variables for configuration:
+
+```typescript
+// Good - environment-based config
+const config = {
+  apiKey: process.env.DEV_API_KEY,
+  timeout: parseInt(process.env.DEV_TIMEOUT || '30000'),
+}
+
+// Avoid - hardcoded values
+const config = {
+  apiKey: 'hardcoded-key',
+  timeout: 30000,
+}
+```
+
+### Validation
+
+Validate configuration on startup:
+
+```typescript
+import { z } from 'zod'
+
+const configSchema = z.object({
+  apiKey: z.string().min(1),
+  timeout: z.number().positive(),
+})
+
+const config = configSchema.parse({
+  apiKey: process.env.API_KEY,
+  timeout: parseInt(process.env.TIMEOUT),
+})
+```
+
+## Performance
+
+### Batch Operations
+
+Process multiple items efficiently:
+
+```typescript
+// Good - batch processing
+const results = await dev.batch(items)
+
+// Avoid - sequential processing
+const results = []
+for (const item of items) {
+  results.push(await dev(item))
+}
+```
+
+### Caching
+
+Cache results when appropriate:
+
+```typescript
+const cache = new Map()
+
+async function getCached(key) {
+  if (cache.has(key)) {
+    return cache.get(key)
+  }
+
+  const result = await dev(key)
+  cache.set(key, result)
+  return result
+}
+```
+
+### Resource Management
+
+Clean up resources properly:
+
+```typescript
+const instance = await dev.create(config)
+
+try {
+  await instance.process(data)
+} finally {
+  await instance.close()
+}
+```
+
+## Testing
+
+### Unit Tests
+
+Write comprehensive unit tests:
+
+```typescript
+import { describe, it, expect } from 'vitest'
+import { dev } from 'dev.do'
+
+describe('dev', () => {
+  it('should process data correctly', async () => {
+    const result = await dev({ data: 'test' })
+    expect(result).toBeDefined()
+  })
+
+  it('should handle errors', async () => {
+    await expect(dev({ invalid: true })).rejects.toThrow()
+  })
+})
+```
+
+### Integration Tests
+
+Test integration with other services:
+
+```typescript
+import { dev } from 'dev.do'
+import { db } from 'sdk.do'
+
+it('should integrate with database', async () => {
+  const data = await db.list($.Data)
+  const result = await dev(data)
+  expect(result).toBeDefined()
+})
+```
+
+## Security
+
+### Input Validation
+
+Always validate inputs:
+
+```typescript
+import { z } from 'zod'
+
+const inputSchema = z.object({
+  data: z.string(),
+  options: z.object({}).optional(),
+})
+
+async function safeProcess(input) {
+  const validated = inputSchema.parse(input)
+  return await dev(validated)
+}
+```
+
+### Sanitization
+
+Sanitize data before processing:
+
+```typescript
+function sanitize(input) {
+  return {
+    data: input.data.trim(),
+    // Remove potentially harmful content
+  }
+}
+
+const result = await dev(sanitize(input))
+```
+
+## Monitoring
+
+### Logging
+
+Implement structured logging:
+
+```typescript
+import { logger } from 'dev.do'
+
+logger.info('dev started', { input })
+
+try {
+  const result = await dev(input)
+  logger.info('dev completed', { result })
+  return result
+} catch (error) {
+  logger.error('dev failed', { error })
+  throw error
+}
+```
+
+### Metrics
+
+Track key metrics:
+
+```typescript
+const startTime = Date.now()
+
+try {
+  const result = await dev(data)
+  metrics.increment('dev.success')
+  metrics.timing('dev.duration', Date.now() - startTime)
+  return result
+} catch (error) {
+  metrics.increment('dev.error')
+  throw error
+}
+```
+
+## Learn More
+
+- [Getting Started](./getting-started) - Setup guide
+- [Architecture](./architecture) - System design
+- [Troubleshooting](./troubleshooting) - Common issues
+
+---
+
+Part of the [dev.do](https://dev.do) documentation.

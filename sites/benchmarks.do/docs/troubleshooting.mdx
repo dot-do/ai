@@ -1,0 +1,632 @@
+---
+$id: https://benchmarks.do/docs/troubleshooting
+$type: TechArticle
+title: Benchmarks.do Troubleshooting
+description: Common benchmarking issues, debugging techniques, and solutions for inconsistent results, resource constraints, and network problems
+keywords: [troubleshooting, debugging, issues, solutions, inconsistent results, resource constraints]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Troubleshooting
+
+Common issues and solutions for benchmarks.do.
+
+## Inconsistent Results
+
+### High Variability Between Runs
+
+**Symptom**: Benchmark results vary significantly between runs
+
+**Causes**:
+
+- Insufficient warmup period
+- System resource contention
+- Network variability
+- JIT compilation effects
+- Background processes
+
+**Solutions**:
+
+```typescript
+import { $, benchmarks } from 'sdk.do'
+
+// 1. Increase warmup period
+const bench = await benchmarks.create({
+  name: 'Stable Benchmark',
+
+  target: async () => await myFunction(),
+
+  warmup: 1000, // ✓ Increased warmup
+  iterations: 10000,
+  cooldown: 100,
+
+  statistics: {
+    enabled: true,
+    outlier_detection: 'iqr',
+  },
+})
+
+// 2. Run multiple times and check consistency
+const runs = []
+for (let i = 0; i < 5; i++) {
+  const result = await benchmarks.run(bench.id)
+  runs.push(result)
+  console.log(`Run ${i + 1}: ${result.avgLatency}ms`)
+}
+
+// Calculate coefficient of variation
+const mean = runs.reduce((sum, r) => sum + r.avgLatency, 0) / runs.length
+const stdDev = Math.sqrt(runs.map((r) => Math.pow(r.avgLatency - mean, 2)).reduce((a, b) => a + b) / runs.length)
+const cv = (stdDev / mean) * 100
+
+console.log('Coefficient of Variation:', cv, '%')
+if (cv > 10) {
+  console.warn('High variability - investigate system conditions')
+}
+```
+
+### Outliers Skewing Results
+
+**Symptom**: P99/P99.9 latency much higher than p95
+
+**Solution**:
+
+```typescript
+import { $, benchmarks } from 'sdk.do'
+
+const bench = await benchmarks.create({
+  name: 'Outlier-Aware Benchmark',
+
+  statistics: {
+    enabled: true,
+    outlier_detection: 'iqr', // Use IQR method
+    outlier_handling: 'report', // Report but don't remove
+    confidence_level: 0.95,
+  },
+})
+
+const results = await benchmarks.run(bench.id)
+
+// Analyze outliers
+console.log('Outlier Analysis:')
+console.log('- Count:', results.statistics.outliers.count)
+console.log('- Percentage:', results.statistics.outliers.percentage, '%')
+console.log('- Values:', results.statistics.outliers.values.slice(0, 10))
+
+// If too many outliers, investigate
+if (results.statistics.outliers.percentage > 5) {
+  console.warn('High outlier percentage - possible issues:')
+  console.warn('- Garbage collection pauses')
+  console.warn('- Network timeouts')
+  console.warn('- Database connection pool exhaustion')
+  console.warn('- CPU throttling')
+}
+```
+
+## Resource Constraints
+
+### Memory Issues
+
+**Symptom**: Benchmark crashes with out-of-memory errors
+
+**Solution**:
+
+```typescript
+import { $, benchmarks } from 'sdk.do'
+
+// 1. Limit memory usage
+const bench = await benchmarks.create({
+  name: 'Memory-Constrained Benchmark',
+
+  resources: {
+    maxMemory: '512MB', // Set memory limit
+    heapSnapshot: true, // Capture heap snapshots
+  },
+
+  monitoring: {
+    interval: '1s',
+    metrics: ['memory_usage', 'heap_used', 'heap_total'],
+  },
+})
+
+// 2. Monitor memory during execution
+const results = await benchmarks.run(bench.id)
+
+console.log('Memory Usage:')
+console.log('- Average:', results.avgMemory, 'MB')
+console.log('- Peak:', results.peakMemory, 'MB')
+console.log('- Growth Rate:', results.memoryGrowthRate, 'MB/s')
+
+// 3. Detect memory leaks
+if (results.memoryGrowthRate > 1) {
+  console.error('Possible memory leak detected!')
+  console.error('Heap snapshots saved for analysis')
+}
+```
+
+### CPU Saturation
+
+**Symptom**: Benchmark performance degrades under high load
+
+**Solution**:
+
+```typescript
+import { $, benchmarks } from 'sdk.do'
+
+// Monitor CPU usage
+const bench = await benchmarks.create({
+  name: 'CPU-Monitored Benchmark',
+
+  monitoring: {
+    interval: '1s',
+    metrics: ['cpu_usage', 'system_load'],
+  },
+
+  resources: {
+    maxCPU: 2, // Limit to 2 CPUs
+  },
+
+  load: {
+    users: 50,
+    duration: '5m',
+  },
+})
+
+const results = await benchmarks.run(bench.id)
+
+console.log('CPU Usage:')
+console.log('- Average:', results.avgCPU, '%')
+console.log('- Peak:', results.peakCPU, '%')
+
+if (results.peakCPU > 90) {
+  console.warn('CPU saturation detected')
+  console.warn('Consider:')
+  console.warn('- Reducing concurrent users')
+  console.warn('- Optimizing hot code paths')
+  console.warn('- Horizontal scaling')
+}
+```
+
+### Network Constraints
+
+**Symptom**: High error rates or timeouts during load tests
+
+**Solution**:
+
+```typescript
+import { $, benchmarks } from 'sdk.do'
+
+// Configure network timeouts and retries
+const bench = await benchmarks.create({
+  name: 'Network-Resilient Benchmark',
+
+  target: {
+    url: 'https://api.example.com/users',
+    method: 'GET',
+    timeout: 10000, // 10s timeout
+    retries: 3, // Retry failed requests
+    retryDelay: 1000, // 1s between retries
+  },
+
+  load: {
+    users: 100,
+    duration: '5m',
+  },
+
+  thresholds: {
+    http_req_duration: ['p(95)<5000'], // Increased threshold
+    http_req_failed: ['rate<0.05'], // Allow 5% failures
+  },
+})
+
+const results = await benchmarks.run(bench.id)
+
+// Analyze errors
+console.log('Error Breakdown:')
+Object.entries(results.errorTypes).forEach(([type, count]) => {
+  console.log(`- ${type}: ${count} (${((count / results.totalRequests) * 100).toFixed(2)}%)`)
+})
+
+// Network-specific errors
+if (results.errorTypes.timeout > 0) {
+  console.warn('Timeout errors detected')
+  console.warn('- Increase timeout value')
+  console.warn('- Check network latency')
+  console.warn('- Verify server capacity')
+}
+```
+
+## Load Generation Issues
+
+### Unable to Reach Target Load
+
+**Symptom**: Benchmark cannot generate desired number of concurrent users
+
+**Solution**:
+
+```typescript
+import { $, benchmarks } from 'sdk.do'
+
+// Distributed load generation
+const bench = await benchmarks.create({
+  name: 'High-Load Benchmark',
+
+  distribution: {
+    regions: ['us-east-1', 'us-west-2', 'eu-west-1'],
+    workersPerRegion: 10, // 10 workers per region
+  },
+
+  load: {
+    users: 1000, // Distributed across all workers
+    duration: '10m',
+    rampUp: '2m',
+  },
+})
+
+// Monitor worker health
+const results = await benchmarks.run(bench.id, {
+  monitorWorkers: true,
+})
+
+console.log('Worker Statistics:')
+console.log('- Total Workers:', results.workerCount)
+console.log('- Active Workers:', results.activeWorkers)
+console.log('- Failed Workers:', results.failedWorkers)
+
+// Check if target load was reached
+const actualUsers = results.peakConcurrency
+const targetUsers = 1000
+
+if (actualUsers < targetUsers * 0.9) {
+  console.error(`Failed to reach target load: ${actualUsers}/${targetUsers}`)
+  console.error('Possible causes:')
+  console.error('- Insufficient worker capacity')
+  console.error('- Resource constraints')
+  console.error('- Network limitations')
+}
+```
+
+### Ramp-Up Issues
+
+**Symptom**: Users ramp up too slowly or too quickly
+
+**Solution**:
+
+```typescript
+import { $, benchmarks } from 'sdk.do'
+
+// Fine-tune ramp-up stages
+const bench = await benchmarks.create({
+  name: 'Controlled Ramp-Up',
+
+  load: {
+    type: 'gradual',
+    stages: [
+      { duration: '30s', target: 10 }, // Slow start
+      { duration: '1m', target: 50 }, // Accelerate
+      { duration: '2m', target: 100 }, // Steady
+      { duration: '5m', target: 100 }, // Hold
+      { duration: '2m', target: 0 }, // Ramp down
+    ],
+
+    // Control ramp-up rate
+    rampUpRate: 'linear', // or 'exponential', 'logarithmic'
+  },
+})
+
+// Monitor ramp-up progress
+const results = await benchmarks.run(bench.id, {
+  realtimeMetrics: true,
+  metricsInterval: '5s',
+})
+```
+
+## Statistical Analysis Problems
+
+### Non-Normal Distribution
+
+**Symptom**: Data doesn't follow normal distribution, t-test invalid
+
+**Solution**:
+
+```typescript
+import { $, benchmarks } from 'sdk.do'
+
+// Use non-parametric tests
+const comparison = await benchmarks.compare({
+  baseline: baselineId,
+  current: currentId,
+
+  statistical_test: 'mann_whitney', // Non-parametric test
+  significance_level: 0.05,
+})
+
+// Check distribution
+console.log('Distribution Test:')
+console.log('- Test:', results.statistics.distribution.test)
+console.log('- p-value:', results.statistics.distribution.pValue)
+console.log('- Is Normal:', results.statistics.distribution.isNormal)
+
+if (!results.statistics.distribution.isNormal) {
+  console.log('Data is not normally distributed')
+  console.log('Using Mann-Whitney U test for comparison')
+}
+```
+
+### Insufficient Sample Size
+
+**Symptom**: Statistical tests lack power, results unreliable
+
+**Solution**:
+
+```typescript
+import { $, benchmarks } from 'sdk.do'
+
+// Calculate required sample size
+function calculateSampleSize(effectSize: number, power: number = 0.8, alpha: number = 0.05): number {
+  // Cohen's d effect size
+  // Power = 0.8 (80% probability of detecting effect)
+  // Alpha = 0.05 (5% false positive rate)
+
+  const zAlpha = 1.96 // For alpha = 0.05
+  const zBeta = 0.84 // For power = 0.8
+
+  const n = 2 * Math.pow((zAlpha + zBeta) / effectSize, 2)
+
+  return Math.ceil(n)
+}
+
+// Use sufficient sample size
+const effectSize = 0.5 // Medium effect (0.5 std dev difference)
+const requiredSamples = calculateSampleSize(effectSize)
+
+console.log('Required sample size:', requiredSamples)
+
+const bench = await benchmarks.create({
+  name: 'Adequately Powered Benchmark',
+  iterations: Math.max(requiredSamples, 1000), // At least 1000
+})
+```
+
+## Debugging Techniques
+
+### Enable Detailed Logging
+
+```typescript
+import { $, benchmarks } from 'sdk.do'
+
+const bench = await benchmarks.create({
+  name: 'Debug Benchmark',
+
+  debug: {
+    enabled: true,
+    logLevel: 'verbose', // 'error', 'warn', 'info', 'debug', 'verbose'
+    captureRequests: true, // Capture request/response details
+    captureErrors: true, // Full error stack traces
+    samplingRate: 0.1, // Log 10% of requests
+  },
+})
+
+const results = await benchmarks.run(bench.id)
+
+// Access debug logs
+console.log('Debug Info:')
+console.log('- Log Entries:', results.debug.logs.length)
+console.log('- Captured Requests:', results.debug.requests.length)
+console.log('- Errors:', results.debug.errors.length)
+
+// Export debug data
+await benchmarks.exportDebug(results.id, './debug.json')
+```
+
+### Request Tracing
+
+```typescript
+import { $, benchmarks } from 'sdk.do'
+
+const bench = await benchmarks.create({
+  name: 'Traced Benchmark',
+
+  tracing: {
+    enabled: true,
+    sampleRate: 0.1, // Trace 10% of requests
+    includeHeaders: true,
+    includeBody: false,
+  },
+})
+
+const results = await benchmarks.run(bench.id)
+
+// Analyze traces
+const slowTraces = results.traces.filter((t) => t.duration > 1000).sort((a, b) => b.duration - a.duration)
+
+console.log('Slowest Requests:')
+slowTraces.slice(0, 10).forEach((trace) => {
+  console.log(`- ${trace.method} ${trace.url}: ${trace.duration}ms`)
+  console.log(`  Status: ${trace.statusCode}`)
+  console.log(`  Headers: ${JSON.stringify(trace.headers)}`)
+})
+```
+
+### Performance Profiling
+
+```typescript
+import { $, benchmarks } from 'sdk.do'
+
+const bench = await benchmarks.create({
+  name: 'Profiled Benchmark',
+
+  profiling: {
+    enabled: true,
+    type: 'cpu', // or 'memory', 'both'
+    interval: 100, // Sample every 100ms
+  },
+})
+
+const results = await benchmarks.run(bench.id)
+
+// Analyze profile
+console.log('CPU Profile:')
+console.log('- Hot Functions:')
+results.profile.hotFunctions.slice(0, 10).forEach((fn) => {
+  console.log(`  ${fn.name}: ${fn.totalTime}ms (${fn.percentage}%)`)
+})
+
+// Export flame graph
+await benchmarks.exportFlameGraph(results.id, './flamegraph.html')
+```
+
+## Common Error Messages
+
+### "Worker allocation failed"
+
+**Cause**: Insufficient resources to allocate workers
+
+**Solution**:
+
+- Reduce number of concurrent users
+- Increase worker pool size
+- Use distributed execution
+
+### "Timeout exceeded"
+
+**Cause**: Benchmark taking longer than configured timeout
+
+**Solution**:
+
+- Increase timeout value
+- Optimize benchmark target
+- Check for blocking operations
+
+### "Connection refused"
+
+**Cause**: Target service not accessible
+
+**Solution**:
+
+- Verify service URL
+- Check network connectivity
+- Ensure service is running
+
+### "Rate limit exceeded"
+
+**Cause**: Too many requests to target service
+
+**Solution**:
+
+- Reduce request rate
+- Implement request throttling
+- Contact service provider for higher limits
+
+```typescript
+import { $, benchmarks } from 'sdk.do'
+
+const bench = await benchmarks.create({
+  name: 'Rate-Limited Benchmark',
+
+  target: {
+    url: 'https://api.example.com',
+  },
+
+  rateLimit: {
+    requestsPerSecond: 100, // Limit to 100 rps
+    burstSize: 10, // Allow bursts of 10
+  },
+
+  load: {
+    users: 50,
+    duration: '5m',
+  },
+})
+```
+
+## Performance Issues
+
+### Benchmark Takes Too Long
+
+**Symptom**: Benchmark execution exceeds acceptable duration
+
+**Solution**:
+
+```typescript
+import { $, benchmarks } from 'sdk.do'
+
+// 1. Reduce sample size for quick tests
+const quickBench = await benchmarks.create({
+  name: 'Quick Performance Check',
+  iterations: 100, // Reduced from 10000
+  duration: '1m', // Reduced from 5m
+})
+
+// 2. Use sampling for large datasets
+const sampledBench = await benchmarks.create({
+  name: 'Sampled Benchmark',
+
+  sampling: {
+    enabled: true,
+    rate: 0.1, // Sample 10% of data
+  },
+})
+
+// 3. Parallel execution
+const parallelBench = await benchmarks.create({
+  name: 'Parallel Benchmark',
+
+  execution: {
+    mode: 'parallel',
+    workers: 4, // Use 4 parallel workers
+  },
+})
+```
+
+### High Benchmark Overhead
+
+**Symptom**: Benchmark infrastructure affecting results
+
+**Solution**:
+
+```typescript
+import { $, benchmarks } from 'sdk.do'
+
+// Minimize overhead
+const lowOverhead = await benchmarks.create({
+  name: 'Low Overhead Benchmark',
+
+  metrics: ['latency'], // Collect only essential metrics
+
+  monitoring: {
+    enabled: false, // Disable system monitoring
+  },
+
+  logging: {
+    enabled: false, // Disable detailed logging
+  },
+})
+
+// Measure overhead
+const withoutBench = await measureRaw() // Direct execution
+const withBench = await benchmarks.run(bench.id)
+
+const overhead = withBench.avgLatency - withoutBench.avgLatency
+console.log('Benchmark overhead:', overhead, 'ms')
+```
+
+## Getting Help
+
+If you're still experiencing issues:
+
+1. **Check Documentation**: Review [Getting Started](./getting-started.mdx) and [Best Practices](./best-practices.mdx)
+2. **Search Issues**: Check [GitHub Issues](https://github.com/dot-do/platform/issues) for similar problems
+3. **Enable Debug Mode**: Run with debug logging enabled and capture full output
+4. **Community Support**: Join [Discord](https://discord.gg/dotdo) for real-time help
+5. **Report Bug**: Open an issue with:
+   - Benchmark configuration
+   - Error messages
+   - Debug logs
+   - System information
+
+---
+
+For more information, see [API Reference](../api/reference.mdx) or [Examples](../examples/basic-usage.mdx).

@@ -1,0 +1,785 @@
+---
+$id: https://integrations.do/quickbooks
+$type: Integration
+name: QuickBooks
+service: quickbooks
+description: Accounting software for small business financial management
+category: accounting
+sdkBased: false
+baseUrl: https://quickbooks.api.intuit.com
+
+auth:
+  type: oauth2
+  authorizationUrl: https://appcenter.intuit.com/connect/oauth2
+  tokenUrl: https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer
+  scopes:
+    - com.intuit.quickbooks.accounting
+
+resources:
+  - name: Invoice
+    plural: Invoices
+    description: Sales forms for customer payments
+    operations:
+      - name: create
+        method: POST
+        path: /v3/company/{realmId}/invoice
+        params:
+          - name: realmId
+            type: string
+            required: true
+            description: Company realm ID
+          - name: Line
+            type: array
+            required: true
+            description: Invoice line items
+          - name: CustomerRef
+            type: object
+            required: true
+            description: Customer reference
+          - name: DueDate
+            type: string
+            required: false
+            description: Due date (YYYY-MM-DD)
+        returns: Invoice
+
+      - name: get
+        method: GET
+        path: /v3/company/{realmId}/invoice/{invoice_id}
+        params:
+          - name: realmId
+            type: string
+            required: true
+            description: Company realm ID
+          - name: invoice_id
+            type: string
+            required: true
+            description: Invoice ID
+        returns: Invoice
+
+      - name: update
+        method: POST
+        path: /v3/company/{realmId}/invoice
+        params:
+          - name: realmId
+            type: string
+            required: true
+            description: Company realm ID
+          - name: Id
+            type: string
+            required: true
+            description: Invoice ID
+          - name: SyncToken
+            type: string
+            required: true
+            description: Sync token for optimistic locking
+          - name: sparse
+            type: boolean
+            required: false
+            description: Partial update if true
+        returns: Invoice
+
+      - name: delete
+        method: POST
+        path: /v3/company/{realmId}/invoice
+        params:
+          - name: realmId
+            type: string
+            required: true
+            description: Company realm ID
+          - name: Id
+            type: string
+            required: true
+            description: Invoice ID
+          - name: SyncToken
+            type: string
+            required: true
+            description: Sync token
+        returns: boolean
+
+      - name: list
+        method: GET
+        path: /v3/company/{realmId}/query
+        params:
+          - name: realmId
+            type: string
+            required: true
+            description: Company realm ID
+          - name: query
+            type: string
+            required: true
+            description: SQL-like query (e.g., "SELECT * FROM Invoice")
+        returns: Invoice[]
+        pagination:
+          type: offset
+          offsetField: startposition
+          limitField: maxresults
+          defaultLimit: 100
+          maxLimit: 1000
+
+  - name: Customer
+    plural: Customers
+    description: Consumers of services or products
+    operations:
+      - name: create
+        method: POST
+        path: /v3/company/{realmId}/customer
+        params:
+          - name: realmId
+            type: string
+            required: true
+            description: Company realm ID
+          - name: DisplayName
+            type: string
+            required: true
+            description: Display name
+          - name: GivenName
+            type: string
+            required: false
+            description: First name
+          - name: FamilyName
+            type: string
+            required: false
+            description: Last name
+          - name: PrimaryEmailAddr
+            type: object
+            required: false
+            description: Email address
+        returns: Customer
+
+      - name: get
+        method: GET
+        path: /v3/company/{realmId}/customer/{customer_id}
+        params:
+          - name: realmId
+            type: string
+            required: true
+            description: Company realm ID
+          - name: customer_id
+            type: string
+            required: true
+            description: Customer ID
+        returns: Customer
+
+      - name: update
+        method: POST
+        path: /v3/company/{realmId}/customer
+        params:
+          - name: realmId
+            type: string
+            required: true
+            description: Company realm ID
+          - name: Id
+            type: string
+            required: true
+            description: Customer ID
+          - name: SyncToken
+            type: string
+            required: true
+            description: Sync token
+          - name: sparse
+            type: boolean
+            required: false
+            description: Partial update if true
+        returns: Customer
+
+      - name: list
+        method: GET
+        path: /v3/company/{realmId}/query
+        params:
+          - name: realmId
+            type: string
+            required: true
+            description: Company realm ID
+          - name: query
+            type: string
+            required: true
+            description: SQL-like query (e.g., "SELECT * FROM Customer")
+        returns: Customer[]
+        pagination:
+          type: offset
+          offsetField: startposition
+          limitField: maxresults
+          defaultLimit: 100
+          maxLimit: 1000
+
+  - name: Payment
+    plural: Payments
+    description: Payment transactions from customers
+    operations:
+      - name: create
+        method: POST
+        path: /v3/company/{realmId}/payment
+        params:
+          - name: realmId
+            type: string
+            required: true
+            description: Company realm ID
+          - name: TotalAmt
+            type: number
+            required: true
+            description: Total payment amount
+          - name: CustomerRef
+            type: object
+            required: true
+            description: Customer reference
+          - name: Line
+            type: array
+            required: false
+            description: Payment line items (invoice links)
+        returns: Payment
+
+      - name: get
+        method: GET
+        path: /v3/company/{realmId}/payment/{payment_id}
+        params:
+          - name: realmId
+            type: string
+            required: true
+            description: Company realm ID
+          - name: payment_id
+            type: string
+            required: true
+            description: Payment ID
+        returns: Payment
+
+      - name: update
+        method: POST
+        path: /v3/company/{realmId}/payment
+        params:
+          - name: realmId
+            type: string
+            required: true
+            description: Company realm ID
+          - name: Id
+            type: string
+            required: true
+            description: Payment ID
+          - name: SyncToken
+            type: string
+            required: true
+            description: Sync token
+        returns: Payment
+
+      - name: list
+        method: GET
+        path: /v3/company/{realmId}/query
+        params:
+          - name: realmId
+            type: string
+            required: true
+            description: Company realm ID
+          - name: query
+            type: string
+            required: true
+            description: SQL-like query (e.g., "SELECT * FROM Payment")
+        returns: Payment[]
+        pagination:
+          type: offset
+          offsetField: startposition
+          limitField: maxresults
+          defaultLimit: 100
+          maxLimit: 1000
+
+  - name: Expense
+    plural: Expenses
+    description: Expense transactions and purchases
+    operations:
+      - name: create
+        method: POST
+        path: /v3/company/{realmId}/purchase
+        params:
+          - name: realmId
+            type: string
+            required: true
+            description: Company realm ID
+          - name: PaymentType
+            type: string
+            required: true
+            description: Payment type (Cash, Check, CreditCard)
+          - name: AccountRef
+            type: object
+            required: true
+            description: Account reference
+          - name: Line
+            type: array
+            required: true
+            description: Expense line items
+        returns: Expense
+
+      - name: get
+        method: GET
+        path: /v3/company/{realmId}/purchase/{expense_id}
+        params:
+          - name: realmId
+            type: string
+            required: true
+            description: Company realm ID
+          - name: expense_id
+            type: string
+            required: true
+            description: Expense ID
+        returns: Expense
+
+      - name: update
+        method: POST
+        path: /v3/company/{realmId}/purchase
+        params:
+          - name: realmId
+            type: string
+            required: true
+            description: Company realm ID
+          - name: Id
+            type: string
+            required: true
+            description: Expense ID
+          - name: SyncToken
+            type: string
+            required: true
+            description: Sync token
+        returns: Expense
+
+      - name: list
+        method: GET
+        path: /v3/company/{realmId}/query
+        params:
+          - name: realmId
+            type: string
+            required: true
+            description: Company realm ID
+          - name: query
+            type: string
+            required: true
+            description: SQL-like query (e.g., "SELECT * FROM Purchase")
+        returns: Expense[]
+        pagination:
+          type: offset
+          offsetField: startposition
+          limitField: maxresults
+          defaultLimit: 100
+          maxLimit: 1000
+
+webhooks:
+  enabled: true
+  signatureHeader: intuit-signature
+  signatureAlgorithm: sha256
+  verificationMethod: signature
+  events:
+    - name: customer.create
+      type: Customer.Create
+      description: Customer was created
+    - name: customer.update
+      type: Customer.Update
+      description: Customer was updated
+    - name: customer.delete
+      type: Customer.Delete
+      description: Customer was deleted
+    - name: invoice.create
+      type: Invoice.Create
+      description: Invoice was created
+    - name: invoice.update
+      type: Invoice.Update
+      description: Invoice was updated
+    - name: invoice.delete
+      type: Invoice.Delete
+      description: Invoice was deleted
+    - name: payment.create
+      type: Payment.Create
+      description: Payment was created
+    - name: payment.update
+      type: Payment.Update
+      description: Payment was updated
+    - name: payment.delete
+      type: Payment.Delete
+      description: Payment was deleted
+
+errors:
+  mapping:
+    - code: AuthenticationFailed
+      type: authentication
+      statusCode: 401
+      message: Authentication failed
+      retryable: false
+    - code: AuthorizationFailed
+      type: authorization
+      statusCode: 403
+      message: Not authorized
+      retryable: false
+    - code: ValidationFault
+      type: validation
+      statusCode: 400
+      message: Validation error
+      retryable: false
+    - code: ObjectNotFound
+      type: not_found
+      statusCode: 404
+      message: Resource not found
+      retryable: false
+    - code: ThrottleExceeded
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+    - code: InternalServerError
+      type: server
+      statusCode: 500
+      message: Internal server error
+      retryable: true
+  retryable: [ThrottleExceeded, InternalServerError, 429, 500, 503]
+  nonRetryable: [AuthenticationFailed, AuthorizationFailed, ValidationFault, ObjectNotFound, 401, 403, 400, 404]
+
+tests:
+  enabled: true
+  cleanup: true
+  scenarios:
+    - name: Customer Management
+      description: Test customer CRUD operations
+      steps:
+        - action: create
+          resource: Customer
+        - action: retrieve
+          resource: Customer
+        - action: update
+          resource: Customer
+        - action: list
+          resource: Customer
+
+    - name: Invoice Management
+      description: Test invoice operations
+      steps:
+        - action: create
+          resource: Invoice
+        - action: retrieve
+          resource: Invoice
+        - action: update
+          resource: Invoice
+        - action: list
+          resource: Invoice
+        - action: delete
+          resource: Invoice
+
+    - name: Payment Processing
+      description: Test payment operations
+      steps:
+        - action: create
+          resource: Payment
+        - action: retrieve
+          resource: Payment
+        - action: list
+          resource: Payment
+
+    - name: Expense Tracking
+      description: Test expense operations
+      steps:
+        - action: create
+          resource: Expense
+        - action: retrieve
+          resource: Expense
+        - action: update
+          resource: Expense
+        - action: list
+          resource: Expense
+
+    - name: Webhook Verification
+      description: Test webhook signature verification
+      steps:
+        - action: assert
+          expects:
+            status: 200
+
+docs:
+  homepage: https://quickbooks.intuit.com
+  apiDocs: https://developer.intuit.com/app/developer/qbo/docs/api/accounting/all-entities/account
+  guides:
+    quickstart: https://developer.intuit.com/app/developer/qbo/docs/get-started
+    webhooks: https://developer.intuit.com/app/developer/qbo/docs/develop/webhooks
+    authentication: https://developer.intuit.com/app/developer/qbo/docs/develop/authentication-and-authorization/oauth-2.0
+---
+
+# QuickBooks Integration
+
+QuickBooks Online is a cloud-based accounting software for small business financial management.
+
+## Features
+
+- **Invoices**: Create and manage sales invoices
+- **Customers**: Manage customer profiles and relationships
+- **Payments**: Track customer payments and receipts
+- **Expenses**: Record purchases and expense transactions
+- **OAuth 2.0**: Secure authentication
+- **Webhooks**: Real-time change notifications with CDC support
+
+## Quick Start
+
+```typescript
+import { QuickbooksClient } from '@dotdo/sdk.do/integrations/quickbooks'
+
+const quickbooks = new QuickbooksClient({
+  clientId: process.env.QUICKBOOKS_CLIENT_ID,
+  clientSecret: process.env.QUICKBOOKS_CLIENT_SECRET,
+  realmId: process.env.QUICKBOOKS_REALM_ID,
+  environment: 'sandbox', // or 'production'
+})
+
+// Create an invoice
+const invoice = await quickbooks.invoice.create({
+  realmId: 'REALM_ID',
+  Line: [
+    {
+      Amount: 100.0,
+      DetailType: 'SalesItemLineDetail',
+      SalesItemLineDetail: {
+        ItemRef: { value: '1' },
+      },
+    },
+  ],
+  CustomerRef: { value: '1' },
+})
+```
+
+## Authentication
+
+QuickBooks uses OAuth 2.0 authentication:
+
+```bash
+export QUICKBOOKS_CLIENT_ID=your_client_id
+export QUICKBOOKS_CLIENT_SECRET=your_client_secret
+export QUICKBOOKS_REALM_ID=your_realm_id
+```
+
+## Resources
+
+### Invoices
+
+Manage sales invoices:
+
+```typescript
+// Create invoice
+const invoice = await quickbooks.invoice.create({
+  realmId: 'REALM_ID',
+  Line: [
+    {
+      Amount: 250.0,
+      DetailType: 'SalesItemLineDetail',
+      SalesItemLineDetail: {
+        ItemRef: { value: '1', name: 'Services' },
+        Qty: 5,
+        UnitPrice: 50,
+      },
+    },
+  ],
+  CustomerRef: { value: '1', name: 'Customer Name' },
+  DueDate: '2025-12-31',
+})
+
+// Get invoice
+const invoice = await quickbooks.invoice.get({
+  realmId: 'REALM_ID',
+  invoice_id: '123',
+})
+
+// Update invoice
+await quickbooks.invoice.update({
+  realmId: 'REALM_ID',
+  Id: '123',
+  SyncToken: '0',
+  sparse: true,
+  Line: [
+    {
+      /* updated line items */
+    },
+  ],
+})
+
+// List invoices
+const invoices = await quickbooks.invoice.list({
+  realmId: 'REALM_ID',
+  query: "SELECT * FROM Invoice WHERE Balance > '0'",
+})
+
+// Delete invoice
+await quickbooks.invoice.delete({
+  realmId: 'REALM_ID',
+  Id: '123',
+  SyncToken: '0',
+})
+```
+
+### Customers
+
+Manage customer profiles:
+
+```typescript
+// Create customer
+const customer = await quickbooks.customer.create({
+  realmId: 'REALM_ID',
+  DisplayName: 'Acme Corporation',
+  GivenName: 'John',
+  FamilyName: 'Doe',
+  PrimaryEmailAddr: {
+    Address: 'john@acme.com',
+  },
+})
+
+// Get customer
+const customer = await quickbooks.customer.get({
+  realmId: 'REALM_ID',
+  customer_id: '1',
+})
+
+// Update customer
+await quickbooks.customer.update({
+  realmId: 'REALM_ID',
+  Id: '1',
+  SyncToken: '0',
+  sparse: true,
+  PrimaryEmailAddr: { Address: 'newemail@acme.com' },
+})
+
+// List customers
+const customers = await quickbooks.customer.list({
+  realmId: 'REALM_ID',
+  query: 'SELECT * FROM Customer WHERE Active = true',
+})
+```
+
+### Payments
+
+Track customer payments:
+
+```typescript
+// Create payment
+const payment = await quickbooks.payment.create({
+  realmId: 'REALM_ID',
+  TotalAmt: 100.0,
+  CustomerRef: { value: '1' },
+  Line: [
+    {
+      Amount: 100.0,
+      LinkedTxn: [
+        {
+          TxnId: '123', // Invoice ID
+          TxnType: 'Invoice',
+        },
+      ],
+    },
+  ],
+})
+
+// Get payment
+const payment = await quickbooks.payment.get({
+  realmId: 'REALM_ID',
+  payment_id: '456',
+})
+
+// List payments
+const payments = await quickbooks.payment.list({
+  realmId: 'REALM_ID',
+  query: "SELECT * FROM Payment WHERE TxnDate >= '2025-01-01'",
+})
+```
+
+### Expenses
+
+Record expense transactions:
+
+```typescript
+// Create expense
+const expense = await quickbooks.expense.create({
+  realmId: 'REALM_ID',
+  PaymentType: 'Cash',
+  AccountRef: { value: '1', name: 'Checking' },
+  Line: [
+    {
+      Amount: 50.0,
+      DetailType: 'AccountBasedExpenseLineDetail',
+      AccountBasedExpenseLineDetail: {
+        AccountRef: { value: '10', name: 'Office Supplies' },
+      },
+    },
+  ],
+})
+
+// Get expense
+const expense = await quickbooks.expense.get({
+  realmId: 'REALM_ID',
+  expense_id: '789',
+})
+
+// List expenses
+const expenses = await quickbooks.expense.list({
+  realmId: 'REALM_ID',
+  query: "SELECT * FROM Purchase WHERE PaymentType = 'Cash'",
+})
+```
+
+## Webhooks
+
+QuickBooks supports webhooks with HMAC-SHA256 signature verification:
+
+```typescript
+import { QuickbooksWebhookHandler, WebhookEventRouter } from '@dotdo/sdk.do/integrations/quickbooks'
+
+const handler = new QuickbooksWebhookHandler(process.env.QUICKBOOKS_WEBHOOK_VERIFIER_TOKEN)
+const event = await handler.handleRequest(request)
+
+const router = new WebhookEventRouter()
+router.onInvoiceCreate(async (event) => {
+  console.log('Invoice created:', event.data)
+})
+
+router.onPaymentCreate(async (event) => {
+  console.log('Payment received:', event.data)
+})
+
+await router.route(event)
+```
+
+### Change Data Capture (CDC)
+
+Use CDC to catch missed webhook events:
+
+```typescript
+// Query for changes since last sync
+const changes = await quickbooks.cdc.query({
+  realmId: 'REALM_ID',
+  entities: ['Invoice', 'Payment', 'Customer'],
+  changedSince: '2025-01-01T00:00:00Z',
+})
+```
+
+## Error Handling
+
+```typescript
+import { QuickbooksError } from '@dotdo/sdk.do/integrations/quickbooks'
+
+try {
+  await quickbooks.invoice.create({
+    /* ... */
+  })
+} catch (error) {
+  if (error instanceof QuickbooksError) {
+    console.error('QuickBooks Error:', error.code, error.message)
+    if (error.isRetriable()) {
+      // Retry logic
+    }
+  }
+}
+```
+
+## Best Practices
+
+1. **Realm ID**: Always pass the company realm ID with every API call
+2. **SyncToken**: Use SyncToken for optimistic locking on updates
+3. **Sparse Updates**: Set `sparse: true` for partial updates
+4. **Query Language**: Use SQL-like syntax for list operations
+5. **Webhooks + CDC**: Combine webhooks with CDC for reliability
+6. **OAuth Refresh**: Refresh tokens expire after 100 days
+7. **Rate Limits**: QuickBooks has per-app rate limits (500 requests/minute)
+
+## API Reference
+
+Full API documentation: https://developer.intuit.com/app/developer/qbo/docs/api/accounting/all-entities/account
+
+## License
+
+MIT

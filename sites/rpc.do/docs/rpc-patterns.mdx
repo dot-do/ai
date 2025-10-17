@@ -1,0 +1,646 @@
+---
+$id: https://rpc.do/docs/rpc-patterns
+$type: TechArticle
+title: RPC Communication Patterns
+description: Common patterns for worker-to-worker RPC communication on Cloudflare
+keywords: [rpc, patterns, distributed, microservices, service-oriented, worker-communication]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# RPC Communication Patterns
+
+Learn common patterns for building distributed systems with rpc.do on Cloudflare Workers.
+
+## Basic Patterns
+
+### Request-Response
+
+The simplest RPC pattern: one worker calls another and waits for a response.
+
+```typescript
+// Client worker
+const client = createRpcClient<DataWorkerRPC.Methods>(env.DATA_SERVICE)
+
+const result = await client.call('getData', { id: '123' })
+console.log(result.data)
+```
+
+**Use Cases**:
+
+- Fetching data from a service
+- Simple calculations or transformations
+- Synchronous operations
+
+**Pros**:
+
+- Simple to implement
+- Easy to debug
+- Predictable flow
+
+**Cons**:
+
+- Blocks until response received
+- No parallelism
+- Single point of failure
+
+### Fire-and-Forget
+
+Send an RPC call without waiting for the response.
+
+```typescript
+// Client worker
+const client = createRpcClient<LogWorkerRPC.Methods>(env.LOG_SERVICE)
+
+// Don't await - fire and forget
+client
+  .call('logEvent', {
+    type: 'user.action',
+    data: { userId: '123', action: 'click' },
+  })
+  .catch((error) => {
+    // Optional: handle errors asynchronously
+    console.error('Failed to log event:', error)
+  })
+
+// Continue processing immediately
+return Response.json({ success: true })
+```
+
+**Use Cases**:
+
+- Logging and analytics
+- Background tasks
+- Non-critical operations
+
+**Pros**:
+
+- Very fast (doesn't block)
+- Good for fire-and-forget operations
+- Improved performance
+
+**Cons**:
+
+- No error feedback
+- No response data
+- Harder to debug
+
+### Fan-Out (Parallel Calls)
+
+Call multiple services in parallel and wait for all responses.
+
+```typescript
+const clients = createWorkerClients(env)
+
+const [userData, orderData, analyticsData] = await Promise.all([
+  clients.user!.call('getUser', { id: userId }),
+  clients.orders!.call('getOrders', { userId }),
+  clients.analytics!.call('getStats', { userId }),
+])
+
+return Response.json({
+  user: userData,
+  orders: orderData,
+  analytics: analyticsData,
+})
+```
+
+**Use Cases**:
+
+- Aggregating data from multiple sources
+- Dashboard queries
+- Data enrichment
+
+**Pros**:
+
+- Fast (parallel execution)
+- Efficient resource usage
+- Scalable
+
+**Cons**:
+
+- Complex error handling
+- All-or-nothing approach
+- Higher memory usage
+
+### Fan-Out with Partial Success
+
+Call multiple services but handle failures gracefully.
+
+```typescript
+const clients = createWorkerClients(env)
+
+const results = await Promise.allSettled([
+  clients.user!.call('getUser', { id: userId }),
+  clients.orders!.call('getOrders', { userId }),
+  clients.analytics!.call('getStats', { userId }),
+])
+
+const response = {
+  user: results[0].status === 'fulfilled' ? results[0].value : null,
+  orders: results[1].status === 'fulfilled' ? results[1].value : null,
+  analytics: results[2].status === 'fulfilled' ? results[2].value : null,
+  errors: results.map((r, i) => (r.status === 'rejected' ? { index: i, error: r.reason } : null)).filter(Boolean),
+}
+
+return Response.json(response)
+```
+
+**Use Cases**:
+
+- Non-critical data aggregation
+- Best-effort operations
+- Resilient systems
+
+**Pros**:
+
+- Graceful degradation
+- Better user experience
+- More resilient
+
+**Cons**:
+
+- Complex response handling
+- Partial data scenarios
+- More error logic
+
+## Advanced Patterns
+
+### Chain Pattern (Sequential RPC)
+
+Call services in sequence, where each call depends on the previous result.
+
+```typescript
+// Step 1: Authenticate user
+const authResult = await authClient.call('authenticate', {
+  token: request.headers.get('Authorization'),
+})
+
+if (!authResult.valid) {
+  return Response.json({ error: 'Unauthorized' }, { status: 401 })
+}
+
+// Step 2: Get user data
+const user = await userClient.call('getUser', {
+  id: authResult.userId,
+})
+
+// Step 3: Get user's orders
+const orders = await orderClient.call('getOrders', {
+  userId: user.id,
+  limit: 10,
+})
+
+// Step 4: Enrich with AI analysis
+const analysis = await aiClient.call('generateText', {
+  prompt: `Analyze purchase patterns for user with ${orders.length} orders`,
+})
+
+return Response.json({
+  user,
+  orders,
+  analysis: analysis.text,
+})
+```
+
+**Use Cases**:
+
+- Multi-step workflows
+- Dependent operations
+- Data pipelines
+
+**Pros**:
+
+- Clear control flow
+- Easy to understand
+- Atomic operations
+
+**Cons**:
+
+- Slower (sequential)
+- Higher latency
+- Single point of failure
+
+### Saga Pattern
+
+Implement distributed transactions with compensating actions.
+
+```typescript
+async function processOrder(orderId: string, env: Env) {
+  const clients = createWorkerClients(env)
+  const compensations: Array<() => Promise<void>> = []
+
+  try {
+    // Step 1: Reserve inventory
+    const inventory = await clients.inventory!.call('reserve', {
+      orderId,
+      items: orderItems,
+    })
+    compensations.push(() => clients.inventory!.call('release', { reservationId: inventory.id }))
+
+    // Step 2: Charge payment
+    const payment = await clients.payment!.call('charge', {
+      orderId,
+      amount: orderTotal,
+    })
+    compensations.push(() => clients.payment!.call('refund', { paymentId: payment.id }))
+
+    // Step 3: Create shipment
+    const shipment = await clients.shipping!.call('createShipment', {
+      orderId,
+      address: shippingAddress,
+    })
+
+    return { success: true, orderId, shipmentId: shipment.id }
+  } catch (error) {
+    // Rollback: execute compensating actions in reverse order
+    console.error('Order processing failed, rolling back:', error)
+
+    for (const compensate of compensations.reverse()) {
+      try {
+        await compensate()
+      } catch (rollbackError) {
+        console.error('Compensation failed:', rollbackError)
+      }
+    }
+
+    throw error
+  }
+}
+```
+
+**Use Cases**:
+
+- Distributed transactions
+- Order processing
+- Multi-service workflows
+
+**Pros**:
+
+- Maintains consistency
+- Handles failures gracefully
+- Recoverable
+
+**Cons**:
+
+- Complex implementation
+- Compensation logic required
+- Not truly atomic
+
+### Circuit Breaker
+
+Prevent cascading failures by stopping calls to failing services.
+
+```typescript
+class CircuitBreaker {
+  private failures = 0
+  private lastFailure = 0
+  private readonly threshold = 5
+  private readonly timeout = 60000 // 1 minute
+
+  async call<T>(fn: () => Promise<T>): Promise<T> {
+    // Check if circuit is open
+    if (this.failures >= this.threshold) {
+      const timeSinceLastFailure = Date.now() - this.lastFailure
+
+      if (timeSinceLastFailure < this.timeout) {
+        throw new Error('Circuit breaker is open')
+      }
+
+      // Try to reset circuit
+      this.failures = 0
+    }
+
+    try {
+      const result = await fn()
+      this.failures = 0 // Reset on success
+      return result
+    } catch (error) {
+      this.failures++
+      this.lastFailure = Date.now()
+      throw error
+    }
+  }
+}
+
+// Usage
+const breaker = new CircuitBreaker()
+
+const result = await breaker.call(() => client.call('getData', { id: '123' }))
+```
+
+**Use Cases**:
+
+- Protecting against cascading failures
+- Improving system resilience
+- Degraded mode operations
+
+**Pros**:
+
+- Prevents cascading failures
+- Fast failure detection
+- System protection
+
+**Cons**:
+
+- Added complexity
+- May reject valid requests
+- Requires tuning
+
+### Request Coalescing
+
+Batch multiple identical requests into a single RPC call.
+
+```typescript
+class RequestCoalescer<T> {
+  private pending = new Map<string, Promise<T>>()
+
+  async coalesce(key: string, fn: () => Promise<T>): Promise<T> {
+    // Check if request is already pending
+    if (this.pending.has(key)) {
+      return this.pending.get(key)!
+    }
+
+    // Create new request
+    const promise = fn().finally(() => {
+      this.pending.delete(key)
+    })
+
+    this.pending.set(key, promise)
+    return promise
+  }
+}
+
+// Usage
+const coalescer = new RequestCoalescer<UserData>()
+
+// Multiple concurrent requests for same user
+const [user1, user2, user3] = await Promise.all([
+  coalescer.coalesce('user-123', () => userClient.call('getUser', { id: '123' })),
+  coalescer.coalesce('user-123', () => userClient.call('getUser', { id: '123' })),
+  coalescer.coalesce('user-123', () => userClient.call('getUser', { id: '123' })),
+])
+
+// Only one actual RPC call made!
+```
+
+**Use Cases**:
+
+- Reducing duplicate requests
+- Optimizing high-traffic endpoints
+- Improving cache efficiency
+
+**Pros**:
+
+- Reduces load on services
+- Better performance
+- Lower costs
+
+**Cons**:
+
+- Complex implementation
+- Memory overhead
+- Timing considerations
+
+## Service-Oriented Patterns
+
+### API Gateway
+
+Single entry point that routes requests to multiple backend services.
+
+```typescript
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const url = new URL(request.url)
+    const clients = createWorkerClients(env)
+
+    // Route based on path
+    if (url.pathname.startsWith('/api/users')) {
+      return handleUserRequest(request, clients.user!)
+    }
+
+    if (url.pathname.startsWith('/api/orders')) {
+      return handleOrderRequest(request, clients.orders!)
+    }
+
+    if (url.pathname.startsWith('/api/ai')) {
+      return handleAIRequest(request, clients.ai!)
+    }
+
+    return Response.json({ error: 'Not found' }, { status: 404 })
+  },
+}
+
+async function handleUserRequest(request: Request, client: TypedRpcClient<UserWorkerRPC.Methods>): Promise<Response> {
+  const url = new URL(request.url)
+  const userId = url.pathname.split('/')[3]
+
+  const user = await client.call('getUser', { id: userId })
+  return Response.json(user)
+}
+```
+
+**Use Cases**:
+
+- Single API entry point
+- Request routing
+- Authentication/authorization
+
+**Pros**:
+
+- Centralized control
+- Easy to add middleware
+- Simplified client integration
+
+**Cons**:
+
+- Single point of failure
+- Potential bottleneck
+- Added latency
+
+### Backend for Frontend (BFF)
+
+Dedicated backend worker optimized for specific frontend needs.
+
+```typescript
+// Mobile BFF
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const clients = createWorkerClients(env)
+
+    // Optimized for mobile: minimal data, single request
+    const [user, notifications, inbox] = await Promise.all([
+      clients.user!.call('getUser', { id: userId, fields: ['id', 'name', 'avatar'] }),
+      clients.notifications!.call('getNotifications', { userId, limit: 5 }),
+      clients.inbox!.call('getMessages', { userId, limit: 10, unreadOnly: true }),
+    ])
+
+    return Response.json({
+      user,
+      unreadNotifications: notifications.filter((n) => !n.read).length,
+      unreadMessages: inbox.length,
+    })
+  },
+}
+```
+
+**Use Cases**:
+
+- Mobile vs web optimization
+- Client-specific APIs
+- Aggregation layers
+
+**Pros**:
+
+- Optimized for client needs
+- Reduced client complexity
+- Better performance
+
+**Cons**:
+
+- Duplicate code
+- More services to maintain
+- Potential inconsistencies
+
+### Service Mesh
+
+Worker-to-worker communication with observability and control.
+
+```typescript
+// Service mesh interceptor
+async function meshCall<T>(serviceName: string, method: string, params: any, client: TypedRpcClient<any>): Promise<T> {
+  const startTime = Date.now()
+  const traceId = crypto.randomUUID()
+
+  console.log(`[${traceId}] Calling ${serviceName}.${method}`)
+
+  try {
+    const result = await client.call(method, params)
+    const duration = Date.now() - startTime
+
+    // Log metrics
+    console.log(`[${traceId}] ${serviceName}.${method} completed in ${duration}ms`)
+
+    // Track in analytics
+    await trackMetric({
+      service: serviceName,
+      method,
+      duration,
+      success: true,
+    })
+
+    return result
+  } catch (error) {
+    const duration = Date.now() - startTime
+
+    console.error(`[${traceId}] ${serviceName}.${method} failed after ${duration}ms:`, error)
+
+    // Track failure
+    await trackMetric({
+      service: serviceName,
+      method,
+      duration,
+      success: false,
+      error: String(error),
+    })
+
+    throw error
+  }
+}
+```
+
+**Use Cases**:
+
+- Observability
+- Distributed tracing
+- Service monitoring
+
+**Pros**:
+
+- Full visibility
+- Centralized monitoring
+- Better debugging
+
+**Cons**:
+
+- Performance overhead
+- Complex implementation
+- More infrastructure
+
+## Performance Patterns
+
+### Caching Layer
+
+Add caching to reduce RPC calls.
+
+```typescript
+class CachedRpcClient<T> {
+  private cache = new Map<string, { data: T; expires: number }>()
+
+  constructor(
+    private client: TypedRpcClient<any>,
+    private ttl: number = 60000 // 1 minute
+  ) {}
+
+  async call(method: string, params: any): Promise<T> {
+    const cacheKey = `${method}:${JSON.stringify(params)}`
+    const cached = this.cache.get(cacheKey)
+
+    if (cached && cached.expires > Date.now()) {
+      return cached.data
+    }
+
+    const result = await this.client.call(method, params)
+
+    this.cache.set(cacheKey, {
+      data: result,
+      expires: Date.now() + this.ttl,
+    })
+
+    return result
+  }
+}
+```
+
+### Retry with Exponential Backoff
+
+Automatically retry failed RPC calls.
+
+```typescript
+async function retryRpc<T>(fn: () => Promise<T>, maxRetries: number = 3, baseDelay: number = 1000): Promise<T> {
+  let lastError: Error | undefined
+
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn()
+    } catch (error) {
+      lastError = error as Error
+      const delay = baseDelay * Math.pow(2, i)
+      await new Promise((resolve) => setTimeout(resolve, delay))
+    }
+  }
+
+  throw lastError
+}
+
+// Usage
+const result = await retryRpc(() => client.call('getData', { id: '123' }))
+```
+
+## Best Practices
+
+1. **Use Timeouts**: Always set timeouts for RPC calls
+2. **Handle Failures**: Implement proper error handling and retries
+3. **Monitor Performance**: Track RPC call latency and success rates
+4. **Use Circuit Breakers**: Protect against cascading failures
+5. **Cache Aggressively**: Reduce unnecessary RPC calls
+6. **Version APIs**: Plan for API evolution
+7. **Batch When Possible**: Combine multiple requests
+8. **Use Parallel Calls**: Leverage Promise.all for independent operations
+
+## See Also
+
+- [Service Objects](./service-objects) - Stateful RPC with Durable Objects
+- [API Reference](../api/) - Complete API documentation
+- [Examples](../examples/) - Real-world implementations

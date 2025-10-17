@@ -1,0 +1,714 @@
+---
+$id: https://events.do/docs/listeners
+$type: TechArticle
+title: Event Listeners with on
+description: Subscribe to and react to business events using the on function
+keywords: [event-listeners, on, subscribe, react, event-handling]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Event Listeners with `on`
+
+Event listeners allow you to subscribe to business events and execute logic when they occur. The `on` function provides a powerful, flexible way to build event-driven applications.
+
+## Basic Usage
+
+```typescript
+import { on } from 'sdk.do'
+
+on('Order.created', async (event) => {
+  console.log('New order:', event.data)
+})
+```
+
+## Function Signature
+
+```typescript
+function on(pattern: string | string[], handler: EventHandler, options?: ListenerOptions): UnsubscribeFunction
+
+type EventHandler = (event: Event) => Promise<void> | void
+
+interface Event<T = any> {
+  type: string
+  data: T
+  metadata?: EventMetadata
+}
+
+interface ListenerOptions {
+  priority?: number
+  filter?: (event: Event) => boolean
+  retry?: RetryOptions
+}
+```
+
+## Event Patterns
+
+### Single Event
+
+Listen to a specific event:
+
+```typescript
+on('Order.created', async (event) => {
+  await processOrder(event.data)
+})
+```
+
+### Multiple Events
+
+Listen to multiple events with the same handler:
+
+```typescript
+on(['Order.created', 'Order.updated'], async (event) => {
+  await syncToAnalytics(event)
+})
+```
+
+### Wildcard Patterns
+
+Listen to all events matching a pattern:
+
+```typescript
+// All Order events
+on('Order.*', async (event) => {
+  await auditOrderEvent(event)
+})
+
+// All events
+on('*', async (event) => {
+  await logAllEvents(event)
+})
+
+// Events matching pattern
+on('*.created', async (event) => {
+  await trackCreationMetrics(event)
+})
+```
+
+### Semantic Patterns
+
+Use semantic `$.Subject.predicate.Object` patterns:
+
+```typescript
+import $, { on } from 'sdk.do'
+
+on($.Order.created, async (event) => {
+  // Full semantic context available
+  const order = event.data
+})
+```
+
+## Event Handler
+
+### Basic Handler
+
+```typescript
+on('Order.created', async (event) => {
+  // Access event type
+  console.log(event.type) // 'Order.created'
+
+  // Access event data
+  console.log(event.data) // { id, customer, items, total }
+
+  // Access metadata
+  console.log(event.metadata) // { timestamp, source, userId }
+})
+```
+
+### Typed Handler
+
+Define types for better IDE support:
+
+```typescript
+import type { Event } from 'sdk.do'
+
+interface OrderData {
+  id: string
+  customer: string
+  items: Array<{ product: string; quantity: number; price: number }>
+  total: number
+}
+
+on('Order.created', async (event: Event<OrderData>) => {
+  // TypeScript knows event.data structure
+  const orderId = event.data.id
+  const total = event.data.total
+})
+```
+
+### Handler Return Values
+
+Handlers can return void or Promise<void>:
+
+```typescript
+// Async handler (recommended)
+on('Order.created', async (event) => {
+  await processOrder(event.data)
+})
+
+// Sync handler
+on('Order.created', (event) => {
+  console.log('Order received:', event.data.id)
+})
+```
+
+## Listener Options
+
+### Priority
+
+Control execution order when multiple listeners exist:
+
+```typescript
+// High priority - runs first
+on('Order.created', criticalHandler, { priority: 10 })
+
+// Normal priority (default = 0)
+on('Order.created', normalHandler)
+
+// Low priority - runs last
+on('Order.created', loggingHandler, { priority: -10 })
+```
+
+### Filtering
+
+Filter events before handler execution:
+
+```typescript
+on(
+  'Order.created',
+  async (event) => {
+    await processHighValueOrder(event.data)
+  },
+  {
+    filter: (event) => event.data.total > 10000,
+  }
+)
+
+// Only handle orders from specific customers
+on(
+  'Order.created',
+  async (event) => {
+    await specialProcessing(event.data)
+  },
+  {
+    filter: (event) => event.data.customer === 'premium-customer',
+  }
+)
+```
+
+### Retry Options
+
+Configure retry behavior for failed handlers:
+
+```typescript
+on(
+  'Order.created',
+  async (event) => {
+    await unreliableExternalAPI(event.data)
+  },
+  {
+    retry: {
+      maxAttempts: 3,
+      delayMs: 1000,
+      backoff: 'exponential', // or 'linear', 'constant'
+    },
+  }
+)
+```
+
+## Error Handling
+
+### Try-Catch
+
+Handle errors within the handler:
+
+```typescript
+on('Order.created', async (event) => {
+  try {
+    await processOrder(event.data)
+  } catch (error) {
+    console.error('Failed to process order:', error)
+
+    // Publish error event
+    await send('Order.processingFailed', {
+      orderId: event.data.id,
+      error: error.message,
+    })
+  }
+})
+```
+
+### Error Events
+
+Publish specific error events:
+
+```typescript
+on('Payment.requested', async (event) => {
+  try {
+    const result = await processPayment(event.data)
+
+    if (result.success) {
+      await send('Payment.completed', result)
+    } else {
+      await send('Payment.failed', {
+        ...event.data,
+        reason: result.reason,
+      })
+    }
+  } catch (error) {
+    await send('Payment.error', {
+      ...event.data,
+      error: error.message,
+    })
+  }
+})
+```
+
+### Global Error Handler
+
+Set up a global error handler:
+
+```typescript
+import { onError } from 'sdk.do'
+
+onError(async (error, event, handler) => {
+  console.error('Event handler error:', {
+    error: error.message,
+    event: event.type,
+    handler: handler.name,
+  })
+
+  // Report to error tracking service
+  await reportError(error, event)
+})
+```
+
+## Unsubscribing
+
+### Manual Unsubscribe
+
+```typescript
+// on() returns an unsubscribe function
+const unsubscribe = on('Order.created', handler)
+
+// Later, unsubscribe
+unsubscribe()
+```
+
+### Conditional Unsubscribe
+
+```typescript
+let count = 0
+const unsubscribe = on('Order.created', async (event) => {
+  count++
+
+  if (count >= 10) {
+    unsubscribe() // Stop listening after 10 orders
+  }
+})
+```
+
+### Cleanup on Shutdown
+
+```typescript
+const subscriptions = []
+
+// Register listeners
+subscriptions.push(on('Order.created', handler1))
+subscriptions.push(on('Payment.completed', handler2))
+subscriptions.push(on('User.registered', handler3))
+
+// Cleanup on shutdown
+process.on('SIGTERM', () => {
+  subscriptions.forEach((unsubscribe) => unsubscribe())
+})
+```
+
+## Common Patterns
+
+### State Machine
+
+Implement state machines with event listeners:
+
+```typescript
+on('Order.created', async (event) => {
+  await send('Order.pending', event.data)
+})
+
+on('Order.pending', async (event) => {
+  const validated = await validateOrder(event.data)
+
+  if (validated) {
+    await send('Order.validated', event.data)
+  } else {
+    await send('Order.rejected', event.data)
+  }
+})
+
+on('Order.validated', async (event) => {
+  await send('Payment.requested', {
+    orderId: event.data.id,
+    amount: event.data.total,
+  })
+})
+
+on('Payment.completed', async (event) => {
+  await send('Order.paid', {
+    orderId: event.data.orderId,
+  })
+})
+
+on('Order.paid', async (event) => {
+  await send('Order.shipped', event.data)
+})
+```
+
+### Saga Pattern
+
+Implement distributed transactions:
+
+```typescript
+// Start saga
+on('Order.created', async (event) => {
+  const sagaId = generateSagaId()
+
+  try {
+    // Step 1: Reserve inventory
+    await send('Inventory.reserved', {
+      sagaId,
+      orderId: event.data.id,
+      items: event.data.items,
+    })
+  } catch (error) {
+    await send('Order.saga.failed', { sagaId, step: 'inventory' })
+  }
+})
+
+on('Inventory.reserved', async (event) => {
+  try {
+    // Step 2: Process payment
+    await send('Payment.processed', {
+      sagaId: event.data.sagaId,
+      orderId: event.data.orderId,
+      amount: event.data.amount,
+    })
+  } catch (error) {
+    // Compensate: Release inventory
+    await send('Inventory.released', event.data)
+    await send('Order.saga.failed', { sagaId: event.data.sagaId, step: 'payment' })
+  }
+})
+
+on('Payment.processed', async (event) => {
+  // Step 3: Complete order
+  await send('Order.completed', {
+    sagaId: event.data.sagaId,
+    orderId: event.data.orderId,
+  })
+})
+```
+
+### Fan-Out Pattern
+
+Distribute work across multiple handlers:
+
+```typescript
+// One event triggers multiple actions
+on('Order.created', async (event) => {
+  // Each handler runs independently
+})
+
+on('Order.created', async (event) => {
+  await sendOrderConfirmation(event.data)
+})
+
+on('Order.created', async (event) => {
+  await updateInventory(event.data)
+})
+
+on('Order.created', async (event) => {
+  await notifyWarehouse(event.data)
+})
+
+on('Order.created', async (event) => {
+  await trackAnalytics(event.data)
+})
+```
+
+### Aggregation Pattern
+
+Collect related events:
+
+```typescript
+const orderEvents = new Map()
+
+on('Order.*', async (event) => {
+  const orderId = event.data.id || event.data.orderId
+
+  if (!orderEvents.has(orderId)) {
+    orderEvents.set(orderId, [])
+  }
+
+  orderEvents.get(orderId).push(event)
+
+  // Check if order is complete
+  if (isOrderComplete(orderEvents.get(orderId))) {
+    await send('Order.aggregate.complete', {
+      orderId,
+      events: orderEvents.get(orderId),
+    })
+
+    // Clean up
+    orderEvents.delete(orderId)
+  }
+})
+```
+
+### Debouncing
+
+Debounce rapid events:
+
+```typescript
+import { debounce } from 'lodash'
+
+const debouncedHandler = debounce(async (event) => {
+  await syncToDatabase(event.data)
+}, 1000)
+
+on('User.updated', debouncedHandler)
+```
+
+### Throttling
+
+Throttle high-frequency events:
+
+```typescript
+import { throttle } from 'lodash'
+
+const throttledHandler = throttle(async (event) => {
+  await updateMetrics(event.data)
+}, 5000)
+
+on('Metrics.updated', throttledHandler)
+```
+
+## Performance Considerations
+
+### Avoid Blocking Operations
+
+```typescript
+// ❌ Bad - blocking operation
+on('Order.created', async (event) => {
+  await longRunningTask(event.data) // Blocks other handlers
+})
+
+// ✅ Good - offload to background job
+on('Order.created', async (event) => {
+  await enqueueJob('process-order', event.data)
+})
+```
+
+### Parallel Processing
+
+Process independent operations in parallel:
+
+```typescript
+on('Order.created', async (event) => {
+  // ❌ Bad - sequential
+  await sendEmail(event.data)
+  await updateAnalytics(event.data)
+  await notifyWebhook(event.data)
+
+  // ✅ Good - parallel
+  await Promise.all([sendEmail(event.data), updateAnalytics(event.data), notifyWebhook(event.data)])
+})
+```
+
+### Batch Processing
+
+Batch multiple events:
+
+```typescript
+const eventBatch = []
+
+on('Metrics.updated', async (event) => {
+  eventBatch.push(event)
+
+  if (eventBatch.length >= 100) {
+    await processBatch(eventBatch)
+    eventBatch.length = 0
+  }
+})
+
+// Flush remaining events periodically
+setInterval(() => {
+  if (eventBatch.length > 0) {
+    processBatch(eventBatch)
+    eventBatch.length = 0
+  }
+}, 60000) // Every minute
+```
+
+## Testing
+
+### Unit Testing
+
+```typescript
+import { on, send } from 'sdk.do'
+import { expect, test } from 'vitest'
+
+test('handles order creation', async () => {
+  let handled = false
+
+  on('Order.created', async (event) => {
+    handled = true
+    expect(event.data.id).toBe('12345')
+  })
+
+  await send('Order.created', { id: '12345' })
+
+  expect(handled).toBe(true)
+})
+```
+
+### Integration Testing
+
+```typescript
+import { on, send } from 'sdk.do'
+import { expect, test } from 'vitest'
+
+test('order workflow', async () => {
+  const events = []
+
+  on('Order.*', async (event) => {
+    events.push(event.type)
+  })
+
+  await send('Order.created', { id: '12345' })
+  await send('Order.validated', { id: '12345' })
+  await send('Order.shipped', { id: '12345' })
+
+  expect(events).toEqual(['Order.created', 'Order.validated', 'Order.shipped'])
+})
+```
+
+### Mock Handlers
+
+```typescript
+import { on } from 'sdk.do'
+import { vi } from 'vitest'
+
+test('calls handler', async () => {
+  const handler = vi.fn()
+
+  on('Order.created', handler)
+
+  await send('Order.created', { id: '12345' })
+
+  expect(handler).toHaveBeenCalledWith(
+    expect.objectContaining({
+      type: 'Order.created',
+      data: { id: '12345' },
+    })
+  )
+})
+```
+
+## Best Practices
+
+1. **Register early**: Register listeners on application startup
+2. **Handle errors**: Always handle errors gracefully
+3. **Keep handlers focused**: One handler, one responsibility
+4. **Use types**: Define TypeScript interfaces for events
+5. **Add logging**: Log handler execution for debugging
+6. **Test thoroughly**: Write tests for event handlers
+7. **Document patterns**: Document complex event chains
+8. **Monitor performance**: Track handler execution time
+9. **Cleanup resources**: Unsubscribe when needed
+10. **Use semantic names**: Follow `Object.Action` pattern
+
+## Advanced Topics
+
+### Event Sourcing
+
+Store events as the source of truth:
+
+```typescript
+on('*', async (event) => {
+  await db.create($.EventStore, {
+    eventType: event.type,
+    eventData: event.data,
+    metadata: event.metadata,
+    timestamp: new Date(),
+  })
+})
+
+// Rebuild state from events
+async function rebuildState(entityId: string) {
+  const events = await db.list($.EventStore, {
+    where: { entityId },
+    orderBy: { timestamp: 'asc' },
+  })
+
+  return events.reduce((state, event) => {
+    return applyEvent(state, event)
+  }, initialState)
+}
+```
+
+### CQRS Pattern
+
+Separate read and write models:
+
+```typescript
+// Write side - handle commands
+on('Order.create', async (event) => {
+  // Validate and create order
+  const order = await createOrder(event.data)
+
+  // Publish event
+  await send('Order.created', order)
+})
+
+// Read side - update projections
+on('Order.created', async (event) => {
+  // Update read model
+  await updateOrderProjection(event.data)
+})
+
+on('Order.updated', async (event) => {
+  await updateOrderProjection(event.data)
+})
+```
+
+### Event Versioning
+
+Handle different event versions:
+
+```typescript
+on('Order.created', async (event) => {
+  const version = event.metadata?.version || 1
+
+  switch (version) {
+    case 1:
+      await handleOrderV1(event.data)
+      break
+    case 2:
+      await handleOrderV2(event.data)
+      break
+    case 3:
+      await handleOrderV3(event.data)
+      break
+    default:
+      throw new Error(`Unsupported version: ${version}`)
+  }
+})
+```
+
+## See Also
+
+- [Event Publishers](./publishers) - Publishing events with `send`
+- [Getting Started](./getting-started) - Basic setup and usage
+- [API Reference](../api/) - Complete API documentation
+- [Examples](../examples/) - Real-world examples

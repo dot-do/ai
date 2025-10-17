@@ -1,0 +1,924 @@
+---
+$id: https://mcp.do/examples/claude-workflow
+$type: HowTo
+title: Claude Workflow Examples
+description: Complete workflow examples showing Claude using mcp.do for complex business processes
+keywords: [claude, workflow, automation, business process, mcp]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Claude Workflow Examples
+
+Complete workflow examples showing Claude using mcp.do for complex business processes.
+
+## Overview
+
+These examples demonstrate end-to-end workflows where Claude orchestrates multiple operations using the `do` tool. Each workflow combines database operations, AI generation, event handling, and external API integration to accomplish complete business processes.
+
+## Customer Onboarding Workflow
+
+**Scenario**: Automate the complete customer onboarding process.
+
+**Prompt to Claude**:
+
+```
+Create a customer onboarding workflow:
+1. Create a new customer in the database
+2. Generate a personalized welcome email
+3. Set up initial billing
+4. Create onboarding tasks
+5. Send welcome notification
+```
+
+**Claude's Response and Execution**:
+
+"I'll create a comprehensive customer onboarding workflow using the do tool."
+
+```typescript
+import $, { db, ai, send } from 'sdk.do'
+
+// Step 1: Create customer
+const customer = await db.create($.Customer, {
+  name: 'John Doe',
+  email: 'john@example.com',
+  company: 'Acme Corp',
+  plan: 'professional',
+  status: 'active',
+  signupDate: new Date(),
+})
+
+// Step 2: Generate personalized welcome email
+const welcomeEmail = await ai.generate({
+  prompt: `Write a personalized welcome email for ${customer.name} at ${customer.company}.
+    They signed up for our ${customer.plan} plan.
+    Be warm, professional, and highlight key features.`,
+  schema: $.EmailMessage,
+  model: 'gpt-5',
+})
+
+// Step 3: Set up initial billing
+const billing = await db.create($.BillingAccount, {
+  customer: customer.$id,
+  plan: customer.plan,
+  status: 'active',
+  nextBillingDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+  amount: customer.plan === 'professional' ? 99 : 49,
+})
+
+// Step 4: Create onboarding tasks
+const tasks = ['Complete profile setup', 'Connect integrations', 'Invite team members', 'Configure preferences']
+
+const createdTasks = await Promise.all(
+  tasks.map((task, index) =>
+    db.create($.Task, {
+      customer: customer.$id,
+      title: task,
+      status: 'pending',
+      order: index,
+      dueDate: new Date(Date.now() + (index + 1) * 24 * 60 * 60 * 1000),
+    })
+  )
+)
+
+// Step 5: Send welcome notification
+await send($.Customer.onboarded, {
+  customerId: customer.$id,
+  email: welcomeEmail,
+  tasks: createdTasks.map((t) => t.$id),
+})
+
+// Return summary
+return {
+  success: true,
+  customer: {
+    id: customer.$id,
+    name: customer.name,
+    email: customer.email,
+  },
+  billing: {
+    id: billing.$id,
+    plan: billing.plan,
+    amount: billing.amount,
+  },
+  tasksCreated: createdTasks.length,
+  emailReady: true,
+}
+```
+
+"Customer onboarding workflow completed successfully!"
+
+## Content Marketing Campaign
+
+**Scenario**: Generate and publish a complete marketing campaign.
+
+**Prompt to Claude**:
+
+```
+Create a content marketing campaign for our new AI product:
+1. Generate blog post
+2. Create social media posts
+3. Generate email newsletter
+4. Create landing page copy
+5. Schedule publication
+```
+
+**Claude's Execution**:
+
+```typescript
+import $, { db, ai, every } from 'sdk.do'
+
+const productName = 'AI Analytics Pro'
+const productDescription = 'Advanced AI-powered analytics platform for businesses'
+
+// Step 1: Generate blog post
+const blogPost = await ai.generate({
+  prompt: `Write a comprehensive blog post introducing ${productName}.
+    Product: ${productDescription}
+    Include: benefits, use cases, features, and call-to-action.
+    Target audience: Business leaders and data analysts.`,
+  schema: $.BlogPost,
+  model: 'gpt-5',
+})
+
+const savedBlogPost = await db.create($.BlogPost, {
+  title: blogPost.title,
+  content: blogPost.content,
+  excerpt: blogPost.excerpt,
+  status: 'draft',
+  category: 'product-launch',
+  publishDate: new Date(Date.now() + 24 * 60 * 60 * 1000),
+})
+
+// Step 2: Create social media posts
+const socialPlatforms = ['twitter', 'linkedin', 'facebook']
+const socialPosts = []
+
+for (const platform of socialPlatforms) {
+  const post = await ai.generate({
+    prompt: `Create a ${platform} post promoting ${productName}.
+      Blog post excerpt: ${blogPost.excerpt}
+      Keep it concise and engaging for ${platform}.`,
+    schema: $.SocialPost,
+    model: 'gpt-5',
+  })
+
+  const saved = await db.create($.SocialPost, {
+    platform,
+    content: post.content,
+    hashtags: post.hashtags,
+    scheduledDate: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    status: 'scheduled',
+  })
+
+  socialPosts.push(saved)
+}
+
+// Step 3: Generate email newsletter
+const newsletter = await ai.generate({
+  prompt: `Create an email newsletter announcing ${productName}.
+    Include: headline, preview text, main content, and CTA.
+    Based on blog post: ${blogPost.title}`,
+  schema: $.EmailNewsletter,
+  model: 'gpt-5',
+})
+
+const savedNewsletter = await db.create($.EmailCampaign, {
+  subject: newsletter.subject,
+  previewText: newsletter.previewText,
+  content: newsletter.content,
+  audience: 'all-subscribers',
+  scheduledDate: new Date(Date.now() + 24 * 60 * 60 * 1000),
+  status: 'scheduled',
+})
+
+// Step 4: Create landing page copy
+const landingPage = await ai.generate({
+  prompt: `Create landing page copy for ${productName}.
+    Include: hero headline, subheadline, features, benefits, social proof, CTA.
+    Product: ${productDescription}`,
+  schema: $.LandingPage,
+  model: 'gpt-5',
+})
+
+const savedLandingPage = await db.create($.LandingPage, {
+  name: `${productName} Launch`,
+  headline: landingPage.headline,
+  subheadline: landingPage.subheadline,
+  features: landingPage.features,
+  benefits: landingPage.benefits,
+  cta: landingPage.cta,
+  status: 'draft',
+})
+
+// Step 5: Schedule publication workflow
+every('0 10 * * *', async () => {
+  // Check for content scheduled for today
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  // Publish blog posts
+  const postsToPublish = await db.list($.BlogPost, {
+    where: {
+      status: 'draft',
+      publishDate: { $lte: today },
+    },
+  })
+
+  for (const post of postsToPublish) {
+    await db.update($.BlogPost, post.$id, { status: 'published' })
+  }
+})
+
+return {
+  success: true,
+  campaign: {
+    product: productName,
+    blogPost: savedBlogPost.$id,
+    socialPosts: socialPosts.length,
+    newsletter: savedNewsletter.$id,
+    landingPage: savedLandingPage.$id,
+    publishDate: new Date(Date.now() + 24 * 60 * 60 * 1000),
+  },
+}
+```
+
+## Sales Analytics Dashboard
+
+**Scenario**: Generate a comprehensive sales analytics report.
+
+**Prompt to Claude**:
+
+```
+Create a sales analytics dashboard:
+1. Query sales data from last 30 days
+2. Calculate key metrics
+3. Generate AI insights
+4. Create visualizations data
+5. Save dashboard report
+```
+
+**Claude's Execution**:
+
+```typescript
+import $, { db, ai } from 'sdk.do'
+
+// Step 1: Query sales data
+const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+
+const salesData = await db.query(
+  `
+  SELECT
+    DATE(created_at) as date,
+    COUNT(*) as order_count,
+    SUM(amount) as revenue,
+    AVG(amount) as avg_order_value
+  FROM orders
+  WHERE created_at >= ?
+  GROUP BY DATE(created_at)
+  ORDER BY date ASC
+`,
+  [thirtyDaysAgo]
+)
+
+const categoryData = await db.query(
+  `
+  SELECT
+    category,
+    COUNT(*) as orders,
+    SUM(amount) as revenue
+  FROM orders
+  WHERE created_at >= ?
+  GROUP BY category
+  ORDER BY revenue DESC
+`,
+  [thirtyDaysAgo]
+)
+
+// Step 2: Calculate key metrics
+const totalRevenue = salesData.reduce((sum, day) => sum + day.revenue, 0)
+const totalOrders = salesData.reduce((sum, day) => sum + day.order_count, 0)
+const avgOrderValue = totalRevenue / totalOrders
+const growthRate = ((salesData[salesData.length - 1].revenue - salesData[0].revenue) / salesData[0].revenue) * 100
+
+const metrics = {
+  totalRevenue,
+  totalOrders,
+  avgOrderValue,
+  growthRate: Math.round(growthRate * 100) / 100,
+  topCategory: categoryData[0]?.category,
+  topCategoryRevenue: categoryData[0]?.revenue,
+}
+
+// Step 3: Generate AI insights
+const insights = await ai.generate({
+  prompt: `Analyze these sales metrics and provide actionable insights:
+
+    Period: Last 30 days
+    Total Revenue: $${metrics.totalRevenue}
+    Total Orders: ${metrics.totalOrders}
+    Average Order Value: $${metrics.avgOrderValue}
+    Growth Rate: ${metrics.growthRate}%
+    Top Category: ${metrics.topCategory} ($${metrics.topCategoryRevenue})
+
+    Provide:
+    1. Key trends and patterns
+    2. Areas of concern
+    3. Growth opportunities
+    4. Actionable recommendations`,
+  schema: $.AnalyticsInsights,
+  model: 'gpt-5',
+})
+
+// Step 4: Create visualizations data
+const chartData = {
+  dailyRevenue: {
+    type: 'line',
+    data: salesData.map((day) => ({
+      date: day.date,
+      revenue: day.revenue,
+    })),
+  },
+  categoryBreakdown: {
+    type: 'pie',
+    data: categoryData.map((cat) => ({
+      category: cat.category,
+      revenue: cat.revenue,
+      percentage: ((cat.revenue / totalRevenue) * 100).toFixed(1),
+    })),
+  },
+  orderVolume: {
+    type: 'bar',
+    data: salesData.map((day) => ({
+      date: day.date,
+      orders: day.order_count,
+    })),
+  },
+}
+
+// Step 5: Save dashboard report
+const dashboard = await db.create($.Dashboard, {
+  name: 'Sales Analytics - 30 Day',
+  period: {
+    start: thirtyDaysAgo,
+    end: new Date(),
+  },
+  metrics,
+  insights: insights.text,
+  charts: chartData,
+  createdDate: new Date(),
+})
+
+return {
+  success: true,
+  dashboard: {
+    id: dashboard.$id,
+    metrics,
+    insights: insights.text,
+    charts: Object.keys(chartData),
+    topCategory: metrics.topCategory,
+  },
+}
+```
+
+## Automated Customer Support
+
+**Scenario**: Handle customer support ticket with AI.
+
+**Prompt to Claude**:
+
+```
+Process a customer support ticket:
+1. Retrieve ticket and customer history
+2. Analyze issue with AI
+3. Search knowledge base
+4. Generate solution
+5. Update ticket and notify customer
+```
+
+**Claude's Execution**:
+
+```typescript
+import $, { db, ai, send } from 'sdk.do'
+
+const ticketId = 'ticket-123'
+
+// Step 1: Retrieve ticket and customer history
+const ticket = await db.get($.SupportTicket, ticketId)
+const customer = await db.get($.Customer, ticket.customer)
+
+const previousTickets = await db.list($.SupportTicket, {
+  where: { customer: customer.$id },
+  orderBy: { createdDate: 'desc' },
+  limit: 5,
+})
+
+// Step 2: Analyze issue with AI
+const analysis = await ai.generate({
+  prompt: `Analyze this support ticket:
+    Subject: ${ticket.subject}
+    Description: ${ticket.description}
+    Customer: ${customer.name} (${customer.email})
+    Previous tickets: ${previousTickets.length}
+
+    Identify:
+    1. Issue category
+    2. Urgency level
+    3. Potential causes
+    4. Recommended solution approach`,
+  schema: $.TicketAnalysis,
+  model: 'gpt-5',
+})
+
+// Step 3: Search knowledge base
+const searchQuery = `${ticket.subject} ${analysis.category}`
+const searchEmbedding = await ai.embed({
+  text: searchQuery,
+  model: 'text-embedding-3-small',
+})
+
+const relevantArticles = await db.vectorSearch($.KnowledgeBaseArticle, {
+  embedding: searchEmbedding,
+  limit: 3,
+  threshold: 0.7,
+})
+
+// Step 4: Generate solution
+const solution = await ai.generate({
+  prompt: `Create a customer support response:
+
+    Ticket: ${ticket.subject}
+    Issue: ${ticket.description}
+    Analysis: ${analysis.summary}
+    Category: ${analysis.category}
+    Urgency: ${analysis.urgency}
+
+    Relevant articles:
+    ${relevantArticles.map((a) => `- ${a.title}: ${a.summary}`).join('\n')}
+
+    Provide:
+    1. Empathetic greeting
+    2. Clear explanation of the issue
+    3. Step-by-step solution
+    4. Additional resources
+    5. Professional closing`,
+  schema: $.SupportResponse,
+  model: 'gpt-5',
+})
+
+// Step 5: Update ticket and notify customer
+const updatedTicket = await db.update($.SupportTicket, ticketId, {
+  status: 'responded',
+  category: analysis.category,
+  urgency: analysis.urgency,
+  response: solution.content,
+  respondedDate: new Date(),
+  respondedBy: 'ai-assistant',
+})
+
+await send($.SupportTicket.responded, {
+  ticketId: updatedTicket.$id,
+  customerId: customer.$id,
+  customerEmail: customer.email,
+  response: solution.content,
+})
+
+// Create activity log
+await db.create($.ActivityLog, {
+  type: 'support_ticket_responded',
+  ticketId: ticketId,
+  customerId: customer.$id,
+  analysis: analysis,
+  articlesUsed: relevantArticles.map((a) => a.$id),
+  timestamp: new Date(),
+})
+
+return {
+  success: true,
+  ticket: {
+    id: updatedTicket.$id,
+    status: updatedTicket.status,
+    category: analysis.category,
+    urgency: analysis.urgency,
+  },
+  response: solution.content,
+  articlesUsed: relevantArticles.length,
+  notificationSent: true,
+}
+```
+
+## Inventory Management Workflow
+
+**Scenario**: Automated inventory monitoring and reordering.
+
+**Prompt to Claude**:
+
+```
+Create an inventory management workflow:
+1. Check inventory levels
+2. Identify low stock items
+3. Calculate reorder quantities
+4. Generate purchase orders
+5. Notify suppliers
+```
+
+**Claude's Execution**:
+
+```typescript
+import $, { db, ai, send } from 'sdk.do'
+
+// Step 1: Check inventory levels
+const inventory = await db.query(`
+  SELECT
+    p.id,
+    p.name,
+    p.sku,
+    i.quantity,
+    i.reorder_point,
+    i.reorder_quantity,
+    s.name as supplier_name,
+    s.email as supplier_email
+  FROM products p
+  JOIN inventory i ON p.id = i.product_id
+  JOIN suppliers s ON p.supplier_id = s.id
+  WHERE i.quantity <= i.reorder_point
+`)
+
+// Step 2: Identify low stock items
+const lowStockItems = inventory.map((item) => ({
+  product: {
+    id: item.id,
+    name: item.name,
+    sku: item.sku,
+  },
+  currentQuantity: item.quantity,
+  reorderPoint: item.reorder_point,
+  reorderQuantity: item.reorder_quantity,
+  supplier: {
+    name: item.supplier_name,
+    email: item.supplier_email,
+  },
+}))
+
+// Step 3: Calculate reorder quantities (with AI optimization)
+const reorderOptimization = await ai.generate({
+  prompt: `Optimize reorder quantities for these low-stock items:
+    ${JSON.stringify(lowStockItems, null, 2)}
+
+    Consider:
+    - Current stock levels
+    - Standard reorder quantities
+    - Bulk discount opportunities
+    - Storage capacity
+
+    Return optimized quantities with reasoning.`,
+  schema: $.ReorderOptimization,
+  model: 'gpt-5',
+})
+
+// Step 4: Generate purchase orders
+const purchaseOrders = []
+
+for (const item of lowStockItems) {
+  const optimizedQty = reorderOptimization.items.find((i) => i.productId === item.product.id)?.quantity || item.reorderQuantity
+
+  const po = await db.create($.PurchaseOrder, {
+    product: item.product.id,
+    supplier: item.supplier.name,
+    quantity: optimizedQty,
+    unitPrice: await getProductPrice(item.product.id),
+    totalAmount: optimizedQty * (await getProductPrice(item.product.id)),
+    status: 'pending',
+    createdDate: new Date(),
+    expectedDelivery: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+  })
+
+  purchaseOrders.push(po)
+}
+
+// Helper function
+async function getProductPrice(productId: string) {
+  const product = await db.get($.Product, productId)
+  return product.supplierPrice || 0
+}
+
+// Step 5: Notify suppliers
+const supplierNotifications = {}
+
+for (const po of purchaseOrders) {
+  const supplier = lowStockItems.find((i) => i.product.id === po.product)?.supplier
+
+  if (!supplierNotifications[supplier.email]) {
+    supplierNotifications[supplier.email] = []
+  }
+
+  supplierNotifications[supplier.email].push(po)
+}
+
+for (const [email, orders] of Object.entries(supplierNotifications)) {
+  const notification = await ai.generate({
+    prompt: `Create a professional purchase order email:
+
+      Recipient: ${email}
+      Orders: ${orders.length}
+      Total value: $${orders.reduce((sum, o) => sum + o.totalAmount, 0)}
+
+      Include:
+      - Professional greeting
+      - Order details table
+      - Delivery expectations
+      - Contact information
+      - Professional closing`,
+    schema: $.EmailMessage,
+    model: 'gpt-5',
+  })
+
+  await send($.PurchaseOrder.created, {
+    supplier: email,
+    orders: orders.map((o) => o.$id),
+    email: notification.content,
+  })
+}
+
+return {
+  success: true,
+  summary: {
+    lowStockItems: lowStockItems.length,
+    purchaseOrdersCreated: purchaseOrders.length,
+    totalValue: purchaseOrders.reduce((sum, po) => sum + po.totalAmount, 0),
+    suppliersNotified: Object.keys(supplierNotifications).length,
+  },
+  purchaseOrders: purchaseOrders.map((po) => ({
+    id: po.$id,
+    product: po.product,
+    quantity: po.quantity,
+    amount: po.totalAmount,
+  })),
+  optimization: reorderOptimization.reasoning,
+}
+```
+
+## Scheduled Reporting Workflow
+
+**Scenario**: Daily automated business intelligence report.
+
+**Prompt to Claude**:
+
+```
+Set up a daily business intelligence report that runs every morning:
+1. Collect metrics from multiple sources
+2. Generate AI analysis
+3. Create visualizations
+4. Compile report
+5. Distribute to stakeholders
+```
+
+**Claude's Execution**:
+
+```typescript
+import $, { every, db, ai, send } from 'sdk.do'
+
+every('0 8 * * *', async () => {
+  // Step 1: Collect metrics from multiple sources
+  const yesterday = new Date()
+  yesterday.setDate(yesterday.getDate() - 1)
+  yesterday.setHours(0, 0, 0, 0)
+
+  const [sales, signups, support, engagement] = await Promise.all([
+    // Sales metrics
+    db.query(
+      `
+      SELECT COUNT(*) as orders, SUM(amount) as revenue
+      FROM orders WHERE created_at >= ?
+    `,
+      [yesterday]
+    ),
+
+    // New signups
+    db.query(
+      `
+      SELECT COUNT(*) as count FROM customers WHERE created_at >= ?
+    `,
+      [yesterday]
+    ),
+
+    // Support tickets
+    db.query(
+      `
+      SELECT
+        COUNT(*) as total,
+        SUM(CASE WHEN status = 'resolved' THEN 1 ELSE 0 END) as resolved
+      FROM support_tickets WHERE created_at >= ?
+    `,
+      [yesterday]
+    ),
+
+    // User engagement
+    db.query(
+      `
+      SELECT
+        COUNT(DISTINCT user_id) as active_users,
+        COUNT(*) as sessions,
+        AVG(duration) as avg_session_duration
+      FROM sessions WHERE created_at >= ?
+    `,
+      [yesterday]
+    ),
+  ])
+
+  const metrics = {
+    date: yesterday.toISOString().split('T')[0],
+    sales: {
+      orders: sales[0].orders,
+      revenue: sales[0].revenue,
+    },
+    growth: {
+      newCustomers: signups[0].count,
+    },
+    support: {
+      total: support[0].total,
+      resolved: support[0].resolved,
+      resolutionRate: ((support[0].resolved / support[0].total) * 100).toFixed(1),
+    },
+    engagement: {
+      activeUsers: engagement[0].active_users,
+      sessions: engagement[0].sessions,
+      avgDuration: Math.round(engagement[0].avg_session_duration),
+    },
+  }
+
+  // Step 2: Generate AI analysis
+  const analysis = await ai.generate({
+    prompt: `Analyze yesterday's business metrics and provide insights:
+
+      ${JSON.stringify(metrics, null, 2)}
+
+      Provide:
+      1. Key highlights and achievements
+      2. Concerning trends or issues
+      3. Comparisons to previous periods
+      4. Actionable recommendations
+      5. Priorities for today`,
+    schema: $.DailyAnalysis,
+    model: 'gpt-5',
+  })
+
+  // Step 3: Create visualizations data
+  const chartData = {
+    salesTrend: await generateSalesTrend(7),
+    customerGrowth: await generateCustomerGrowth(30),
+    supportPerformance: await generateSupportMetrics(7),
+  }
+
+  // Helper functions
+  async function generateSalesTrend(days: number) {
+    const data = await db.query(`
+      SELECT DATE(created_at) as date, SUM(amount) as revenue
+      FROM orders WHERE created_at >= DATE('now', '-${days} days')
+      GROUP BY DATE(created_at)
+    `)
+    return data
+  }
+
+  async function generateCustomerGrowth(days: number) {
+    const data = await db.query(`
+      SELECT DATE(created_at) as date, COUNT(*) as count
+      FROM customers WHERE created_at >= DATE('now', '-${days} days')
+      GROUP BY DATE(created_at)
+    `)
+    return data
+  }
+
+  async function generateSupportMetrics(days: number) {
+    const data = await db.query(`
+      SELECT
+        DATE(created_at) as date,
+        COUNT(*) as tickets,
+        AVG(resolution_time) as avg_resolution
+      FROM support_tickets WHERE created_at >= DATE('now', '-${days} days')
+      GROUP BY DATE(created_at)
+    `)
+    return data
+  }
+
+  // Step 4: Compile report
+  const report = await db.create($.DailyReport, {
+    date: yesterday,
+    type: 'business_intelligence',
+    metrics,
+    analysis: analysis.text,
+    charts: chartData,
+    highlights: analysis.highlights,
+    recommendations: analysis.recommendations,
+    createdDate: new Date(),
+  })
+
+  // Step 5: Distribute to stakeholders
+  const stakeholders = await db.list($.User, {
+    where: { role: { $in: ['admin', 'manager', 'executive'] } },
+  })
+
+  await send($.DailyReport.created, {
+    reportId: report.$id,
+    recipients: stakeholders.map((s) => s.email),
+    date: yesterday,
+  })
+})
+
+return {
+  success: true,
+  schedule: 'Daily at 8:00 AM',
+  description: 'Business intelligence report workflow scheduled',
+}
+```
+
+## Best Practices for Workflows
+
+### 1. Error Handling
+
+Always include comprehensive error handling:
+
+```typescript
+try {
+  // Workflow steps
+} catch (error) {
+  // Log error
+  await db.create($.ErrorLog, {
+    workflow: 'customer-onboarding',
+    error: error.message,
+    timestamp: new Date(),
+  })
+
+  // Notify admin
+  await send($.Workflow.failed, {
+    workflow: 'customer-onboarding',
+    error: error.message,
+  })
+
+  return { error: true, message: error.message }
+}
+```
+
+### 2. Progress Tracking
+
+Track workflow progress:
+
+```typescript
+const workflowId = crypto.randomUUID()
+
+// Log start
+await db.create($.WorkflowLog, {
+  id: workflowId,
+  status: 'started',
+  timestamp: new Date(),
+})
+
+// Update progress
+await db.update($.WorkflowLog, workflowId, {
+  status: 'in_progress',
+  step: 'generating_content',
+})
+
+// Log completion
+await db.update($.WorkflowLog, workflowId, {
+  status: 'completed',
+  completedAt: new Date(),
+})
+```
+
+### 3. Idempotency
+
+Make workflows idempotent:
+
+```typescript
+// Check if already processed
+const existing = await db.list($.ProcessedItem, {
+  where: { itemId: item.id },
+})
+
+if (existing.length > 0) {
+  return { skipped: true, reason: 'Already processed' }
+}
+
+// Process item
+// ...
+
+// Mark as processed
+await db.create($.ProcessedItem, {
+  itemId: item.id,
+  processedAt: new Date(),
+})
+```
+
+## Next Steps
+
+- [API Reference](../api/) - Complete tool reference
+- [Basic Examples](./basic) - Common patterns
+- [Execute TypeScript](./execute-typescript) - Advanced TypeScript
+
+## See Also
+
+- [Getting Started](../docs/getting-started) - Setup guide
+- [Claude Integration](../docs/claude-integration) - Claude Desktop configuration
+- [sdk.do](https://sdk.do) - Complete SDK documentation

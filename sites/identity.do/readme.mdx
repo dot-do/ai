@@ -1,0 +1,343 @@
+---
+$id: https://identity.do
+$type: WebSite
+name: identity.do
+description: Identity management and SSO for Business-as-Code applications with multiple identity providers, user profiles, and federated authentication
+license: CC-BY-4.0
+keywords: [identity, sso, identity-provider, saml, oidc, user-profiles, federated-auth, business-as-code]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# identity.do
+
+**Identity management and SSO for Business-as-Code applications**
+
+identity.do provides comprehensive identity management in the `.do` platform's Business-as-Code SDK. It enables user identity management, Single Sign-On (SSO), integration with identity providers (Google, GitHub, Microsoft, SAML, OIDC), user profile management, and federated authentication using semantic patterns.
+
+## Quick Start
+
+```bash
+pnpm add sdk.do
+```
+
+```typescript
+import { identity } from 'sdk.do'
+
+// Create user identity
+const user = await identity.create({
+  email: 'user@example.com',
+  name: 'John Smith',
+  provider: 'local',
+})
+
+// Link identity provider
+await identity.link({
+  userId: user.$id,
+  provider: 'google',
+  providerId: 'google_123456',
+  email: 'user@gmail.com',
+})
+
+// Get user identities
+const identities = await identity.list(user.$id)
+console.log(identities)
+// [
+//   { provider: 'local', email: 'user@example.com' },
+//   { provider: 'google', email: 'user@gmail.com' }
+// ]
+
+// SSO login
+const session = await identity.sso({
+  provider: 'google',
+  redirectUri: 'https://app.example.com/auth/callback',
+})
+```
+
+## Key Features
+
+### Identity Provider Integration
+
+Connect with multiple identity providers:
+
+```typescript
+import { identity } from 'sdk.do'
+
+// OAuth Providers
+await identity.configure({
+  google: {
+    clientId: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  },
+  github: {
+    clientId: process.env.GITHUB_CLIENT_ID,
+    clientSecret: process.env.GITHUB_CLIENT_SECRET,
+  },
+  microsoft: {
+    clientId: process.env.MICROSOFT_CLIENT_ID,
+    clientSecret: process.env.MICROSOFT_CLIENT_SECRET,
+    tenant: 'common',
+  },
+})
+
+// SAML Provider
+await identity.configure({
+  saml: {
+    entryPoint: 'https://idp.example.com/sso',
+    certificate: process.env.SAML_CERT,
+    issuer: 'https://app.example.com',
+  },
+})
+
+// OIDC Provider
+await identity.configure({
+  oidc: {
+    issuer: 'https://accounts.example.com',
+    clientId: process.env.OIDC_CLIENT_ID,
+    clientSecret: process.env.OIDC_CLIENT_SECRET,
+  },
+})
+```
+
+### User Profile Management
+
+Manage comprehensive user profiles:
+
+```typescript
+import { $, identity, db } from 'sdk.do'
+
+// Create user profile
+const profile = await identity.createProfile({
+  userId: 'user_123',
+  name: 'John Smith',
+  email: 'john@example.com',
+  phone: '+1234567890',
+  picture: 'https://example.com/photo.jpg',
+  organization: { $id: 'org_456', name: 'Acme Corp' },
+  department: 'Engineering',
+  jobTitle: 'Senior Developer',
+  timezone: 'America/New_York',
+  locale: 'en-US',
+})
+
+// Update profile
+await identity.updateProfile('user_123', {
+  jobTitle: 'Lead Developer',
+  department: 'Product Engineering',
+})
+
+// Get profile
+const userProfile = await identity.getProfile('user_123')
+```
+
+### Federated Identity
+
+Link multiple identities to one user:
+
+```typescript
+import { identity } from 'sdk.do'
+
+// Link Google account
+await identity.link({
+  userId: 'user_123',
+  provider: 'google',
+  providerId: 'google_123456',
+  email: 'user@gmail.com',
+  profile: {
+    name: 'John Smith',
+    picture: 'https://lh3.googleusercontent.com/...',
+  },
+})
+
+// Link GitHub account
+await identity.link({
+  userId: 'user_123',
+  provider: 'github',
+  providerId: 'github_789012',
+  username: 'johnsmith',
+  profile: {
+    name: 'John Smith',
+    avatar: 'https://avatars.githubusercontent.com/...',
+  },
+})
+
+// Get all linked identities
+const linkedIdentities = await identity.list('user_123')
+
+// Unlink provider
+await identity.unlink('user_123', 'github')
+```
+
+### Single Sign-On (SSO)
+
+Implement SSO across applications:
+
+```typescript
+import { identity } from 'sdk.do'
+
+// Initiate SSO
+const ssoUrl = await identity.sso({
+  provider: 'google',
+  redirectUri: 'https://app.example.com/auth/callback',
+  scopes: ['email', 'profile'],
+  state: generateState(),
+})
+
+// Handle SSO callback
+const result = await identity.ssoCallback({
+  provider: 'google',
+  code: authCode,
+  state: state,
+})
+
+// result contains user identity and profile
+console.log(result)
+// {
+//   userId: 'user_123',
+//   provider: 'google',
+//   providerId: 'google_123456',
+//   email: 'user@gmail.com',
+//   profile: { name: 'John Smith', picture: '...' }
+// }
+```
+
+## Features
+
+- **Multiple Identity Providers**: Google, GitHub, Microsoft, SAML, OIDC, and custom providers
+- **User Profiles**: Comprehensive profile management with Schema.org Person type
+- **Federated Identity**: Link multiple provider identities to one user account
+- **Single Sign-On**: SSO across multiple applications
+- **Identity Verification**: Email and phone verification
+- **Profile Enrichment**: Automatic profile data from providers
+- **Identity Mapping**: Map external identities to internal users
+- **Type Safety**: Full TypeScript support
+- **Semantic Patterns**: Use $.Subject.predicate.Object patterns
+- **AI-Native**: Designed for AI agents to understand
+
+## Documentation
+
+- [Getting Started](./docs/getting-started) - Installation and setup
+- [Architecture](./docs/architecture) - Identity architecture
+- [Best Practices](./docs/best-practices) - Identity best practices
+- [Troubleshooting](./docs/troubleshooting) - Common issues
+- [API Reference](./api/) - Complete API documentation
+
+## Examples
+
+- [Basic Usage](./examples/basic-usage) - Simple identity management
+- [Advanced Patterns](./examples/advanced-patterns) - Complex scenarios
+- [Integration](./examples/integration) - Integration examples
+- [Real-World Use Case](./examples/real-world-use-case) - Production setup
+
+## Use Cases
+
+### Social Login
+
+```typescript
+import { $, identity, db } from 'sdk.do'
+
+export async function socialLogin(provider: string, code: string) {
+  // Handle SSO callback
+  const result = await identity.ssoCallback({ provider, code })
+
+  // Check if user exists
+  let user = await db
+    .list($.Person, {
+      where: { email: result.email },
+    })
+    .then((users) => users[0])
+
+  if (!user) {
+    // Create new user
+    user = await db.create($.Person, {
+      email: result.email,
+      name: result.profile.name,
+      image: result.profile.picture,
+      emailVerified: true,
+    })
+  }
+
+  // Link identity
+  await identity.link({
+    userId: user.$id,
+    provider: result.provider,
+    providerId: result.providerId,
+    email: result.email,
+    profile: result.profile,
+  })
+
+  return user
+}
+```
+
+### Enterprise SSO with SAML
+
+```typescript
+import { identity } from 'sdk.do'
+
+export async function enterpriseSSO() {
+  // Configure SAML
+  await identity.configure({
+    saml: {
+      entryPoint: 'https://idp.company.com/sso',
+      certificate: process.env.SAML_CERT,
+      issuer: 'https://app.example.com',
+      callbackUrl: 'https://app.example.com/auth/saml/callback',
+    },
+  })
+
+  // Initiate SAML SSO
+  const authUrl = await identity.sso({
+    provider: 'saml',
+    redirectUri: 'https://app.example.com/auth/saml/callback',
+  })
+
+  return { authUrl }
+}
+```
+
+## Integration with `.do` Platform
+
+```typescript
+import { $, identity, auth, db } from 'sdk.do'
+
+// Create identity and auth in one flow
+export async function registerWithIdentity(email: string, name: string) {
+  // Create user
+  const user = await db.create($.Person, { email, name })
+
+  // Create identity
+  await identity.create({
+    userId: user.$id,
+    email,
+    name,
+    provider: 'local',
+  })
+
+  // Create profile
+  await identity.createProfile({
+    userId: user.$id,
+    name,
+    email,
+  })
+
+  return user
+}
+```
+
+## Related Domains
+
+- **[auth.do](https://auth.do)** - Authentication framework
+- **[user.do](https://user.do)** - User context
+- **[session.do](https://session.do)** - Session management
+- **[oauth.do](https://oauth.do)** - OAuth 2.0 flows
+- **[sdk.do](https://sdk.do)** - Core SDK
+
+## License
+
+CC-BY-4.0 (Open Source)
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

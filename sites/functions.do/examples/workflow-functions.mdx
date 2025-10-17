@@ -1,0 +1,789 @@
+---
+$id: https://functions.do/examples/workflow-functions
+$type: HowTo
+title: Workflow Function Examples
+description: Real-world examples of composing functions into complete business workflows
+keywords: [workflow, composition, business logic, pipelines, orchestration]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Workflow Function Examples
+
+This guide demonstrates how to compose functions into complete, production-ready business workflows.
+
+## Example 1: E-Commerce Order Processing
+
+A complete order processing workflow from validation to fulfillment:
+
+```typescript
+import $, { fn, pipe, db, send } from 'sdk.do'
+
+// Step 1: Validate order data
+const validateOrder = fn($.ValidateOrder, async (order: Partial<$.Order>) => {
+  if (!order.customer) {
+    throw new Error('Order must have a customer')
+  }
+
+  if (!order.items || order.items.length === 0) {
+    throw new Error('Order must have at least one item')
+  }
+
+  // Validate customer exists
+  const customer = await db.get($.Person, order.customer)
+  if (!customer) {
+    throw new Error('Customer not found')
+  }
+
+  return { ...order, validatedAt: new Date() }
+})
+
+// Step 2: Calculate order totals
+const calculateTotals = fn($.CalculateTotals, async (order: $.Order) => {
+  // Calculate subtotal
+  const subtotal = order.items.reduce((sum, item) => {
+    return sum + item.price * item.quantity
+  }, 0)
+
+  // Calculate tax (8%)
+  const tax = subtotal * 0.08
+
+  // Apply discounts
+  let discount = 0
+  if (order.customer.isPremium) {
+    discount = subtotal * 0.1 // 10% premium discount
+  } else if (subtotal > 100) {
+    discount = subtotal * 0.05 // 5% volume discount
+  }
+
+  const total = subtotal + tax - discount
+
+  return {
+    ...order,
+    subtotal,
+    tax,
+    discount,
+    total,
+    calculatedAt: new Date(),
+  }
+})
+
+// Step 3: Check inventory availability
+const checkInventory = fn($.CheckInventory, async (order: $.Order) => {
+  const unavailableItems = []
+
+  for (const item of order.items) {
+    const product = await db.get($.Product, item.productId)
+
+    if (!product || product.inventory < item.quantity) {
+      unavailableItems.push({
+        productId: item.productId,
+        requested: item.quantity,
+        available: product?.inventory || 0,
+      })
+    }
+  }
+
+  if (unavailableItems.length > 0) {
+    throw new Error(`Items unavailable: ${JSON.stringify(unavailableItems)}`)
+  }
+
+  return { ...order, inventoryChecked: true }
+})
+
+// Step 4: Reserve inventory
+const reserveInventory = fn($.ReserveInventory, async (order: $.Order) => {
+  for (const item of order.items) {
+    await db.update($.Product, item.productId, {
+      inventory: { decrement: item.quantity },
+      reserved: { increment: item.quantity },
+    })
+  }
+
+  return { ...order, inventoryReserved: true }
+})
+
+// Step 5: Process payment
+const processPayment = fn($.ProcessPayment, async (order: $.Order) => {
+  // Get customer payment method
+  const customer = await db.get($.Person, order.customer)
+  const paymentMethod = customer.defaultPaymentMethod
+
+  if (!paymentMethod) {
+    throw new Error('No payment method found')
+  }
+
+  // Process payment through gateway
+  const paymentResult = await paymentGateway.charge({
+    amount: order.total,
+    currency: 'USD',
+    paymentMethod: paymentMethod.id,
+    description: `Order ${order.$id}`,
+  })
+
+  if (paymentResult.status !== 'succeeded') {
+    throw new Error(`Payment failed: ${paymentResult.error}`)
+  }
+
+  return {
+    ...order,
+    paymentId: paymentResult.id,
+    paymentStatus: 'paid',
+    paidAt: new Date(),
+  }
+})
+
+// Step 6: Create invoice
+const createInvoice = fn($.CreateInvoice, async (order: $.Order) => {
+  const invoice = await db.create($.Invoice, {
+    orderId: order.$id,
+    customerId: order.customer,
+    amount: order.total,
+    status: 'paid',
+    dueDate: new Date(),
+    paidDate: new Date(),
+  })
+
+  return { ...order, invoiceId: invoice.$id }
+})
+
+// Step 7: Send confirmation email
+const sendConfirmation = fn($.SendConfirmation, async (order: $.Order) => {
+  const customer = await db.get($.Person, order.customer)
+
+  await send($.Email.send, {
+    to: customer.email,
+    subject: `Order Confirmation #${order.$id}`,
+    template: 'orderConfirmation',
+    data: { order, customer },
+  })
+
+  return { ...order, confirmationSent: true }
+})
+
+// Step 8: Save order to database
+const saveOrder = fn($.SaveOrder, async (order: $.Order) => {
+  const savedOrder = await db.create($.Order, {
+    ...order,
+    status: 'processing',
+    createdAt: new Date(),
+  })
+
+  return savedOrder
+})
+
+// Step 9: Publish order event
+const publishOrderEvent = fn($.PublishOrderEvent, async (order: $.Order) => {
+  await send($.Order.created, order)
+  return order
+})
+
+// Compose complete workflow
+export const processOrder = pipe(
+  validateOrder,
+  calculateTotals,
+  checkInventory,
+  reserveInventory,
+  processPayment,
+  createInvoice,
+  sendConfirmation,
+  saveOrder,
+  publishOrderEvent
+)
+
+// Usage
+const order = await processOrder({
+  customer: 'customer-123',
+  items: [
+    { productId: 'prod-1', quantity: 2, price: 29.99 },
+    { productId: 'prod-2', quantity: 1, price: 49.99 },
+  ],
+  shippingAddress: {
+    street: '123 Main St',
+    city: 'San Francisco',
+    state: 'CA',
+    zip: '94105',
+  },
+})
+```
+
+## Example 2: Customer Onboarding Workflow
+
+Complete customer onboarding with validation, account creation, and welcome emails:
+
+```typescript
+import $, { fn, pipe, db, send, ai } from 'sdk.do'
+
+// Step 1: Validate signup data
+const validateSignup = fn($.ValidateSignup, (data: { email: string; password: string; name: string; company?: string }) => {
+  const errors: string[] = []
+
+  // Email validation
+  if (!data.email.includes('@')) {
+    errors.push('Invalid email address')
+  }
+
+  // Password validation
+  if (data.password.length < 8) {
+    errors.push('Password must be at least 8 characters')
+  }
+
+  // Name validation
+  if (data.name.length < 2) {
+    errors.push('Name must be at least 2 characters')
+  }
+
+  if (errors.length > 0) {
+    throw new Error(`Validation failed: ${errors.join(', ')}`)
+  }
+
+  return data
+})
+
+// Step 2: Check for existing account
+const checkExisting = fn($.CheckExisting, async (data: any) => {
+  const existing = await db.list($.Person, {
+    where: { email: data.email },
+    limit: 1,
+  })
+
+  if (existing.length > 0) {
+    throw new Error('Email already registered')
+  }
+
+  return data
+})
+
+// Step 3: Create user account
+const createAccount = fn($.CreateAccount, async (data: any) => {
+  // Hash password
+  const passwordHash = await hashPassword(data.password)
+
+  // Create user
+  const user = await db.create($.Person, {
+    $type: 'Person',
+    email: data.email,
+    name: data.name,
+    passwordHash,
+    status: 'active',
+    createdAt: new Date(),
+  })
+
+  return { ...data, user }
+})
+
+// Step 4: Create company if provided
+const createCompany = fn($.CreateCompany, async (data: any) => {
+  if (!data.company) {
+    return data
+  }
+
+  const company = await db.create($.Organization, {
+    $type: 'Organization',
+    name: data.company,
+    founder: data.user.$id,
+    createdAt: new Date(),
+  })
+
+  // Link user to company
+  await db.relate(data.user, $.worksFor, company)
+
+  return { ...data, company }
+})
+
+// Step 5: Generate personalized welcome message
+const generateWelcomeMessage = fn($.GenerateWelcomeMessage, async (data: any) => {
+  const message = await ai.generate({
+    prompt: `Write a personalized welcome message for ${data.user.name}`,
+    schema: { type: 'string', maxLength: 200 },
+  })
+
+  return { ...data, welcomeMessage: message }
+})
+
+// Step 6: Send welcome email
+const sendWelcomeEmail = fn($.SendWelcomeEmail, async (data: any) => {
+  await send($.Email.send, {
+    to: data.user.email,
+    subject: 'Welcome to Our Platform!',
+    template: 'welcome',
+    data: {
+      name: data.user.name,
+      message: data.welcomeMessage,
+    },
+  })
+
+  return data
+})
+
+// Step 7: Create default preferences
+const createPreferences = fn($.CreatePreferences, async (data: any) => {
+  await db.create($.UserPreferences, {
+    userId: data.user.$id,
+    theme: 'light',
+    notifications: {
+      email: true,
+      push: false,
+    },
+    language: 'en',
+  })
+
+  return data
+})
+
+// Step 8: Assign to onboarding flow
+const assignOnboarding = fn($.AssignOnboarding, async (data: any) => {
+  await db.create($.OnboardingTask, {
+    userId: data.user.$id,
+    tasks: [
+      { id: 1, title: 'Complete profile', completed: false },
+      { id: 2, title: 'Connect integrations', completed: false },
+      { id: 3, title: 'Create first project', completed: false },
+    ],
+    status: 'in_progress',
+  })
+
+  return data
+})
+
+// Step 9: Publish signup event
+const publishSignupEvent = fn($.PublishSignupEvent, async (data: any) => {
+  await send($.User.signedUp, {
+    userId: data.user.$id,
+    email: data.user.email,
+    signupAt: new Date(),
+  })
+
+  return data.user
+})
+
+// Compose complete onboarding workflow
+export const onboardCustomer = pipe(
+  validateSignup,
+  checkExisting,
+  createAccount,
+  createCompany,
+  generateWelcomeMessage,
+  sendWelcomeEmail,
+  createPreferences,
+  assignOnboarding,
+  publishSignupEvent
+)
+
+// Usage
+const user = await onboardCustomer({
+  email: 'alice@example.com',
+  password: 'securepassword123',
+  name: 'Alice Smith',
+  company: 'Acme Corp',
+})
+```
+
+## Example 3: Data Processing Pipeline
+
+ETL (Extract, Transform, Load) workflow for processing external data:
+
+```typescript
+import $, { fn, pipe, db, api } from 'sdk.do'
+
+// Step 1: Extract data from external API
+const extractData = fn($.ExtractData, async (config: { apiUrl: string; apiKey: string }) => {
+  const response = await api.get(config.apiUrl, {
+    headers: { Authorization: `Bearer ${config.apiKey}` },
+  })
+
+  return {
+    rawData: response.data,
+    extractedAt: new Date(),
+    source: config.apiUrl,
+  }
+})
+
+// Step 2: Validate data structure
+const validateData = fn($.ValidateData, (data: any) => {
+  if (!Array.isArray(data.rawData)) {
+    throw new Error('Expected array of records')
+  }
+
+  const validRecords = data.rawData.filter((record) => {
+    return record.id && record.name && record.email
+  })
+
+  console.log(`Validated ${validRecords.length} of ${data.rawData.length} records`)
+
+  return { ...data, validRecords }
+})
+
+// Step 3: Transform to standard format
+const transformData = fn($.TransformData, (data: any) => {
+  const transformed = data.validRecords.map((record: any) => ({
+    $type: 'Person',
+    $id: `imported-${record.id}`,
+    name: record.name.trim(),
+    email: record.email.toLowerCase(),
+    phone: record.phone || null,
+    company: record.company_name || null,
+    importedFrom: data.source,
+    importedAt: data.extractedAt,
+  }))
+
+  return { ...data, transformed }
+})
+
+// Step 4: Deduplicate records
+const deduplicateRecords = fn($.DeduplicateRecords, async (data: any) => {
+  const uniqueRecords = []
+  const seen = new Set()
+
+  for (const record of data.transformed) {
+    // Check if email already exists in database
+    const existing = await db.list($.Person, {
+      where: { email: record.email },
+      limit: 1,
+    })
+
+    if (existing.length === 0 && !seen.has(record.email)) {
+      uniqueRecords.push(record)
+      seen.add(record.email)
+    }
+  }
+
+  console.log(`Deduplicated to ${uniqueRecords.length} unique records`)
+
+  return { ...data, uniqueRecords }
+})
+
+// Step 5: Enrich with additional data
+const enrichRecords = fn($.EnrichRecords, async (data: any) => {
+  const enriched = await Promise.all(
+    data.uniqueRecords.map(async (record: any) => {
+      // Enrich with company data if available
+      if (record.company) {
+        const companyData = await fetchCompanyData(record.company)
+        return { ...record, companyData }
+      }
+      return record
+    })
+  )
+
+  return { ...data, enriched }
+})
+
+// Step 6: Load into database
+const loadData = fn($.LoadData, async (data: any) => {
+  const loaded = await db.createMany($.Person, data.enriched)
+
+  return {
+    ...data,
+    loaded,
+    successCount: loaded.length,
+    loadedAt: new Date(),
+  }
+})
+
+// Step 7: Create import record
+const createImportRecord = fn($.CreateImportRecord, async (data: any) => {
+  await db.create($.ImportRecord, {
+    source: data.source,
+    extractedAt: data.extractedAt,
+    totalRecords: data.rawData.length,
+    validRecords: data.validRecords.length,
+    uniqueRecords: data.uniqueRecords.length,
+    loadedRecords: data.successCount,
+    status: 'completed',
+    completedAt: new Date(),
+  })
+
+  return data
+})
+
+// Step 8: Send completion notification
+const sendNotification = fn($.SendNotification, async (data: any) => {
+  await send($.Notification.send, {
+    type: 'import_completed',
+    message: `Successfully imported ${data.successCount} records`,
+    data: {
+      source: data.source,
+      totalRecords: data.rawData.length,
+      successCount: data.successCount,
+    },
+  })
+
+  return data
+})
+
+// Compose ETL pipeline
+export const etlPipeline = pipe(extractData, validateData, transformData, deduplicateRecords, enrichRecords, loadData, createImportRecord, sendNotification)
+
+// Usage
+const result = await etlPipeline({
+  apiUrl: 'https://api.external.com/customers',
+  apiKey: process.env.EXTERNAL_API_KEY,
+})
+
+console.log(`Imported ${result.successCount} records`)
+```
+
+## Example 4: Content Publishing Workflow
+
+Complete content publishing workflow with approval, formatting, and distribution:
+
+```typescript
+import $, { fn, pipe, db, ai, send } from 'sdk.do'
+
+// Step 1: Draft content
+const draftContent = fn($.DraftContent, async (input: { title: string; body: string; author: string; tags: string[] }) => {
+  const content = await db.create($.Article, {
+    $type: 'Article',
+    title: input.title,
+    body: input.body,
+    author: input.author,
+    tags: input.tags,
+    status: 'draft',
+    createdAt: new Date(),
+  })
+
+  return content
+})
+
+// Step 2: Generate SEO metadata
+const generateSEO = fn($.GenerateSEO, async (content: $.Article) => {
+  const metadata = await ai.generate({
+    prompt: `Generate SEO metadata for article titled "${content.title}"`,
+    schema: {
+      type: 'object',
+      properties: {
+        description: { type: 'string', maxLength: 160 },
+        keywords: { type: 'array', items: { type: 'string' } },
+      },
+    },
+  })
+
+  return {
+    ...content,
+    metaDescription: metadata.description,
+    keywords: metadata.keywords,
+  }
+})
+
+// Step 3: Generate featured image
+const generateImage = fn($.GenerateImage, async (content: $.Article) => {
+  const imageUrl = await ai.generateImage({
+    prompt: `Featured image for article: ${content.title}`,
+    size: '1200x630',
+  })
+
+  return { ...content, featuredImage: imageUrl }
+})
+
+// Step 4: Check grammar and spelling
+const checkGrammar = fn($.CheckGrammar, async (content: $.Article) => {
+  const suggestions = await ai.generate({
+    prompt: `Review this text for grammar and spelling:\n\n${content.body}`,
+    schema: {
+      type: 'object',
+      properties: {
+        corrections: { type: 'array' },
+        score: { type: 'number' },
+      },
+    },
+  })
+
+  if (suggestions.score < 0.8) {
+    console.warn('Grammar score below threshold:', suggestions.corrections)
+  }
+
+  return { ...content, grammarChecked: true }
+})
+
+// Step 5: Submit for review
+const submitForReview = fn($.SubmitForReview, async (content: $.Article) => {
+  await db.update($.Article, content.$id, {
+    status: 'review',
+    submittedAt: new Date(),
+  })
+
+  // Notify editors
+  const editors = await db.list($.Person, {
+    where: { role: 'editor' },
+  })
+
+  for (const editor of editors) {
+    await send($.Notification.send, {
+      to: editor.$id,
+      type: 'review_requested',
+      message: `New article ready for review: ${content.title}`,
+    })
+  }
+
+  return content
+})
+
+// Step 6: Auto-approve if passes criteria
+const autoApprove = fn($.AutoApprove, async (content: $.Article) => {
+  // Auto-approve if author is trusted and content is good
+  const author = await db.get($.Person, content.author)
+
+  if (author.isTrusted && content.grammarChecked) {
+    await db.update($.Article, content.$id, {
+      status: 'approved',
+      approvedAt: new Date(),
+      approvedBy: 'system',
+    })
+
+    return { ...content, status: 'approved' }
+  }
+
+  return content
+})
+
+// Step 7: Format for publication
+const formatContent = fn($.FormatContent, async (content: $.Article) => {
+  // Convert markdown to HTML
+  const html = await markdownToHtml(content.body)
+
+  // Generate table of contents
+  const toc = generateTableOfContents(html)
+
+  // Optimize images
+  const optimizedHtml = await optimizeImages(html)
+
+  return {
+    ...content,
+    bodyHtml: optimizedHtml,
+    tableOfContents: toc,
+  }
+})
+
+// Step 8: Publish to CDN
+const publishToCDN = fn($.PublishToCDN, async (content: $.Article) => {
+  if (content.status !== 'approved') {
+    throw new Error('Content must be approved before publishing')
+  }
+
+  const cdnUrl = await uploadToCDN({
+    path: `/articles/${content.$id}.html`,
+    content: content.bodyHtml,
+    metadata: {
+      title: content.title,
+      author: content.author,
+      publishedAt: new Date(),
+    },
+  })
+
+  return { ...content, publishedUrl: cdnUrl }
+})
+
+// Step 9: Update database and send notifications
+const finalizePublication = fn($.FinalizePublication, async (content: $.Article) => {
+  // Update article status
+  await db.update($.Article, content.$id, {
+    status: 'published',
+    publishedAt: new Date(),
+    publishedUrl: content.publishedUrl,
+  })
+
+  // Send notifications
+  await send($.Article.published, content)
+
+  // Notify subscribers
+  await send($.Email.send, {
+    to: 'subscribers',
+    template: 'newArticle',
+    data: content,
+  })
+
+  return content
+})
+
+// Compose publishing workflow
+export const publishContent = pipe(
+  draftContent,
+  generateSEO,
+  generateImage,
+  checkGrammar,
+  submitForReview,
+  autoApprove,
+  formatContent,
+  publishToCDN,
+  finalizePublication
+)
+
+// Usage
+const article = await publishContent({
+  title: 'Getting Started with functions.do',
+  body: '# Introduction\n\nfunctions.do makes it easy to...',
+  author: 'author-123',
+  tags: ['tutorial', 'functions', 'typescript'],
+})
+```
+
+## Best Practices for Workflows
+
+### 1. Break Down Complex Logic
+
+```typescript
+// Good - small, focused functions
+const workflow = pipe(validate, transform, enrich, save, notify)
+
+// Avoid - one large function
+const workflow = fn($.Workflow, (data) => {
+  // 200+ lines of complex logic
+})
+```
+
+### 2. Add Error Handling
+
+```typescript
+const safeWorkflow = pipe(
+  validateInput,
+  processData,
+  fn($.HandleErrors, async (data) => {
+    try {
+      return await riskyOperation(data)
+    } catch (error) {
+      console.error('Error:', error)
+      return { ...data, error: error.message }
+    }
+  }),
+  saveResults
+)
+```
+
+### 3. Log Progress
+
+```typescript
+const workflow = pipe(
+  fn($.Step1, async (data) => {
+    console.log('Starting step 1...')
+    const result = await processStep1(data)
+    console.log('Step 1 complete')
+    return result
+  })
+  // ... more steps with logging
+)
+```
+
+### 4. Make Workflows Testable
+
+```typescript
+// Export individual steps for testing
+export const validateOrder = fn($.ValidateOrder, ...)
+export const calculateTotals = fn($.CalculateTotals, ...)
+export const processPayment = fn($.ProcessPayment, ...)
+
+// Export composed workflow
+export const processOrder = pipe(
+  validateOrder,
+  calculateTotals,
+  processPayment
+)
+```
+
+## Next Steps
+
+- [Error Handling Examples](./error-handling) - Learn error handling patterns
+- [Composition Guide](../docs/composition) - Deep dive into composition
+- [API Reference](../api/) - Complete API documentation
+- [Creating Functions](../docs/creating-functions) - Function creation guide

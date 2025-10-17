@@ -1,0 +1,895 @@
+---
+$id: https://data.do/examples/real-world-use-case
+$type: https://schema.org/TechArticle
+name: data.do Real-world Use Case
+description: Complete ETL pipeline for customer data platform with transformation, validation, and enrichment
+author:
+  $type: https://schema.org/Organization
+  name: .do
+  url: https://do.inc
+license:
+  documentation: CC-BY-4.0
+  code: MIT
+---
+
+# Real-world Use Case: Customer Data Platform
+
+This comprehensive example demonstrates building a complete Customer Data Platform (CDP) using data.do, showcasing ETL pipelines, data transformation, validation, enrichment, and production-ready patterns.
+
+## Overview
+
+We'll build a CDP that:
+
+1. Ingests customer data from multiple sources (CRM, e-commerce, support)
+2. Normalizes and validates data against schemas
+3. Deduplicates and merges customer records
+4. Enriches data with third-party services (geocoding, credit scores)
+5. Calculates customer metrics and segments
+6. Syncs to data warehouse for analytics
+7. Monitors data quality and pipeline health
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      Data Sources                            │
+│  ┌───────────┐  ┌───────────┐  ┌───────────┐               │
+│  │    CRM    │  │ E-commerce│  │  Support  │               │
+│  │   (API)   │  │   (CSV)   │  │  (JSON)   │               │
+│  └─────┬─────┘  └─────┬─────┘  └─────┬─────┘               │
+└────────┼──────────────┼──────────────┼──────────────────────┘
+         │              │              │
+         v              v              v
+┌─────────────────────────────────────────────────────────────┐
+│                   Extract & Transform                        │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │  • Fetch data from sources                             │ │
+│  │  • Normalize to common schema                          │ │
+│  │  • Validate against Schema.org types                   │ │
+│  │  • Deduplicate records                                 │ │
+│  └────────────────────────────────────────────────────────┘ │
+└────────────────────────────┬────────────────────────────────┘
+                             │
+                             v
+┌─────────────────────────────────────────────────────────────┐
+│                      Enrichment                              │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │  • Geocode addresses                                   │ │
+│  │  • Credit score lookup                                 │ │
+│  │  • Purchase history analysis                           │ │
+│  │  • Behavioral scoring                                  │ │
+│  └────────────────────────────────────────────────────────┘ │
+└────────────────────────────┬────────────────────────────────┘
+                             │
+                             v
+┌─────────────────────────────────────────────────────────────┐
+│                     Master Database                          │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │  • Store unified customer records                      │ │
+│  │  • Calculate metrics and segments                      │ │
+│  │  • Version and audit trail                             │ │
+│  └────────────────────────────────────────────────────────┘ │
+└────────────────────────────┬────────────────────────────────┘
+                             │
+                             v
+┌─────────────────────────────────────────────────────────────┐
+│                   Data Warehouse                             │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │  • Sync for analytics                                  │ │
+│  │  • Historical tracking                                 │ │
+│  │  • Reporting and BI                                    │ │
+│  └────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Implementation
+
+### 1. Schema Definition
+
+Define comprehensive schemas for customer data.
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Customer schema with validation rules
+export const CustomerSchema = {
+  $type: $.Customer,
+  version: 1,
+  required: ['email', 'name'],
+  rules: {
+    email: {
+      type: 'string',
+      format: 'email',
+      unique: true,
+      required: true,
+    },
+    name: {
+      type: 'string',
+      minLength: 2,
+      maxLength: 100,
+      required: true,
+    },
+    phone: {
+      type: 'string',
+      format: 'e164',
+    },
+    address: {
+      type: 'object',
+      properties: {
+        streetAddress: { type: 'string', required: true },
+        addressLocality: { type: 'string', required: true },
+        addressRegion: { type: 'string', required: true },
+        postalCode: { type: 'string', required: true },
+        addressCountry: { type: 'string', default: 'US' },
+      },
+    },
+    status: {
+      type: 'string',
+      enum: ['active', 'inactive', 'suspended'],
+      default: 'active',
+    },
+    tier: {
+      type: 'string',
+      enum: ['standard', 'premium', 'vip'],
+      default: 'standard',
+    },
+    segment: {
+      type: 'string',
+      enum: ['new', 'active', 'at-risk', 'churned'],
+    },
+  },
+}
+
+// Source mapping schemas
+export const SourceSchemas = {
+  crm: {
+    name: 'FirstName + LastName',
+    email: 'EmailAddress',
+    phone: 'PhoneNumber',
+    externalId: 'CRM_ID',
+  },
+  ecommerce: {
+    name: 'customer_name',
+    email: 'email_address',
+    phone: 'contact_phone',
+    externalId: 'customer_id',
+  },
+  support: {
+    name: 'full_name',
+    email: 'email',
+    phone: 'phone_number',
+    externalId: 'ticket_user_id',
+  },
+}
+```
+
+### 2. Data Extraction
+
+Extract data from multiple sources.
+
+```typescript
+import { $, api, data } from 'sdk.do'
+import fs from 'fs/promises'
+
+// Extract from CRM API
+async function extractFromCRM() {
+  console.log('Extracting customers from CRM...')
+
+  const response = await api.fetch('https://api.crm.example.com/customers', {
+    headers: {
+      Authorization: `Bearer ${process.env.CRM_API_KEY}`,
+    },
+    params: {
+      updated_since: await getLastSyncTime('crm'),
+      limit: 1000,
+    },
+  })
+
+  const customers = await response.json()
+
+  return customers.map((c) => ({
+    source: 'crm',
+    externalId: c.CRM_ID,
+    data: c,
+  }))
+}
+
+// Extract from E-commerce CSV
+async function extractFromEcommerce() {
+  console.log('Extracting customers from E-commerce...')
+
+  const csvContent = await fs.readFile('./data/customers.csv', 'utf-8')
+
+  const customers = await data.transform(csvContent, {
+    from: 'csv',
+    to: 'json',
+    options: {
+      headers: true,
+      skipEmptyLines: true,
+    },
+  })
+
+  return customers.map((c) => ({
+    source: 'ecommerce',
+    externalId: c.customer_id,
+    data: c,
+  }))
+}
+
+// Extract from Support JSON
+async function extractFromSupport() {
+  console.log('Extracting customers from Support...')
+
+  const jsonContent = await fs.readFile('./data/support-users.json', 'utf-8')
+  const users = JSON.parse(jsonContent)
+
+  return users.map((u) => ({
+    source: 'support',
+    externalId: u.ticket_user_id,
+    data: u,
+  }))
+}
+
+// Extract from all sources
+export async function extractAllSources() {
+  const [crmCustomers, ecommerceCustomers, supportCustomers] = await Promise.all([extractFromCRM(), extractFromEcommerce(), extractFromSupport()])
+
+  return {
+    crm: crmCustomers,
+    ecommerce: ecommerceCustomers,
+    support: supportCustomers,
+    total: crmCustomers.length + ecommerceCustomers.length + supportCustomers.length,
+  }
+}
+```
+
+### 3. Data Transformation
+
+Transform and normalize data from different sources.
+
+```typescript
+import { $, data, validate } from 'sdk.do/data'
+
+// Transform source data to common schema
+async function transformCustomer(sourceCustomer: any) {
+  const { source, externalId, data: rawData } = sourceCustomer
+  const mapping = SourceSchemas[source]
+
+  // Map fields based on source
+  let normalized: any = {
+    $type: $.Customer,
+    source,
+    externalId,
+  }
+
+  // Map source fields to common schema
+  if (source === 'crm') {
+    normalized.name = `${rawData.FirstName} ${rawData.LastName}`.trim()
+    normalized.email = rawData.EmailAddress
+    normalized.phone = rawData.PhoneNumber
+  } else if (source === 'ecommerce') {
+    normalized.name = rawData.customer_name
+    normalized.email = rawData.email_address
+    normalized.phone = rawData.contact_phone
+  } else if (source === 'support') {
+    normalized.name = rawData.full_name
+    normalized.email = rawData.email
+    normalized.phone = rawData.phone_number
+  }
+
+  // Normalize data
+  normalized = await data.transform(normalized, $.Customer.normalize, {
+    lowercase: ['email'],
+    trim: ['name', 'email'],
+    parse: {
+      phone: 'e164',
+    },
+  })
+
+  // Validate
+  const validationResult = await validate(normalized, CustomerSchema, {
+    detailed: true,
+  })
+
+  if (!validationResult.valid) {
+    console.error(`Validation failed for ${source}:${externalId}`, validationResult.errors)
+    return null
+  }
+
+  return normalized
+}
+
+// Transform all customers
+export async function transformCustomers(extracted: any) {
+  const allCustomers = [...extracted.crm, ...extracted.ecommerce, ...extracted.support]
+
+  console.log(`Transforming ${allCustomers.length} customers...`)
+
+  const transformed = await batch.transform(allCustomers, transformCustomer, {
+    batchSize: 100,
+    concurrency: 10,
+    onProgress: (processed, total) => {
+      console.log(`Transformed: ${processed}/${total}`)
+    },
+  })
+
+  const valid = transformed.filter((c) => c !== null)
+
+  return {
+    valid,
+    invalid: allCustomers.length - valid.length,
+    total: allCustomers.length,
+  }
+}
+```
+
+### 4. Deduplication
+
+Identify and merge duplicate customer records.
+
+```typescript
+import { $, data, db } from 'sdk.do'
+
+// Find duplicates based on email and phone
+async function findDuplicates(customers: any[]) {
+  const duplicates = new Map<string, any[]>()
+
+  for (const customer of customers) {
+    const key = customer.email.toLowerCase()
+
+    if (!duplicates.has(key)) {
+      duplicates.set(key, [])
+    }
+
+    duplicates.get(key)!.push(customer)
+  }
+
+  // Return only groups with duplicates
+  return Array.from(duplicates.values()).filter((group) => group.length > 1)
+}
+
+// Merge duplicate records
+function mergeCustomers(duplicates: any[]) {
+  // Sort by completeness (most complete record first)
+  const sorted = duplicates.sort((a, b) => {
+    const scoreA = calculateCompletenessScore(a)
+    const scoreB = calculateCompletenessScore(b)
+    return scoreB - scoreA
+  })
+
+  const master = sorted[0]
+
+  // Merge data from other records
+  for (const duplicate of sorted.slice(1)) {
+    // Take non-null values from duplicates
+    for (const [key, value] of Object.entries(duplicate)) {
+      if (value && !master[key]) {
+        master[key] = value
+      }
+    }
+
+    // Track sources
+    if (!master.sources) {
+      master.sources = [master.source]
+    }
+    if (!master.sources.includes(duplicate.source)) {
+      master.sources.push(duplicate.source)
+    }
+  }
+
+  return master
+}
+
+function calculateCompletenessScore(customer: any) {
+  const fields = ['name', 'email', 'phone', 'address', 'tier', 'segment']
+  return fields.filter((field) => customer[field] != null).length
+}
+
+// Deduplicate customer list
+export async function deduplicateCustomers(customers: any[]) {
+  console.log('Finding duplicates...')
+
+  const duplicateGroups = await findDuplicates(customers)
+
+  console.log(`Found ${duplicateGroups.length} duplicate groups`)
+
+  const merged = duplicateGroups.map(mergeCustomers)
+  const uniqueEmails = new Set(merged.map((c) => c.email))
+
+  // Filter out customers that were merged
+  const unique = customers.filter((c) => !duplicateGroups.some((group) => group.includes(c)))
+
+  return {
+    unique: [...unique, ...merged],
+    duplicatesRemoved: customers.length - unique.length - merged.length,
+  }
+}
+```
+
+### 5. Data Enrichment
+
+Enrich customer data with external services.
+
+```typescript
+import { $, api, data } from 'sdk.do'
+
+// Geocode address
+async function geocodeAddress(address: any) {
+  try {
+    const response = await api.fetch('https://api.geocode.example.com/geocode', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${process.env.GEOCODE_API_KEY}`,
+      },
+      body: JSON.stringify({
+        street: address.streetAddress,
+        city: address.addressLocality,
+        state: address.addressRegion,
+        zip: address.postalCode,
+        country: address.addressCountry,
+      }),
+    })
+
+    const result = await response.json()
+
+    return {
+      latitude: result.latitude,
+      longitude: result.longitude,
+      timezone: result.timezone,
+      county: result.county,
+    }
+  } catch (error) {
+    console.error('Geocoding failed:', error.message)
+    return null
+  }
+}
+
+// Get credit score
+async function getCreditScore(customer: any) {
+  try {
+    const response = await api.fetch('https://api.credit.example.com/score', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${process.env.CREDIT_API_KEY}`,
+      },
+      body: JSON.stringify({
+        name: customer.name,
+        address: customer.address,
+      }),
+    })
+
+    const result = await response.json()
+
+    return {
+      score: result.score,
+      rating: result.rating,
+    }
+  } catch (error) {
+    console.error('Credit score lookup failed:', error.message)
+    return null
+  }
+}
+
+// Calculate customer metrics
+async function calculateMetrics(customer: any) {
+  // Get order history
+  const orders = await db.list($.Order, {
+    where: { customerId: customer.$id },
+  })
+
+  const totalOrders = orders.length
+  const totalSpent = orders.reduce((sum, order) => sum + order.total, 0)
+  const avgOrderValue = totalOrders > 0 ? totalSpent / totalOrders : 0
+
+  // Calculate lifetime value
+  const ltv = totalSpent * 1.5 // Simple LTV calculation
+
+  // Determine tier
+  let tier = 'standard'
+  if (ltv > 10000) tier = 'vip'
+  else if (ltv > 1000) tier = 'premium'
+
+  // Determine segment
+  const daysSinceLastOrder = orders.length > 0 ? daysSince(orders[0].createdAt) : null
+
+  let segment = 'new'
+  if (totalOrders > 0) {
+    if (daysSinceLastOrder < 30) segment = 'active'
+    else if (daysSinceLastOrder < 90) segment = 'at-risk'
+    else segment = 'churned'
+  }
+
+  return {
+    totalOrders,
+    totalSpent,
+    avgOrderValue,
+    ltv,
+    tier,
+    segment,
+  }
+}
+
+// Enrich customer
+async function enrichCustomer(customer: any) {
+  console.log(`Enriching customer: ${customer.email}`)
+
+  const [geo, credit, metrics] = await Promise.all([
+    customer.address ? geocodeAddress(customer.address) : null,
+    getCreditScore(customer),
+    calculateMetrics(customer),
+  ])
+
+  return {
+    ...customer,
+    geo,
+    credit,
+    metrics,
+    enrichedAt: new Date(),
+  }
+}
+
+// Enrich all customers
+export async function enrichCustomers(customers: any[]) {
+  console.log(`Enriching ${customers.length} customers...`)
+
+  const enriched = await batch.transform(customers, enrichCustomer, {
+    batchSize: 50, // Smaller batches for API rate limits
+    concurrency: 5,
+    onProgress: (processed, total) => {
+      console.log(`Enriched: ${processed}/${total}`)
+    },
+  })
+
+  return enriched
+}
+```
+
+### 6. Load to Database
+
+Store unified customer records.
+
+```typescript
+import { $, db, version } from 'sdk.do'
+
+// Enable versioning for audit trail
+async function setupVersioning() {
+  await version.enable($.Customer, {
+    strategy: 'snapshot',
+    retention: '365d',
+    track: ['name', 'email', 'phone', 'address', 'tier', 'segment'],
+  })
+}
+
+// Load customers to database
+export async function loadCustomers(customers: any[]) {
+  console.log(`Loading ${customers.length} customers to database...`)
+
+  await setupVersioning()
+
+  const results = {
+    created: 0,
+    updated: 0,
+    failed: 0,
+  }
+
+  for (const customer of customers) {
+    try {
+      // Check if customer exists
+      const existing = await db.list($.Customer, {
+        where: { email: customer.email },
+      })
+
+      if (existing.length > 0) {
+        // Update existing
+        await db.update($.Customer, existing[0].$id, customer)
+        results.updated++
+      } else {
+        // Create new
+        await db.create($.Customer, customer)
+        results.created++
+      }
+    } catch (error) {
+      console.error(`Failed to load customer ${customer.email}:`, error.message)
+      results.failed++
+    }
+  }
+
+  console.log('Load results:', results)
+
+  return results
+}
+```
+
+### 7. Sync to Data Warehouse
+
+Sync customer data to data warehouse for analytics.
+
+```typescript
+import { $, api, db, batch } from 'sdk.do'
+
+// Sync to data warehouse
+export async function syncToWarehouse() {
+  console.log('Syncing to data warehouse...')
+
+  // Get all customers
+  const customers = await db.list($.Customer)
+
+  // Transform to warehouse format
+  const warehouseRecords = customers.map((customer) => ({
+    customer_id: customer.$id,
+    email: customer.email,
+    name: customer.name,
+    phone: customer.phone,
+    tier: customer.tier,
+    segment: customer.segment,
+    total_orders: customer.metrics?.totalOrders || 0,
+    total_spent: customer.metrics?.totalSpent || 0,
+    avg_order_value: customer.metrics?.avgOrderValue || 0,
+    lifetime_value: customer.metrics?.ltv || 0,
+    credit_score: customer.credit?.score,
+    latitude: customer.geo?.latitude,
+    longitude: customer.geo?.longitude,
+    last_updated: new Date(),
+  }))
+
+  // Batch sync to warehouse
+  await batch.transform(
+    warehouseRecords,
+    async (record) => {
+      await api.fetch('https://warehouse.example.com/customers', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${process.env.WAREHOUSE_API_KEY}`,
+        },
+        body: JSON.stringify(record),
+      })
+    },
+    {
+      batchSize: 100,
+      concurrency: 5,
+      onProgress: (processed, total) => {
+        console.log(`Synced: ${processed}/${total}`)
+      },
+    }
+  )
+
+  console.log('Warehouse sync complete')
+}
+```
+
+### 8. Data Quality Monitoring
+
+Monitor and report on data quality.
+
+```typescript
+import { $, quality, send } from 'sdk.do'
+
+// Setup data quality monitoring
+export async function setupQualityMonitoring() {
+  await quality.define($.Customer, {
+    completeness: {
+      required: ['email', 'name', 'phone', 'address'],
+      threshold: 0.98,
+    },
+    accuracy: {
+      email: { format: 'email' },
+      phone: { format: 'e164' },
+      'address.postalCode': { format: 'postal' },
+    },
+    consistency: {
+      tier: { values: ['standard', 'premium', 'vip'] },
+      segment: { values: ['new', 'active', 'at-risk', 'churned'] },
+    },
+    timeliness: {
+      enrichedAt: { maxAge: '7d' },
+    },
+    uniqueness: {
+      email: { duplicates: 'error' },
+    },
+  })
+}
+
+// Run quality check and alert if needed
+export async function checkDataQuality() {
+  const report = await quality.check($.Customer, {
+    detailed: true,
+  })
+
+  console.log('Data Quality Report:')
+  console.log(`- Overall Score: ${(report.score * 100).toFixed(2)}%`)
+  console.log(`- Completeness: ${(report.completeness * 100).toFixed(2)}%`)
+  console.log(`- Accuracy: ${(report.accuracy * 100).toFixed(2)}%`)
+  console.log(`- Consistency: ${(report.consistency * 100).toFixed(2)}%`)
+  console.log(`- Timeliness: ${(report.timeliness * 100).toFixed(2)}%`)
+  console.log(`- Uniqueness: ${(report.uniqueness * 100).toFixed(2)}%`)
+
+  // Alert if quality below threshold
+  if (report.score < 0.95) {
+    await send($.Alert, {
+      type: 'data-quality',
+      subject: 'Customer data quality below threshold',
+      score: report.score,
+      issues: report.issues,
+    })
+
+    // Auto-fix if possible
+    console.log('Attempting to auto-fix quality issues...')
+    const fixed = await quality.fix($.Customer, {
+      strategies: ['normalize', 'validate'],
+      dryRun: false,
+    })
+
+    console.log(`Fixed ${fixed.count} issues`)
+  }
+
+  return report
+}
+```
+
+### 9. Complete Pipeline
+
+Put it all together in a complete pipeline.
+
+```typescript
+import { $, every, send } from 'sdk.do'
+
+// Main CDP pipeline
+export async function runCDPPipeline() {
+  console.log('Starting CDP pipeline...')
+
+  const startTime = Date.now()
+  const metrics = {
+    extracted: 0,
+    transformed: 0,
+    deduplicated: 0,
+    enriched: 0,
+    loaded: 0,
+    duration: 0,
+  }
+
+  try {
+    // 1. Extract
+    console.log('\n1. Extracting data from sources...')
+    const extracted = await extractAllSources()
+    metrics.extracted = extracted.total
+
+    // 2. Transform
+    console.log('\n2. Transforming and validating data...')
+    const transformed = await transformCustomers(extracted)
+    metrics.transformed = transformed.valid.length
+
+    // 3. Deduplicate
+    console.log('\n3. Deduplicating customers...')
+    const deduplicated = await deduplicateCustomers(transformed.valid)
+    metrics.deduplicated = deduplicated.duplicatesRemoved
+
+    // 4. Enrich
+    console.log('\n4. Enriching customer data...')
+    const enriched = await enrichCustomers(deduplicated.unique)
+    metrics.enriched = enriched.length
+
+    // 5. Load
+    console.log('\n5. Loading to database...')
+    const loaded = await loadCustomers(enriched)
+    metrics.loaded = loaded.created + loaded.updated
+
+    // 6. Sync to warehouse
+    console.log('\n6. Syncing to data warehouse...')
+    await syncToWarehouse()
+
+    // 7. Check quality
+    console.log('\n7. Checking data quality...')
+    const quality = await checkDataQuality()
+
+    metrics.duration = Date.now() - startTime
+
+    // Send completion notification
+    await send($.Notification, {
+      type: 'pipeline-complete',
+      pipeline: 'CDP',
+      metrics,
+      quality: quality.score,
+      timestamp: new Date(),
+    })
+
+    console.log('\nPipeline complete!')
+    console.log('Metrics:', metrics)
+
+    return { success: true, metrics }
+  } catch (error) {
+    console.error('Pipeline failed:', error)
+
+    // Send error notification
+    await send($.Alert, {
+      type: 'pipeline-failed',
+      pipeline: 'CDP',
+      error: error.message,
+      metrics,
+      timestamp: new Date(),
+    })
+
+    return { success: false, error: error.message, metrics }
+  }
+}
+
+// Schedule pipeline to run daily
+export async function scheduleCDPPipeline() {
+  await every('0 2 * * *', async () => {
+    // Run at 2 AM daily
+    await runCDPPipeline()
+  })
+}
+
+// Run immediately
+if (require.main === module) {
+  runCDPPipeline()
+}
+```
+
+## Production Metrics
+
+After running the pipeline, you'll see metrics like:
+
+```
+CDP Pipeline Results:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Extraction:
+  - CRM: 5,234 customers
+  - E-commerce: 12,456 customers
+  - Support: 3,891 customers
+  - Total extracted: 21,581 customers
+
+Transformation:
+  - Valid: 21,203 customers
+  - Invalid: 378 customers
+  - Success rate: 98.25%
+
+Deduplication:
+  - Duplicates found: 1,456 records
+  - Unique customers: 19,747
+
+Enrichment:
+  - Geocoded: 19,234 (97.4%)
+  - Credit scores: 18,891 (95.7%)
+  - Metrics calculated: 19,747 (100%)
+
+Loading:
+  - Created: 2,134 new customers
+  - Updated: 17,613 existing customers
+  - Failed: 0
+
+Data Quality:
+  - Overall score: 97.8%
+  - Completeness: 98.5%
+  - Accuracy: 96.2%
+  - Consistency: 99.1%
+  - Timeliness: 97.4%
+  - Uniqueness: 100%
+
+Pipeline duration: 12m 34s
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+## Key Takeaways
+
+This real-world example demonstrates:
+
+1. **Multi-source ETL** - Extract from APIs, CSV, and JSON
+2. **Schema validation** - Validate against comprehensive schemas
+3. **Data normalization** - Transform different formats to common schema
+4. **Deduplication** - Identify and merge duplicate records
+5. **Data enrichment** - Enhance with third-party services
+6. **Quality monitoring** - Track and improve data quality
+7. **Production patterns** - Error handling, retries, progress tracking
+8. **Scalability** - Batch processing for large datasets
+9. **Observability** - Metrics, logging, and alerting
+
+## License
+
+- Documentation: [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/)
+- Code Examples: [MIT](https://opensource.org/licenses/MIT)

@@ -1,0 +1,744 @@
+---
+$id: https://apis.do
+$type: WebSite
+name: apis.do
+description: Unified API gateway for all .do platform services with semantic routing and authentication
+keywords: [api, gateway, routing, authentication, rest, graphql, semantic, business-as-code]
+license: MIT
+---
+
+# apis.do
+
+**Unified API gateway for all .do platform services with semantic routing and authentication**
+
+apis.do provides a comprehensive API gateway that routes requests to domain-specific services across the `.do` platform. It offers intelligent routing, authentication, rate limiting, request/response transformation, and semantic API patterns for building Business-as-Code applications.
+
+## Quick Start
+
+```bash
+pnpm add sdk.do
+```
+
+```typescript
+import { api } from 'sdk.do'
+
+// Call platform API through gateway
+const businesses = await api('https://apis.do/businesses', {
+  method: 'GET',
+  headers: {
+    Authorization: 'Bearer your-token',
+    'Content-Type': 'application/json',
+  },
+})
+
+// With semantic context
+const orders = await api('https://apis.do/orders', {
+  schema: $.Order,
+  transform: (data) => data.items,
+})
+
+// POST request with data
+const newBusiness = await api('https://apis.do/businesses', {
+  method: 'POST',
+  body: {
+    name: 'Acme Corp',
+    industry: 'Technology',
+  },
+  schema: $.Business,
+})
+```
+
+## Overview
+
+apis.do serves as the central API gateway for the entire `.do` platform, providing:
+
+- **Unified API Endpoint**: Single entry point for all platform services
+- **Semantic Routing**: Route requests based on `$.Subject.predicate.Object` patterns
+- **Authentication**: Centralized auth with JWT, OAuth2, API keys
+- **Rate Limiting**: Per-user, per-endpoint rate limiting
+- **Request Transformation**: Transform requests to match service expectations
+- **Response Transformation**: Normalize responses across services
+- **Schema Validation**: Validate requests/responses with Schema.org types
+- **API Versioning**: Support multiple API versions simultaneously
+- **Load Balancing**: Distribute requests across service instances
+- **Monitoring**: Track API usage, errors, and performance
+
+## Key Features
+
+### Unified API Gateway
+
+Single endpoint for all platform services:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Database operations
+const businesses = await api('/businesses', { method: 'GET' })
+const business = await api('/businesses/123', { method: 'GET' })
+
+// AI services
+const analysis = await api('/ai/generate', {
+  method: 'POST',
+  body: {
+    prompt: 'Analyze this data',
+    data: {
+      /* ... */
+    },
+  },
+})
+
+// Event publishing
+await api('/events/send', {
+  method: 'POST',
+  body: {
+    type: 'Order.created',
+    data: { orderId: '123', total: 99.99 },
+  },
+})
+
+// User management
+const user = await api('/users/me', { method: 'GET' })
+```
+
+### Semantic Routing
+
+Route requests using semantic patterns:
+
+```typescript
+import $, { api } from 'sdk.do'
+
+// Route to appropriate service based on type
+const businesses = await api($.Business.list, {
+  where: { industry: 'Technology' },
+})
+
+// Semantic relationships
+const employees = await api($.Organization.employs.Person, {
+  organizationId: 'org-123',
+})
+
+// Event routing
+await api($.Order.created.send, {
+  orderId: '123',
+  total: 99.99,
+})
+```
+
+### Authentication & Authorization
+
+Multiple authentication methods:
+
+```typescript
+// JWT Bearer Token
+const response = await api('/businesses', {
+  headers: { Authorization: 'Bearer jwt-token' },
+})
+
+// API Key
+const response = await api('/businesses', {
+  headers: { 'X-API-Key': 'api-key' },
+})
+
+// OAuth2
+const response = await api('/businesses', {
+  oauth: {
+    clientId: 'client-id',
+    clientSecret: 'client-secret',
+  },
+})
+```
+
+### Rate Limiting
+
+Automatic rate limiting per user and endpoint:
+
+```typescript
+// Rate limits are enforced automatically
+// 429 Too Many Requests returned when exceeded
+
+// Response headers include rate limit info
+// X-RateLimit-Limit: 100
+// X-RateLimit-Remaining: 99
+// X-RateLimit-Reset: 1640995200
+```
+
+### Request/Response Transformation
+
+Transform data between formats:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Transform request
+await api('/businesses', {
+  method: 'POST',
+  body: { name: 'Acme' },
+  transform: {
+    request: (data) => ({
+      ...data,
+      $type: 'Business',
+      createdAt: new Date().toISOString(),
+    }),
+  },
+})
+
+// Transform response
+const businesses = await api('/businesses', {
+  transform: {
+    response: (data) =>
+      data.items.map((b) => ({
+        id: b.$id,
+        name: b.name,
+        industry: b.industry,
+      })),
+  },
+})
+```
+
+### Schema Validation
+
+Validate requests and responses with Schema.org types:
+
+```typescript
+import $, { api } from 'sdk.do'
+
+// Request validation
+await api('/businesses', {
+  method: 'POST',
+  body: {
+    name: 'Acme Corp',
+    industry: 'Technology',
+  },
+  schema: $.Business,
+  validate: 'request',
+})
+
+// Response validation
+const businesses = await api('/businesses', {
+  schema: $.Business,
+  validate: 'response',
+})
+```
+
+### API Versioning
+
+Support multiple API versions:
+
+```typescript
+// Version in URL
+await api('https://apis.do/v1/businesses')
+await api('https://apis.do/v2/businesses')
+
+// Version in header
+await api('/businesses', {
+  headers: { 'API-Version': 'v2' },
+})
+
+// Version in accept header
+await api('/businesses', {
+  headers: { Accept: 'application/vnd.do.v2+json' },
+})
+```
+
+## Routing Patterns
+
+### Domain-Based Routing
+
+Route to services by domain:
+
+```
+/businesses       → database.do
+/events           → events.do
+/ai               → ai.do
+/workflows        → workflows.do
+/users            → user.do
+```
+
+### Semantic Pattern Routing
+
+Route by semantic patterns:
+
+```typescript
+// $.Subject.verb.Object patterns
+$.Business.list()         → GET /businesses
+$.Business.get('id')      → GET /businesses/:id
+$.Business.create(data)   → POST /businesses
+$.Business.update(data)   → PUT /businesses/:id
+$.Business.delete('id')   → DELETE /businesses/:id
+
+// Relationship routing
+$.Person.worksFor.Organization  → GET /people/:id/relationships/worksFor
+$.Organization.owns.Brand       → GET /organizations/:id/relationships/owns
+```
+
+### REST API Routing
+
+Standard REST patterns:
+
+```
+GET    /businesses              → List businesses
+GET    /businesses/:id          → Get business
+POST   /businesses              → Create business
+PUT    /businesses/:id          → Update business
+PATCH  /businesses/:id          → Partial update
+DELETE /businesses/:id          → Delete business
+```
+
+### GraphQL API Routing
+
+GraphQL endpoint with semantic schema:
+
+```graphql
+query {
+  businesses(where: { industry: "Technology" }) {
+    id
+    name
+    industry
+    employees {
+      id
+      name
+      jobTitle
+    }
+  }
+}
+
+mutation {
+  createBusiness(input: { name: "Acme Corp", industry: "Technology" }) {
+    id
+    name
+  }
+}
+```
+
+## Authentication Methods
+
+### JWT Bearer Tokens
+
+Standard JWT authentication:
+
+```typescript
+import { api } from 'sdk.do'
+
+const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+
+const response = await api('/businesses', {
+  headers: {
+    Authorization: `Bearer ${token}`,
+  },
+})
+```
+
+### API Keys
+
+Simple API key authentication:
+
+```typescript
+const response = await api('/businesses', {
+  headers: {
+    'X-API-Key': 'your-api-key-here',
+  },
+})
+```
+
+### OAuth2
+
+OAuth2 authentication flow:
+
+```typescript
+// Step 1: Get authorization URL
+const authUrl = await api('/oauth/authorize', {
+  clientId: 'your-client-id',
+  redirectUri: 'https://your-app.com/callback',
+  scope: 'read:businesses write:businesses',
+})
+
+// Step 2: Exchange code for token
+const tokens = await api('/oauth/token', {
+  method: 'POST',
+  body: {
+    code: 'auth-code',
+    clientId: 'your-client-id',
+    clientSecret: 'your-client-secret',
+    redirectUri: 'https://your-app.com/callback',
+  },
+})
+
+// Step 3: Use access token
+const response = await api('/businesses', {
+  headers: {
+    Authorization: `Bearer ${tokens.accessToken}`,
+  },
+})
+```
+
+### Service-to-Service Authentication
+
+Authenticate service-to-service calls:
+
+```typescript
+// Using service credentials
+const response = await api('/businesses', {
+  headers: {
+    'X-Service-ID': 'service-id',
+    'X-Service-Secret': 'service-secret',
+  },
+})
+```
+
+## API Endpoints
+
+### Core Resources
+
+```
+GET    /businesses              → List businesses
+GET    /businesses/:id          → Get business by ID
+POST   /businesses              → Create business
+PUT    /businesses/:id          → Update business
+DELETE /businesses/:id          → Delete business
+
+GET    /people                  → List people
+GET    /people/:id              → Get person by ID
+POST   /people                  → Create person
+PUT    /people/:id              → Update person
+DELETE /people/:id              → Delete person
+
+GET    /products                → List products
+GET    /products/:id            → Get product by ID
+POST   /products                → Create product
+PUT    /products/:id            → Update product
+DELETE /products/:id            → Delete product
+
+GET    /orders                  → List orders
+GET    /orders/:id              → Get order by ID
+POST   /orders                  → Create order
+PUT    /orders/:id              → Update order
+DELETE /orders/:id              → Delete order
+```
+
+### AI Services
+
+```
+POST   /ai/generate             → Generate content with AI
+POST   /ai/embed                → Generate embeddings
+POST   /ai/batch                → Batch AI operations
+GET    /ai/models               → List available models
+```
+
+### Events
+
+```
+POST   /events/send             → Publish event
+GET    /events/stream           → Subscribe to event stream
+GET    /events/history          → Get event history
+```
+
+### Workflows
+
+```
+POST   /workflows/start         → Start workflow
+GET    /workflows/:id           → Get workflow status
+POST   /workflows/:id/cancel    → Cancel workflow
+GET    /workflows               → List workflows
+```
+
+### User Management
+
+```
+GET    /users/me                → Get current user
+PUT    /users/me                → Update current user
+GET    /users/:id               → Get user by ID
+POST   /users                   → Create user
+DELETE /users/:id               → Delete user
+```
+
+## Documentation
+
+- [Getting Started](./docs/getting-started) - Setup and first API call
+- [Routing](./docs/routing) - API routing patterns
+- [Authentication](./docs/authentication) - Authentication methods
+- [API Reference](./api/) - Complete API documentation
+
+## Examples
+
+- [Basic Usage](./examples/basic) - Basic API gateway usage
+- [Advanced Routing](./examples/routing) - Complex routing patterns
+- [Authentication](./examples/authentication) - Auth examples
+- [Rate Limiting](./examples/rate-limiting) - Rate limit handling
+- [Transformations](./examples/transformations) - Request/response transformation
+
+## Integration with .do Platform
+
+apis.do routes to all `.do` platform services:
+
+- **[database.do](https://database.do)** - Database operations
+- **[events.do](https://events.do)** - Event system
+- **[ai.do](https://ai.do)** - AI services
+- **[workflows.do](https://workflows.do)** - Workflow orchestration
+- **[user.do](https://user.do)** - User management
+- **[sdk.do](https://sdk.do)** - Core SDK functions
+
+## Use Cases
+
+### Building a REST API
+
+```typescript
+import { api } from 'sdk.do'
+
+// List resources
+app.get('/api/businesses', async (req, res) => {
+  const businesses = await api('/businesses', {
+    query: req.query,
+  })
+  res.json(businesses)
+})
+
+// Get resource
+app.get('/api/businesses/:id', async (req, res) => {
+  const business = await api(`/businesses/${req.params.id}`)
+  res.json(business)
+})
+
+// Create resource
+app.post('/api/businesses', async (req, res) => {
+  const business = await api('/businesses', {
+    method: 'POST',
+    body: req.body,
+    schema: $.Business,
+  })
+  res.status(201).json(business)
+})
+```
+
+### Microservices Communication
+
+```typescript
+// Service A calls Service B through gateway
+import { api } from 'sdk.do'
+
+async function processOrder(orderId: string) {
+  // Get order from database service
+  const order = await api(`/orders/${orderId}`)
+
+  // Process payment through payment service
+  const payment = await api('/payments', {
+    method: 'POST',
+    body: {
+      orderId: order.id,
+      amount: order.total,
+    },
+  })
+
+  // Update inventory through inventory service
+  await api('/inventory/reserve', {
+    method: 'POST',
+    body: {
+      items: order.items,
+    },
+  })
+
+  // Publish event through event service
+  await api('/events/send', {
+    method: 'POST',
+    body: {
+      type: 'Order.processed',
+      data: { orderId, payment },
+    },
+  })
+}
+```
+
+### Third-Party API Integration
+
+```typescript
+import { api } from 'sdk.do'
+
+// Proxy external APIs through gateway
+const weatherData = await api('/external/weather', {
+  provider: 'openweathermap',
+  params: { city: 'San Francisco' },
+})
+
+// Transform external data to internal format
+const normalizedData = await api('/external/products', {
+  provider: 'shopify',
+  transform: {
+    response: (data) =>
+      data.products.map((p) => ({
+        $type: 'Product',
+        name: p.title,
+        price: parseFloat(p.variants[0].price),
+        description: p.body_html,
+      })),
+  },
+})
+```
+
+## Best Practices
+
+### Use Semantic Routing
+
+Leverage semantic patterns for type safety:
+
+```typescript
+// Good - semantic routing
+const businesses = await api($.Business.list, {
+  where: { industry: 'Technology' },
+})
+
+// Avoid - string-based routing
+const businesses = await api('/businesses?industry=Technology')
+```
+
+### Handle Errors Gracefully
+
+Always handle API errors:
+
+```typescript
+try {
+  const business = await api('/businesses/123')
+} catch (error) {
+  if (error.status === 404) {
+    console.error('Business not found')
+  } else if (error.status === 401) {
+    console.error('Unauthorized')
+  } else {
+    console.error('API error:', error.message)
+  }
+}
+```
+
+### Use Rate Limit Headers
+
+Check rate limit status:
+
+```typescript
+const response = await api('/businesses')
+
+const limit = response.headers['x-ratelimit-limit']
+const remaining = response.headers['x-ratelimit-remaining']
+const reset = response.headers['x-ratelimit-reset']
+
+if (remaining < 10) {
+  console.warn(`Rate limit low: ${remaining}/${limit}`)
+}
+```
+
+### Cache Responses
+
+Cache frequently accessed data:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Enable caching
+const businesses = await api('/businesses', {
+  cache: {
+    ttl: 3600, // 1 hour
+    key: 'businesses-list',
+  },
+})
+```
+
+### Batch Requests
+
+Batch multiple requests:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Batch requests for efficiency
+const [businesses, products, orders] = await Promise.all([api('/businesses'), api('/products'), api('/orders')])
+```
+
+## Configuration
+
+Configure the API gateway with environment variables:
+
+```bash
+# Gateway configuration
+APIS_GATEWAY_URL=https://apis.do
+APIS_GATEWAY_TIMEOUT=30000
+APIS_GATEWAY_RETRY=3
+
+# Authentication
+APIS_JWT_SECRET=your-jwt-secret
+APIS_API_KEY=your-api-key
+
+# Rate limiting
+APIS_RATE_LIMIT_WINDOW=60000    # 1 minute
+APIS_RATE_LIMIT_MAX=100         # 100 requests per window
+
+# Service routing
+APIS_DATABASE_URL=https://database.do
+APIS_EVENTS_URL=https://events.do
+APIS_AI_URL=https://ai.do
+APIS_WORKFLOWS_URL=https://workflows.do
+```
+
+## Troubleshooting
+
+### Connection Errors
+
+Check gateway connectivity:
+
+```bash
+curl https://apis.do/health
+```
+
+### Authentication Failures
+
+Verify token validity:
+
+```bash
+curl https://apis.do/auth/verify \
+  -H "Authorization: Bearer your-token"
+```
+
+### Rate Limit Exceeded
+
+Wait for rate limit reset or upgrade plan:
+
+```typescript
+const resetTime = response.headers['x-ratelimit-reset']
+const waitMs = parseInt(resetTime) * 1000 - Date.now()
+console.log(`Wait ${waitMs}ms before retrying`)
+```
+
+### Service Unavailable
+
+Check service status:
+
+```bash
+curl https://apis.do/status
+```
+
+## License
+
+MIT (Open Source)
+
+apis.do is open-source software released under the MIT License. You are free to use, modify, and distribute it for any purpose.
+
+## Resources
+
+- [GitHub Repository](https://github.com/dot-do/ai)
+- [Issue Tracker](https://github.com/dot-do/ai/issues)
+- [API Status Page](https://status.apis.do)
+- [Changelog](https://github.com/dot-do/ai/blob/main/CHANGELOG.md)
+
+## Related Projects
+
+- **sdk.do** - Core TypeScript SDK
+- **database.do** - Database service
+- **events.do** - Event system
+- **ai.do** - AI services
+- **workflows.do** - Workflow orchestration
+
+## Contributing
+
+Contributions are welcome! apis.do is part of the [`.do` platform](https://github.com/dot-do/platform) ecosystem.
+
+See [CONTRIBUTING.md](https://github.com/dot-do/ai/blob/main/CONTRIBUTING.md) for guidelines.
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

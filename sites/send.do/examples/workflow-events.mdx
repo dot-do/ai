@@ -1,0 +1,782 @@
+---
+$id: https://send.do/examples/workflow-events
+$type: HowTo
+title: Workflow Events
+description: Event-driven workflow patterns using event chains and orchestration
+keywords: [examples, workflows, event-chains, orchestration, automation]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Workflow Events
+
+Event-driven workflow patterns using event chains and orchestration.
+
+## Overview
+
+Event-driven workflows use events to trigger sequences of actions. Each step publishes an event that triggers the next step, creating autonomous business processes.
+
+## Basic Order Workflow
+
+A simple order processing workflow:
+
+```typescript
+import { on, send } from 'sdk.do'
+
+// Step 1: Order created
+on('Order.created', async (event) => {
+  console.log('Order created:', event.data.id)
+
+  // Validate inventory
+  const available = await checkInventory(event.data.items)
+
+  if (available) {
+    await send('Order.validated', event.data)
+  } else {
+    await send('Order.rejected', {
+      ...event.data,
+      reason: 'insufficient-inventory',
+    })
+  }
+})
+
+// Step 2: Order validated
+on('Order.validated', async (event) => {
+  console.log('Order validated:', event.data.id)
+
+  // Request payment
+  await send('Payment.requested', {
+    orderId: event.data.id,
+    amount: event.data.total,
+    customerId: event.data.customerId,
+  })
+})
+
+// Step 3: Payment completed
+on('Payment.completed', async (event) => {
+  console.log('Payment completed:', event.data.orderId)
+
+  // Ship order
+  const trackingNumber = await generateTrackingNumber()
+
+  await send('Order.shipped', {
+    orderId: event.data.orderId,
+    trackingNumber,
+    carrier: 'FedEx',
+    shippedAt: new Date(),
+  })
+})
+
+// Step 4: Order shipped
+on('Order.shipped', async (event) => {
+  console.log('Order shipped:', event.data.orderId)
+
+  // Notify customer
+  await send('Customer.notified', {
+    customerId: event.data.customerId,
+    type: 'order-shipped',
+    orderId: event.data.orderId,
+    trackingNumber: event.data.trackingNumber,
+  })
+})
+
+// Start the workflow
+await send('Order.created', {
+  id: 'order-12345',
+  customerId: 'cust-456',
+  items: [{ product: 'widget', quantity: 10, price: 99.99 }],
+  total: 999.9,
+})
+```
+
+## User Registration Workflow
+
+Complete user registration and onboarding:
+
+```typescript
+import { on, send } from 'sdk.do'
+
+// Step 1: User registered
+on('User.registered', async (event) => {
+  console.log('User registered:', event.data.email)
+
+  // Send verification email
+  await sendVerificationEmail(event.data.email)
+
+  await send('Email.sent', {
+    userId: event.data.id,
+    type: 'verification',
+    to: event.data.email,
+  })
+})
+
+// Step 2: User verified email
+on('User.emailVerified', async (event) => {
+  console.log('User verified:', event.data.email)
+
+  // Activate account
+  await activateAccount(event.data.id)
+
+  await send('User.activated', {
+    id: event.data.id,
+    email: event.data.email,
+    activatedAt: new Date(),
+  })
+})
+
+// Step 3: User activated
+on('User.activated', async (event) => {
+  console.log('User activated:', event.data.email)
+
+  // Create default preferences
+  await createDefaultPreferences(event.data.id)
+
+  await send('Preferences.created', {
+    userId: event.data.id,
+  })
+
+  // Send welcome email
+  await sendWelcomeEmail(event.data.email)
+
+  await send('Email.sent', {
+    userId: event.data.id,
+    type: 'welcome',
+    to: event.data.email,
+  })
+})
+
+// Step 4: Welcome sent
+on('Email.sent', async (event) => {
+  if (event.data.type === 'welcome') {
+    console.log('Welcome email sent:', event.data.to)
+
+    // Start onboarding process
+    await send('Onboarding.started', {
+      userId: event.data.userId,
+    })
+  }
+})
+
+// Start the workflow
+await send('User.registered', {
+  id: 'user-123',
+  email: 'john@example.com',
+  name: 'John Doe',
+  registeredAt: new Date(),
+})
+```
+
+## E-commerce Purchase Workflow
+
+End-to-end purchase flow:
+
+```typescript
+import { on, send, db } from 'sdk.do'
+
+// Step 1: Cart converted to order
+on('Cart.converted', async (event) => {
+  const cart = event.data
+
+  // Create order from cart
+  const order = await db.create($.Order, {
+    customerId: cart.customerId,
+    items: cart.items,
+    total: cart.total,
+    status: 'created',
+  })
+
+  await send('Order.created', order)
+})
+
+// Step 2: Order created
+on('Order.created', async (event) => {
+  // Reserve inventory
+  for (const item of event.data.items) {
+    await reserveInventory(item.product, item.quantity)
+  }
+
+  await send('Inventory.reserved', {
+    orderId: event.data.id,
+    items: event.data.items,
+  })
+})
+
+// Step 3: Inventory reserved
+on('Inventory.reserved', async (event) => {
+  // Request payment
+  await send('Payment.requested', {
+    orderId: event.data.orderId,
+    amount: event.data.total,
+  })
+})
+
+// Step 4: Payment completed
+on('Payment.completed', async (event) => {
+  // Update order status
+  await db.update($.Order, event.data.orderId, {
+    status: 'paid',
+    paidAt: new Date(),
+  })
+
+  await send('Order.paid', {
+    orderId: event.data.orderId,
+    amount: event.data.amount,
+  })
+})
+
+// Step 5: Order paid
+on('Order.paid', async (event) => {
+  // Request fulfillment
+  await send('Fulfillment.requested', {
+    orderId: event.data.orderId,
+  })
+})
+
+// Step 6: Fulfillment completed
+on('Fulfillment.completed', async (event) => {
+  // Ship order
+  const trackingNumber = await generateTrackingNumber()
+
+  await send('Shipment.created', {
+    orderId: event.data.orderId,
+    trackingNumber,
+    carrier: 'FedEx',
+  })
+})
+
+// Step 7: Shipment created
+on('Shipment.created', async (event) => {
+  // Update order status
+  await db.update($.Order, event.data.orderId, {
+    status: 'shipped',
+    trackingNumber: event.data.trackingNumber,
+    shippedAt: new Date(),
+  })
+
+  await send('Order.shipped', {
+    orderId: event.data.orderId,
+    trackingNumber: event.data.trackingNumber,
+  })
+
+  // Notify customer
+  await send('Customer.notified', {
+    orderId: event.data.orderId,
+    type: 'order-shipped',
+    trackingNumber: event.data.trackingNumber,
+  })
+})
+
+// Step 8: Shipment delivered
+on('Shipment.delivered', async (event) => {
+  // Update order status
+  await db.update($.Order, event.data.orderId, {
+    status: 'delivered',
+    deliveredAt: new Date(),
+  })
+
+  await send('Order.delivered', {
+    orderId: event.data.orderId,
+    deliveredAt: new Date(),
+  })
+
+  // Request review
+  await send('Review.requested', {
+    orderId: event.data.orderId,
+  })
+})
+```
+
+## Subscription Management Workflow
+
+Subscription lifecycle with events:
+
+```typescript
+import { on, send, every } from 'sdk.do'
+
+// Step 1: Subscription created
+on('Subscription.created', async (event) => {
+  console.log('Subscription created:', event.data.id)
+
+  // Process first payment
+  await send('Payment.requested', {
+    subscriptionId: event.data.id,
+    amount: event.data.price,
+    customerId: event.data.customerId,
+  })
+})
+
+// Step 2: Payment completed
+on('Payment.completed', async (event) => {
+  if (event.data.subscriptionId) {
+    // Activate subscription
+    await db.update($.Subscription, event.data.subscriptionId, {
+      status: 'active',
+      activatedAt: new Date(),
+    })
+
+    await send('Subscription.activated', {
+      id: event.data.subscriptionId,
+      customerId: event.data.customerId,
+    })
+  }
+})
+
+// Step 3: Subscription activated
+on('Subscription.activated', async (event) => {
+  console.log('Subscription activated:', event.data.id)
+
+  // Grant access to service
+  await grantAccess(event.data.customerId)
+
+  await send('Access.granted', {
+    customerId: event.data.customerId,
+    subscriptionId: event.data.id,
+  })
+
+  // Send welcome email
+  await send('Email.sent', {
+    customerId: event.data.customerId,
+    type: 'subscription-activated',
+  })
+})
+
+// Recurring billing
+every($.Daily, async () => {
+  const subscriptions = await db.list($.Subscription, {
+    where: {
+      status: 'active',
+      nextBillingDate: new Date(),
+    },
+  })
+
+  for (const subscription of subscriptions) {
+    await send('Subscription.renewalDue', {
+      id: subscription.id,
+      customerId: subscription.customerId,
+      amount: subscription.price,
+    })
+  }
+})
+
+// Step 4: Renewal due
+on('Subscription.renewalDue', async (event) => {
+  // Process renewal payment
+  await send('Payment.requested', {
+    subscriptionId: event.data.id,
+    amount: event.data.amount,
+    customerId: event.data.customerId,
+    type: 'renewal',
+  })
+})
+
+// Step 5: Renewal payment completed
+on('Payment.completed', async (event) => {
+  if (event.data.type === 'renewal') {
+    await send('Subscription.renewed', {
+      id: event.data.subscriptionId,
+      renewedAt: new Date(),
+    })
+  }
+})
+
+// Step 6: Renewal payment failed
+on('Payment.failed', async (event) => {
+  if (event.data.type === 'renewal') {
+    await send('Subscription.renewalFailed', {
+      id: event.data.subscriptionId,
+      reason: event.data.reason,
+    })
+
+    // Send reminder email
+    await send('Email.sent', {
+      customerId: event.data.customerId,
+      type: 'payment-failed',
+    })
+  }
+})
+
+// Step 7: Cancellation requested
+on('Subscription.cancellationRequested', async (event) => {
+  // Process cancellation
+  await db.update($.Subscription, event.data.id, {
+    status: 'cancelled',
+    cancelledAt: new Date(),
+  })
+
+  await send('Subscription.cancelled', {
+    id: event.data.id,
+    customerId: event.data.customerId,
+  })
+
+  // Revoke access
+  await revokeAccess(event.data.customerId)
+
+  await send('Access.revoked', {
+    customerId: event.data.customerId,
+    subscriptionId: event.data.id,
+  })
+})
+```
+
+## Content Moderation Workflow
+
+AI-powered content moderation:
+
+```typescript
+import { on, send, ai } from 'sdk.do'
+
+// Step 1: Content submitted
+on('Content.submitted', async (event) => {
+  console.log('Content submitted:', event.data.id)
+
+  // Queue for moderation
+  await send('Content.moderationQueued', {
+    contentId: event.data.id,
+    type: event.data.type,
+    userId: event.data.userId,
+  })
+})
+
+// Step 2: AI moderation
+on('Content.moderationQueued', async (event) => {
+  // Analyze with AI
+  const analysis = await ai.generate({
+    prompt: `Moderate this content: ${event.data.content}`,
+    schema: $.ModerationAnalysis,
+  })
+
+  if (analysis.safe) {
+    await send('Content.approved', {
+      contentId: event.data.contentId,
+      automated: true,
+    })
+  } else if (analysis.flagged) {
+    await send('Content.flagged', {
+      contentId: event.data.contentId,
+      reasons: analysis.reasons,
+    })
+  } else {
+    await send('Content.requiresReview', {
+      contentId: event.data.contentId,
+      concerns: analysis.concerns,
+    })
+  }
+})
+
+// Step 3a: Content approved
+on('Content.approved', async (event) => {
+  console.log('Content approved:', event.data.contentId)
+
+  // Publish content
+  await db.update($.Content, event.data.contentId, {
+    status: 'published',
+    publishedAt: new Date(),
+  })
+
+  await send('Content.published', {
+    contentId: event.data.contentId,
+  })
+})
+
+// Step 3b: Content flagged
+on('Content.flagged', async (event) => {
+  console.log('Content flagged:', event.data.contentId)
+
+  // Reject content
+  await db.update($.Content, event.data.contentId, {
+    status: 'rejected',
+    rejectedAt: new Date(),
+  })
+
+  await send('Content.rejected', {
+    contentId: event.data.contentId,
+    reasons: event.data.reasons,
+  })
+
+  // Notify user
+  await send('User.notified', {
+    contentId: event.data.contentId,
+    type: 'content-rejected',
+  })
+})
+
+// Step 3c: Manual review needed
+on('Content.requiresReview', async (event) => {
+  console.log('Content requires review:', event.data.contentId)
+
+  // Assign to moderator
+  const moderator = await findAvailableModerator()
+
+  await send('Moderation.assigned', {
+    contentId: event.data.contentId,
+    moderatorId: moderator.id,
+  })
+})
+
+// Step 4: Manual moderation completed
+on('Moderation.completed', async (event) => {
+  if (event.data.approved) {
+    await send('Content.approved', {
+      contentId: event.data.contentId,
+      automated: false,
+      moderatorId: event.data.moderatorId,
+    })
+  } else {
+    await send('Content.rejected', {
+      contentId: event.data.contentId,
+      reasons: event.data.reasons,
+      moderatorId: event.data.moderatorId,
+    })
+  }
+})
+```
+
+## Lead Nurturing Workflow
+
+Marketing automation with events:
+
+```typescript
+import { on, send, every, db } from 'sdk.do'
+
+// Step 1: Lead captured
+on('Lead.captured', async (event) => {
+  console.log('Lead captured:', event.data.email)
+
+  // Create lead in database
+  const lead = await db.create($.Lead, {
+    ...event.data,
+    status: 'new',
+    score: 0,
+  })
+
+  await send('Lead.created', lead)
+})
+
+// Step 2: Lead created
+on('Lead.created', async (event) => {
+  // Send welcome email
+  await send('Email.scheduled', {
+    leadId: event.data.id,
+    template: 'welcome',
+    sendAt: new Date(),
+  })
+
+  // Schedule follow-up
+  await send('Email.scheduled', {
+    leadId: event.data.id,
+    template: 'follow-up-1',
+    sendAt: addDays(new Date(), 3),
+  })
+})
+
+// Step 3: Lead engaged
+on('Lead.emailOpened', async (event) => {
+  // Increase lead score
+  const lead = await db.get($.Lead, event.data.leadId)
+  await db.update($.Lead, event.data.leadId, {
+    score: lead.score + 10,
+  })
+
+  await send('Lead.scoreUpdated', {
+    leadId: event.data.leadId,
+    oldScore: lead.score,
+    newScore: lead.score + 10,
+  })
+})
+
+on('Lead.linkClicked', async (event) => {
+  // Increase lead score significantly
+  const lead = await db.get($.Lead, event.data.leadId)
+  await db.update($.Lead, event.data.leadId, {
+    score: lead.score + 25,
+  })
+
+  await send('Lead.scoreUpdated', {
+    leadId: event.data.leadId,
+    oldScore: lead.score,
+    newScore: lead.score + 25,
+  })
+})
+
+// Step 4: Lead qualified
+on('Lead.scoreUpdated', async (event) => {
+  if (event.data.newScore >= 50 && event.data.oldScore < 50) {
+    await send('Lead.qualified', {
+      leadId: event.data.leadId,
+    })
+  }
+})
+
+// Step 5: Lead qualified
+on('Lead.qualified', async (event) => {
+  console.log('Lead qualified:', event.data.leadId)
+
+  // Assign to sales rep
+  const salesRep = await findAvailableSalesRep()
+
+  await db.update($.Lead, event.data.leadId, {
+    status: 'qualified',
+    assignedTo: salesRep.id,
+  })
+
+  await send('Lead.assigned', {
+    leadId: event.data.leadId,
+    salesRepId: salesRep.id,
+  })
+
+  // Notify sales rep
+  await send('Notification.sent', {
+    userId: salesRep.id,
+    type: 'lead-assigned',
+    leadId: event.data.leadId,
+  })
+})
+
+// Daily lead nurturing
+every($.Daily, async () => {
+  const leads = await db.list($.Lead, {
+    where: {
+      status: 'new',
+      createdAt: { $lt: addDays(new Date(), -7) },
+    },
+  })
+
+  for (const lead of leads) {
+    await send('Email.scheduled', {
+      leadId: lead.id,
+      template: 'check-in',
+      sendAt: new Date(),
+    })
+  }
+})
+```
+
+## Parallel Event Processing
+
+Fan-out pattern for parallel processing:
+
+```typescript
+import { on, send } from 'sdk.do'
+
+// Step 1: Order created - trigger multiple parallel processes
+on('Order.created', async (event) => {
+  console.log('Order created, starting parallel processes')
+
+  // All these events are processed in parallel
+  await Promise.all([
+    // Inventory reservation
+    send('Inventory.reservationRequested', {
+      orderId: event.data.id,
+      items: event.data.items,
+    }),
+
+    // Payment processing
+    send('Payment.requested', {
+      orderId: event.data.id,
+      amount: event.data.total,
+    }),
+
+    // Customer notification
+    send('Customer.notified', {
+      customerId: event.data.customerId,
+      type: 'order-received',
+      orderId: event.data.id,
+    }),
+
+    // Analytics tracking
+    send('Analytics.orderCreated', {
+      orderId: event.data.id,
+      value: event.data.total,
+      items: event.data.items.length,
+    }),
+
+    // Fraud check
+    send('Fraud.checkRequested', {
+      orderId: event.data.id,
+      customerId: event.data.customerId,
+      amount: event.data.total,
+    }),
+  ])
+})
+
+// Each process completes independently
+on('Inventory.reserved', async (event) => {
+  console.log('Inventory reserved for order:', event.data.orderId)
+})
+
+on('Payment.completed', async (event) => {
+  console.log('Payment completed for order:', event.data.orderId)
+})
+
+on('Fraud.checkCompleted', async (event) => {
+  if (!event.data.safe) {
+    await send('Order.flagged', {
+      orderId: event.data.orderId,
+      reason: 'fraud-detection',
+    })
+  }
+})
+```
+
+## Event Aggregation (Fan-In)
+
+Multiple events combine to trigger a single event:
+
+```typescript
+import { on, send } from 'sdk.do'
+
+// Track order readiness
+const orderReadiness = new Map()
+
+// Process completes
+on('Inventory.reserved', async (event) => {
+  updateOrderReadiness(event.data.orderId, 'inventory', true)
+})
+
+on('Payment.completed', async (event) => {
+  updateOrderReadiness(event.data.orderId, 'payment', true)
+})
+
+on('Fraud.checkCompleted', async (event) => {
+  if (event.data.safe) {
+    updateOrderReadiness(event.data.orderId, 'fraud', true)
+  }
+})
+
+function updateOrderReadiness(orderId: string, step: string, ready: boolean) {
+  const state = orderReadiness.get(orderId) || {}
+  state[step] = ready
+  orderReadiness.set(orderId, state)
+
+  // Check if all steps completed
+  if (state.inventory && state.payment && state.fraud) {
+    send('Order.readyToShip', {
+      orderId,
+      readyAt: new Date(),
+    })
+    orderReadiness.delete(orderId)
+  }
+}
+
+// Final step: Ship order
+on('Order.readyToShip', async (event) => {
+  console.log('Order ready to ship:', event.data.orderId)
+
+  const trackingNumber = await generateTrackingNumber()
+
+  await send('Shipment.created', {
+    orderId: event.data.orderId,
+    trackingNumber,
+  })
+})
+```
+
+## See Also
+
+- [Basic Publishing Example](./basic-publishing) - Simple examples
+- [Publishing Patterns](../docs/patterns) - Advanced patterns
+- [Event Naming](../docs/event-naming) - Naming conventions
+- [API Reference](../api/) - Complete API
+- [on.do](https://on.do) - Event listeners
+- [workflows.do](https://workflows.do) - Workflow orchestration

@@ -1,0 +1,91 @@
+# Wit ai Integration
+
+Wit.ai is a natural language processing platform that enables developers to build applications and devices that understand human language.
+
+**Category**: productivity
+**Service**: WitAi
+**Base URL**: https://api.wit_ai.com
+
+This Integration is auto-generated from MDXLD definition: [https://integrations.do/wit_ai](https://integrations.do/wit_ai)
+
+## Installation
+
+```bash
+npm install @dotdo/integration-wit_ai
+```
+
+Or with pnpm:
+
+```bash
+pnpm add @dotdo/integration-wit_ai
+```
+
+## Quick Start
+
+```typescript
+import { WitAiClient } from '@dotdo/integration-wit_ai'
+
+// Initialize client
+const client = new WitAiClient({
+  apiKey: 'your-api-key',
+})
+```
+
+## Authentication
+
+This Integration uses **api-key** authentication.
+
+Provide your API key when initializing the client:
+
+```typescript
+const client = new WitAiClient({
+  apiKey: process.env.API_KEY,
+})
+```
+
+## Resources
+
+### Action
+
+Execute Wit ai actions
+
+#### `action.execute()`
+
+```typescript
+const result = await client.action.execute({
+  action: 'example', // Action name to execute
+  parameters: {}, // Action parameters
+})
+```
+
+## Error Handling
+
+All errors are thrown as `WitAiError` instances with additional metadata:
+
+```typescript
+try {
+  const result = await client.action.list()
+} catch (error) {
+  if (error instanceof WitAiError) {
+    console.error('Error type:', error.type)
+    console.error('Error code:', error.code)
+    console.error('Status code:', error.statusCode)
+    console.error('Retryable:', error.isRetriable())
+  }
+}
+```
+
+**Error Types:**
+
+- `authentication` - Authentication failed
+- `authorization` - Insufficient permissions
+- `validation` - Invalid parameters
+- `not_found` - Resource not found
+- `rate_limit` - Rate limit exceeded
+- `server` - Server error
+- `network` - Network error
+- `unknown` - Unknown error
+
+## License
+
+MIT

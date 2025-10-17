@@ -1,0 +1,630 @@
+---
+$id: https://docs.do/docs/troubleshooting
+$type: TechArticle
+title: Troubleshooting docs.do
+description: Common issues and solutions for docs.do documentation platform
+keywords: [troubleshooting, errors, issues, solutions, debugging]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Troubleshooting docs.do
+
+Common issues and solutions when working with docs.do.
+
+## Search Issues
+
+### Search Returns No Results
+
+**Problem:** Search queries return empty results even though documentation exists.
+
+**Solutions:**
+
+1. **Rebuild search index:**
+
+```bash
+pnpm docs reindex --all
+```
+
+Or programmatically:
+
+```typescript
+await docs.reindex({ force: true, all: true })
+```
+
+2. **Check Elasticsearch connection:**
+
+```bash
+curl $DOCS_ELASTICSEARCH_URL/_cluster/health
+```
+
+3. **Verify documents are indexed:**
+
+```typescript
+const stats = await docs.indexStats()
+console.log(`Indexed: ${stats.documentCount} documents`)
+```
+
+### Slow Search Performance
+
+**Problem:** Search queries take too long to execute.
+
+**Solutions:**
+
+1. **Enable Elasticsearch:**
+
+```bash
+export DOCS_ELASTICSEARCH_URL=http://localhost:9200
+```
+
+2. **Use query caching:**
+
+```typescript
+const results = await docs.search(query, {
+  useCache: true,
+  cacheTTL: 3600,
+})
+```
+
+3. **Limit result size:**
+
+```typescript
+const results = await docs.search(query, {
+  limit: 20, // Instead of fetching everything
+  domains: ['sdk.do'], // Filter by domain
+})
+```
+
+4. **Monitor query performance:**
+
+```typescript
+const metrics = await docs.searchMetrics()
+console.log(`Avg latency: ${metrics.avgLatency}ms`)
+console.log(`Slow queries: ${metrics.slowQueries.length}`)
+```
+
+### Semantic Search Not Working
+
+**Problem:** Semantic search returns irrelevant results.
+
+**Solutions:**
+
+1. **Regenerate embeddings:**
+
+```typescript
+const docs = await docs.list($.TechArticle)
+for (const doc of docs) {
+  const embedding = await ai.embed(doc.articleBody)
+  await docs.update(doc, { embedding })
+}
+```
+
+2. **Adjust similarity threshold:**
+
+```typescript
+const results = await docs.search(query, {
+  semantic: true,
+  minScore: 0.8, // Increase threshold
+})
+```
+
+3. **Verify OpenAI API key:**
+
+```bash
+export DOCS_OPENAI_API_KEY=sk-your-key
+curl https://api.openai.com/v1/models \
+  -H "Authorization: Bearer $DOCS_OPENAI_API_KEY"
+```
+
+## Version Management Issues
+
+### Version Conflicts
+
+**Problem:** Multiple versions conflict when updating.
+
+**Solutions:**
+
+1. **Use merge strategy:**
+
+```typescript
+const resolved = await docs.resolveConflict(docId, {
+  strategy: 'latest', // or 'merge', 'manual'
+  preserveHistory: true,
+})
+```
+
+2. **Create new version explicitly:**
+
+```typescript
+await docs.update(docId, content, {
+  version: '2.0.0',
+  previousVersion: '1.0.0',
+  forceNewVersion: true,
+})
+```
+
+### Cannot Access Old Version
+
+**Problem:** Old versions return 404 errors.
+
+**Solutions:**
+
+1. **Check version exists:**
+
+```typescript
+const versions = await docs.versions(docId)
+console.log(
+  'Available versions:',
+  versions.map((v) => v.version)
+)
+```
+
+2. **Enable version retention:**
+
+```bash
+export DOCS_VERSION_RETENTION_DAYS=365
+```
+
+3. **Restore from backup:**
+
+```typescript
+await docs.restore(docId, {
+  version: '1.0.0',
+  source: 'backup',
+})
+```
+
+## Translation Issues
+
+### Translation Quality Poor
+
+**Problem:** Auto-translated content has errors or poor quality.
+
+**Solutions:**
+
+1. **Use higher quality model:**
+
+```bash
+export DOCS_AI_MODEL=gpt-5  # Instead of gpt-5-mini
+```
+
+2. **Manual translation:**
+
+```typescript
+await docs.translate(docId, 'es', {
+  manual: true,
+  translation: manuallyTranslatedContent,
+})
+```
+
+3. **Improve translation with context:**
+
+```typescript
+await docs.translate(docId, 'es', {
+  preserveCodeBlocks: true,
+  preserveLinks: true,
+  context: 'Technical documentation',
+  tone: 'formal',
+})
+```
+
+### Translation Not Syncing
+
+**Problem:** Translations don't update when source changes.
+
+**Solutions:**
+
+1. **Enable auto-sync:**
+
+```typescript
+await docs.update(docId, content, {
+  syncTranslations: true,
+})
+```
+
+2. **Manual sync:**
+
+```typescript
+await docs.syncTranslations(docId, {
+  languages: ['es', 'fr', 'de'],
+})
+```
+
+3. **Check sync status:**
+
+```typescript
+const status = await docs.translationStatus(docId)
+console.log('Outdated translations:', status.outdated)
+```
+
+## Database Issues
+
+### Connection Errors
+
+**Problem:** "Connection refused" or "Timeout" errors.
+
+**Solutions:**
+
+1. **Verify connection string:**
+
+```bash
+export DOCS_DATABASE_URL=postgres://user:pass@localhost:5432/docs
+psql $DOCS_DATABASE_URL -c "SELECT 1"
+```
+
+2. **Check PostgreSQL is running:**
+
+```bash
+pg_isready -h localhost -p 5432
+```
+
+3. **Increase connection timeout:**
+
+```bash
+export DOCS_DB_TIMEOUT=30000  # 30 seconds
+```
+
+### Migration Errors
+
+**Problem:** Database migrations fail.
+
+**Solutions:**
+
+1. **Run migrations manually:**
+
+```bash
+pnpm docs migrate --up
+```
+
+2. **Check migration status:**
+
+```typescript
+const status = await docs.migrationStatus()
+console.log('Pending migrations:', status.pending)
+```
+
+3. **Rollback and retry:**
+
+```bash
+pnpm docs migrate --down
+pnpm docs migrate --up
+```
+
+## Performance Issues
+
+### High Memory Usage
+
+**Problem:** Application uses excessive memory.
+
+**Solutions:**
+
+1. **Enable streaming:**
+
+```typescript
+const docs = await docs.streamList($.TechArticle, {
+  batchSize: 100,
+})
+
+for await (const batch of docs) {
+  await processBatch(batch)
+}
+```
+
+2. **Clear caches:**
+
+```typescript
+await docs.clearCache()
+```
+
+3. **Limit concurrent operations:**
+
+```typescript
+const limit = pLimit(5) // Max 5 concurrent
+await Promise.all(docs.map((doc) => limit(() => processDoc(doc))))
+```
+
+### Slow Indexing
+
+**Problem:** Document indexing takes too long.
+
+**Solutions:**
+
+1. **Use batch indexing:**
+
+```typescript
+await docs.batchIndex(documents, {
+  batchSize: 100,
+  parallel: 5,
+})
+```
+
+2. **Index incrementally:**
+
+```typescript
+// Only index changed documents
+await docs.indexIncremental({
+  since: lastIndexTime,
+})
+```
+
+3. **Schedule indexing:**
+
+```typescript
+import { every } from 'sdk.do'
+
+every('0 2 * * *', async () => {
+  // Index at 2 AM daily
+  await docs.reindex({ incremental: true })
+})
+```
+
+## API Issues
+
+### Rate Limiting
+
+**Problem:** Hitting API rate limits.
+
+**Solutions:**
+
+1. **Use batch operations:**
+
+```typescript
+// Instead of individual calls
+await docs.batchCreate(documents)
+await docs.batchUpdate(updates)
+```
+
+2. **Implement backoff:**
+
+```typescript
+async function withRetry(fn, maxRetries = 3) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn()
+    } catch (error) {
+      if (error.code === 'RATE_LIMIT' && i < maxRetries - 1) {
+        await sleep(Math.pow(2, i) * 1000)
+        continue
+      }
+      throw error
+    }
+  }
+}
+```
+
+3. **Check rate limit status:**
+
+```typescript
+const limits = await docs.rateLimits()
+console.log(`Remaining: ${limits.remaining}/${limits.limit}`)
+console.log(`Resets at: ${limits.reset}`)
+```
+
+### Authentication Errors
+
+**Problem:** "Unauthorized" or "Invalid token" errors.
+
+**Solutions:**
+
+1. **Verify API key:**
+
+```bash
+export DOCS_API_KEY=your-api-key
+```
+
+2. **Check token expiration:**
+
+```typescript
+const token = await docs.refreshToken()
+```
+
+3. **Use proper authentication:**
+
+```typescript
+const docs = new DocsClient({
+  apiKey: process.env.DOCS_API_KEY,
+  endpoint: 'https://docs.do/api',
+})
+```
+
+## Content Issues
+
+### Broken Links
+
+**Problem:** Documentation contains broken links.
+
+**Solutions:**
+
+1. **Run link checker:**
+
+```typescript
+const broken = await docs.validateLinks(docId)
+console.log('Broken links:', broken)
+```
+
+2. **Auto-fix links:**
+
+```typescript
+await docs.fixBrokenLinks(docId, {
+  autoRedirect: true,
+  removeInvalid: false,
+})
+```
+
+3. **Monitor links:**
+
+```typescript
+import { every } from 'sdk.do'
+
+every($.Weekly, async () => {
+  const allDocs = await docs.list($.TechArticle)
+  for (const doc of allDocs) {
+    const broken = await docs.validateLinks(doc.$id)
+    if (broken.length > 0) {
+      await notifyAdmin({ doc, broken })
+    }
+  }
+})
+```
+
+### Missing Code Examples
+
+**Problem:** Code examples don't render or are missing.
+
+**Solutions:**
+
+1. **Validate code blocks:**
+
+```typescript
+const examples = await docs.extractCodeExamples(doc)
+for (const example of examples) {
+  if (!example.language) {
+    console.warn('Missing language:', example)
+  }
+}
+```
+
+2. **Test code examples:**
+
+```typescript
+await docs.testCodeExamples(docId, {
+  executeCode: true,
+  reportErrors: true,
+})
+```
+
+## Common Error Messages
+
+### "Index not found"
+
+**Cause:** Search index doesn't exist or was deleted.
+
+**Fix:**
+
+```typescript
+await docs.createIndex()
+await docs.reindex({ all: true })
+```
+
+### "Version mismatch"
+
+**Cause:** Client version doesn't match server version.
+
+**Fix:**
+
+```bash
+pnpm update docs.do
+```
+
+### "Embedding generation failed"
+
+**Cause:** OpenAI API issues or quota exceeded.
+
+**Fix:**
+
+```bash
+# Check quota
+curl https://api.openai.com/v1/usage \
+  -H "Authorization: Bearer $DOCS_OPENAI_API_KEY"
+
+# Use fallback
+export DOCS_EMBEDDING_PROVIDER=local
+```
+
+### "Document too large"
+
+**Cause:** Document exceeds size limit.
+
+**Fix:**
+
+```typescript
+// Split large documents
+const chunks = await docs.chunk(largeDoc, {
+  maxSize: 50000,
+  overlap: 500,
+})
+
+for (const chunk of chunks) {
+  await docs.create($.TechArticle, chunk)
+}
+```
+
+## Debugging Tools
+
+### Enable Debug Logging
+
+```bash
+export DEBUG=docs:*
+export DOCS_LOG_LEVEL=debug
+```
+
+### Query Explain
+
+```typescript
+const explanation = await docs.explain(query)
+console.log('Query plan:', explanation.plan)
+console.log('Execution time:', explanation.duration)
+console.log('Results count:', explanation.resultsCount)
+```
+
+### Health Check
+
+```typescript
+const health = await docs.health()
+console.log('Status:', health.status)
+console.log('Database:', health.database)
+console.log('Search:', health.search)
+console.log('Cache:', health.cache)
+```
+
+### Performance Profiling
+
+```typescript
+const profiler = docs.createProfiler()
+
+profiler.start('search')
+await docs.search(query)
+profiler.end('search')
+
+profiler.start('index')
+await docs.reindex(docId)
+profiler.end('index')
+
+console.log(profiler.report())
+```
+
+## Getting Help
+
+If you're still experiencing issues:
+
+1. **Check logs:**
+
+```bash
+tail -f logs/docs.log
+```
+
+2. **Review documentation:**
+   - [Getting Started](./getting-started)
+   - [Architecture](./architecture)
+   - [Best Practices](./best-practices)
+
+3. **Community support:**
+   - [GitHub Issues](https://github.com/dot-do/ai/issues)
+   - [GitHub Discussions](https://github.com/dot-do/ai/discussions)
+   - Discord community server
+
+4. **Report bugs:**
+
+```typescript
+await docs.reportIssue({
+  title: 'Search not working',
+  description: '...',
+  logs: await docs.getLogs(),
+  environment: process.env,
+})
+```
+
+---
+
+Return to [Getting Started](./getting-started) or explore [Examples](../examples/).

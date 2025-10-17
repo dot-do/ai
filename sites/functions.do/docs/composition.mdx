@@ -1,0 +1,587 @@
+---
+$id: https://functions.do/docs/composition
+$type: TechArticle
+title: Function Composition Patterns
+description: Learn how to compose functions into powerful workflows with functions.do
+keywords: [composition, workflows, pipe, compose, parallel, sequential]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Function Composition Patterns
+
+Function composition is one of the most powerful features of functions.do. This guide covers all the ways you can combine functions to build complex workflows.
+
+## Why Composition?
+
+Composition allows you to:
+
+- Build complex workflows from simple, reusable functions
+- Create maintainable, testable code
+- Express business logic clearly and semantically
+- Avoid deeply nested code and callback hell
+- Reuse functions in different contexts
+
+## Basic Composition
+
+### Sequential Composition with `compose()`
+
+The `compose()` function combines functions right-to-left (mathematical composition):
+
+```typescript
+import $, { fn, compose } from 'sdk.do'
+
+const addTen = fn($.AddTen, (n: number) => n + 10)
+const multiplyByTwo = fn($.MultiplyByTwo, (n: number) => n * 2)
+const subtractFive = fn($.SubtractFive, (n: number) => n - 5)
+
+// Executes right-to-left: subtractFive(multiplyByTwo(addTen(x)))
+const calculate = compose(subtractFive, multiplyByTwo, addTen)
+
+console.log(calculate(5)) // (5 + 10) * 2 - 5 = 25
+```
+
+### Sequential Composition with `pipe()`
+
+The `pipe()` function combines functions left-to-right (pipeline style):
+
+```typescript
+import $, { fn, pipe } from 'sdk.do'
+
+const addTen = fn($.AddTen, (n: number) => n + 10)
+const multiplyByTwo = fn($.MultiplyByTwo, (n: number) => n * 2)
+const subtractFive = fn($.SubtractFive, (n: number) => n - 5)
+
+// Executes left-to-right: subtractFive(multiplyByTwo(addTen(x)))
+const calculate = pipe(addTen, multiplyByTwo, subtractFive)
+
+console.log(calculate(5)) // (5 + 10) * 2 - 5 = 25
+```
+
+**Note**: `pipe()` is often more intuitive as it reads in execution order.
+
+## Real-World Composition Examples
+
+### Order Processing Pipeline
+
+```typescript
+import $, { fn, pipe } from 'sdk.do'
+
+// Define individual steps
+const validateOrder = fn($.ValidateOrder, async (order: $.Order) => {
+  if (!order.items.length) {
+    throw new Error('Order must have items')
+  }
+  if (!order.customer) {
+    throw new Error('Order must have customer')
+  }
+  return order
+})
+
+const calculateTotals = fn($.CalculateTotals, async (order: $.Order) => {
+  const subtotal = order.items.reduce((sum, item) => {
+    return sum + item.price * item.quantity
+  }, 0)
+
+  const tax = subtotal * 0.08
+  const total = subtotal + tax
+
+  return { ...order, subtotal, tax, total }
+})
+
+const applyDiscounts = fn($.ApplyDiscounts, async (order: $.Order) => {
+  let discount = 0
+
+  // Volume discount
+  if (order.items.length > 5) {
+    discount += order.subtotal * 0.05
+  }
+
+  // First-time customer discount
+  if (order.customer.isNew) {
+    discount += order.subtotal * 0.1
+  }
+
+  const finalTotal = order.total - discount
+
+  return { ...order, discount, finalTotal }
+})
+
+const reserveInventory = fn($.ReserveInventory, async (order: $.Order) => {
+  for (const item of order.items) {
+    await inventory.reserve(item.productId, item.quantity)
+  }
+  return order
+})
+
+const createInvoice = fn($.CreateInvoice, async (order: $.Order) => {
+  const invoice = await db.create($.Invoice, {
+    orderId: order.$id,
+    total: order.finalTotal,
+    status: 'pending',
+  })
+
+  return { ...order, invoiceId: invoice.$id }
+})
+
+// Compose the complete workflow
+const processOrder = pipe(validateOrder, calculateTotals, applyDiscounts, reserveInventory, createInvoice)
+
+// Use the composed workflow
+const result = await processOrder(orderData)
+```
+
+### Data Transformation Pipeline
+
+```typescript
+import $, { fn, pipe } from 'sdk.do'
+
+// ETL pipeline
+const extractData = fn($.ExtractData, async (source: string) => {
+  return await fetch(source).then((r) => r.json())
+})
+
+const validateData = fn($.ValidateData, (data: any[]) => {
+  return data.filter((item) => item.id && item.name)
+})
+
+const transformData = fn($.TransformData, (data: any[]) => {
+  return data.map((item) => ({
+    $type: 'Product',
+    $id: item.id,
+    name: item.name,
+    price: parseFloat(item.price),
+    category: item.category?.toLowerCase(),
+  }))
+})
+
+const enrichData = fn($.EnrichData, async (data: $.Product[]) => {
+  return Promise.all(
+    data.map(async (product) => ({
+      ...product,
+      categoryInfo: await fetchCategoryInfo(product.category),
+    }))
+  )
+})
+
+const loadData = fn($.LoadData, async (data: $.Product[]) => {
+  return await db.createMany($.Product, data)
+})
+
+// Complete ETL pipeline
+const etlPipeline = pipe(extractData, validateData, transformData, enrichData, loadData)
+
+// Execute the pipeline
+const results = await etlPipeline('https://api.example.com/products')
+```
+
+## Parallel Composition
+
+Execute multiple functions in parallel:
+
+```typescript
+import $, { fn, parallel } from 'sdk.do'
+
+const fetchUser = fn($.FetchUser, async (userId: string) => {
+  return await db.get($.Person, userId)
+})
+
+const fetchOrders = fn($.FetchOrders, async (userId: string) => {
+  return await db.list($.Order, { where: { customerId: userId } })
+})
+
+const fetchPreferences = fn($.FetchPreferences, async (userId: string) => {
+  return await db.get($.UserPreferences, userId)
+})
+
+// Execute all three functions in parallel
+const fetchUserProfile = parallel({
+  user: fetchUser,
+  orders: fetchOrders,
+  preferences: fetchPreferences,
+})
+
+const profile = await fetchUserProfile('user-123')
+// Result: { user: {...}, orders: [...], preferences: {...} }
+```
+
+### Parallel Array Processing
+
+```typescript
+import $, { fn, parallel } from 'sdk.do'
+
+const enrichProduct = fn($.EnrichProduct, async (product: $.Product) => {
+  const [category, reviews, inventory] = await Promise.all([fetchCategory(product.categoryId), fetchReviews(product.$id), fetchInventory(product.$id)])
+
+  return { ...product, category, reviews, inventory }
+})
+
+// Process multiple products in parallel
+const enrichProducts = fn($.EnrichProducts, async (products: $.Product[]) => {
+  return await parallel(products.map(enrichProduct))
+})
+```
+
+## Conditional Composition
+
+### Using `when()`
+
+Execute a function only when a condition is true:
+
+```typescript
+import $, { fn, when } from 'sdk.do'
+
+const applyPremiumDiscount = fn($.ApplyPremiumDiscount, (order: $.Order) => {
+  return { ...order, discount: order.total * 0.15 }
+})
+
+// Only apply discount if customer is premium
+const processOrder = when((order: $.Order) => order.customer.isPremium, applyPremiumDiscount)
+```
+
+### Using `ifElse()`
+
+Execute different functions based on a condition:
+
+```typescript
+import $, { fn, ifElse } from 'sdk.do'
+
+const processLargeOrder = fn($.ProcessLargeOrder, async (order: $.Order) => {
+  // Special handling for large orders
+  await notifyWarehouse(order)
+  return await processWithPriority(order)
+})
+
+const processStandardOrder = fn($.ProcessStandardOrder, async (order: $.Order) => {
+  return await processNormal(order)
+})
+
+// Route based on order size
+const processOrder = ifElse((order: $.Order) => order.total > 1000, processLargeOrder, processStandardOrder)
+```
+
+### Using `match()`
+
+Pattern matching for multiple conditions:
+
+```typescript
+import $, { fn, match } from 'sdk.do'
+
+const handlePendingOrder = fn($.HandlePending, async (order) => {
+  return await validateAndProcess(order)
+})
+
+const handlePaidOrder = fn($.HandlePaid, async (order) => {
+  return await fulfillOrder(order)
+})
+
+const handleShippedOrder = fn($.HandleShipped, async (order) => {
+  return await trackShipment(order)
+})
+
+const handleDeliveredOrder = fn($.HandleDelivered, async (order) => {
+  return await requestReview(order)
+})
+
+const handleCancelledOrder = fn($.HandleCancelled, async (order) => {
+  return await processRefund(order)
+})
+
+// Match on order status
+const handleOrder = match((order: $.Order) => order.status, {
+  pending: handlePendingOrder,
+  paid: handlePaidOrder,
+  shipped: handleShippedOrder,
+  delivered: handleDeliveredOrder,
+  cancelled: handleCancelledOrder,
+  _: fn($.HandleUnknown, () => {
+    throw new Error('Unknown order status')
+  }),
+})
+```
+
+## Advanced Composition Patterns
+
+### Branching Workflows
+
+Create workflows that branch based on results:
+
+```typescript
+import $, { fn, pipe, branch } from 'sdk.do'
+
+const validatePayment = fn($.ValidatePayment, async (payment: $.PaymentRequest) => {
+  const isValid = await paymentGateway.validate(payment)
+  return { payment, isValid }
+})
+
+const processPayment = branch((result) => result.isValid, {
+  true: pipe(
+    fn($.ChargePayment, async (r) => await paymentGateway.charge(r.payment)),
+    fn($.SendReceipt, async (r) => await emailService.sendReceipt(r)),
+    fn($.UpdateOrder, async (r) => await db.update($.Order, r.orderId, { status: 'paid' }))
+  ),
+  false: pipe(
+    fn($.LogFailure, (r) => console.error('Payment failed:', r)),
+    fn($.NotifyCustomer, async (r) => await emailService.sendPaymentFailure(r))
+  ),
+})
+
+const handlePayment = pipe(validatePayment, processPayment)
+```
+
+### Retry Composition
+
+Add retry logic to composed functions:
+
+```typescript
+import $, { fn, pipe, withRetry } from 'sdk.do'
+
+const fetchData = withRetry(
+  fn($.FetchData, async (url: string) => {
+    const response = await fetch(url)
+    if (!response.ok) throw new Error('Fetch failed')
+    return response.json()
+  }),
+  { attempts: 3, backoff: 'exponential' }
+)
+
+const processData = fn($.ProcessData, (data) => {
+  return data.map((item) => ({ ...item, processed: true }))
+})
+
+const saveData = withRetry(
+  fn($.SaveData, async (data) => {
+    return await db.createMany($.DataRecord, data)
+  }),
+  { attempts: 5, backoff: 'linear' }
+)
+
+// Composed pipeline with retry on fetch and save
+const dataFlow = pipe(fetchData, processData, saveData)
+```
+
+### Timeout Composition
+
+Add timeouts to prevent functions from running too long:
+
+```typescript
+import $, { fn, pipe, withTimeout } from 'sdk.do'
+
+const fetchExternalData = withTimeout(
+  fn($.FetchExternal, async (url) => {
+    return await fetch(url).then((r) => r.json())
+  }),
+  5000 // 5 second timeout
+)
+
+const processData = fn($.ProcessData, (data) => {
+  return transformData(data)
+})
+
+const pipeline = pipe(fetchExternalData, processData)
+```
+
+### Logging Composition
+
+Add logging to composed workflows:
+
+```typescript
+import $, { fn, pipe, withLogging } from 'sdk.do'
+
+const step1 = withLogging(
+  fn($.Step1, async (data) => {
+    return await processStep1(data)
+  }),
+  { level: 'info', name: 'Step 1' }
+)
+
+const step2 = withLogging(
+  fn($.Step2, async (data) => {
+    return await processStep2(data)
+  }),
+  { level: 'info', name: 'Step 2' }
+)
+
+const step3 = withLogging(
+  fn($.Step3, async (data) => {
+    return await processStep3(data)
+  }),
+  { level: 'info', name: 'Step 3' }
+)
+
+// Workflow with logging at each step
+const workflow = pipe(step1, step2, step3)
+```
+
+## Error Handling in Composition
+
+### Try-Catch in Pipeline
+
+```typescript
+import $, { fn, pipe } from 'sdk.do'
+
+const safeStep = (stepFn: Function) => {
+  return fn($.SafeStep, async (data) => {
+    try {
+      return await stepFn(data)
+    } catch (error) {
+      console.error('Step failed:', error)
+      return { ...data, error: error.message }
+    }
+  })
+}
+
+const pipeline = pipe(safeStep(step1), safeStep(step2), safeStep(step3))
+```
+
+### Error Recovery
+
+```typescript
+import $, { fn, pipe, recover } from 'sdk.do'
+
+const riskyOperation = fn($.RiskyOperation, async (data) => {
+  // Might throw error
+  return await dangerousApi(data)
+})
+
+const fallbackOperation = fn($.FallbackOperation, async (error, data) => {
+  console.error('Operation failed, using fallback')
+  return { ...data, fromCache: true }
+})
+
+const safeOperation = recover(riskyOperation, fallbackOperation)
+```
+
+## Composition with Type Safety
+
+### Typed Pipelines
+
+Ensure type safety through composition:
+
+```typescript
+import $, { fn, pipe } from 'sdk.do'
+
+interface Input {
+  value: number
+}
+
+interface Step1Result {
+  doubled: number
+}
+
+interface Step2Result {
+  text: string
+}
+
+const step1 = fn($.Step1, (input: Input): Step1Result => {
+  return { doubled: input.value * 2 }
+})
+
+const step2 = fn($.Step2, (input: Step1Result): Step2Result => {
+  return { text: `Value is ${input.doubled}` }
+})
+
+// TypeScript ensures types match through the pipeline
+const pipeline = pipe(step1, step2)
+
+const result: Step2Result = pipeline({ value: 5 })
+```
+
+## Performance Optimization
+
+### Memoized Composition
+
+Cache results of expensive composed functions:
+
+```typescript
+import $, { fn, pipe, memoize } from 'sdk.do'
+
+const expensiveCalculation1 = fn($.Calc1, (n) => {
+  // Complex computation
+  return complexMath1(n)
+})
+
+const expensiveCalculation2 = fn($.Calc2, (n) => {
+  // Complex computation
+  return complexMath2(n)
+})
+
+const expensiveCalculation3 = fn($.Calc3, (n) => {
+  // Complex computation
+  return complexMath3(n)
+})
+
+// Memoize the entire pipeline
+const optimizedPipeline = memoize(pipe(expensiveCalculation1, expensiveCalculation2, expensiveCalculation3))
+```
+
+### Lazy Evaluation
+
+Defer execution until needed:
+
+```typescript
+import $, { fn, lazy } from 'sdk.do'
+
+const lazyLoad = lazy(() => {
+  return pipe(fetchLargeDataset, processDataset, cacheDataset)
+})
+
+// Only executes when called
+const result = await lazyLoad()(input)
+```
+
+## Best Practices
+
+### 1. Use Pipe for Readability
+
+```typescript
+// Good - easy to read top-to-bottom
+const workflow = pipe(step1, step2, step3)
+
+// Less clear - reads bottom-to-top
+const workflow = compose(step3, step2, step1)
+```
+
+### 2. Keep Functions Small
+
+```typescript
+// Good - small, focused functions
+const validate = fn($.Validate, validateImpl)
+const transform = fn($.Transform, transformImpl)
+const save = fn($.Save, saveImpl)
+
+const workflow = pipe(validate, transform, save)
+
+// Avoid - large monolithic function
+const workflow = fn($.Workflow, (data) => {
+  // 100+ lines of code
+})
+```
+
+### 3. Name Composed Functions
+
+```typescript
+// Good - named composition
+const processCustomerOrder = pipe(validateOrder, calculateTotals, processPayment, sendConfirmation)
+
+// Avoid - anonymous composition
+export default pipe(validateOrder, calculateTotals, processPayment, sendConfirmation)
+```
+
+### 4. Handle Errors Explicitly
+
+```typescript
+// Good - explicit error handling
+const safeWorkflow = pipe(validateInput, processData, handleErrors)
+
+// Avoid - letting errors propagate
+const workflow = pipe(step1, step2, step3)
+```
+
+## Next Steps
+
+- [Basic Function Example](../examples/basic-function) - Simple function examples
+- [Workflow Functions Example](../examples/workflow-functions) - Complete workflows
+- [Error Handling Example](../examples/error-handling) - Error patterns
+- [API Reference](../api/) - Complete API documentation

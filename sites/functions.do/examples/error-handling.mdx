@@ -1,0 +1,731 @@
+---
+$id: https://functions.do/examples/error-handling
+$type: HowTo
+title: Error Handling Examples
+description: Comprehensive examples of error handling patterns in functions.do
+keywords: [error handling, try-catch, retry, recovery, validation, resilience]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Error Handling Examples
+
+This guide demonstrates best practices for handling errors in functions.do, from basic try-catch to advanced retry and recovery patterns.
+
+## Example 1: Basic Error Handling
+
+Simple try-catch pattern for handling errors:
+
+```typescript
+import $, { fn } from 'sdk.do'
+
+const divideNumbers = fn($.DivideNumbers, (a: number, b: number): number => {
+  if (b === 0) {
+    throw new Error('Cannot divide by zero')
+  }
+  return a / b
+})
+
+// Usage with error handling
+try {
+  const result = divideNumbers(10, 0)
+  console.log(result)
+} catch (error) {
+  console.error('Division error:', error.message)
+  // Handle error appropriately
+}
+```
+
+## Example 2: Validation with Detailed Errors
+
+Return detailed validation errors:
+
+```typescript
+import $, { fn } from 'sdk.do'
+
+interface ValidationError {
+  field: string
+  message: string
+}
+
+interface ValidationResult {
+  valid: boolean
+  errors: ValidationError[]
+  data?: any
+}
+
+const validateUserInput = fn($.ValidateUserInput, (input: { email: string; password: string; age: number }): ValidationResult => {
+  const errors: ValidationError[] = []
+
+  // Email validation
+  if (!input.email) {
+    errors.push({ field: 'email', message: 'Email is required' })
+  } else if (!input.email.includes('@')) {
+    errors.push({ field: 'email', message: 'Email must be valid' })
+  }
+
+  // Password validation
+  if (!input.password) {
+    errors.push({ field: 'password', message: 'Password is required' })
+  } else if (input.password.length < 8) {
+    errors.push({ field: 'password', message: 'Password must be at least 8 characters' })
+  }
+
+  // Age validation
+  if (input.age < 0) {
+    errors.push({ field: 'age', message: 'Age must be positive' })
+  } else if (input.age < 18) {
+    errors.push({ field: 'age', message: 'Must be 18 or older' })
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    data: errors.length === 0 ? input : undefined,
+  }
+})
+
+// Usage
+const result = validateUserInput({
+  email: 'invalid-email',
+  password: 'short',
+  age: 15,
+})
+
+if (!result.valid) {
+  console.error('Validation errors:')
+  result.errors.forEach((err) => {
+    console.error(`  ${err.field}: ${err.message}`)
+  })
+} else {
+  console.log('Validation passed:', result.data)
+}
+```
+
+## Example 3: Safe Async Operations
+
+Wrap async operations with error handling:
+
+```typescript
+import $, { fn, db } from 'sdk.do'
+
+const safeGetUser = fn(
+  $.SafeGetUser,
+  async (
+    userId: string
+  ): Promise<{
+    success: boolean
+    user?: $.Person
+    error?: string
+  }> => {
+    try {
+      const user = await db.get($.Person, userId)
+
+      if (!user) {
+        return {
+          success: false,
+          error: 'User not found',
+        }
+      }
+
+      return {
+        success: true,
+        user,
+      }
+    } catch (error) {
+      console.error('Error fetching user:', error)
+
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      }
+    }
+  }
+)
+
+// Usage
+const result = await safeGetUser('user-123')
+
+if (result.success) {
+  console.log('User found:', result.user.name)
+} else {
+  console.error('Error:', result.error)
+}
+```
+
+## Example 4: Retry Logic
+
+Implement automatic retry for transient failures:
+
+```typescript
+import $, { fn } from 'sdk.do'
+
+interface RetryOptions {
+  maxAttempts?: number
+  delayMs?: number
+  backoff?: 'linear' | 'exponential'
+}
+
+const withRetry = <T>(operation: () => Promise<T>, options: RetryOptions = {}): Promise<T> => {
+  const { maxAttempts = 3, delayMs = 1000, backoff = 'exponential' } = options
+
+  return fn($.WithRetry, async (): Promise<T> => {
+    let lastError: Error
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await operation()
+      } catch (error) {
+        lastError = error as Error
+        console.log(`Attempt ${attempt} failed:`, error.message)
+
+        if (attempt < maxAttempts) {
+          // Calculate delay
+          const delay = backoff === 'exponential' ? delayMs * Math.pow(2, attempt - 1) : delayMs * attempt
+
+          console.log(`Retrying in ${delay}ms...`)
+          await new Promise((resolve) => setTimeout(resolve, delay))
+        }
+      }
+    }
+
+    throw new Error(`Operation failed after ${maxAttempts} attempts: ${lastError.message}`)
+  })()
+}
+
+// Usage
+const fetchDataWithRetry = async (url: string) => {
+  return withRetry(
+    async () => {
+      const response = await fetch(url)
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+      return response.json()
+    },
+    { maxAttempts: 3, delayMs: 1000, backoff: 'exponential' }
+  )
+}
+
+try {
+  const data = await fetchDataWithRetry('https://api.example.com/data')
+  console.log('Data fetched:', data)
+} catch (error) {
+  console.error('All retry attempts failed:', error)
+}
+```
+
+## Example 5: Error Recovery
+
+Recover from errors with fallback strategies:
+
+```typescript
+import $, { fn } from 'sdk.do'
+
+const fetchWithFallback = fn($.FetchWithFallback, async (primaryUrl: string, fallbackUrl: string) => {
+  try {
+    // Try primary source
+    const response = await fetch(primaryUrl)
+    if (!response.ok) throw new Error('Primary fetch failed')
+    return {
+      data: await response.json(),
+      source: 'primary',
+    }
+  } catch (primaryError) {
+    console.warn('Primary fetch failed, trying fallback')
+
+    try {
+      // Try fallback source
+      const response = await fetch(fallbackUrl)
+      if (!response.ok) throw new Error('Fallback fetch failed')
+      return {
+        data: await response.json(),
+        source: 'fallback',
+      }
+    } catch (fallbackError) {
+      // Both failed, return cached or default data
+      console.error('Both sources failed, using cache')
+      return {
+        data: getCachedData(),
+        source: 'cache',
+      }
+    }
+  }
+})
+
+// Usage
+const result = await fetchWithFallback('https://api.primary.com/data', 'https://api.backup.com/data')
+
+console.log(`Data from ${result.source}:`, result.data)
+```
+
+## Example 6: Graceful Degradation
+
+Continue operation with reduced functionality on errors:
+
+```typescript
+import $, { fn, db, api } from 'sdk.do'
+
+interface EnrichedUser {
+  $type: 'Person'
+  name: string
+  email: string
+  avatar?: string
+  socialProfiles?: any[]
+  preferences?: any
+  enrichmentErrors?: string[]
+}
+
+const enrichUserProfile = fn($.EnrichUserProfile, async (userId: string): Promise<EnrichedUser> => {
+  const errors: string[] = []
+
+  // Get base user data (required)
+  const user = await db.get($.Person, userId)
+  if (!user) {
+    throw new Error('User not found')
+  }
+
+  const enriched: EnrichedUser = {
+    $type: 'Person',
+    name: user.name,
+    email: user.email,
+  }
+
+  // Try to get avatar (optional)
+  try {
+    const avatar = await api.get(`https://avatars.com/${user.email}`)
+    enriched.avatar = avatar.url
+  } catch (error) {
+    errors.push('Failed to fetch avatar')
+    console.warn('Avatar fetch failed:', error)
+  }
+
+  // Try to get social profiles (optional)
+  try {
+    const profiles = await api.get(`https://social.com/profiles/${user.email}`)
+    enriched.socialProfiles = profiles.data
+  } catch (error) {
+    errors.push('Failed to fetch social profiles')
+    console.warn('Social profiles fetch failed:', error)
+  }
+
+  // Try to get preferences (optional)
+  try {
+    const prefs = await db.get($.UserPreferences, userId)
+    enriched.preferences = prefs
+  } catch (error) {
+    errors.push('Failed to fetch preferences')
+    console.warn('Preferences fetch failed:', error)
+  }
+
+  // Include errors if any occurred
+  if (errors.length > 0) {
+    enriched.enrichmentErrors = errors
+  }
+
+  return enriched
+})
+
+// Usage
+const user = await enrichUserProfile('user-123')
+
+if (user.enrichmentErrors) {
+  console.warn('Some enrichment failed:', user.enrichmentErrors)
+}
+
+console.log('User profile:', user)
+```
+
+## Example 7: Circuit Breaker Pattern
+
+Prevent cascading failures with circuit breaker:
+
+```typescript
+import $, { fn } from 'sdk.do'
+
+class CircuitBreaker {
+  private failureCount = 0
+  private lastFailureTime = 0
+  private state: 'closed' | 'open' | 'half-open' = 'closed'
+
+  constructor(
+    private threshold: number = 5,
+    private timeout: number = 60000
+  ) {}
+
+  async execute<T>(operation: () => Promise<T>): Promise<T> {
+    if (this.state === 'open') {
+      if (Date.now() - this.lastFailureTime > this.timeout) {
+        this.state = 'half-open'
+      } else {
+        throw new Error('Circuit breaker is OPEN')
+      }
+    }
+
+    try {
+      const result = await operation()
+      this.onSuccess()
+      return result
+    } catch (error) {
+      this.onFailure()
+      throw error
+    }
+  }
+
+  private onSuccess() {
+    this.failureCount = 0
+    this.state = 'closed'
+  }
+
+  private onFailure() {
+    this.failureCount++
+    this.lastFailureTime = Date.now()
+
+    if (this.failureCount >= this.threshold) {
+      this.state = 'open'
+      console.warn('Circuit breaker opened after', this.failureCount, 'failures')
+    }
+  }
+}
+
+// Usage
+const breaker = new CircuitBreaker(5, 60000)
+
+const fetchWithCircuitBreaker = fn($.FetchWithCircuitBreaker, async (url: string) => {
+  return breaker.execute(async () => {
+    const response = await fetch(url)
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`)
+    }
+    return response.json()
+  })
+})
+
+try {
+  const data = await fetchWithCircuitBreaker('https://api.example.com/data')
+  console.log('Data:', data)
+} catch (error) {
+  if (error.message === 'Circuit breaker is OPEN') {
+    console.error('Service is temporarily unavailable')
+  } else {
+    console.error('Request failed:', error)
+  }
+}
+```
+
+## Example 8: Timeout Handling
+
+Add timeouts to prevent hanging operations:
+
+```typescript
+import $, { fn } from 'sdk.do'
+
+const withTimeout = <T>(operation: () => Promise<T>, timeoutMs: number): Promise<T> => {
+  return Promise.race([operation(), new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`Operation timed out after ${timeoutMs}ms`)), timeoutMs))])
+}
+
+const fetchWithTimeout = fn($.FetchWithTimeout, async (url: string, timeoutMs: number = 5000) => {
+  return withTimeout(async () => {
+    const response = await fetch(url)
+    return response.json()
+  }, timeoutMs)
+})
+
+// Usage
+try {
+  const data = await fetchWithTimeout('https://api.example.com/data', 3000)
+  console.log('Data:', data)
+} catch (error) {
+  if (error.message.includes('timed out')) {
+    console.error('Request took too long')
+  } else {
+    console.error('Request failed:', error)
+  }
+}
+```
+
+## Example 9: Partial Failure Handling
+
+Handle failures in batch operations:
+
+```typescript
+import $, { fn, db } from 'sdk.do'
+
+interface BatchResult<T> {
+  successful: T[]
+  failed: Array<{
+    item: any
+    error: string
+  }>
+}
+
+const batchProcessUsers = fn($.BatchProcessUsers, async (userIds: string[]): Promise<BatchResult<$.Person>> => {
+  const successful: $.Person[] = []
+  const failed: Array<{ item: any; error: string }> = []
+
+  await Promise.allSettled(
+    userIds.map(async (userId) => {
+      try {
+        const user = await db.get($.Person, userId)
+
+        if (!user) {
+          throw new Error('User not found')
+        }
+
+        // Process user
+        const processed = await processUser(user)
+        successful.push(processed)
+      } catch (error) {
+        failed.push({
+          item: userId,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        })
+      }
+    })
+  )
+
+  return { successful, failed }
+})
+
+// Usage
+const result = await batchProcessUsers(['user-1', 'user-2', 'user-3', 'invalid-user'])
+
+console.log(`Processed ${result.successful.length} users successfully`)
+
+if (result.failed.length > 0) {
+  console.error('Failed to process:')
+  result.failed.forEach((f) => {
+    console.error(`  ${f.item}: ${f.error}`)
+  })
+}
+```
+
+## Example 10: Error Context and Logging
+
+Add context to errors for better debugging:
+
+```typescript
+import $, { fn } from 'sdk.do'
+
+class DetailedError extends Error {
+  constructor(
+    message: string,
+    public context: Record<string, any>,
+    public originalError?: Error
+  ) {
+    super(message)
+    this.name = 'DetailedError'
+  }
+
+  toJSON() {
+    return {
+      name: this.name,
+      message: this.message,
+      context: this.context,
+      originalError: this.originalError?.message,
+      stack: this.stack,
+    }
+  }
+}
+
+const processOrderWithContext = fn($.ProcessOrderWithContext, async (orderId: string) => {
+  try {
+    const order = await db.get($.Order, orderId)
+
+    if (!order) {
+      throw new DetailedError('Order not found', { orderId, timestamp: new Date() })
+    }
+
+    // Process order
+    const result = await processOrder(order)
+    return result
+  } catch (error) {
+    if (error instanceof DetailedError) {
+      // Log detailed error
+      console.error('Detailed error:', JSON.stringify(error.toJSON(), null, 2))
+      throw error
+    } else {
+      // Wrap regular error with context
+      throw new DetailedError(
+        'Order processing failed',
+        {
+          orderId,
+          timestamp: new Date(),
+          errorType: error.constructor.name,
+        },
+        error as Error
+      )
+    }
+  }
+})
+
+// Usage
+try {
+  await processOrderWithContext('order-123')
+} catch (error) {
+  if (error instanceof DetailedError) {
+    console.error('Error with context:', error.context)
+  } else {
+    console.error('Unexpected error:', error)
+  }
+}
+```
+
+## Example 11: Error Aggregation in Pipelines
+
+Collect errors from multiple steps in a pipeline:
+
+```typescript
+import $, { fn, pipe } from 'sdk.do'
+
+interface PipelineResult<T> {
+  success: boolean
+  data?: T
+  errors: Array<{
+    step: string
+    error: string
+    timestamp: Date
+  }>
+}
+
+const createErrorCollector = <T>() => {
+  const errors: PipelineResult<T>['errors'] = []
+
+  const wrapStep = (stepName: string, stepFn: (data: any) => Promise<any>) => {
+    return fn($[stepName], async (data: any) => {
+      try {
+        return await stepFn(data)
+      } catch (error) {
+        errors.push({
+          step: stepName,
+          error: error instanceof Error ? error.message : 'Unknown error',
+          timestamp: new Date(),
+        })
+        throw error
+      }
+    })
+  }
+
+  const getResult = (data?: T): PipelineResult<T> => {
+    return {
+      success: errors.length === 0,
+      data: errors.length === 0 ? data : undefined,
+      errors,
+    }
+  }
+
+  return { wrapStep, getResult, errors }
+}
+
+// Usage
+const processDataPipeline = async (input: any) => {
+  const collector = createErrorCollector()
+
+  try {
+    const result = await pipe(
+      collector.wrapStep('Validate', validateData),
+      collector.wrapStep('Transform', transformData),
+      collector.wrapStep('Enrich', enrichData),
+      collector.wrapStep('Save', saveData)
+    )(input)
+
+    return collector.getResult(result)
+  } catch (error) {
+    return collector.getResult()
+  }
+}
+
+const result = await processDataPipeline(rawData)
+
+if (!result.success) {
+  console.error('Pipeline failed at the following steps:')
+  result.errors.forEach((err) => {
+    console.error(`  ${err.step}: ${err.error} at ${err.timestamp}`)
+  })
+}
+```
+
+## Best Practices
+
+### 1. Fail Fast for Invalid Input
+
+```typescript
+const processData = fn($.ProcessData, (data) => {
+  if (!data) throw new Error('Data is required')
+  if (!Array.isArray(data)) throw new Error('Data must be an array')
+
+  // Process data...
+})
+```
+
+### 2. Use Specific Error Types
+
+```typescript
+class ValidationError extends Error {
+  constructor(
+    message: string,
+    public field: string
+  ) {
+    super(message)
+    this.name = 'ValidationError'
+  }
+}
+
+class NotFoundError extends Error {
+  constructor(
+    message: string,
+    public resourceId: string
+  ) {
+    super(message)
+    this.name = 'NotFoundError'
+  }
+}
+
+// Usage
+if (validationFailed) {
+  throw new ValidationError('Invalid email', 'email')
+}
+
+if (!user) {
+  throw new NotFoundError('User not found', userId)
+}
+```
+
+### 3. Log Errors with Context
+
+```typescript
+try {
+  await riskyOperation()
+} catch (error) {
+  console.error('Operation failed', {
+    error: error.message,
+    context: { userId, orderId, timestamp: new Date() },
+  })
+  throw error
+}
+```
+
+### 4. Handle Errors at the Right Level
+
+```typescript
+// Handle at the call site if the caller needs to react
+try {
+  const user = await getUser(userId)
+} catch (error) {
+  return res.status(404).json({ error: 'User not found' })
+}
+
+// Let errors bubble up if the caller can't handle them
+const processUser = async (userId: string) => {
+  const user = await getUser(userId) // Let errors propagate
+  return transform(user)
+}
+```
+
+## Next Steps
+
+- [Basic Functions](./basic-function) - Simple function examples
+- [Workflow Functions](./workflow-functions) - Complete workflows
+- [Creating Functions](../docs/creating-functions) - Function creation guide
+- [API Reference](../api/) - Complete API documentation

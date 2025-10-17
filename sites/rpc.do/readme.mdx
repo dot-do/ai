@@ -1,0 +1,501 @@
+---
+$id: https://rpc.do
+$type: WebSite
+name: rpc.do
+description: RPC communication layer for Cloudflare Workers with typed service bindings and Durable Objects
+keywords: [rpc, workers, cloudflare, service-bindings, durable-objects, distributed, communication, typed-rpc]
+author:
+  $type: Organization
+  name: .do Platform
+license: MIT
+---
+
+# rpc.do
+
+**RPC communication layer for Cloudflare Workers with typed service bindings and Durable Objects**
+
+rpc.do provides a type-safe RPC (Remote Procedure Call) framework for building distributed worker-to-worker communication on Cloudflare's edge network. It enables seamless communication between Workers, Durable Objects, and services using strongly-typed interfaces and semantic patterns.
+
+## Quick Start
+
+```bash
+pnpm add sdk.do
+```
+
+```typescript
+import { createRpcClient, AIWorkerRPC } from '../rpc-types'
+import type { WorkerServiceBindings } from '../rpc-types'
+
+interface Env extends WorkerServiceBindings {
+  AI_SERVICE: Fetcher
+}
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    // Create a typed RPC client
+    const aiClient = createRpcClient<AIWorkerRPC.Methods>(env.AI_SERVICE)
+
+    // Make type-safe RPC calls
+    const result = await aiClient.call('generateText', {
+      prompt: 'Hello, world!',
+      model: 'gpt-5',
+      temperature: 0.7,
+    })
+
+    return Response.json({ text: result.text })
+  },
+}
+```
+
+## Overview
+
+rpc.do is the communication backbone of the `.do` platform, enabling workers to communicate with each other in a type-safe, distributed manner. It abstracts the complexity of service bindings, Durable Objects, and RPC patterns into a simple, intuitive API.
+
+### Key Features
+
+- **Type-Safe RPC**: Full TypeScript support with compile-time type checking
+- **Service Bindings**: Seamless worker-to-worker communication
+- **Durable Objects**: Stateful RPC with persistent storage
+- **Auto-Generated Clients**: Type-safe clients for all platform workers
+- **Pattern Matching**: Semantic `$.Subject.predicate.Object` patterns
+- **Error Handling**: Automatic retry logic and error propagation
+- **Performance**: Edge-optimized with minimal latency
+- **Observability**: Built-in logging and tracing support
+
+### Architecture
+
+rpc.do follows a client-server RPC model:
+
+1. **RPC Server**: Workers expose methods via RPC endpoints
+2. **RPC Client**: Other workers call methods through typed clients
+3. **Service Bindings**: Cloudflare connects workers without network overhead
+4. **Durable Objects**: Provide stateful RPC with strong consistency
+
+## Core Concepts
+
+### Service Bindings
+
+Service bindings allow one Worker to call another Worker directly, without going through the public internet:
+
+```typescript
+// wrangler.jsonc
+{
+  "services": [
+    {
+      "binding": "AI_SERVICE",
+      "service": "ai-worker",
+      "environment": "production"
+    }
+  ]
+}
+```
+
+### Typed RPC Clients
+
+Create type-safe clients for any worker:
+
+```typescript
+import { createRpcClient, AIWorkerRPC } from '../rpc-types'
+
+const aiClient = createRpcClient<AIWorkerRPC.Methods>(env.AI_SERVICE)
+
+// TypeScript knows all available methods and their signatures
+const result = await aiClient.call('generateText', {
+  prompt: 'Write a haiku',
+  model: 'gpt-5',
+})
+```
+
+### RPC Method Definitions
+
+Define RPC methods with full type safety:
+
+```typescript
+export namespace MyWorkerRPC {
+  export interface MyMethodParams {
+    input: string
+    options?: {
+      flag: boolean
+    }
+  }
+
+  export interface MyMethodResponse {
+    output: string
+    metadata: Record<string, any>
+  }
+
+  export type Methods = {
+    myMethod: {
+      params: MyMethodParams
+      response: MyMethodResponse
+    }
+  }
+}
+```
+
+### Durable Objects RPC
+
+Use Durable Objects for stateful RPC:
+
+```typescript
+import { DurableObject } from 'cloudflare:workers'
+
+export class CounterService extends DurableObject {
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url)
+
+    if (url.pathname === '/rpc/increment') {
+      const count = (await this.ctx.storage.get<number>('count')) || 0
+      const newCount = count + 1
+      await this.ctx.storage.put('count', newCount)
+
+      return Response.json({
+        success: true,
+        data: { count: newCount },
+      })
+    }
+
+    return Response.json({ error: 'Method not found' }, { status: 404 })
+  }
+}
+```
+
+## Platform Workers
+
+rpc.do provides typed clients for all `.do` platform workers:
+
+### AI Worker
+
+```typescript
+const aiClient = createRpcClient<AIWorkerRPC.Methods>(env.AI_SERVICE)
+
+// Generate text
+const text = await aiClient.call('generateText', {
+  prompt: 'Explain quantum computing',
+  model: 'gpt-5',
+})
+
+// Generate structured objects
+const product = await aiClient.call('generateObject', {
+  prompt: 'Create a product description',
+  schema: $.Product,
+})
+
+// Create embeddings
+const embeddings = await aiClient.call('embed', {
+  text: ['machine learning', 'artificial intelligence'],
+})
+```
+
+### OAuth Worker
+
+```typescript
+const oauthClient = createRpcClient<OAuthWorkerRPC.Methods>(env.OAUTH_SERVICE)
+
+// Get user info
+const user = await oauthClient.call('user.get', {
+  token: 'user-token-123',
+})
+
+// Verify token
+const verification = await oauthClient.call('user.verify', {
+  token: 'user-token-123',
+})
+```
+
+### Patent Worker
+
+```typescript
+const patentClient = createRpcClient<PatentWorkerRPC.Methods>(env.PATENT_SERVICE)
+
+// Search patents
+const patents = await patentClient.call('patents.search', {
+  q: { patent_title: { _contains: 'machine learning' } },
+  o: { size: 10 },
+})
+```
+
+### Pipeline Worker
+
+```typescript
+const pipelineClient = createRpcClient<PipelineWorkerRPC.Methods>(env.PIPELINE_SERVICE)
+
+// Send event
+await pipelineClient.call('event.send', {
+  eventType: 'user.created',
+  payload: { userId: '123' },
+})
+
+// Schedule job
+await pipelineClient.call('schedule.create', {
+  cron: '0 0 * * *',
+  handler: 'daily-report',
+})
+```
+
+## Documentation
+
+- [Getting Started](./docs/getting-started) - Installation and configuration
+- [RPC Patterns](./docs/rpc-patterns) - Communication patterns and best practices
+- [Service Objects](./docs/service-objects) - Durable Objects for RPC
+- [API Reference](./api/) - Complete API documentation
+
+## Examples
+
+- [Basic RPC](./examples/basic-rpc) - Simple worker-to-worker calls
+- [Worker Communication](./examples/worker-communication) - Multi-worker patterns
+
+## Use Cases
+
+### Distributed Services
+
+```typescript
+// User worker calls AI worker
+const aiClient = createRpcClient<AIWorkerRPC.Methods>(env.AI_SERVICE)
+
+on('User.registered', async (event) => {
+  // Generate personalized welcome message
+  const message = await aiClient.call('generateText', {
+    prompt: `Welcome message for ${event.data.name}`,
+  })
+
+  await sendWelcomeEmail(event.data.email, message.text)
+})
+```
+
+### Service Orchestration
+
+```typescript
+// Orchestrator worker coordinates multiple services
+const { ai, oauth, patent } = createWorkerClients(env)
+
+async function processResearchRequest(userId: string, query: string) {
+  // Verify user
+  const user = await oauth!.call('user.get', { token: userId })
+
+  // Search patents
+  const patents = await patent!.call('patents.search', {
+    q: { patent_abstract: { _contains: query } },
+  })
+
+  // Generate summary
+  const summary = await ai!.call('generateText', {
+    prompt: `Summarize these patents: ${patents.patents.map((p) => p.patent_title).join(', ')}`,
+  })
+
+  return { user, patents, summary }
+}
+```
+
+### Stateful RPC with Durable Objects
+
+```typescript
+// Session management with Durable Objects
+export class SessionService extends DurableObject {
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url)
+    const body = await request.json()
+
+    if (url.pathname === '/rpc/createSession') {
+      const sessionId = crypto.randomUUID()
+      await this.ctx.storage.put(`session:${sessionId}`, {
+        userId: body.params.userId,
+        createdAt: Date.now(),
+        data: body.params.data,
+      })
+
+      return Response.json({
+        success: true,
+        data: { sessionId },
+      })
+    }
+
+    return Response.json({ error: 'Method not found' }, { status: 404 })
+  }
+}
+```
+
+## Best Practices
+
+### 1. Use Typed Clients
+
+Always use typed RPC clients for compile-time safety:
+
+```typescript
+// Good - Type-safe
+const aiClient = createRpcClient<AIWorkerRPC.Methods>(env.AI_SERVICE)
+const result = await aiClient.call('generateText', { prompt: 'Hello' })
+
+// Bad - Untyped fetch
+const response = await env.AI_SERVICE.fetch('http://service/rpc/generateText', {
+  method: 'POST',
+  body: JSON.stringify({ prompt: 'Hello' }),
+})
+```
+
+### 2. Handle Errors Gracefully
+
+```typescript
+try {
+  const result = await aiClient.call('generateText', { prompt: 'Hello' })
+  console.log(result.text)
+} catch (error) {
+  console.error('RPC call failed:', error)
+  // Fallback logic
+}
+```
+
+### 3. Use Service Bindings for Performance
+
+Service bindings are faster than HTTP calls:
+
+```typescript
+// Good - Service binding (no network overhead)
+const result = await env.AI_SERVICE.fetch(...)
+
+// Bad - HTTP call (network latency)
+const result = await fetch('https://ai.example.com/rpc/...')
+```
+
+### 4. Batch RPC Calls
+
+Use Promise.all for parallel calls:
+
+```typescript
+const [text, embeddings, list] = await Promise.all([
+  aiClient.call('generateText', { prompt: 'Hello' }),
+  aiClient.call('embed', { text: 'Hello world' }),
+  aiClient.call('list', { prompt: 'List 5 colors' }),
+])
+```
+
+### 5. Version Your RPC APIs
+
+Add version prefixes for breaking changes:
+
+```typescript
+export namespace MyWorkerRPC {
+  export namespace V1 {
+    export type Methods = {
+      myMethod: { params: Params; response: Response }
+    }
+  }
+
+  export namespace V2 {
+    export type Methods = {
+      myMethod: { params: NewParams; response: NewResponse }
+    }
+  }
+}
+```
+
+## Integration with .do Platform
+
+rpc.do integrates seamlessly with the entire `.do` platform:
+
+- **[sdk.do](https://sdk.do)**: Core SDK with RPC client utilities
+- **[workers.do](https://workers.do)**: Worker deployment and management
+- **[events.do](https://events.do)**: Event-driven RPC patterns
+- **[database.do](https://database.do)**: Database RPC operations
+- **[ai.do](https://ai.do)**: AI service RPC calls
+
+## Performance
+
+### Service Bindings vs HTTP
+
+| Method          | Latency   | Overhead            |
+| --------------- | --------- | ------------------- |
+| Service Binding | ~1-2ms    | None (direct call)  |
+| HTTP Request    | ~50-200ms | Network + DNS + TLS |
+
+### Durable Objects
+
+- **Strong Consistency**: Single-threaded execution per object
+- **Edge-Optimized**: Automatically migrates to optimal location
+- **Low Latency**: <10ms for same-region calls
+
+## Security
+
+### Authentication
+
+```typescript
+// Add auth to RPC endpoints
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const authHeader = request.headers.get('Authorization')
+    if (!authHeader?.startsWith('Bearer ')) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Process RPC call
+  },
+}
+```
+
+### Rate Limiting
+
+```typescript
+// Rate limit RPC calls
+const rateLimiter = new RateLimiter(env.RATE_LIMITER)
+
+if (!(await rateLimiter.check(clientId))) {
+  return Response.json({ error: 'Rate limit exceeded' }, { status: 429 })
+}
+```
+
+## Troubleshooting
+
+### Service Not Bound
+
+Ensure service binding is configured in `wrangler.jsonc`:
+
+```jsonc
+{
+  "services": [
+    {
+      "binding": "AI_SERVICE",
+      "service": "ai-worker",
+    },
+  ],
+}
+```
+
+### Type Errors
+
+Import RPC types from the shared `rpc-types.ts` file:
+
+```typescript
+import { createRpcClient, AIWorkerRPC } from '../rpc-types'
+import type { WorkerServiceBindings } from '../rpc-types'
+```
+
+### RPC Call Timeout
+
+Add timeout handling:
+
+```typescript
+const timeout = (ms: number) => new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), ms))
+
+const result = await Promise.race([aiClient.call('generateText', { prompt: 'Hello' }), timeout(5000)])
+```
+
+## License
+
+MIT (Open Source)
+
+rpc.do is open-source software released under the MIT License. You are free to use, modify, and distribute it for any purpose.
+
+## Resources
+
+- [Cloudflare Workers Docs](https://developers.cloudflare.com/workers/)
+- [Service Bindings](https://developers.cloudflare.com/workers/runtime-apis/bindings/service-bindings/)
+- [Durable Objects](https://developers.cloudflare.com/durable-objects/)
+- [RPC Pattern Guide](./docs/rpc-patterns)
+
+## Contributing
+
+rpc.do is part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem. Contributions are welcome!
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

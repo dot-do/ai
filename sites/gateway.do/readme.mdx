@@ -1,0 +1,538 @@
+---
+$id: https://gateway.do
+$type: WebSite
+name: gateway.do
+description: API gateway for unified access to external APIs with authentication, rate limiting, caching, and transformations
+keywords: [api, gateway, routing, authentication, rate limiting, caching, transformation, proxy]
+license: CC-BY-4.0
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# gateway.do
+
+**Universal API gateway for seamless integration with external services**
+
+gateway.do provides a unified, secure, and optimized gateway for accessing external APIs with built-in authentication, rate limiting, response caching, request/response transformations, and comprehensive monitoring.
+
+## Quick Start
+
+```typescript
+import { gateway } from 'sdk.do'
+
+// Simple API request
+const data = await gateway.get('https://api.example.com/users')
+
+// With authentication
+const data = await gateway.get('https://api.example.com/users', {
+  auth: {
+    type: 'bearer',
+    token: process.env.API_TOKEN,
+  },
+})
+
+// With caching and rate limiting
+const data = await gateway.get('https://api.example.com/data', {
+  cache: { ttl: 3600 },
+  rateLimit: { requests: 100, window: 60000 },
+})
+
+// Request transformation
+const result = await gateway.post('https://api.example.com/webhook', {
+  data: { message: 'Hello' },
+  transform: {
+    request: (data) => ({ payload: JSON.stringify(data) }),
+    response: (data) => JSON.parse(data.result),
+  },
+})
+```
+
+## Key Features
+
+### 🔐 Authentication Management
+
+Support for multiple authentication methods:
+
+```typescript
+import { gateway } from 'sdk.do'
+
+// Bearer token
+await gateway.get('https://api.example.com/data', {
+  auth: {
+    type: 'bearer',
+    token: process.env.API_TOKEN,
+  },
+})
+
+// Basic auth
+await gateway.get('https://api.example.com/data', {
+  auth: {
+    type: 'basic',
+    username: 'user',
+    password: 'pass',
+  },
+})
+
+// API key (header or query param)
+await gateway.get('https://api.example.com/data', {
+  auth: {
+    type: 'apiKey',
+    key: 'X-API-Key',
+    value: process.env.API_KEY,
+    in: 'header', // or 'query'
+  },
+})
+
+// OAuth 2.0
+await gateway.get('https://api.example.com/data', {
+  auth: {
+    type: 'oauth2',
+    clientId: process.env.CLIENT_ID,
+    clientSecret: process.env.CLIENT_SECRET,
+    tokenUrl: 'https://api.example.com/oauth/token',
+  },
+})
+
+// Custom authentication
+await gateway.get('https://api.example.com/data', {
+  auth: {
+    type: 'custom',
+    handler: async (request) => {
+      const signature = await generateSignature(request)
+      return {
+        headers: { 'X-Signature': signature },
+      }
+    },
+  },
+})
+```
+
+### ⚡ Rate Limiting
+
+Automatic rate limiting with multiple strategies:
+
+```typescript
+import { gateway } from 'sdk.do'
+
+// Per-endpoint rate limiting
+await gateway.get('https://api.example.com/data', {
+  rateLimit: {
+    requests: 100,
+    window: 60000, // 1 minute
+    strategy: 'sliding-window',
+  },
+})
+
+// Global rate limiting
+gateway.config({
+  rateLimit: {
+    default: {
+      requests: 1000,
+      window: 60000,
+    },
+    byEndpoint: {
+      'api.example.com': { requests: 100, window: 60000 },
+      'api.other.com': { requests: 500, window: 60000 },
+    },
+  },
+})
+
+// Adaptive rate limiting
+await gateway.get('https://api.example.com/data', {
+  rateLimit: {
+    adaptive: true, // Auto-adjust based on 429 responses
+    backoff: 'exponential',
+  },
+})
+```
+
+### 💾 Response Caching
+
+Intelligent response caching for performance:
+
+```typescript
+import { gateway } from 'sdk.do'
+
+// Simple caching
+const data = await gateway.get('https://api.example.com/static-data', {
+  cache: {
+    enabled: true,
+    ttl: 3600, // 1 hour
+  },
+})
+
+// Cache with invalidation
+const data = await gateway.get('https://api.example.com/products', {
+  cache: {
+    enabled: true,
+    ttl: 3600,
+    key: 'products:list',
+    tags: ['products'], // For bulk invalidation
+  },
+})
+
+// Invalidate cache
+await gateway.cache.invalidate({ tags: ['products'] })
+
+// Conditional caching
+const data = await gateway.get('https://api.example.com/data', {
+  cache: {
+    enabled: true,
+    ttl: 3600,
+    condition: (response) => response.status === 200,
+  },
+})
+```
+
+### 🔄 Request/Response Transformation
+
+Transform requests and responses:
+
+```typescript
+import { gateway } from 'sdk.do'
+
+// Transform request data
+await gateway.post('https://api.example.com/users', {
+  data: { name: 'John', email: 'john@example.com' },
+  transform: {
+    request: (data) => ({
+      user: {
+        full_name: data.name,
+        email_address: data.email,
+      },
+    }),
+  },
+})
+
+// Transform response data
+const user = await gateway.get('https://api.example.com/users/123', {
+  transform: {
+    response: (data) => ({
+      id: data.user_id,
+      name: data.full_name,
+      email: data.email_address,
+    }),
+  },
+})
+
+// Bidirectional transformation
+await gateway.post('https://api.example.com/products', {
+  data: { name: 'Product', price: 99.99 },
+  transform: {
+    request: (data) => toExternalFormat(data),
+    response: (data) => toInternalFormat(data),
+  },
+})
+```
+
+### 🔁 Retry Logic
+
+Automatic retries with exponential backoff:
+
+```typescript
+import { gateway } from 'sdk.do'
+
+// Simple retry
+const data = await gateway.get('https://api.example.com/data', {
+  retry: {
+    max: 3,
+    delay: 1000,
+    backoff: 'exponential',
+  },
+})
+
+// Conditional retry
+const data = await gateway.get('https://api.example.com/data', {
+  retry: {
+    max: 5,
+    delay: 1000,
+    condition: (error) => {
+      // Retry on network errors or 5xx
+      return error.code === 'NETWORK_ERROR' || error.status >= 500
+    },
+  },
+})
+
+// With circuit breaker
+const data = await gateway.get('https://api.example.com/data', {
+  retry: {
+    max: 3,
+    circuitBreaker: {
+      enabled: true,
+      threshold: 5,
+      timeout: 60000,
+    },
+  },
+})
+```
+
+### 📊 Request/Response Monitoring
+
+Track API usage and performance:
+
+```typescript
+import { gateway } from 'sdk.do'
+
+// Get analytics
+const analytics = await gateway.analytics.usage({
+  period: 'last_7_days',
+  groupBy: ['endpoint', 'status'],
+})
+
+console.log(analytics)
+// {
+//   totalRequests: 10000,
+//   successRate: 0.98,
+//   averageLatency: 250,
+//   byEndpoint: {
+//     'api.example.com/users': {
+//       requests: 5000,
+//       success: 4900,
+//       avgLatency: 200
+//     }
+//   },
+//   byStatus: {
+//     200: 9500,
+//     404: 100,
+//     500: 50
+//   }
+// }
+
+// Real-time monitoring
+gateway.on('request', (event) => {
+  console.log(`${event.method} ${event.url}`)
+})
+
+gateway.on('response', (event) => {
+  console.log(`${event.status} in ${event.latency}ms`)
+})
+
+gateway.on('error', (event) => {
+  console.error(`Error: ${event.error.message}`)
+})
+```
+
+## Supported Methods
+
+- **GET** - Retrieve data
+- **POST** - Create resources
+- **PUT** - Update resources
+- **PATCH** - Partial updates
+- **DELETE** - Delete resources
+- **HEAD** - Get headers only
+- **OPTIONS** - Get available methods
+
+## Features
+
+- **Authentication**: Bearer, Basic, API Key, OAuth 2.0, Custom
+- **Rate Limiting**: Fixed window, sliding window, adaptive
+- **Caching**: TTL-based, tag-based, conditional
+- **Transformations**: Request/response data transformation
+- **Retry Logic**: Exponential backoff, circuit breaker
+- **Monitoring**: Real-time analytics and logging
+- **Error Handling**: Automatic retries and fallbacks
+- **Type Safety**: Full TypeScript support
+- **WebSockets**: Real-time connection support
+- **GraphQL**: GraphQL query support
+- **Batch Requests**: Multiple requests in parallel
+
+## Documentation
+
+- [Getting Started](./docs/getting-started) - Installation and basic usage
+- [Architecture](./docs/architecture) - Gateway design and patterns
+- [Best Practices](./docs/best-practices) - Optimization and security
+- [Troubleshooting](./docs/troubleshooting) - Common issues
+- [API Reference](./api/reference) - Complete API documentation
+
+## Examples
+
+- [Basic Usage](./examples/basic-usage) - Simple API requests
+- [Advanced Patterns](./examples/advanced-patterns) - Complex integrations
+- [Integration](./examples/integration) - Integration with `.do` services
+- [Real-World Use Case](./examples/real-world-use-case) - Production implementation
+
+## Use Cases
+
+### External API Integration
+
+```typescript
+import { gateway } from 'sdk.do'
+
+// Stripe integration
+const customer = await gateway.post('https://api.stripe.com/v1/customers', {
+  auth: {
+    type: 'bearer',
+    token: process.env.STRIPE_SECRET_KEY,
+  },
+  data: { email: 'customer@example.com' },
+  cache: { enabled: false }, // Don't cache POST requests
+})
+
+// GitHub API
+const repos = await gateway.get('https://api.github.com/user/repos', {
+  auth: {
+    type: 'bearer',
+    token: process.env.GITHUB_TOKEN,
+  },
+  cache: { ttl: 300 }, // Cache for 5 minutes
+  rateLimit: { requests: 5000, window: 3600000 }, // GitHub rate limit
+})
+```
+
+### Webhook Proxying
+
+```typescript
+import { gateway, on } from 'sdk.do'
+
+// Receive webhook
+on($.Webhook.received, async (event) => {
+  const { source, payload } = event.data
+
+  // Forward to internal API
+  await gateway.post('https://internal-api.example.com/webhooks', {
+    data: payload,
+    transform: {
+      request: (data) => ({
+        source,
+        timestamp: new Date(),
+        data,
+      }),
+    },
+    retry: { max: 3 },
+  })
+})
+```
+
+### API Aggregation
+
+```typescript
+import { gateway } from 'sdk.do'
+
+async function getUserDashboard(userId: string) {
+  // Fetch from multiple APIs in parallel
+  const [profile, orders, recommendations] = await Promise.all([
+    gateway.get(`https://api.example.com/users/${userId}`, {
+      cache: { ttl: 3600 },
+    }),
+    gateway.get(`https://api.example.com/orders?user=${userId}`, {
+      cache: { ttl: 300 },
+    }),
+    gateway.get(`https://api.example.com/recommendations/${userId}`, {
+      cache: { ttl: 600 },
+    }),
+  ])
+
+  return {
+    profile,
+    orders,
+    recommendations,
+  }
+}
+```
+
+## Integration with `.do` Platform
+
+```typescript
+import { gateway, db, on, send } from 'sdk.do'
+
+// Fetch and store external data
+on($.DataSync.scheduled, async () => {
+  const products = await gateway.get('https://api.supplier.com/products', {
+    auth: { type: 'apiKey', key: 'X-API-Key', value: process.env.SUPPLIER_KEY },
+    cache: { ttl: 3600 },
+  })
+
+  for (const product of products) {
+    await db.upsert({
+      $id: `product:${product.id}`,
+      $type: 'Product',
+      ...product,
+      syncedAt: new Date(),
+    })
+  }
+
+  await send($.DataSync.completed, { count: products.length })
+})
+```
+
+## Configuration
+
+### Environment Variables
+
+```bash
+# Gateway configuration
+GATEWAY_ENABLE_CACHE=true
+GATEWAY_CACHE_TTL=3600
+GATEWAY_RATE_LIMIT=1000
+GATEWAY_TIMEOUT=30000
+
+# API credentials (examples)
+STRIPE_SECRET_KEY=sk_test_...
+GITHUB_TOKEN=ghp_...
+OPENAI_API_KEY=sk-...
+```
+
+### SDK Configuration
+
+```typescript
+import { gateway } from 'sdk.do'
+
+gateway.config({
+  // Default settings
+  timeout: 30000,
+  retries: 3,
+
+  // Cache settings
+  cache: {
+    enabled: true,
+    ttl: 3600,
+    maxSize: 1000,
+  },
+
+  // Rate limiting
+  rateLimit: {
+    default: { requests: 1000, window: 60000 },
+  },
+
+  // Authentication
+  auth: {
+    providers: {
+      stripe: {
+        type: 'bearer',
+        token: process.env.STRIPE_SECRET_KEY,
+      },
+      github: {
+        type: 'bearer',
+        token: process.env.GITHUB_TOKEN,
+      },
+    },
+  },
+})
+```
+
+## Resources
+
+- [sdk.do](https://sdk.do) - Core SDK documentation
+- [llm.do](https://llm.do) - LLM gateway documentation
+- [api.do](https://api.do) - API integration patterns
+- [db.do](https://db.do) - Database operations
+
+## Related Domains
+
+- **[llm.do](https://llm.do)** - LLM gateway for AI providers
+- **[api.do](https://api.do)** - External API integration
+- **[db.do](https://db.do)** - Database operations
+- **[on.do](https://on.do)** - Event listeners
+- **[send.do](https://send.do)** - Event publishing
+
+## Contributing
+
+gateway.do is part of the [`.do` platform](https://do) ecosystem. Contributions are welcome!
+
+See the [ai repository](https://github.com/dot-do/ai) for contribution guidelines.
+
+## License
+
+Documentation licensed under [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/).
+Code examples licensed under MIT.

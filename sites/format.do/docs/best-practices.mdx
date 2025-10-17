@@ -1,0 +1,270 @@
+---
+$id: https://format.do/docs/best-practices
+$type: TechArticle
+title: format.do Best Practices
+description: Best practices and patterns for using format.do effectively
+keywords: [format, formatting, dates, numbers, strings, currency, locale, i18n, best-practices, patterns, guidelines]
+---
+
+# format.do Best Practices
+
+Recommended patterns and practices for using format.do effectively.
+
+## General Guidelines
+
+### Use TypeScript
+
+Always use TypeScript for type safety:
+
+```typescript
+// Good - type-safe
+import type { Options } from 'format.do'
+const options: Options = {
+  // Configuration
+}
+
+// Avoid - untyped
+const options = {
+  // Configuration
+}
+```
+
+### Handle Errors
+
+Implement comprehensive error handling:
+
+```typescript
+// Good - error handling
+try {
+  const result = await format(data)
+  return result
+} catch (error) {
+  console.error('Operation failed:', error)
+  // Handle or rethrow
+  throw error
+}
+
+// Avoid - no error handling
+const result = await format(data)
+```
+
+### Use Semantic Patterns
+
+Leverage semantic patterns for clarity:
+
+```typescript
+// Good - semantic
+import $ from 'format.do'
+const result = await format($.Data, options)
+
+// Avoid - generic
+const result = await format('data', options)
+```
+
+## Configuration
+
+### Environment Variables
+
+Use environment variables for configuration:
+
+```typescript
+// Good - environment-based config
+const config = {
+  apiKey: process.env.FORMAT_API_KEY,
+  timeout: parseInt(process.env.FORMAT_TIMEOUT || '30000'),
+}
+
+// Avoid - hardcoded values
+const config = {
+  apiKey: 'hardcoded-key',
+  timeout: 30000,
+}
+```
+
+### Validation
+
+Validate configuration on startup:
+
+```typescript
+import { z } from 'zod'
+
+const configSchema = z.object({
+  apiKey: z.string().min(1),
+  timeout: z.number().positive(),
+})
+
+const config = configSchema.parse({
+  apiKey: process.env.API_KEY,
+  timeout: parseInt(process.env.TIMEOUT),
+})
+```
+
+## Performance
+
+### Batch Operations
+
+Process multiple items efficiently:
+
+```typescript
+// Good - batch processing
+const results = await format.batch(items)
+
+// Avoid - sequential processing
+const results = []
+for (const item of items) {
+  results.push(await format(item))
+}
+```
+
+### Caching
+
+Cache results when appropriate:
+
+```typescript
+const cache = new Map()
+
+async function getCached(key) {
+  if (cache.has(key)) {
+    return cache.get(key)
+  }
+
+  const result = await format(key)
+  cache.set(key, result)
+  return result
+}
+```
+
+### Resource Management
+
+Clean up resources properly:
+
+```typescript
+const instance = await format.create(config)
+
+try {
+  await instance.process(data)
+} finally {
+  await instance.close()
+}
+```
+
+## Testing
+
+### Unit Tests
+
+Write comprehensive unit tests:
+
+```typescript
+import { describe, it, expect } from 'vitest'
+import { format } from 'format.do'
+
+describe('format', () => {
+  it('should process data correctly', async () => {
+    const result = await format({ data: 'test' })
+    expect(result).toBeDefined()
+  })
+
+  it('should handle errors', async () => {
+    await expect(format({ invalid: true })).rejects.toThrow()
+  })
+})
+```
+
+### Integration Tests
+
+Test integration with other services:
+
+```typescript
+import { format } from 'format.do'
+import { db } from 'sdk.do'
+
+it('should integrate with database', async () => {
+  const data = await db.list($.Data)
+  const result = await format(data)
+  expect(result).toBeDefined()
+})
+```
+
+## Security
+
+### Input Validation
+
+Always validate inputs:
+
+```typescript
+import { z } from 'zod'
+
+const inputSchema = z.object({
+  data: z.string(),
+  options: z.object({}).optional(),
+})
+
+async function safeProcess(input) {
+  const validated = inputSchema.parse(input)
+  return await format(validated)
+}
+```
+
+### Sanitization
+
+Sanitize data before processing:
+
+```typescript
+function sanitize(input) {
+  return {
+    data: input.data.trim(),
+    // Remove potentially harmful content
+  }
+}
+
+const result = await format(sanitize(input))
+```
+
+## Monitoring
+
+### Logging
+
+Implement structured logging:
+
+```typescript
+import { logger } from 'dev.do'
+
+logger.info('format started', { input })
+
+try {
+  const result = await format(input)
+  logger.info('format completed', { result })
+  return result
+} catch (error) {
+  logger.error('format failed', { error })
+  throw error
+}
+```
+
+### Metrics
+
+Track key metrics:
+
+```typescript
+const startTime = Date.now()
+
+try {
+  const result = await format(data)
+  metrics.increment('format.success')
+  metrics.timing('format.duration', Date.now() - startTime)
+  return result
+} catch (error) {
+  metrics.increment('format.error')
+  throw error
+}
+```
+
+## Learn More
+
+- [Getting Started](./getting-started) - Setup guide
+- [Architecture](./architecture) - System design
+- [Troubleshooting](./troubleshooting) - Common issues
+
+---
+
+Part of the [format.do](https://format.do) documentation.

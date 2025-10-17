@@ -1,0 +1,580 @@
+---
+$id: https://integrations.do/paypal
+$type: Integration
+name: PayPal
+service: paypal
+description: Payment processing platform for online transactions
+category: payments
+sdkBased: true
+sdkPackage: '@paypal/paypal-server-sdk'
+sdkVersion: ^1.0.0
+sdkImport: PayPalServerSDK
+
+auth:
+  type: oauth2
+  authorizationUrl: https://www.paypal.com/signin/authorize
+  tokenUrl: https://api.paypal.com/v1/oauth2/token
+  scopes:
+    - openid
+    - profile
+    - email
+
+resources:
+  - name: Payment
+    plural: Payments
+    description: Process payment transactions
+    operations:
+      - name: create
+        method: POST
+        path: /v2/payments
+        params:
+          - name: intent
+            type: string
+            required: true
+            description: Payment intent (CAPTURE or AUTHORIZE)
+          - name: purchase_units
+            type: array
+            required: true
+            description: Purchase units with amount and breakdown
+          - name: payer
+            type: object
+            required: false
+            description: Payer information
+        returns: Payment
+
+      - name: get
+        method: GET
+        path: /v2/payments/{payment_id}
+        params:
+          - name: payment_id
+            type: string
+            required: true
+            description: Payment ID
+        returns: Payment
+
+      - name: capture
+        method: POST
+        path: /v2/payments/authorizations/{authorization_id}/capture
+        params:
+          - name: authorization_id
+            type: string
+            required: true
+            description: Authorization ID
+          - name: amount
+            type: object
+            required: false
+            description: Amount to capture
+        returns: Payment
+
+  - name: Order
+    plural: Orders
+    description: Create and manage orders
+    operations:
+      - name: create
+        method: POST
+        path: /v2/checkout/orders
+        params:
+          - name: intent
+            type: string
+            required: true
+            description: Order intent (CAPTURE, AUTHORIZE)
+          - name: purchase_units
+            type: array
+            required: true
+            description: Purchase units
+          - name: payer
+            type: object
+            required: false
+            description: Payer details
+        returns: Order
+
+      - name: get
+        method: GET
+        path: /v2/checkout/orders/{order_id}
+        params:
+          - name: order_id
+            type: string
+            required: true
+            description: Order ID
+        returns: Order
+
+      - name: capture
+        method: POST
+        path: /v2/checkout/orders/{order_id}/capture
+        params:
+          - name: order_id
+            type: string
+            required: true
+            description: Order ID
+        returns: Order
+
+      - name: authorize
+        method: POST
+        path: /v2/checkout/orders/{order_id}/authorize
+        params:
+          - name: order_id
+            type: string
+            required: true
+            description: Order ID
+        returns: Order
+
+  - name: Refund
+    plural: Refunds
+    description: Issue refunds for captured payments
+    operations:
+      - name: create
+        method: POST
+        path: /v2/payments/captures/{capture_id}/refund
+        params:
+          - name: capture_id
+            type: string
+            required: true
+            description: Capture ID
+          - name: amount
+            type: object
+            required: false
+            description: Refund amount
+          - name: note_to_payer
+            type: string
+            required: false
+            description: Note to payer
+        returns: Refund
+
+      - name: get
+        method: GET
+        path: /v2/payments/refunds/{refund_id}
+        params:
+          - name: refund_id
+            type: string
+            required: true
+            description: Refund ID
+        returns: Refund
+
+  - name: Subscription
+    plural: Subscriptions
+    description: Manage recurring subscriptions
+    operations:
+      - name: create
+        method: POST
+        path: /v1/billing/subscriptions
+        params:
+          - name: plan_id
+            type: string
+            required: true
+            description: Billing plan ID
+          - name: subscriber
+            type: object
+            required: false
+            description: Subscriber information
+          - name: application_context
+            type: object
+            required: false
+            description: Application context
+        returns: Subscription
+
+      - name: get
+        method: GET
+        path: /v1/billing/subscriptions/{subscription_id}
+        params:
+          - name: subscription_id
+            type: string
+            required: true
+            description: Subscription ID
+        returns: Subscription
+
+      - name: update
+        method: PATCH
+        path: /v1/billing/subscriptions/{subscription_id}
+        params:
+          - name: subscription_id
+            type: string
+            required: true
+            description: Subscription ID
+          - name: operations
+            type: array
+            required: true
+            description: JSON Patch operations
+        returns: Subscription
+
+      - name: cancel
+        method: POST
+        path: /v1/billing/subscriptions/{subscription_id}/cancel
+        params:
+          - name: subscription_id
+            type: string
+            required: true
+            description: Subscription ID
+          - name: reason
+            type: string
+            required: false
+            description: Cancellation reason
+        returns: boolean
+
+webhooks:
+  enabled: true
+  signatureHeader: PAYPAL-TRANSMISSION-SIG
+  signatureAlgorithm: sha256
+  verificationMethod: signature
+  events:
+    - name: payment.capture.completed
+      type: PAYMENT.CAPTURE.COMPLETED
+      description: Payment capture completed
+    - name: payment.capture.denied
+      type: PAYMENT.CAPTURE.DENIED
+      description: Payment capture denied
+    - name: payment.capture.refunded
+      type: PAYMENT.CAPTURE.REFUNDED
+      description: Payment was refunded
+    - name: checkout.order.approved
+      type: CHECKOUT.ORDER.APPROVED
+      description: Order was approved
+    - name: checkout.order.completed
+      type: CHECKOUT.ORDER.COMPLETED
+      description: Order was completed
+    - name: billing.subscription.created
+      type: BILLING.SUBSCRIPTION.CREATED
+      description: Subscription created
+    - name: billing.subscription.activated
+      type: BILLING.SUBSCRIPTION.ACTIVATED
+      description: Subscription activated
+    - name: billing.subscription.cancelled
+      type: BILLING.SUBSCRIPTION.CANCELLED
+      description: Subscription cancelled
+
+errors:
+  mapping:
+    - code: AUTHENTICATION_FAILURE
+      type: authentication
+      statusCode: 401
+      message: Authentication failed
+      retryable: false
+    - code: NOT_AUTHORIZED
+      type: authorization
+      statusCode: 403
+      message: Not authorized
+      retryable: false
+    - code: RESOURCE_NOT_FOUND
+      type: not_found
+      statusCode: 404
+      message: Resource not found
+      retryable: false
+    - code: INVALID_REQUEST
+      type: validation
+      statusCode: 400
+      message: Invalid request
+      retryable: false
+    - code: RATE_LIMIT_REACHED
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit reached
+      retryable: true
+    - code: INTERNAL_SERVER_ERROR
+      type: server
+      statusCode: 500
+      message: Internal server error
+      retryable: true
+  retryable: [RATE_LIMIT_REACHED, INTERNAL_SERVER_ERROR, 429, 500, 503]
+  nonRetryable: [AUTHENTICATION_FAILURE, NOT_AUTHORIZED, RESOURCE_NOT_FOUND, INVALID_REQUEST, 401, 403, 404, 400]
+
+tests:
+  enabled: true
+  cleanup: true
+  scenarios:
+    - name: Payment Processing
+      description: Test payment operations
+      steps:
+        - action: create
+          resource: Payment
+        - action: retrieve
+          resource: Payment
+        - action: custom
+          resource: Payment
+
+    - name: Order Management
+      description: Test order CRUD operations
+      steps:
+        - action: create
+          resource: Order
+        - action: retrieve
+          resource: Order
+        - action: custom
+          resource: Order
+
+    - name: Refund Operations
+      description: Test refund processing
+      steps:
+        - action: create
+          resource: Refund
+        - action: retrieve
+          resource: Refund
+
+    - name: Subscription Management
+      description: Test subscription operations
+      steps:
+        - action: create
+          resource: Subscription
+        - action: retrieve
+          resource: Subscription
+        - action: update
+          resource: Subscription
+        - action: custom
+          resource: Subscription
+
+    - name: Webhook Verification
+      description: Test webhook signature verification
+      steps:
+        - action: assert
+          expects:
+            status: 200
+
+docs:
+  homepage: https://www.paypal.com
+  apiDocs: https://developer.paypal.com/api/rest/
+  sdkDocs: https://github.com/paypal/PayPal-node-SDK
+  guides:
+    quickstart: https://developer.paypal.com/api/rest/
+    webhooks: https://developer.paypal.com/api/rest/webhooks/
+    authentication: https://developer.paypal.com/api/rest/authentication/
+---
+
+# PayPal Integration
+
+PayPal is a leading payment processing platform for online transactions, subscriptions, and marketplace payments.
+
+## Features
+
+- **Payments**: Process one-time payments with capture or authorization
+- **Orders**: Create and manage checkout orders
+- **Refunds**: Issue full or partial refunds
+- **Subscriptions**: Manage recurring billing
+- **OAuth 2.0**: Secure authentication
+- **Webhooks**: Real-time event notifications
+
+## Quick Start
+
+```typescript
+import { PaypalClient } from '@dotdo/sdk.do/integrations/paypal'
+
+const paypal = new PaypalClient({
+  clientId: process.env.PAYPAL_CLIENT_ID,
+  clientSecret: process.env.PAYPAL_CLIENT_SECRET,
+  environment: 'sandbox', // or 'production'
+})
+
+// Create an order
+const order = await paypal.order.create({
+  intent: 'CAPTURE',
+  purchase_units: [
+    {
+      amount: {
+        currency_code: 'USD',
+        value: '100.00',
+      },
+    },
+  ],
+})
+
+// Capture the order
+const capture = await paypal.order.capture({
+  order_id: order.id,
+})
+```
+
+## Authentication
+
+PayPal uses OAuth 2.0 authentication:
+
+```bash
+export PAYPAL_CLIENT_ID=your_client_id
+export PAYPAL_CLIENT_SECRET=your_client_secret
+```
+
+## Resources
+
+### Payments
+
+Process payments:
+
+```typescript
+// Create payment
+const payment = await paypal.payment.create({
+  intent: 'CAPTURE',
+  purchase_units: [
+    {
+      amount: {
+        currency_code: 'USD',
+        value: '50.00',
+      },
+    },
+  ],
+})
+
+// Get payment
+const payment = await paypal.payment.get({ payment_id: 'PAY-123' })
+
+// Capture authorized payment
+const capture = await paypal.payment.capture({
+  authorization_id: 'AUTH-123',
+  amount: {
+    currency_code: 'USD',
+    value: '50.00',
+  },
+})
+```
+
+### Orders
+
+Manage checkout orders:
+
+```typescript
+// Create order
+const order = await paypal.order.create({
+  intent: 'CAPTURE',
+  purchase_units: [
+    {
+      amount: {
+        currency_code: 'USD',
+        value: '100.00',
+        breakdown: {
+          item_total: { currency_code: 'USD', value: '90.00' },
+          shipping: { currency_code: 'USD', value: '10.00' },
+        },
+      },
+      items: [
+        {
+          name: 'Product Name',
+          quantity: '1',
+          unit_amount: { currency_code: 'USD', value: '90.00' },
+        },
+      ],
+    },
+  ],
+})
+
+// Get order
+const order = await paypal.order.get({ order_id: order.id })
+
+// Capture order
+const capture = await paypal.order.capture({ order_id: order.id })
+
+// Authorize order
+const authorization = await paypal.order.authorize({ order_id: order.id })
+```
+
+### Refunds
+
+Issue refunds:
+
+```typescript
+// Create refund
+const refund = await paypal.refund.create({
+  capture_id: 'CAPTURE-123',
+  amount: {
+    currency_code: 'USD',
+    value: '50.00',
+  },
+  note_to_payer: 'Refund for order cancellation',
+})
+
+// Get refund
+const refund = await paypal.refund.get({ refund_id: 'REFUND-123' })
+```
+
+### Subscriptions
+
+Manage subscriptions:
+
+```typescript
+// Create subscription
+const subscription = await paypal.subscription.create({
+  plan_id: 'PLAN-123',
+  subscriber: {
+    email_address: 'customer@example.com',
+    name: {
+      given_name: 'John',
+      surname: 'Doe',
+    },
+  },
+})
+
+// Get subscription
+const subscription = await paypal.subscription.get({
+  subscription_id: 'SUB-123',
+})
+
+// Update subscription
+await paypal.subscription.update({
+  subscription_id: 'SUB-123',
+  operations: [
+    {
+      op: 'replace',
+      path: '/billing_info/outstanding_balance',
+      value: { currency_code: 'USD', value: '0.00' },
+    },
+  ],
+})
+
+// Cancel subscription
+await paypal.subscription.cancel({
+  subscription_id: 'SUB-123',
+  reason: 'Customer request',
+})
+```
+
+## Webhooks
+
+PayPal supports webhooks with signature verification:
+
+```typescript
+import { PaypalWebhookHandler, WebhookEventRouter } from '@dotdo/sdk.do/integrations/paypal'
+
+const handler = new PaypalWebhookHandler(process.env.PAYPAL_WEBHOOK_ID)
+const event = await handler.handleRequest(request)
+
+const router = new WebhookEventRouter()
+router.onPaymentCaptureCompleted(async (event) => {
+  console.log('Payment captured:', event.data)
+})
+
+router.onCheckoutOrderCompleted(async (event) => {
+  console.log('Order completed:', event.data)
+})
+
+await router.route(event)
+```
+
+## Error Handling
+
+```typescript
+import { PaypalError } from '@dotdo/sdk.do/integrations/paypal'
+
+try {
+  await paypal.order.create({
+    /* ... */
+  })
+} catch (error) {
+  if (error instanceof PaypalError) {
+    console.error('PayPal Error:', error.code, error.message)
+    if (error.isRetriable()) {
+      // Retry logic
+    }
+  }
+}
+```
+
+## Best Practices
+
+1. **Environments**: Use sandbox for testing, production for live transactions
+2. **Order vs Payment**: Use Orders API for checkout flows, Payments API for direct captures
+3. **Webhooks**: Verify webhook signatures for security
+4. **Refunds**: Always include note_to_payer for transparency
+5. **Subscriptions**: Use billing plans for recurring payments
+6. **Error Handling**: Implement proper retry logic for rate limits
+
+## API Reference
+
+Full API documentation: https://developer.paypal.com/api/rest/
+
+## License
+
+MIT

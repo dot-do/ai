@@ -1,0 +1,760 @@
+---
+$id: https://agents.do/docs/agent-communication
+$type: TechArticle
+title: Agent Communication
+description: Learn how agents communicate and collaborate in multi-agent systems
+keywords: [agent communication, multi-agent, agent collaboration, message passing, agent coordination]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Agent Communication
+
+Learn how agents communicate and collaborate in multi-agent systems using semantic message passing.
+
+## Communication Patterns
+
+Agents communicate through several patterns:
+
+### 1. Request-Response
+
+One agent requests something from another:
+
+```typescript
+// Agent A requests information
+const response = await agentA.request({
+  to: agentB,
+  type: 'information_request',
+  content: {
+    $type: 'CompanyResearchRequest',
+    company: 'Acme Corp',
+    fields: ['industry', 'size', 'decision_makers'],
+  },
+})
+
+// Agent B receives and responds
+agentB.on('information_request', async (request) => {
+  const research = await agentB.execute({ task: 'research_company', input: request.content })
+
+  return {
+    $type: 'CompanyResearchResponse',
+    company: 'Acme Corp',
+    data: research,
+  }
+})
+```
+
+### 2. Publish-Subscribe
+
+Agents subscribe to events from other agents:
+
+```typescript
+// Agent B subscribes to Agent A events
+agentB.subscribe({
+  from: agentA,
+  events: ['lead_qualified', 'meeting_booked'],
+})
+
+// Agent A publishes event
+await agentA.publish({
+  event: 'lead_qualified',
+  data: {
+    $type: 'Lead',
+    company: 'Acme Corp',
+    status: 'qualified',
+    score: 85,
+  },
+})
+
+// Agent B receives notification
+agentB.on('lead_qualified', async (lead) => {
+  console.log(`New qualified lead: ${lead.company}`)
+  await agentB.execute({ task: 'send_welcome_email', input: lead })
+})
+```
+
+### 3. Task Delegation
+
+One agent delegates tasks to another:
+
+```typescript
+// Agent A delegates research to Agent B
+const result = await agentA.delegate({
+  to: agentB,
+  task: {
+    $type: 'Task',
+    name: 'research_company',
+    priority: 'high',
+    deadline: new Date('2025-10-15'),
+    input: { company: 'Acme Corp' },
+  },
+})
+
+// Agent B accepts and executes
+agentB.on('task_delegated', async (task) => {
+  const result = await agentB.execute(task)
+
+  await agentB.reportBack({
+    to: task.from,
+    task: task.id,
+    result: result,
+  })
+})
+```
+
+### 4. Broadcast
+
+One agent broadcasts to multiple agents:
+
+```typescript
+// Agent A broadcasts to team
+await agentA.broadcast({
+  to: [agentB, agentC, agentD],
+  message: {
+    $type: 'TeamAnnouncement',
+    priority: 'high',
+    content: 'New product launch today - focus on enterprise leads',
+  },
+})
+
+// All agents receive
+agentB.on('team_announcement', (message) => {
+  console.log(`Announcement: ${message.content}`)
+})
+```
+
+## Message Structure
+
+Messages use semantic structure:
+
+```typescript
+interface AgentMessage {
+  // Message metadata
+  $type: 'AgentMessage'
+  $id: string
+  timestamp: string
+
+  // Participants
+  from: Agent
+  to: Agent | Agent[]
+
+  // Message type
+  type: 'request' | 'response' | 'notification' | 'task' | 'broadcast'
+
+  // Semantic content
+  content: {
+    $type: string
+    [key: string]: any
+  }
+
+  // Context
+  context?: {
+    conversation_id?: string
+    parent_message_id?: string
+    thread_id?: string
+  }
+
+  // Priority and routing
+  priority?: 'low' | 'normal' | 'high' | 'urgent'
+  requires_response?: boolean
+  deadline?: string
+}
+```
+
+## Semantic Message Types
+
+Use semantic types for structured communication:
+
+### Lead Qualification
+
+```typescript
+// Research agent → Sales agent
+{
+  $type: 'LeadQualificationResult',
+  lead: {
+    $type: 'Lead',
+    company: 'Acme Corp',
+    contact: 'John Doe',
+    email: 'john@acme.com'
+  },
+  qualification: {
+    score: 85,
+    fit: 'excellent',
+    signals: ['funding_round', 'hiring_spike', 'tech_stack_match'],
+    recommendation: 'high_priority'
+  },
+  insights: {
+    company_profile: '...',
+    decision_makers: [...],
+    competitors: [...]
+  }
+}
+```
+
+### Meeting Coordination
+
+```typescript
+// Calendar agent → Sales agent
+{
+  $type: 'MeetingScheduled',
+  meeting: {
+    $type: 'Meeting',
+    title: 'Discovery Call - Acme Corp',
+    participants: ['sarah@example.com', 'john@acme.com'],
+    datetime: '2025-10-15T14:00:00Z',
+    duration: 30,
+    location: 'Zoom'
+  },
+  actions_required: [
+    'send_calendar_invite',
+    'send_prep_materials',
+    'create_meeting_notes_doc'
+  ]
+}
+```
+
+### Task Status Update
+
+```typescript
+// Worker agent → Orchestrator agent
+{
+  $type: 'TaskStatusUpdate',
+  task_id: 'task-123',
+  status: 'in_progress',
+  progress: 0.6,
+  estimated_completion: '2025-10-10T16:00:00Z',
+  actions_completed: [
+    'company_research',
+    'contact_lookup'
+  ],
+  next_actions: [
+    'personalized_email_draft',
+    'send_email'
+  ],
+  blockers: []
+}
+```
+
+## Communication Channels
+
+Agents communicate through different channels:
+
+### Direct Channel
+
+Point-to-point communication:
+
+```typescript
+// Create direct channel
+const channel = await agent.createChannel({
+  type: 'direct',
+  participants: [agentA, agentB],
+  encryption: true,
+})
+
+// Send message
+await agentA.send({
+  channel: channel,
+  message: { $type: 'TaskRequest', task: 'research' },
+})
+```
+
+### Team Channel
+
+Multi-agent communication:
+
+```typescript
+// Create team channel
+const teamChannel = await agent.createChannel({
+  type: 'team',
+  name: 'Sales Team',
+  participants: [sdrAgent, researchAgent, qualifierAgent],
+  rules: {
+    broadcast_allowed: ['orchestrator'],
+    message_retention: '30_days',
+  },
+})
+
+// Team communication
+await orchestrator.broadcast({
+  channel: teamChannel,
+  message: { $type: 'TeamUpdate', content: 'New goals for Q4' },
+})
+```
+
+### Event Stream
+
+Publish-subscribe pattern:
+
+```typescript
+// Create event stream
+const leadStream = await agent.createStream({
+  name: 'lead_events',
+  events: ['lead_created', 'lead_qualified', 'meeting_booked'],
+})
+
+// Publish to stream
+await sdrAgent.publish({
+  stream: leadStream,
+  event: 'lead_qualified',
+  data: leadData,
+})
+
+// Subscribe to stream
+await emailAgent.subscribe({
+  stream: leadStream,
+  events: ['lead_qualified'],
+  handler: async (event) => {
+    await emailAgent.execute({ task: 'send_welcome_email', input: event.data })
+  },
+})
+```
+
+## Multi-Agent Workflows
+
+Coordinate multiple agents in workflows:
+
+### Sequential Workflow
+
+Agents work in sequence:
+
+```typescript
+const leadWorkflow = await workflow.create({
+  name: 'Lead Processing',
+  type: 'sequential',
+  stages: [
+    {
+      agent: researchAgent,
+      task: 'research_lead',
+      output: 'lead_profile',
+    },
+    {
+      agent: qualificationAgent,
+      task: 'qualify_lead',
+      input: 'lead_profile',
+      output: 'qualification_result',
+    },
+    {
+      agent: outreachAgent,
+      task: 'send_outreach',
+      input: 'qualification_result',
+      condition: (result) => result.qualified === true,
+    },
+  ],
+})
+
+// Execute workflow
+const result = await leadWorkflow.execute({
+  input: { lead: leadData },
+})
+```
+
+### Parallel Workflow
+
+Agents work in parallel:
+
+```typescript
+const enrichmentWorkflow = await workflow.create({
+  name: 'Lead Enrichment',
+  type: 'parallel',
+  tasks: [
+    {
+      agent: companyAgent,
+      task: 'research_company',
+    },
+    {
+      agent: contactAgent,
+      task: 'find_decision_makers',
+    },
+    {
+      agent: competitorAgent,
+      task: 'analyze_competitors',
+    },
+  ],
+  aggregation: 'merge', // How to combine results
+})
+
+// All agents work simultaneously
+const result = await enrichmentWorkflow.execute({
+  input: { company: 'Acme Corp' },
+})
+```
+
+### Conditional Workflow
+
+Dynamic routing based on conditions:
+
+```typescript
+const qualificationWorkflow = await workflow.create({
+  name: 'Lead Qualification',
+  type: 'conditional',
+  stages: [
+    {
+      agent: researchAgent,
+      task: 'research_lead',
+    },
+    {
+      condition: (result) => result.score > 80,
+      then: {
+        agent: highTouchAgent,
+        task: 'personalized_outreach',
+      },
+      else: {
+        agent: automatedAgent,
+        task: 'automated_sequence',
+      },
+    },
+  ],
+})
+```
+
+## Agent Teams
+
+Create teams of agents:
+
+```typescript
+const salesTeam = await agent.createTeam({
+  name: 'Sales Development Team',
+  description: 'Team focused on lead generation and qualification',
+
+  // Team members
+  members: [
+    {
+      agent: researchAgent,
+      role: 'researcher',
+      responsibilities: ['company_research', 'contact_discovery'],
+    },
+    {
+      agent: outreachAgent,
+      role: 'outreach',
+      responsibilities: ['email_outreach', 'follow_up'],
+    },
+    {
+      agent: qualifierAgent,
+      role: 'qualifier',
+      responsibilities: ['lead_qualification', 'discovery_calls'],
+    },
+  ],
+
+  // Team orchestrator
+  orchestrator: {
+    agent: orchestratorAgent,
+    responsibilities: ['task_assignment', 'progress_monitoring', 'escalation'],
+  },
+
+  // Team goals
+  goals: [
+    {
+      metric: 'leads_qualified',
+      target: 100,
+      period: 'week',
+    },
+    {
+      metric: 'meetings_booked',
+      target: 50,
+      period: 'week',
+    },
+  ],
+
+  // Communication rules
+  communication: {
+    default_channel: 'team',
+    escalation_channel: 'orchestrator',
+    notification_preferences: {
+      task_complete: ['orchestrator'],
+      task_blocked: ['orchestrator', 'team'],
+      goal_achieved: ['team'],
+    },
+  },
+})
+```
+
+### Team Operations
+
+```typescript
+// Assign task to team
+await salesTeam.assignTask({
+  task: 'Process 50 new leads',
+  distribution: 'auto', // Team figures out distribution
+})
+
+// Team self-organizes
+// - Orchestrator analyzes task
+// - Assigns research to research agent
+// - Routes qualified leads to outreach agent
+// - Coordinates qualification calls
+
+// Monitor team performance
+const teamMetrics = await salesTeam.getMetrics()
+console.log(teamMetrics)
+// {
+//   tasks_completed: 150,
+//   team_efficiency: 0.85,
+//   agent_utilization: {
+//     researcher: 0.90,
+//     outreach: 0.85,
+//     qualifier: 0.75
+//   },
+//   goals_progress: {
+//     leads_qualified: { current: 95, target: 100 },
+//     meetings_booked: { current: 48, target: 50 }
+//   }
+// }
+```
+
+## Coordination Patterns
+
+### Leader-Follower
+
+One agent leads, others follow:
+
+```typescript
+const leaderFollower = await coordination.create({
+  pattern: 'leader_follower',
+  leader: orchestratorAgent,
+  followers: [agentA, agentB, agentC],
+  rules: {
+    leader_responsibilities: ['planning', 'task_assignment', 'monitoring'],
+    follower_responsibilities: ['execution', 'reporting'],
+  },
+})
+
+// Leader assigns tasks
+await orchestratorAgent.assignTasks([
+  { to: agentA, task: 'research' },
+  { to: agentB, task: 'outreach' },
+  { to: agentC, task: 'follow_up' },
+])
+```
+
+### Peer-to-Peer
+
+Agents collaborate as equals:
+
+```typescript
+const peerNetwork = await coordination.create({
+  pattern: 'peer_to_peer',
+  agents: [agentA, agentB, agentC],
+  collaboration: {
+    task_sharing: true,
+    consensus_required: true,
+    voting_mechanism: 'majority',
+  },
+})
+
+// Agents negotiate task distribution
+await peerNetwork.distributeTask({
+  task: 'Large research project',
+  strategy: 'negotiation', // Agents decide among themselves
+})
+```
+
+### Pipeline
+
+Agents form a processing pipeline:
+
+```typescript
+const pipeline = await coordination.create({
+  pattern: 'pipeline',
+  stages: [
+    { agent: collectorAgent, input: 'raw_leads', output: 'validated_leads' },
+    { agent: enrichmentAgent, input: 'validated_leads', output: 'enriched_leads' },
+    { agent: qualificationAgent, input: 'enriched_leads', output: 'qualified_leads' },
+    { agent: outreachAgent, input: 'qualified_leads', output: 'contacted_leads' },
+  ],
+})
+
+// Data flows through pipeline
+await pipeline.process({ leads: rawLeads })
+```
+
+## Conflict Resolution
+
+Handle conflicts between agents:
+
+```typescript
+const team = await agent.createTeam({
+  name: 'Team',
+  conflict_resolution: {
+    // Priority-based resolution
+    priority: {
+      strategy: 'highest_priority_wins',
+      priority_order: [orchestrator, senior_agent, junior_agent],
+    },
+
+    // Voting-based resolution
+    voting: {
+      strategy: 'majority_vote',
+      quorum: 0.6,
+      tie_breaker: orchestrator,
+    },
+
+    // Rule-based resolution
+    rules: [
+      {
+        condition: 'resource_conflict',
+        resolution: 'time_sharing',
+        params: { time_slice: '5_minutes' },
+      },
+      {
+        condition: 'decision_conflict',
+        resolution: 'escalate',
+        escalate_to: orchestrator,
+      },
+    ],
+  },
+})
+```
+
+## Communication Best Practices
+
+### 1. Use Semantic Types
+
+Always use semantic types for messages:
+
+```typescript
+// Good: Semantic type
+{
+  $type: 'LeadQualificationResult',
+  lead: { ... },
+  score: 85
+}
+
+// Avoid: Untyped message
+{
+  data: { ... }
+}
+```
+
+### 2. Include Context
+
+Provide conversation context:
+
+```typescript
+{
+  $type: 'TaskRequest',
+  content: { ... },
+  context: {
+    conversation_id: 'conv-123',
+    parent_message_id: 'msg-456',
+    related_tasks: ['task-789']
+  }
+}
+```
+
+### 3. Set Clear Expectations
+
+Specify response requirements:
+
+```typescript
+{
+  $type: 'InformationRequest',
+  content: { ... },
+  requires_response: true,
+  deadline: '2025-10-10T17:00:00Z',
+  priority: 'high'
+}
+```
+
+### 4. Handle Errors
+
+Gracefully handle communication errors:
+
+```typescript
+agentA.on('message_failed', async (error) => {
+  console.error(`Message failed: ${error.message}`)
+
+  // Retry with backoff
+  await agentA.retry({
+    message: error.message,
+    attempts: 3,
+    backoff: 'exponential',
+  })
+})
+```
+
+### 5. Monitor Communication
+
+Track communication patterns:
+
+```typescript
+const commMetrics = await agent.getCommunicationMetrics()
+console.log(commMetrics)
+// {
+//   messages_sent: 500,
+//   messages_received: 450,
+//   response_rate: 0.95,
+//   avg_response_time: 2000,
+//   failed_messages: 5
+// }
+```
+
+## Example: Sales Team Coordination
+
+Complete example of coordinated sales team:
+
+```typescript
+// Create team members
+const researchAgent = await agent.create({
+  name: 'Research Agent',
+  role: 'Lead Researcher',
+  capabilities: ['research', 'analysis', 'enrichment'],
+})
+
+const outreachAgent = await agent.create({
+  name: 'Outreach Agent',
+  role: 'SDR',
+  capabilities: ['email', 'personalization', 'follow_up'],
+})
+
+const qualifierAgent = await agent.create({
+  name: 'Qualifier Agent',
+  role: 'BDR',
+  capabilities: ['qualification', 'discovery', 'scheduling'],
+})
+
+// Create team
+const salesTeam = await agent.createTeam({
+  name: 'Sales Team',
+  members: [researchAgent, outreachAgent, qualifierAgent],
+})
+
+// Set up communication
+researchAgent.on('research_complete', async (lead) => {
+  await researchAgent.send({
+    to: outreachAgent,
+    message: {
+      $type: 'LeadResearchComplete',
+      lead: lead,
+      recommendation: lead.score > 80 ? 'high_priority' : 'normal',
+    },
+  })
+})
+
+outreachAgent.on('email_responded', async (lead) => {
+  await outreachAgent.send({
+    to: qualifierAgent,
+    message: {
+      $type: 'LeadResponded',
+      lead: lead,
+      request: 'schedule_qualification_call',
+    },
+  })
+})
+
+// Execute team workflow
+await salesTeam.process({
+  task: 'Process new leads',
+  leads: newLeads,
+})
+```
+
+## Next Steps
+
+- [Examples](../examples/) - See multi-agent examples
+- [API Reference](../api/) - Complete API documentation
+- [Basic Agent Example](../examples/basic-agent) - Simple agent implementation
+
+---
+
+Ready to see agents in action? Check out the [examples](../examples/).

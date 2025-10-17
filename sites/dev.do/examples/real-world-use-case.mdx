@@ -1,0 +1,137 @@
+---
+$id: https://dev.do/examples/real-world-use-case
+$type: HowTo
+title: Real-World Development Utilities Use Case
+description: Production-ready example using dev.do
+keywords: [dev, production, example, real-world]
+---
+
+# Real-World Development Utilities Use Case
+
+A production-ready example demonstrating dev.do in a real-world scenario.
+
+## Overview
+
+This example shows how to use dev.do in a production environment with:
+
+- Error handling and retry logic
+- Monitoring and logging
+- Performance optimization
+- Security best practices
+
+## Implementation
+
+```typescript
+import { dev } from 'dev.do'
+import { db, on, send } from 'sdk.do'
+import { queue } from 'queue.do'
+
+// Configuration
+const config = {
+  timeout: 30000,
+  retries: 3,
+  batchSize: 100,
+}
+
+// Create processing queue
+const processQueue = queue($.Data.process, {
+  attempts: config.retries,
+  backoff: { type: 'exponential', delay: 1000 },
+})
+
+// Process queue jobs
+processQueue.process(10, async (job) => {
+  const { data } = job.data
+
+  // Update progress
+  await job.progress(10)
+
+  // Process with dev.do
+  const result = await dev({
+    data,
+    timeout: config.timeout,
+  })
+
+  await job.progress(50)
+
+  // Store results
+  await db.create($.Result, {
+    $id: job.id,
+    data: result,
+    processedAt: new Date(),
+  })
+
+  await job.progress(100)
+
+  return result
+})
+
+// Listen for data events
+on($.Data.received, async (data) => {
+  // Add to queue for processing
+  await processQueue.add({ data })
+})
+
+// Monitor queue health
+import { every } from 'sdk.do'
+
+every('*/5 * * * *', async () => {
+  const counts = await processQueue.getJobCounts()
+
+  if (counts.failed > 10) {
+    console.error('High failure rate:', counts.failed)
+    // Send alert
+  }
+})
+
+// Error handling
+processQueue.on('failed', async (job, error) => {
+  console.error('Job failed:', job.id, error)
+
+  // Log error
+  await db.create($.Error, {
+    jobId: job.id,
+    error: error.message,
+    timestamp: new Date(),
+  })
+
+  // Send alert if critical
+  if (job.data.critical) {
+    await sendAlert({
+      type: 'critical-failure',
+      jobId: job.id,
+      error: error.message,
+    })
+  }
+})
+
+console.log('Development Utilities system initialized')
+```
+
+## Monitoring
+
+```typescript
+import { every } from 'sdk.do'
+
+// Collect metrics every minute
+every('*/1 * * * *', async () => {
+  const metrics = {
+    queue: await processQueue.getJobCounts(),
+    processed: await db.count($.Result),
+    errors: await db.count($.Error),
+  }
+
+  // Send to monitoring service
+  await sendMetrics(metrics)
+})
+```
+
+## Learn More
+
+- [Basic Usage](./basic-usage) - Simple examples
+- [Advanced Patterns](./advanced-patterns) - Complex workflows
+- [Best Practices](../docs/best-practices) - Recommended patterns
+
+---
+
+Part of the [dev.do](https://dev.do) documentation.

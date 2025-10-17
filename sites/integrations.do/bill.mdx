@@ -1,0 +1,94 @@
+---
+$id: https://integrations.do/bill
+$type: Integration
+name: Bill
+service: bill
+description: Integration with Bill.com API
+category: productivity
+sdkBased: false
+baseUrl: https://api.bill.com
+
+auth:
+  type: api-key
+  location: header
+  headerName: Authorization
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Bill actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: false
+  events: []
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://www.bill.com
+  apiDocs: https://www.bill.com
+---
+
+# Bill Integration
+
+Integration with Bill.com API
+
+## Quick Start
+
+```typescript
+import { BillClient } from '@dotdo/sdk.do/integrations/bill'
+
+const bill = new BillClient({
+  apiKey: process.env.BILL_API_KEY,
+})
+
+const result = await bill.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Bill provides 221 actions through the Composio API.
+
+## License
+
+MIT

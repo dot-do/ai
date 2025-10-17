@@ -1,0 +1,762 @@
+---
+$id: https://services.do
+$type: WebSite
+name: services.do
+description: Service deployment and management layer for autonomous Business-as-Code systems on Cloudflare Workers
+license: MIT
+keywords: [services, deployment, cloudflare, workers, microservices, service-discovery, management, sdk]
+---
+
+# services.do
+
+**Service deployment and management layer for autonomous Business-as-Code systems on Cloudflare Workers**
+
+services.do provides a comprehensive framework for deploying, discovering, and managing services as autonomous workers on Cloudflare's edge network. Build scalable microservices architectures with semantic patterns, automatic service discovery, and intelligent routing.
+
+## Quick Start
+
+```bash
+pnpm add sdk.do
+```
+
+```typescript
+import $, { service } from 'sdk.do'
+
+// Define a service
+const userService = service({
+  $type: 'Service',
+  name: 'UserService',
+  route: '/users',
+  handler: async (request) => {
+    const users = await db.list($.Person)
+    return Response.json(users)
+  },
+})
+
+// Deploy to Cloudflare Workers
+await userService.deploy()
+```
+
+## Key Features
+
+### Edge-Native Service Deployment
+
+Deploy services to Cloudflare Workers for global distribution and low-latency access:
+
+```typescript
+import $, { service } from 'sdk.do'
+
+// Define service
+const orderService = service({
+  $type: 'Service',
+  $id: 'https://services.do/OrderService',
+  name: 'OrderService',
+  description: 'Handles order processing and fulfillment',
+  version: '1.0.0',
+  routes: {
+    'POST /orders': $.Order.create,
+    'GET /orders/:id': $.Order.get,
+    'PUT /orders/:id': $.Order.update,
+    'DELETE /orders/:id': $.Order.delete,
+  },
+})
+
+// Deploy to edge
+await orderService.deploy({
+  environment: 'production',
+  regions: ['auto'], // Deploy globally
+  resources: {
+    cpu: 100,
+    memory: 128,
+  },
+})
+```
+
+### Automatic Service Discovery
+
+Services automatically register and discover each other:
+
+```typescript
+import $, { service, discover } from 'sdk.do'
+
+// Discover services
+const userService = await discover($.UserService)
+const orderService = await discover($.OrderService)
+const paymentService = await discover($.PaymentService)
+
+// Call discovered services
+const user = await userService.call('getUser', { id: '123' })
+const order = await orderService.call('createOrder', { userId: user.id })
+const payment = await paymentService.call('processPayment', { orderId: order.id })
+```
+
+### Service-to-Service Communication
+
+Semantic patterns for inter-service communication:
+
+```typescript
+import $, { service, call } from 'sdk.do'
+
+// Define service with dependencies
+const checkoutService = service({
+  name: 'CheckoutService',
+  dependencies: [$.UserService, $.OrderService, $.PaymentService],
+  handler: async (request) => {
+    // Call other services with semantic patterns
+    const user = await call($.UserService, $.User.get, { id: request.userId })
+    const order = await call($.OrderService, $.Order.create, { user, items: request.items })
+    const payment = await call($.PaymentService, $.Payment.process, { order })
+
+    return Response.json({ order, payment })
+  },
+})
+```
+
+### Service Health and Monitoring
+
+Built-in health checks and monitoring:
+
+```typescript
+import $, { service } from 'sdk.do'
+
+const apiService = service({
+  name: 'APIService',
+  health: {
+    endpoint: '/health',
+    interval: 30000, // 30 seconds
+    timeout: 5000,
+    checks: [
+      {
+        name: 'database',
+        check: async () => await db.ping(),
+      },
+      {
+        name: 'cache',
+        check: async () => await cache.ping(),
+      },
+    ],
+  },
+  monitoring: {
+    metrics: ['requests', 'errors', 'latency'],
+    alerts: [
+      {
+        condition: 'error_rate > 0.05',
+        action: $.Alert.send,
+      },
+    ],
+  },
+})
+```
+
+### Zero-Downtime Deployments
+
+Deploy new versions without downtime:
+
+```typescript
+import $, { service } from 'sdk.do'
+
+// Deploy new version
+await service.deploy({
+  name: 'OrderService',
+  version: '2.0.0',
+  strategy: 'rolling', // rolling, canary, blue-green
+  rollout: {
+    percentage: 10, // Start with 10% traffic
+    interval: 300, // Increase every 5 minutes
+    autoPromote: true,
+  },
+})
+
+// Monitor deployment
+service.on('deployment.started', (event) => {
+  console.log('Deployment started:', event)
+})
+
+service.on('deployment.progress', (event) => {
+  console.log('Deployment progress:', event.percentage)
+})
+
+service.on('deployment.completed', (event) => {
+  console.log('Deployment completed:', event)
+})
+```
+
+## Core Concepts
+
+### Services
+
+A service is a deployable unit of business logic:
+
+```typescript
+interface Service {
+  $id: string
+  $type: 'Service'
+  name: string
+  description: string
+  version: string
+  routes: Record<string, Function>
+  dependencies?: string[]
+  environment?: Record<string, string>
+  resources?: ServiceResources
+  health?: HealthCheckConfig
+}
+```
+
+### Service Registry
+
+Services automatically register in a distributed registry:
+
+```typescript
+import { registry } from 'sdk.do'
+
+// Register service
+await registry.register({
+  name: 'UserService',
+  version: '1.0.0',
+  endpoint: 'https://users.example.workers.dev',
+  schema: $.Person,
+})
+
+// Query registry
+const services = await registry.list()
+const userService = await registry.get('UserService')
+
+// Watch for changes
+registry.watch($.UserService, (event) => {
+  console.log('Service updated:', event)
+})
+```
+
+### Service Mesh
+
+Services communicate through a semantic service mesh:
+
+```typescript
+import $, { mesh } from 'sdk.do'
+
+// Configure service mesh
+mesh.configure({
+  authentication: true,
+  encryption: true,
+  retries: {
+    maxAttempts: 3,
+    backoff: 'exponential',
+  },
+  circuitBreaker: {
+    threshold: 0.5,
+    timeout: 60000,
+  },
+  loadBalancing: 'round-robin',
+})
+
+// Mesh automatically handles routing
+const result = await mesh.call($.UserService, 'getUser', { id: '123' })
+```
+
+### Cloudflare Workers Integration
+
+Deep integration with Cloudflare Workers:
+
+```typescript
+import $, { service } from 'sdk.do'
+
+// Service with Workers features
+const emailService = service({
+  name: 'EmailService',
+  worker: {
+    // Cloudflare Workers configuration
+    compatibility_date: '2025-10-10',
+    usage_model: 'bundled',
+
+    // Durable Objects for state
+    durable_objects: {
+      bindings: [{ name: 'QUEUE', class_name: 'EmailQueue' }],
+    },
+
+    // KV for caching
+    kv_namespaces: [{ binding: 'CACHE', id: 'cache-namespace-id' }],
+
+    // R2 for storage
+    r2_buckets: [{ binding: 'STORAGE', bucket_name: 'email-templates' }],
+
+    // Environment variables
+    vars: {
+      SMTP_HOST: 'smtp.example.com',
+      SMTP_PORT: '587',
+    },
+  },
+})
+```
+
+## Service Patterns
+
+### Microservices Architecture
+
+Build microservices with clear boundaries:
+
+```typescript
+import $, { service } from 'sdk.do'
+
+// User Service
+const userService = service({
+  name: 'UserService',
+  domain: 'users',
+  routes: {
+    'GET /users': $.User.list,
+    'GET /users/:id': $.User.get,
+    'POST /users': $.User.create,
+    'PUT /users/:id': $.User.update,
+    'DELETE /users/:id': $.User.delete,
+  },
+})
+
+// Order Service
+const orderService = service({
+  name: 'OrderService',
+  domain: 'orders',
+  dependencies: [$.UserService, $.ProductService],
+  routes: {
+    'GET /orders': $.Order.list,
+    'POST /orders': $.Order.create,
+    'GET /orders/:id': $.Order.get,
+  },
+})
+
+// Payment Service
+const paymentService = service({
+  name: 'PaymentService',
+  domain: 'payments',
+  dependencies: [$.OrderService],
+  routes: {
+    'POST /payments': $.Payment.process,
+    'GET /payments/:id': $.Payment.get,
+  },
+})
+```
+
+### API Gateway Pattern
+
+Unified entry point for multiple services:
+
+```typescript
+import $, { gateway } from 'sdk.do'
+
+// API Gateway
+const apiGateway = gateway({
+  name: 'APIGateway',
+  routes: {
+    '/users/*': $.UserService,
+    '/orders/*': $.OrderService,
+    '/payments/*': $.PaymentService,
+    '/products/*': $.ProductService,
+  },
+  middleware: [$.Middleware.cors, $.Middleware.auth, $.Middleware.rateLimit, $.Middleware.logging],
+  policies: {
+    authentication: 'required',
+    rateLimit: {
+      requests: 100,
+      window: 60000, // 1 minute
+    },
+  },
+})
+
+await apiGateway.deploy()
+```
+
+### Event-Driven Services
+
+Services that react to events:
+
+```typescript
+import $, { service, on } from 'sdk.do'
+
+const notificationService = service({
+  name: 'NotificationService',
+  events: {
+    // Listen to events from other services
+    [$.Order.created]: async (event) => {
+      await sendEmail({
+        to: event.data.customer.email,
+        subject: 'Order Confirmation',
+        template: 'order-confirmation',
+        data: event.data,
+      })
+    },
+    [$.Payment.succeeded]: async (event) => {
+      await sendSMS({
+        to: event.data.customer.phone,
+        message: 'Payment received!',
+      })
+    },
+  },
+})
+```
+
+### Saga Pattern for Distributed Transactions
+
+Coordinate distributed transactions across services:
+
+```typescript
+import $, { saga, service } from 'sdk.do'
+
+const orderSaga = saga({
+  name: 'OrderProcessingSaga',
+  steps: [
+    {
+      service: $.OrderService,
+      action: $.Order.create,
+      compensate: $.Order.cancel,
+    },
+    {
+      service: $.PaymentService,
+      action: $.Payment.charge,
+      compensate: $.Payment.refund,
+    },
+    {
+      service: $.InventoryService,
+      action: $.Inventory.reserve,
+      compensate: $.Inventory.release,
+    },
+    {
+      service: $.ShipmentService,
+      action: $.Shipment.create,
+      compensate: $.Shipment.cancel,
+    },
+  ],
+})
+
+// Execute saga
+const result = await orderSaga.execute({ orderId: '123' })
+```
+
+## Deployment Strategies
+
+### Rolling Deployment
+
+Gradually replace old version with new version:
+
+```typescript
+await service.deploy({
+  strategy: 'rolling',
+  rollout: {
+    batchSize: 25, // Update 25% at a time
+    interval: 120, // 2 minutes between batches
+    healthCheck: true,
+  },
+})
+```
+
+### Canary Deployment
+
+Deploy to small subset first:
+
+```typescript
+await service.deploy({
+  strategy: 'canary',
+  canary: {
+    percentage: 5, // Start with 5% traffic
+    duration: 600, // 10 minutes
+    metrics: ['error_rate', 'latency'],
+    autoPromote: true,
+    thresholds: {
+      error_rate: 0.01,
+      latency: 500,
+    },
+  },
+})
+```
+
+### Blue-Green Deployment
+
+Switch between two identical environments:
+
+```typescript
+await service.deploy({
+  strategy: 'blue-green',
+  blueGreen: {
+    testing: true, // Test green environment first
+    autoSwitch: false, // Manual switch
+    switchDelay: 0,
+  },
+})
+
+// Manually switch when ready
+await service.switchTraffic('green')
+
+// Rollback if needed
+await service.switchTraffic('blue')
+```
+
+## Service Management
+
+### Scaling
+
+Scale services based on load:
+
+```typescript
+import { service } from 'sdk.do'
+
+// Configure auto-scaling
+await service.configure({
+  scaling: {
+    enabled: true,
+    min: 1,
+    max: 100,
+    metrics: [
+      {
+        type: 'cpu',
+        threshold: 70,
+        action: 'scale-up',
+      },
+      {
+        type: 'requests',
+        threshold: 1000,
+        action: 'scale-up',
+      },
+    ],
+  },
+})
+```
+
+### Version Management
+
+Manage multiple service versions:
+
+```typescript
+import { service } from 'sdk.do'
+
+// Deploy multiple versions
+await service.deploy({ version: '1.0.0' })
+await service.deploy({ version: '2.0.0' })
+
+// Route by version
+await service.route({
+  v1: '1.0.0',
+  v2: '2.0.0',
+  latest: '2.0.0',
+})
+
+// Gradual migration
+await service.migrate({
+  from: '1.0.0',
+  to: '2.0.0',
+  duration: 3600, // 1 hour
+})
+```
+
+### Service Configuration
+
+Update service configuration without redeployment:
+
+```typescript
+// Update environment variables
+await service.config.update({
+  vars: {
+    API_KEY: 'new-key',
+    FEATURE_FLAG: 'enabled',
+  },
+})
+
+// Update resource limits
+await service.config.update({
+  resources: {
+    cpu: 200,
+    memory: 256,
+  },
+})
+```
+
+## Use Cases
+
+### E-Commerce Platform
+
+Build scalable e-commerce with microservices:
+
+```typescript
+import $, { service, gateway } from 'sdk.do'
+
+// Individual services
+const productService = service({
+  name: 'ProductService',
+  routes: {
+    /*...*/
+  },
+})
+const cartService = service({
+  name: 'CartService',
+  routes: {
+    /*...*/
+  },
+})
+const checkoutService = service({
+  name: 'CheckoutService',
+  routes: {
+    /*...*/
+  },
+})
+const orderService = service({
+  name: 'OrderService',
+  routes: {
+    /*...*/
+  },
+})
+const paymentService = service({
+  name: 'PaymentService',
+  routes: {
+    /*...*/
+  },
+})
+
+// Deploy all services
+await Promise.all([productService.deploy(), cartService.deploy(), checkoutService.deploy(), orderService.deploy(), paymentService.deploy()])
+
+// Unified gateway
+await gateway({
+  routes: {
+    '/products/*': productService,
+    '/cart/*': cartService,
+    '/checkout/*': checkoutService,
+    '/orders/*': orderService,
+    '/payments/*': paymentService,
+  },
+}).deploy()
+```
+
+### Real-Time Analytics
+
+Process and analyze data in real-time:
+
+```typescript
+const analyticsService = service({
+  name: 'AnalyticsService',
+  events: {
+    [$.Event.tracked]: async (event) => {
+      await processEvent(event.data)
+      await updateMetrics(event.data)
+      await checkAlerts(event.data)
+    },
+  },
+  routes: {
+    'GET /metrics': async () => {
+      return Response.json(await getMetrics())
+    },
+    'GET /reports': async () => {
+      return Response.json(await generateReports())
+    },
+  },
+})
+```
+
+### Multi-Tenant SaaS
+
+Deploy services for multi-tenant applications:
+
+```typescript
+const tenantService = service({
+  name: 'TenantService',
+  multiTenant: true,
+  isolation: 'namespace', // or 'database', 'worker'
+  routes: {
+    'GET /:tenant/data': async (request) => {
+      const tenant = request.params.tenant
+      return Response.json(await db.list($.Data, { tenant }))
+    },
+  },
+})
+```
+
+## Integration with `.do` Platform
+
+services.do integrates seamlessly with the broader `.do` ecosystem:
+
+- **[sdk.do](https://sdk.do)**: Core SDK for service development
+- **[functions.do](https://functions.do)**: Serverless function execution
+- **[workflows.do](https://workflows.do)**: Orchestrate multi-service workflows
+- **[events.do](https://events.do)**: Event-driven service communication
+- **[database.do](https://database.do)**: Data persistence for services
+- **[agents.do](https://agents.do)**: AI agents as service consumers
+
+## Best Practices
+
+1. **Design for Failure**: Implement retries, circuit breakers, and fallbacks
+2. **Idempotency**: Make service operations idempotent for safe retries
+3. **Versioning**: Use semantic versioning and maintain backward compatibility
+4. **Monitoring**: Track metrics, logs, and traces for all services
+5. **Security**: Implement authentication, authorization, and encryption
+6. **Documentation**: Document service APIs and dependencies
+7. **Testing**: Test services individually and integration scenarios
+8. **Resource Limits**: Set appropriate CPU and memory limits
+9. **Graceful Degradation**: Handle partial failures gracefully
+10. **Service Boundaries**: Keep services focused on single responsibilities
+
+## Documentation
+
+- [Getting Started](./docs/getting-started.mdx) - Deploy your first service
+- [Deployment Guide](./docs/deployment.mdx) - Deployment strategies and configuration
+- [Service Management](./docs/management.mdx) - Managing and scaling services
+- [API Reference](./api/) - Complete API documentation
+
+## Examples
+
+- [Deploy Service](./examples/deploy-service.mdx) - Deploy a service to Cloudflare Workers
+- [Service Communication](./examples/service-communication.mdx) - Inter-service communication patterns
+
+## Semantic Patterns
+
+services.do uses `$.Subject.predicate.Object` patterns throughout:
+
+```typescript
+// Service definition
+$.Service.define('UserService')
+
+// Service deployment
+$.Service.deploy({ name: 'UserService' })
+
+// Service discovery
+$.Service.discover('UserService')
+
+// Service calls
+$.UserService.call('getUser', { id: '123' })
+
+// Service health
+$.Service.health('UserService')
+
+// Service scaling
+$.Service.scale({ min: 1, max: 10 })
+
+// Service routing
+$.Service.route({ path: '/users', handler: $.User.list })
+```
+
+## License
+
+MIT (Open Source)
+
+services.do is part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.
+
+## Resources
+
+### Related Domains
+
+- [functions.do](https://functions.do) - Serverless functions
+- [workflows.do](https://workflows.do) - Workflow orchestration
+- [events.do](https://events.do) - Event system
+- [database.do](https://database.do) - Database operations
+
+### Ontologies
+
+- [schema.org.ai](https://schema.org.ai) - Schema.org types
+- [actions.org.ai](https://actions.org.ai) - Action definitions
+
+## Contributing
+
+Contributions are welcome! services.do is designed to be extensible with:
+
+- New deployment strategies
+- Additional service patterns
+- Enhanced monitoring capabilities
+- Integration examples
+
+## Acknowledgments
+
+services.do builds upon microservices architecture, service mesh patterns, and Cloudflare Workers to provide a powerful yet approachable framework for service deployment and management.

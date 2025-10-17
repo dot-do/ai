@@ -1,0 +1,106 @@
+---
+$id: https://integrations.do/one_drive
+$type: Integration
+name: One drive
+service: one_drive
+description: OneDrive is Microsoft’s cloud storage solution enabling users to store, sync, and share files across devices, offering offline access, real-time collaboration, and enterprise-grade security
+category: storage
+sdkBased: false
+baseUrl: https://api.one_drive.com
+
+auth:
+  type: oauth2
+  authorizationUrl: https://login.microsoftonline.com/common/oauth2/v2.0/authorize
+  tokenUrl: https://login.microsoftonline.com/common/oauth2/v2.0/token
+  scopes:
+    - Files.ReadWrite.All
+    - Sites.Read.All
+    - offline_access
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute One drive actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: true
+  verificationMethod: none
+  events:
+    - name: generic_trigger
+      type: trigger
+      description: Generic webhook trigger
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://www.microsoft.com/en-in/microsoft-365/onedrive/online-cloud-storage/
+  apiDocs: https://www.microsoft.com/en-in/microsoft-365/onedrive/online-cloud-storage/
+---
+
+# One drive Integration
+
+OneDrive is Microsoft’s cloud storage solution enabling users to store, sync, and share files across devices, offering offline access, real-time collaboration, and enterprise-grade security
+
+## Quick Start
+
+```typescript
+import { OnedriveClient } from '@dotdo/sdk.do/integrations/one_drive'
+
+const one_drive = new OnedriveClient({
+  apiKey: process.env.ONE_DRIVE_API_KEY,
+})
+
+const result = await one_drive.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+One drive provides 35 actions through the Composio API.
+
+## Webhooks
+
+One drive supports 4 webhook triggers for real-time event notifications.
+
+## License
+
+MIT

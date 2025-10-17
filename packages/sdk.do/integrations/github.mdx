@@ -1,0 +1,1460 @@
+---
+$id: https://integrations.do/github
+$type: Integration
+name: GitHub
+service: github
+description: Source control, collaboration, and development platform for software projects
+category: developer-tools
+sdkBased: true
+sdkPackage: '@octokit/rest'
+sdkVersion: ^21.0.0
+sdkImport: Octokit
+
+auth:
+  type: api-key
+  location: header
+  headerName: Authorization
+  scheme: token
+
+resources:
+  - name: Repository
+    plural: Repositories
+    sdkPath: repos
+    operations:
+      - name: get
+        method: get
+        params:
+          - name: owner
+            type: string
+            required: true
+            description: Repository owner (username or organization)
+          - name: repo
+            type: string
+            required: true
+            description: Repository name
+        returns: Repository
+
+      - name: list
+        method: listForAuthenticatedUser
+        params:
+          - name: per_page
+            type: number
+            required: false
+            description: Results per page
+            default: 30
+          - name: page
+            type: number
+            required: false
+            description: Page number
+            default: 1
+          - name: sort
+            type: string
+            required: false
+            description: Sort field
+            default: updated
+          - name: direction
+            type: string
+            required: false
+            description: Sort direction
+          - name: visibility
+            type: string
+            required: false
+            description: Filter by visibility
+          - name: affiliation
+            type: string
+            required: false
+            description: Filter by affiliation
+          - name: type
+            type: string
+            required: false
+            description: Type of repositories to list
+        returns: Repository[]
+        pagination:
+          type: page
+          pageParam: page
+          limitParam: per_page
+          defaultLimit: 30
+          maxLimit: 100
+
+      - name: create
+        method: createForAuthenticatedUser
+        params:
+          - name: name
+            type: string
+            required: true
+            description: Repository name
+          - name: description
+            type: string
+            required: false
+            description: Repository description
+          - name: private
+            type: boolean
+            required: false
+            description: Whether the repository should be private
+            default: false
+          - name: auto_init
+            type: boolean
+            required: false
+            description: Initialize with a README
+            default: false
+          - name: license_template
+            type: string
+            required: false
+            description: License template to use
+          - name: gitignore_template
+            type: string
+            required: false
+            description: .gitignore template to use
+          - name: allow_squash_merge
+            type: boolean
+            required: false
+            description: Whether to allow squash merging
+          - name: allow_merge_commit
+            type: boolean
+            required: false
+            description: Whether to allow merge commits
+          - name: allow_rebase_merge
+            type: boolean
+            required: false
+            description: Whether to allow rebase merging
+        returns: Repository
+
+      - name: update
+        method: update
+        params:
+          - name: owner
+            type: string
+            required: true
+            description: Repository owner (username or organization)
+          - name: repo
+            type: string
+            required: true
+            description: Repository name
+          - name: name
+            type: string
+            required: false
+            description: Repository name
+          - name: description
+            type: string
+            required: false
+            description: Repository description
+          - name: private
+            type: boolean
+            required: false
+            description: Whether the repository should be private
+          - name: archived
+            type: boolean
+            required: false
+            description: Whether to archive the repository
+          - name: default_branch
+            type: string
+            required: false
+            description: Default branch name
+        returns: Repository
+
+      - name: delete
+        method: delete
+        params:
+          - name: owner
+            type: string
+            required: true
+            description: Repository owner (username or organization)
+          - name: repo
+            type: string
+            required: true
+            description: Repository name
+        returns: void
+
+  - name: Issue
+    plural: Issues
+    sdkPath: issues
+    operations:
+      - name: list
+        method: listForRepo
+        params:
+          - name: owner
+            type: string
+            required: true
+            description: Repository owner (username or organization)
+          - name: repo
+            type: string
+            required: true
+            description: Repository name
+          - name: per_page
+            type: number
+            required: false
+            description: Results per page
+            default: 30
+          - name: page
+            type: number
+            required: false
+            description: Page number
+            default: 1
+          - name: state
+            type: string
+            required: false
+            description: Filter by issue state (open, closed, all)
+            default: open
+          - name: labels
+            type: string
+            required: false
+            description: Filter by labels (comma-separated)
+          - name: sort
+            type: string
+            required: false
+            description: Sort by field (created, updated, comments)
+            default: created
+          - name: direction
+            type: string
+            required: false
+            description: Sort direction
+          - name: assignee
+            type: string
+            required: false
+            description: Filter by assignee
+          - name: creator
+            type: string
+            required: false
+            description: Filter by creator
+          - name: mentioned
+            type: string
+            required: false
+            description: Filter by mentioned user
+          - name: milestone
+            type: string
+            required: false
+            description: Filter by milestone number
+        returns: Issue[]
+        pagination:
+          type: page
+          pageParam: page
+          limitParam: per_page
+          defaultLimit: 30
+          maxLimit: 100
+
+      - name: get
+        method: get
+        params:
+          - name: owner
+            type: string
+            required: true
+            description: Repository owner (username or organization)
+          - name: repo
+            type: string
+            required: true
+            description: Repository name
+          - name: issue_number
+            type: number
+            required: true
+            description: Issue number
+        returns: Issue
+
+      - name: create
+        method: create
+        params:
+          - name: owner
+            type: string
+            required: true
+            description: Repository owner (username or organization)
+          - name: repo
+            type: string
+            required: true
+            description: Repository name
+          - name: title
+            type: string
+            required: true
+            description: Issue title
+          - name: body
+            type: string
+            required: false
+            description: Issue body/description
+          - name: assignees
+            type: string[]
+            required: false
+            description: Usernames to assign to the issue
+          - name: labels
+            type: string[]
+            required: false
+            description: Labels to apply to the issue
+          - name: milestone
+            type: number
+            required: false
+            description: Milestone number
+        returns: Issue
+
+      - name: update
+        method: update
+        params:
+          - name: owner
+            type: string
+            required: true
+            description: Repository owner (username or organization)
+          - name: repo
+            type: string
+            required: true
+            description: Repository name
+          - name: issue_number
+            type: number
+            required: true
+            description: Issue number
+          - name: title
+            type: string
+            required: false
+            description: Issue title
+          - name: body
+            type: string
+            required: false
+            description: Issue body/description
+          - name: state
+            type: string
+            required: false
+            description: Issue state (open or closed)
+          - name: assignees
+            type: string[]
+            required: false
+            description: Usernames to assign to the issue
+          - name: labels
+            type: string[]
+            required: false
+            description: Labels to apply to the issue
+          - name: milestone
+            type: number
+            required: false
+            description: Milestone number
+        returns: Issue
+
+      - name: lock
+        method: lock
+        params:
+          - name: owner
+            type: string
+            required: true
+            description: Repository owner (username or organization)
+          - name: repo
+            type: string
+            required: true
+            description: Repository name
+          - name: issue_number
+            type: number
+            required: true
+            description: Issue number
+        returns: void
+
+      - name: addLabels
+        method: addLabels
+        params:
+          - name: owner
+            type: string
+            required: true
+            description: Repository owner (username or organization)
+          - name: repo
+            type: string
+            required: true
+            description: Repository name
+          - name: issue_number
+            type: number
+            required: true
+            description: Issue number
+          - name: labels
+            type: string[]
+            required: true
+            description: Array of label names
+        returns: Label[]
+
+  - name: PullRequest
+    plural: PullRequests
+    sdkPath: pulls
+    operations:
+      - name: list
+        method: list
+        params:
+          - name: owner
+            type: string
+            required: true
+            description: Repository owner (username or organization)
+          - name: repo
+            type: string
+            required: true
+            description: Repository name
+          - name: per_page
+            type: number
+            required: false
+            description: Results per page
+            default: 30
+          - name: page
+            type: number
+            required: false
+            description: Page number
+            default: 1
+          - name: state
+            type: string
+            required: false
+            description: Filter by PR state (open, closed, all)
+            default: open
+          - name: head
+            type: string
+            required: false
+            description: Filter by head branch
+          - name: base
+            type: string
+            required: false
+            description: Filter by base branch
+          - name: sort
+            type: string
+            required: false
+            description: Sort by field (created, updated, popularity, long-running)
+            default: created
+          - name: direction
+            type: string
+            required: false
+            description: Sort direction
+        returns: PullRequest[]
+        pagination:
+          type: page
+          pageParam: page
+          limitParam: per_page
+          defaultLimit: 30
+          maxLimit: 100
+
+      - name: get
+        method: get
+        params:
+          - name: owner
+            type: string
+            required: true
+            description: Repository owner (username or organization)
+          - name: repo
+            type: string
+            required: true
+            description: Repository name
+          - name: pull_number
+            type: number
+            required: true
+            description: Pull request number
+        returns: PullRequest
+
+      - name: create
+        method: create
+        params:
+          - name: owner
+            type: string
+            required: true
+            description: Repository owner (username or organization)
+          - name: repo
+            type: string
+            required: true
+            description: Repository name
+          - name: title
+            type: string
+            required: true
+            description: Pull request title
+          - name: head
+            type: string
+            required: true
+            description: Branch name containing changes
+          - name: base
+            type: string
+            required: true
+            description: Branch name to merge into
+          - name: body
+            type: string
+            required: false
+            description: Pull request body/description
+          - name: draft
+            type: boolean
+            required: false
+            description: Whether to create as draft PR
+            default: false
+          - name: maintainer_can_modify
+            type: boolean
+            required: false
+            description: Whether maintainers can modify the PR
+            default: true
+        returns: PullRequest
+
+      - name: update
+        method: update
+        params:
+          - name: owner
+            type: string
+            required: true
+            description: Repository owner (username or organization)
+          - name: repo
+            type: string
+            required: true
+            description: Repository name
+          - name: pull_number
+            type: number
+            required: true
+            description: Pull request number
+          - name: title
+            type: string
+            required: false
+            description: Pull request title
+          - name: body
+            type: string
+            required: false
+            description: Pull request body/description
+          - name: state
+            type: string
+            required: false
+            description: Pull request state (open or closed)
+          - name: base
+            type: string
+            required: false
+            description: Base branch name
+        returns: PullRequest
+
+      - name: merge
+        method: merge
+        params:
+          - name: owner
+            type: string
+            required: true
+            description: Repository owner (username or organization)
+          - name: repo
+            type: string
+            required: true
+            description: Repository name
+          - name: pull_number
+            type: number
+            required: true
+            description: Pull request number
+          - name: commit_title
+            type: string
+            required: false
+            description: Merge commit message
+          - name: commit_message
+            type: string
+            required: false
+            description: Merge commit description
+          - name: merge_method
+            type: string
+            required: false
+            description: Merge method to use (merge, squash, rebase)
+            default: merge
+          - name: sha
+            type: string
+            required: false
+            description: SHA that pull request head must match
+        returns: MergeResult
+
+  - name: Content
+    plural: Contents
+    sdkPath: repos
+    operations:
+      - name: get
+        method: getContent
+        params:
+          - name: owner
+            type: string
+            required: true
+            description: Repository owner (username or organization)
+          - name: repo
+            type: string
+            required: true
+            description: Repository name
+          - name: path
+            type: string
+            required: true
+            description: File path
+          - name: ref
+            type: string
+            required: false
+            description: Branch, tag, or commit SHA (defaults to default branch)
+        returns: Content
+
+      - name: createOrUpdate
+        method: createOrUpdateFileContents
+        params:
+          - name: owner
+            type: string
+            required: true
+            description: Repository owner (username or organization)
+          - name: repo
+            type: string
+            required: true
+            description: Repository name
+          - name: path
+            type: string
+            required: true
+            description: File path
+          - name: message
+            type: string
+            required: true
+            description: Commit message
+          - name: content
+            type: string
+            required: true
+            description: File content (base64 encoded)
+          - name: sha
+            type: string
+            required: false
+            description: SHA of the file being replaced (required for updates)
+          - name: branch
+            type: string
+            required: false
+            description: Branch name
+          - name: committer
+            type: object
+            required: false
+            description: Committer information (name, email)
+          - name: author
+            type: object
+            required: false
+            description: Author information (name, email)
+        returns: ContentOperation
+
+      - name: delete
+        method: deleteFile
+        params:
+          - name: owner
+            type: string
+            required: true
+            description: Repository owner (username or organization)
+          - name: repo
+            type: string
+            required: true
+            description: Repository name
+          - name: path
+            type: string
+            required: true
+            description: File path
+          - name: message
+            type: string
+            required: true
+            description: Commit message
+          - name: sha
+            type: string
+            required: true
+            description: SHA of the file being deleted
+          - name: branch
+            type: string
+            required: false
+            description: Branch name
+          - name: committer
+            type: object
+            required: false
+            description: Committer information (name, email)
+          - name: author
+            type: object
+            required: false
+            description: Author information (name, email)
+        returns: ContentOperation
+
+  - name: Branch
+    plural: Branches
+    sdkPath: repos
+    operations:
+      - name: list
+        method: listBranches
+        params:
+          - name: owner
+            type: string
+            required: true
+            description: Repository owner (username or organization)
+          - name: repo
+            type: string
+            required: true
+            description: Repository name
+        returns: Branch[]
+
+      - name: get
+        method: getBranch
+        params:
+          - name: owner
+            type: string
+            required: true
+            description: Repository owner (username or organization)
+          - name: repo
+            type: string
+            required: true
+            description: Repository name
+          - name: branch
+            type: string
+            required: true
+            description: Branch name
+        returns: Branch
+
+      - name: create
+        method: git.createRef
+        params:
+          - name: owner
+            type: string
+            required: true
+            description: Repository owner (username or organization)
+          - name: repo
+            type: string
+            required: true
+            description: Repository name
+          - name: ref
+            type: string
+            required: true
+            description: Branch name (will be prefixed with refs/heads/)
+          - name: sha
+            type: string
+            required: true
+            description: SHA to create branch from
+        returns: Reference
+
+webhooks:
+  enabled: true
+  signatureHeader: x-hub-signature-256
+  signatureAlgorithm: sha256
+  verificationMethod: signature
+  events:
+    - name: repository.created
+      type: repository
+      description: Triggered when a repository is created
+    - name: repository.deleted
+      type: repository
+      description: Triggered when a repository is deleted
+    - name: repository.archived
+      type: repository
+      description: Triggered when a repository is archived
+    - name: repository.unarchived
+      type: repository
+      description: Triggered when a repository is unarchived
+    - name: repository.renamed
+      type: repository
+      description: Triggered when a repository is renamed
+    - name: repository.transferred
+      type: repository
+      description: Triggered when a repository is transferred
+    - name: push
+      type: push
+      description: Triggered when commits are pushed to a repository
+    - name: pull_request.opened
+      type: pull_request
+      description: Triggered when a pull request is opened
+    - name: pull_request.closed
+      type: pull_request
+      description: Triggered when a pull request is closed
+    - name: pull_request.reopened
+      type: pull_request
+      description: Triggered when a pull request is reopened
+    - name: pull_request.edited
+      type: pull_request
+      description: Triggered when a pull request is edited
+    - name: pull_request.assigned
+      type: pull_request
+      description: Triggered when a pull request is assigned
+    - name: pull_request.review_requested
+      type: pull_request
+      description: Triggered when a review is requested on a pull request
+    - name: pull_request.synchronized
+      type: pull_request
+      description: Triggered when a pull request's head branch is updated
+    - name: pull_request_review.submitted
+      type: pull_request_review
+      description: Triggered when a pull request review is submitted
+    - name: pull_request_review.edited
+      type: pull_request_review
+      description: Triggered when a pull request review is edited
+    - name: pull_request_review.dismissed
+      type: pull_request_review
+      description: Triggered when a pull request review is dismissed
+    - name: pull_request_review_comment.created
+      type: pull_request_review_comment
+      description: Triggered when a comment is created on a pull request review
+    - name: issues.opened
+      type: issues
+      description: Triggered when an issue is opened
+    - name: issues.edited
+      type: issues
+      description: Triggered when an issue is edited
+    - name: issues.deleted
+      type: issues
+      description: Triggered when an issue is deleted
+    - name: issues.closed
+      type: issues
+      description: Triggered when an issue is closed
+    - name: issues.reopened
+      type: issues
+      description: Triggered when an issue is reopened
+    - name: issues.assigned
+      type: issues
+      description: Triggered when an issue is assigned
+    - name: issues.labeled
+      type: issues
+      description: Triggered when a label is added to an issue
+    - name: issue_comment.created
+      type: issue_comment
+      description: Triggered when a comment is created on an issue
+    - name: issue_comment.edited
+      type: issue_comment
+      description: Triggered when a comment on an issue is edited
+    - name: issue_comment.deleted
+      type: issue_comment
+      description: Triggered when a comment on an issue is deleted
+    - name: create
+      type: create
+      description: Triggered when a branch or tag is created
+    - name: delete
+      type: delete
+      description: Triggered when a branch or tag is deleted
+    - name: release.published
+      type: release
+      description: Triggered when a release is published
+    - name: release.created
+      type: release
+      description: Triggered when a release is created
+    - name: status
+      type: status
+      description: Triggered when the status of a commit changes
+    - name: check_run.created
+      type: check_run
+      description: Triggered when a check run is created
+    - name: check_run.completed
+      type: check_run
+      description: Triggered when a check run is completed
+    - name: workflow_run.completed
+      type: workflow_run
+      description: Triggered when a workflow run is completed
+    - name: star.created
+      type: star
+      description: Triggered when a user stars a repository
+    - name: fork
+      type: fork
+      description: Triggered when a repository is forked
+
+errors:
+  mapping:
+    - code: unauthorized
+      type: authentication
+      statusCode: 401
+      message: Authentication failed - check your GitHub token
+      retryable: false
+    - code: forbidden
+      type: authorization
+      statusCode: 403
+      message: Permission denied - check repository access and token scopes
+      retryable: false
+    - code: rate_limit_exceeded
+      type: rate_limit
+      statusCode: 403
+      message: API rate limit exceeded - wait for reset
+      retryable: true
+    - code: not_found
+      type: not_found
+      statusCode: 404
+      message: Resource not found - check repository name, owner, and resource ID
+      retryable: false
+    - code: validation_failed
+      type: validation
+      statusCode: 422
+      message: Validation failed - check request parameters
+      retryable: false
+    - code: conflict
+      type: validation
+      statusCode: 409
+      message: Conflict detected - resource already exists or merge conflict
+      retryable: false
+    - code: server_error
+      type: server
+      statusCode: 500
+      message: GitHub API server error - please retry later
+      retryable: true
+  retryable: [server_error, connection_error]
+  nonRetryable: [unauthorized, forbidden, not_found, validation_failed, conflict]
+
+tests:
+  enabled: true
+  cleanup: true
+  scenarios:
+    - name: Repository Operations
+      description: Test repository CRUD operations
+      steps:
+        - action: create
+          resource: Repository
+        - action: retrieve
+          resource: Repository
+        - action: update
+          resource: Repository
+        - action: list
+          resource: Repository
+        - action: delete
+          resource: Repository
+    - name: Issue Management
+      description: Test issue lifecycle operations
+      steps:
+        - action: create
+          resource: Issue
+        - action: retrieve
+          resource: Issue
+        - action: update
+          resource: Issue
+        - action: list
+          resource: Issue
+    - name: Pull Request Workflow
+      description: Test pull request operations
+      steps:
+        - action: create
+          resource: PullRequest
+        - action: retrieve
+          resource: PullRequest
+        - action: update
+          resource: PullRequest
+        - action: list
+          resource: PullRequest
+    - name: Content Operations
+      description: Test file content operations
+      steps:
+        - action: create
+          resource: Content
+        - action: retrieve
+          resource: Content
+        - action: update
+          resource: Content
+        - action: delete
+          resource: Content
+    - name: Branch Management
+      description: Test branch operations
+      steps:
+        - action: create
+          resource: Branch
+        - action: retrieve
+          resource: Branch
+        - action: list
+          resource: Branch
+
+docs:
+  homepage: https://github.com
+  apiDocs: https://docs.github.com/rest
+  sdkDocs: https://github.com/octokit/rest.js
+  guides:
+    quickstart: https://docs.github.com/rest/quickstart
+    webhooks: https://docs.github.com/webhooks
+    authentication: https://docs.github.com/authentication
+    rateLimit: https://docs.github.com/rest/rate-limit
+---
+
+# GitHub Integration
+
+GitHub is the world's leading platform for software development collaboration, providing source control, code review, issue tracking, and project management tools for millions of developers.
+
+## Features
+
+- **Source Control**: Git-based version control with branch management and merge strategies
+- **Issue Tracking**: Comprehensive issue management with labels, milestones, and assignments
+- **Pull Requests**: Code review workflow with comments, reviews, and merge controls
+- **Content Management**: Direct file operations via API with commit tracking
+- **Webhooks**: Real-time event notifications for repository activities
+- **Actions**: CI/CD automation with workflow runs and check suites
+- **Global Scale**: Powers millions of open-source and private repositories
+
+## Quick Start
+
+```typescript
+import { GitHubClient } from '@dotdo/sdk.do/integrations/github'
+
+const github = new GitHubClient({
+  token: process.env.GITHUB_TOKEN,
+})
+
+// Create a repository
+const repo = await github.createRepo({
+  name: 'my-new-repo',
+  description: 'A new repository for my project',
+  private: true,
+  auto_init: true,
+  license_template: 'mit',
+})
+
+// Create an issue
+const issue = await github.createIssue('owner', 'repo', {
+  title: 'Bug: Application crashes on startup',
+  body: 'Detailed description of the bug...',
+  labels: ['bug', 'high-priority'],
+  assignees: ['username'],
+})
+
+// Create a pull request
+const pr = await github.createPull('owner', 'repo', {
+  title: 'Add new feature',
+  head: 'feature-branch',
+  base: 'main',
+  body: 'This PR adds a new feature...',
+})
+```
+
+## Authentication
+
+GitHub supports multiple authentication methods:
+
+**Personal Access Token** (recommended for development):
+
+```bash
+export GITHUB_TOKEN=ghp_xxxxx
+```
+
+**Fine-Grained Personal Access Token** (recommended for production):
+
+```bash
+# Create token at https://github.com/settings/tokens?type=beta
+export GITHUB_TOKEN=github_pat_xxxxx
+```
+
+**GitHub App** (recommended for automation):
+
+```typescript
+const github = new GitHubClient({
+  token: generateAppToken(appId, privateKey, installationId),
+})
+```
+
+**Important**: Never expose your token in client-side code or commit it to repositories. Use environment variables or secrets management.
+
+## Resources
+
+### Repositories
+
+Manage GitHub repositories:
+
+```typescript
+// Create a repository
+const repo = await github.createRepo({
+  name: 'my-repo',
+  description: 'My awesome project',
+  private: false,
+  auto_init: true,
+  license_template: 'apache-2.0',
+})
+
+// Get repository details
+const retrieved = await github.getRepo('owner', 'repo')
+
+// Update repository
+await github.updateRepo('owner', 'repo', {
+  description: 'Updated description',
+  default_branch: 'main',
+})
+
+// List repositories
+const repos = await github.listRepos({
+  per_page: 50,
+  sort: 'updated',
+  direction: 'desc',
+})
+
+// Delete repository
+await github.deleteRepo('owner', 'repo')
+```
+
+### Issues
+
+Track bugs, features, and tasks:
+
+```typescript
+// Create an issue
+const issue = await github.createIssue('owner', 'repo', {
+  title: 'Bug: Login fails on mobile',
+  body: 'Steps to reproduce:\n1. ...\n2. ...',
+  labels: ['bug', 'mobile'],
+  assignees: ['developer1', 'developer2'],
+  milestone: 1,
+})
+
+// Get issue
+const retrieved = await github.getIssue('owner', 'repo', 42)
+
+// Update issue
+await github.updateIssue('owner', 'repo', 42, {
+  state: 'closed',
+  labels: ['bug', 'fixed'],
+})
+
+// Add labels
+await github.addLabels('owner', 'repo', 42, ['enhancement', 'documentation'])
+
+// Lock issue
+await github.lockIssue('owner', 'repo', 42)
+
+// List issues
+const issues = await github.listIssues('owner', 'repo', {
+  state: 'open',
+  labels: 'bug',
+  sort: 'created',
+  direction: 'desc',
+})
+```
+
+### Pull Requests
+
+Code review and merge workflow:
+
+```typescript
+// Create pull request
+const pr = await github.createPull('owner', 'repo', {
+  title: 'Add authentication feature',
+  head: 'feature/auth',
+  base: 'main',
+  body: 'This PR implements OAuth 2.0 authentication',
+  draft: false,
+})
+
+// Get pull request
+const retrieved = await github.getPull('owner', 'repo', 123)
+
+// Update pull request
+await github.updatePull('owner', 'repo', 123, {
+  title: 'Updated title',
+  body: 'Updated description',
+})
+
+// Merge pull request
+const result = await github.mergePull('owner', 'repo', 123, {
+  commit_title: 'Merge authentication feature',
+  merge_method: 'squash',
+})
+
+// Close without merging
+await github.closePull('owner', 'repo', 123)
+
+// List pull requests
+const prs = await github.listPulls('owner', 'repo', {
+  state: 'open',
+  sort: 'created',
+  direction: 'desc',
+})
+```
+
+### Content
+
+Manage files in repositories:
+
+```typescript
+// Get file content
+const content = await github.getContent('owner', 'repo', 'README.md', 'main')
+
+// Create or update file
+const result = await github.createOrUpdateFile('owner', 'repo', 'config.json', {
+  message: 'Update configuration',
+  content: JSON.stringify({ setting: 'value' }),
+  branch: 'main',
+  sha: existingFileSha, // Required for updates
+})
+
+// Delete file
+await github.deleteFile('owner', 'repo', 'old-file.txt', {
+  message: 'Remove deprecated file',
+  sha: fileSha,
+  branch: 'main',
+})
+```
+
+### Branches
+
+Manage repository branches:
+
+```typescript
+// List branches
+const branches = await github.listBranches('owner', 'repo')
+
+// Get branch
+const branch = await github.getBranch('owner', 'repo', 'main')
+
+// Create branch
+const newBranch = await github.createBranch('owner', 'repo', {
+  ref: 'feature/new-feature',
+  sha: 'abc123def456', // SHA to create from
+})
+```
+
+## Webhooks
+
+GitHub sends webhooks for repository events. Always verify webhook signatures:
+
+```typescript
+import { GitHubWebhooks } from '@dotdo/sdk.do/integrations/github'
+
+// In your webhook handler (e.g., Cloudflare Worker)
+export default {
+  async fetch(request: Request, env: Env) {
+    const signature = request.headers.get('x-hub-signature-256')
+    const eventType = request.headers.get('x-github-event')
+    const payload = await request.text()
+
+    try {
+      // Verify and parse webhook
+      const event = GitHubWebhooks.verifyAndParse(payload, signature, env.GITHUB_WEBHOOK_SECRET)
+
+      // Handle event
+      switch (eventType) {
+        case 'push':
+          console.log('Push to', event.repository?.name)
+          console.log('Commits:', event.commits)
+          break
+
+        case 'pull_request':
+          console.log('PR action:', event.action)
+          console.log('PR number:', event.pull_request?.number)
+          break
+
+        case 'issues':
+          console.log('Issue action:', event.action)
+          console.log('Issue number:', event.issue?.number)
+          break
+      }
+
+      return new Response('OK', { status: 200 })
+    } catch (error) {
+      console.error('Webhook error:', error)
+      return new Response('Webhook Error', { status: 400 })
+    }
+  },
+}
+```
+
+### Webhook Router
+
+Use the webhook router for cleaner event handling:
+
+```typescript
+import { WebhookRouter } from '@dotdo/sdk.do/integrations/github'
+
+const router = new WebhookRouter()
+
+// Register event handlers
+router.on('push', async (eventType, event, data) => {
+  console.log('Push to', data.ref)
+  console.log('Commits:', data.commits.length)
+})
+
+router.on('pull_request', async (eventType, event, data) => {
+  if (event.action === 'opened') {
+    console.log('New PR:', data.number)
+    // Auto-label, run checks, etc.
+  }
+})
+
+// Wildcard patterns
+router.on('pull_request.*', async (eventType, event, data) => {
+  console.log('Any PR event:', event.action)
+})
+
+// In webhook handler
+const event = GitHubWebhooks.verifyAndParse(payload, signature, secret)
+await router.handle(eventType, event)
+```
+
+### Common Webhook Events
+
+GitHub supports 40+ webhook events:
+
+- **Repository**: `repository.created`, `repository.deleted`, `repository.archived`
+- **Push**: `push` (commits pushed to branch)
+- **Pull Requests**: `pull_request.opened`, `pull_request.closed`, `pull_request.synchronized`
+- **Issues**: `issues.opened`, `issues.closed`, `issues.labeled`
+- **Comments**: `issue_comment.created`, `pull_request_review_comment.created`
+- **Releases**: `release.published`, `release.created`
+- **Actions**: `workflow_run.completed`, `check_run.completed`
+
+## Error Handling
+
+```typescript
+import { GitHubIntegrationError } from '@dotdo/sdk.do/integrations/github'
+
+try {
+  const repo = await github.getRepo('owner', 'nonexistent-repo')
+} catch (error) {
+  if (error instanceof GitHubIntegrationError) {
+    console.error('Error code:', error.code)
+    console.error('Status:', error.statusCode)
+    console.error('Request ID:', error.requestId)
+
+    // Check error type
+    if (error.isRateLimited()) {
+      const resetTime = error.getRateLimitResetTime()
+      console.log(`Rate limited. Resets in ${resetTime}ms`)
+    }
+
+    if (error.isRetriable()) {
+      // Implement retry logic
+      console.log('Error is retriable, retrying...')
+    }
+
+    // Access rate limit info
+    if (error.rateLimit) {
+      console.log('Limit:', error.rateLimit.limit)
+      console.log('Remaining:', error.rateLimit.remaining)
+      console.log('Resets at:', new Date(error.rateLimit.reset * 1000))
+    }
+  }
+}
+```
+
+### Error Codes
+
+- `unauthorized` (401) - Invalid or missing GitHub token
+- `forbidden` (403) - Insufficient permissions
+- `rate_limit_exceeded` (403) - API rate limit exceeded
+- `not_found` (404) - Resource not found
+- `validation_failed` (422) - Invalid request parameters
+- `conflict` (409) - Resource conflict
+- `server_error` (5xx) - GitHub API server error
+
+## Rate Limits
+
+GitHub enforces rate limits to protect service availability:
+
+**Authenticated Requests**:
+
+- 5,000 requests per hour per user
+- 15,000 requests per hour for GitHub Apps
+
+**Unauthenticated Requests**:
+
+- 60 requests per hour per IP
+
+**Secondary Rate Limits**:
+
+- No more than 100 concurrent requests
+- No more than 900 points per minute (varies by endpoint)
+
+Handle rate limits with exponential backoff:
+
+```typescript
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn()
+    } catch (error) {
+      if (error instanceof GitHubIntegrationError) {
+        if (error.isRateLimited()) {
+          const resetTime = error.getRateLimitResetTime()
+          if (resetTime) {
+            console.log(`Rate limited. Waiting ${resetTime}ms...`)
+            await new Promise((resolve) => setTimeout(resolve, resetTime + 1000))
+            continue
+          }
+        }
+        if (error.isRetriable() && i < maxRetries - 1) {
+          const delay = Math.pow(2, i) * 1000
+          await new Promise((resolve) => setTimeout(resolve, delay))
+          continue
+        }
+      }
+      throw error
+    }
+  }
+  throw new Error('Max retries exceeded')
+}
+
+// Usage
+const repo = await withRetry(() => github.getRepo('owner', 'repo'))
+```
+
+## Best Practices
+
+1. **Use Fine-Grained Tokens**: Create tokens with minimal required permissions
+2. **Verify Webhook Signatures**: ALWAYS verify signatures in production
+3. **Handle Rate Limits**: Implement exponential backoff for rate limit errors
+4. **Use Pagination**: Don't fetch all data at once for large result sets
+5. **Implement Retry Logic**: Retry server errors and transient failures
+6. **Check Permissions**: Ensure token has required scopes before operations
+7. **Secure Secrets**: Never expose tokens in client-side code or logs
+8. **Monitor Usage**: Track rate limit headers to avoid hitting limits
+
+## Common Use Cases
+
+### Auto-label PRs Based on Files Changed
+
+```typescript
+router.on('pull_request.opened', async (eventType, event, data) => {
+  const github = new GitHubClient({ token: env.GITHUB_TOKEN })
+
+  // Get files changed
+  const files = await github.sdk.pulls.listFiles({
+    owner: data.base.repo.owner.login,
+    repo: data.base.repo.name,
+    pull_number: data.number,
+  })
+
+  // Auto-label based on patterns
+  const labels = []
+  if (files.data.some((f) => f.filename.endsWith('.md'))) labels.push('documentation')
+  if (files.data.some((f) => f.filename.includes('test'))) labels.push('tests')
+  if (files.data.some((f) => f.filename.endsWith('.ts'))) labels.push('typescript')
+
+  if (labels.length > 0) {
+    await github.addLabels(data.base.repo.owner.login, data.base.repo.name, data.number, labels)
+  }
+})
+```
+
+### Sync Issues to Database
+
+```typescript
+router.on('issues', async (eventType, event, data) => {
+  await db.issues.upsert({
+    where: { githubId: data.id },
+    create: {
+      githubId: data.id,
+      number: data.number,
+      title: data.title,
+      body: data.body,
+      state: data.state,
+      labels: data.labels.map((l) => l.name),
+      createdAt: new Date(data.created_at),
+      updatedAt: new Date(data.updated_at),
+    },
+    update: {
+      title: data.title,
+      body: data.body,
+      state: data.state,
+      labels: data.labels.map((l) => l.name),
+      updatedAt: new Date(data.updated_at),
+    },
+  })
+})
+```
+
+### Auto-close Stale Issues
+
+```typescript
+async function closeStaleIssues(owner: string, repo: string) {
+  const github = new GitHubClient({ token: env.GITHUB_TOKEN })
+
+  const issues = await github.listIssues(owner, repo, {
+    state: 'open',
+    per_page: 100,
+  })
+
+  const thirtyDaysAgo = new Date()
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+
+  for (const issue of issues) {
+    const updatedAt = new Date(issue.updated_at)
+
+    if (updatedAt < thirtyDaysAgo) {
+      await github.addLabels(owner, repo, issue.number, ['stale'])
+
+      await github.sdk.issues.createComment({
+        owner,
+        repo,
+        issue_number: issue.number,
+        body: 'This issue has been marked as stale due to inactivity.',
+      })
+    }
+  }
+}
+```
+
+## API Reference
+
+Full API documentation: https://docs.github.com/rest
+
+**Key Resources**:
+
+- Repositories: https://docs.github.com/rest/repos
+- Issues: https://docs.github.com/rest/issues
+- Pull Requests: https://docs.github.com/rest/pulls
+- Webhooks: https://docs.github.com/webhooks
+
+## Support
+
+- **Documentation**: https://docs.github.com
+- **API Reference**: https://docs.github.com/rest
+- **Octokit SDK**: https://github.com/octokit/rest.js
+- **Status**: https://www.githubstatus.com

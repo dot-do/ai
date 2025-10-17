@@ -1,0 +1,105 @@
+---
+$id: https://integrations.do/googledrive
+$type: Integration
+name: Google Drive
+service: googledrive
+description: Google Drive is a cloud storage solution for uploading, sharing, and collaborating on files across devices, with robust search and offline access
+category: storage
+sdkBased: false
+baseUrl: https://api.googledrive.com
+
+auth:
+  type: oauth2
+  authorizationUrl: https://accounts.google.com/o/oauth2/v2/auth
+  tokenUrl: https://oauth2.googleapis.com/token
+  scopes:
+    - https://www.googleapis.com/auth/drive
+    - https://www.googleapis.com/auth/userinfo.email
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Google Drive actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: true
+  verificationMethod: none
+  events:
+    - name: generic_trigger
+      type: trigger
+      description: Generic webhook trigger
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://drive.google.com
+  apiDocs: https://drive.google.com
+---
+
+# Google Drive Integration
+
+Google Drive is a cloud storage solution for uploading, sharing, and collaborating on files across devices, with robust search and offline access
+
+## Quick Start
+
+```typescript
+import { GoogleDriveClient } from '@dotdo/sdk.do/integrations/googledrive'
+
+const googledrive = new GoogleDriveClient({
+  apiKey: process.env.GOOGLEDRIVE_API_KEY,
+})
+
+const result = await googledrive.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Google Drive provides 51 actions through the Composio API.
+
+## Webhooks
+
+Google Drive supports 1 webhook triggers for real-time event notifications.
+
+## License
+
+MIT

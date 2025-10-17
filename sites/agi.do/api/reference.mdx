@@ -1,0 +1,806 @@
+---
+$id: https://agi.do/api/reference
+$type: APIReference
+title: AGI Agent API Reference
+description: Complete API reference for agi.do
+keywords: [agi, api, reference, documentation, types, functions]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# API Reference
+
+Complete API reference for agi.do.
+
+## agent.create()
+
+Create an AGI agent with specified capabilities.
+
+```typescript
+function create(options: AGIAgentOptions): Promise<AGIAgent>
+```
+
+### AGIAgentOptions
+
+```typescript
+interface AGIAgentOptions {
+  // Identity
+  $type?: string // Default: $.Agent
+  $role: string // e.g., $.AGIAgent, $.AGIAgent.Researcher
+  name?: string
+  description?: string
+
+  // Capabilities
+  capabilities: Capability[]
+  domains?: string[]
+
+  // Reasoning configuration
+  reasoning?: ReasoningConfig
+
+  // Learning configuration
+  learning?: LearningConfig
+
+  // Decomposition configuration
+  decomposition?: DecompositionConfig
+
+  // Planning configuration
+  planning?: PlanningConfig
+
+  // Knowledge graph
+  knowledge_graph?: KnowledgeGraphConfig
+
+  // Orchestration (for coordinator agents)
+  orchestration?: OrchestrationConfig
+
+  // Tools and integrations
+  tools?: Record<string, any>
+
+  // LLM configuration
+  model?: string // e.g., 'claude-sonnet-4.5', 'gpt-5'
+  temperature?: number // 0-2, default: 0.7
+  llm?: LLMConfig
+
+  // Personalization
+  user_id?: string
+  personalization?: PersonalizationConfig
+}
+```
+
+### Capability Types
+
+```typescript
+type Capability = 'advanced_reasoning' | 'multi_domain_expertise' | 'self_improvement' | 'meta_learning' | 'research_synthesis' | 'strategic_thinking'
+```
+
+### ReasoningConfig
+
+```typescript
+interface ReasoningConfig {
+  strategy: 'chain-of-thought' | 'tree-of-thought' | 'graph-of-thought'
+  depth?: number // Reasoning depth (default: 5)
+  breadth?: number // Options at each step (default: 3, for tree-of-thought)
+  verbosity?: 'minimal' | 'standard' | 'detailed'
+  pruning?: 'none' | 'confidence_threshold' | 'cost_benefit'
+}
+```
+
+### Examples
+
+```typescript
+// Basic AGI agent
+const agent = await agent.create({
+  $role: $.AGIAgent,
+  name: 'Strategic Analyst',
+  capabilities: ['advanced_reasoning', 'strategic_thinking'],
+})
+
+// Researcher with multiple domains
+const researcher = await agent.create({
+  $role: $.AGIAgent.Researcher,
+  capabilities: ['research_synthesis', 'multi_domain_expertise'],
+  domains: ['market_analysis', 'technology', 'economics'],
+  tools: {
+    web_search: api.get('search-api'),
+    news: api.get('news-api'),
+  },
+})
+
+// Agent with advanced reasoning
+const reasoner = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['advanced_reasoning'],
+  reasoning: {
+    strategy: 'tree-of-thought',
+    depth: 6,
+    breadth: 4,
+  },
+})
+
+// Self-improving agent
+const learner = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['self_improvement', 'meta_learning'],
+  learning: {
+    enabled: true,
+    strategy: 'experience_replay',
+    memory_size: 10000,
+  },
+})
+```
+
+## agent.execute()
+
+Execute a task with the AGI agent.
+
+```typescript
+function execute(task: ExecuteTask): Promise<ExecuteResult>
+```
+
+### ExecuteTask
+
+```typescript
+interface ExecuteTask {
+  task: string
+  context?: any
+  autonomy_level?: 'autonomous' | 'supervised' | 'manual'
+  priority?: 'low' | 'normal' | 'high'
+  timeout?: number // milliseconds
+  feedback_loop?: boolean
+}
+```
+
+### ExecuteResult
+
+```typescript
+interface ExecuteResult {
+  $id: string
+  status: 'completed' | 'failed' | 'partial'
+  result: any
+  reasoning?: ReasoningChain
+  metrics?: {
+    quality: number
+    confidence: number
+    time_elapsed: number
+  }
+  subtasks?: SubTask[]
+  error?: string
+}
+```
+
+### Examples
+
+```typescript
+// Simple execution
+const result = await agent.execute({
+  task: 'Analyze market trends',
+})
+
+// With context and supervision
+const result = await agent.execute({
+  task: 'Design system architecture',
+  context: {
+    requirements: { scale: '1M users', latency: '< 100ms' },
+  },
+  autonomy_level: 'supervised',
+  feedback_loop: true,
+})
+
+// High priority task
+const result = await agent.execute({
+  task: 'Respond to security incident',
+  priority: 'high',
+  timeout: 60000, // 1 minute
+})
+```
+
+## agent.reason()
+
+Perform complex reasoning on a problem.
+
+```typescript
+function reason(problem: ReasonProblem): Promise<ReasonResult>
+```
+
+### ReasonProblem
+
+```typescript
+interface ReasonProblem {
+  problem: string
+  constraints?: string[]
+  context?: any
+  approach?: 'analytical' | 'creative' | 'philosophical_analysis' | 'systems_thinking'
+  evaluate_options?: boolean
+}
+```
+
+### ReasonResult
+
+```typescript
+interface ReasonResult {
+  conclusion: any
+  reasoning_chain: ReasoningStep[]
+  alternatives?: Alternative[]
+  confidence: number
+  tree?: ReasoningTree // For tree-of-thought
+  graph?: KnowledgeGraph // For graph-of-thought
+}
+```
+
+### ReasoningStep
+
+```typescript
+interface ReasoningStep {
+  step: number
+  thought: string
+  conclusion: string
+  confidence?: number
+  branches?: ReasoningStep[] // For tree-of-thought
+}
+```
+
+### Examples
+
+```typescript
+// Chain-of-thought reasoning
+const solution = await agent.reason({
+  problem: 'Design a distributed cache invalidation strategy',
+  constraints: ['eventual consistency', 'low latency'],
+  approach: 'systems_thinking',
+})
+
+// Tree-of-thought exploration
+const exploration = await agent.reason({
+  problem: 'Optimize conversion funnel',
+  evaluate_options: true,
+})
+
+console.log(exploration.tree)
+console.log(exploration.alternatives)
+```
+
+## agent.research()
+
+Conduct autonomous research and synthesis.
+
+```typescript
+function research(topic: ResearchTopic): Promise<ResearchReport>
+```
+
+### ResearchTopic
+
+```typescript
+interface ResearchTopic {
+  topic: string
+  depth: 'overview' | 'comprehensive' | 'deep_dive'
+  sources?: string[] // e.g., ['academic', 'industry', 'news']
+  deliverable: 'summary' | 'executive_summary' | 'detailed_report'
+  build_knowledge_graph?: boolean
+}
+```
+
+### ResearchReport
+
+```typescript
+interface ResearchReport {
+  $id: string
+  topic: string
+  key_findings: string[]
+  trends: Trend[]
+  recommendations: string[]
+  sources: Source[]
+  confidence: number
+  knowledge_graph_id?: string
+  executive_summary?: string
+}
+```
+
+### Examples
+
+```typescript
+// Comprehensive research
+const report = await agent.research({
+  topic: 'AI infrastructure market trends',
+  depth: 'comprehensive',
+  sources: ['academic', 'industry', 'news'],
+  deliverable: 'executive_summary',
+  build_knowledge_graph: true,
+})
+
+// Quick overview
+const overview = await agent.research({
+  topic: 'Vector database performance',
+  depth: 'overview',
+  deliverable: 'summary',
+})
+```
+
+## agent.plan()
+
+Generate strategic plans with scenario analysis.
+
+```typescript
+function plan(objective: PlanObjective): Promise<StrategicPlan>
+```
+
+### PlanObjective
+
+```typescript
+interface PlanObjective {
+  objective: string
+  current_state?: any
+  constraints?: any
+  horizon?: string // e.g., '1_year', '3_years'
+  scenarios?: number // Number of scenarios to generate
+}
+```
+
+### StrategicPlan
+
+```typescript
+interface StrategicPlan {
+  $id: string
+  objective: string
+  phases: Phase[]
+  scenarios: Scenario[]
+  risks: Risk[]
+  success_metrics: Metric[]
+  confidence: number
+}
+```
+
+### Phase
+
+```typescript
+interface Phase {
+  name: string
+  duration: string
+  objectives: string[]
+  milestones: Milestone[]
+  budget?: string
+  dependencies?: string[]
+}
+```
+
+### Scenario
+
+```typescript
+interface Scenario {
+  name: string
+  probability: number
+  outcome: string
+  key_factors: string[]
+  risk_level?: number
+}
+```
+
+### Examples
+
+```typescript
+// Strategic planning
+const strategy = await agent.plan({
+  objective: 'Achieve market leadership',
+  current_state: {
+    market_share: 0.15,
+    revenue: '$10M ARR',
+  },
+  constraints: {
+    funding: '$50M',
+    timeline: '24 months',
+  },
+  horizon: '2_years',
+  scenarios: 5,
+})
+
+console.log(strategy.phases)
+console.log(strategy.scenarios)
+```
+
+## agent.analyze()
+
+Perform comprehensive analysis on data or problems.
+
+```typescript
+function analyze(analysis: AnalysisTask): Promise<AnalysisResult>
+```
+
+### AnalysisTask
+
+```typescript
+interface AnalysisTask {
+  problem?: string
+  data?: any
+  context?: any
+  type?: 'root_cause' | 'competitive' | 'market' | 'customer' | 'technical'
+  analyze?: string[] // Aspects to analyze
+  objective?: string
+}
+```
+
+### AnalysisResult
+
+```typescript
+interface AnalysisResult {
+  $id: string
+  analysis: any
+  insights: Insight[]
+  recommendations: string[]
+  confidence: number
+  reasoning: ReasoningChain
+  visualization_data?: any
+}
+```
+
+### Examples
+
+```typescript
+// Root cause analysis
+const analysis = await agent.analyze({
+  problem: 'User retention dropped 15%',
+  type: 'root_cause',
+  context: {
+    metrics: { churn_rate: 0.18, nps: 42 },
+  },
+})
+
+// Data analysis
+const customerAnalysis = await agent.analyze({
+  data: customerData,
+  type: 'customer',
+  objective: 'Identify churn patterns',
+})
+
+// Multi-aspect analysis
+const competitiveAnalysis = await agent.analyze({
+  type: 'competitive',
+  analyze: ['market_positioning', 'technology_capabilities', 'strategic_vulnerabilities'],
+})
+```
+
+## agent.feedback()
+
+Provide feedback for agent learning and improvement.
+
+```typescript
+function feedback(feedback: AgentFeedback): Promise<void>
+```
+
+### AgentFeedback
+
+```typescript
+interface AgentFeedback {
+  task_id?: string
+  analysis_id?: string
+  outcome: 'success' | 'failure' | 'partial'
+  metrics?: {
+    quality?: number // 0-1
+    efficiency?: number // 0-1
+    user_satisfaction?: number
+    [key: string]: number
+  }
+  notes?: string
+  corrections?: any
+}
+```
+
+### Examples
+
+```typescript
+// Provide feedback after task completion
+await agent.feedback({
+  task_id: result.$id,
+  outcome: 'success',
+  metrics: {
+    quality: 0.95,
+    efficiency: 0.88,
+    user_satisfaction: 0.92,
+  },
+  notes: 'Excellent analysis, actionable recommendations',
+})
+
+// Feedback with corrections
+await agent.feedback({
+  analysis_id: analysis.$id,
+  outcome: 'partial',
+  metrics: { quality: 0.7 },
+  corrections: {
+    missed_factor: 'Regulatory changes',
+    incorrect_assumption: 'Market size estimate',
+  },
+})
+```
+
+## agent.synthesize()
+
+Synthesize information from multiple sources.
+
+```typescript
+function synthesize(synthesis: SynthesisTask): Promise<SynthesisResult>
+```
+
+### SynthesisTask
+
+```typescript
+interface SynthesisTask {
+  topic: string
+  sources?: any[]
+  data?: any[]
+  context?: any
+  focus?: string[]
+  deliverable?: 'summary' | 'insights' | 'recommendations'
+}
+```
+
+### SynthesisResult
+
+```typescript
+interface SynthesisResult {
+  synthesis: string
+  key_points: string[]
+  insights: Insight[]
+  recommendations?: string[]
+  confidence: number
+  sources_used: number
+}
+```
+
+## agent.consolidate()
+
+Consolidate learning and optimize performance.
+
+```typescript
+function consolidate(options: ConsolidateOptions): Promise<void>
+```
+
+### ConsolidateOptions
+
+```typescript
+interface ConsolidateOptions {
+  period?: 'daily' | 'weekly' | 'monthly'
+  optimize_for?: ('quality' | 'speed' | 'cost')[]
+  prune_low_value?: boolean
+}
+```
+
+### Examples
+
+```typescript
+// Daily consolidation
+await agent.consolidate({
+  period: 'daily',
+  optimize_for: ['quality', 'speed'],
+})
+
+// Monthly optimization with pruning
+await agent.consolidate({
+  period: 'monthly',
+  optimize_for: ['quality'],
+  prune_low_value: true,
+})
+```
+
+## agent.configure()
+
+Update agent configuration.
+
+```typescript
+function configure(config: Partial<AGIAgentOptions>): Promise<void>
+```
+
+### Examples
+
+```typescript
+// Update learning configuration
+await agent.configure({
+  learning: {
+    learning_rate: 0.05,
+    strategy: 'meta_learning',
+  },
+})
+
+// Update reasoning strategy
+await agent.configure({
+  reasoning: {
+    strategy: 'graph-of-thought',
+    depth: 8,
+  },
+})
+```
+
+## agent.getMetrics()
+
+Get agent performance metrics.
+
+```typescript
+function getMetrics(): Promise<AgentMetrics>
+```
+
+### AgentMetrics
+
+```typescript
+interface AgentMetrics {
+  quality: number
+  speed: number // Average task completion time
+  confidence: number
+  learning_progress: number
+  task_count: number
+  success_rate: number
+  improvement_rate: number
+}
+```
+
+### Examples
+
+```typescript
+const metrics = await agent.getMetrics()
+console.log(`Quality: ${metrics.quality}`)
+console.log(`Success rate: ${metrics.success_rate}`)
+console.log(`Improvement: ${metrics.improvement_rate}`)
+```
+
+## agent.getLearningCurve()
+
+Get learning trajectory over time.
+
+```typescript
+function getLearningCurve(): Promise<LearningCurve>
+```
+
+### LearningCurve
+
+```typescript
+interface LearningCurve {
+  iterations: number[]
+  quality: number[]
+  speed: number[]
+  confidence: number[]
+  milestones: Milestone[]
+}
+```
+
+## Configuration Interfaces
+
+### LearningConfig
+
+```typescript
+interface LearningConfig {
+  enabled: boolean
+  strategy: 'online' | 'batch' | 'experience_replay' | 'meta_learning' | 'continual' | 'federated'
+  learning_rate?: number // 0-1, default: 0.1
+  memory_size?: number // For experience replay
+  update_frequency?: 'task' | 'batch' | 'continuous'
+  batch_size?: number
+  forgetting_prevention?: {
+    method: 'elastic_weight_consolidation' | 'progressive_networks' | 'memory_replay'
+    importance_threshold?: number
+  }
+  meta_parameters?: {
+    learning_rate_adaptation?: boolean
+    strategy_selection?: 'static' | 'dynamic'
+    transfer_learning?: boolean
+  }
+  memory?: {
+    episodic?: boolean
+    semantic?: boolean
+    replay_frequency?: 'periodic' | 'continuous'
+  }
+  personalized?: boolean
+  privacy_preserving?: boolean
+}
+```
+
+### DecompositionConfig
+
+```typescript
+interface DecompositionConfig {
+  strategy: 'hierarchical' | 'sequential' | 'parallel'
+  max_depth: number
+  execution_mode: 'autonomous' | 'supervised' | 'manual'
+}
+```
+
+### PlanningConfig
+
+```typescript
+interface PlanningConfig {
+  horizon: string // e.g., '1_year', '2_years', '3_years'
+  scenarios: number
+  monte_carlo_iterations?: number
+}
+```
+
+### KnowledgeGraphConfig
+
+```typescript
+interface KnowledgeGraphConfig {
+  enabled: boolean
+  store: any // Database instance
+  auto_link?: boolean // Automatically create relationships
+}
+```
+
+### OrchestrationConfig
+
+```typescript
+interface OrchestrationConfig {
+  delegation: boolean
+  synthesis: boolean
+  adaptive_planning?: boolean
+}
+```
+
+### LLMConfig
+
+```typescript
+interface LLMConfig {
+  routing?: 'intelligent' | 'static'
+  models?: {
+    reasoning?: string
+    creative?: string
+    fast?: string
+  }
+  fallback?: string
+}
+```
+
+### PersonalizationConfig
+
+```typescript
+interface PersonalizationConfig {
+  preferences?: any
+  history?: any[]
+  learning_style?: string
+}
+```
+
+## Error Codes
+
+| Code                         | Description                         |
+| ---------------------------- | ----------------------------------- |
+| `INVALID_CAPABILITY`         | Unsupported capability specified    |
+| `INVALID_REASONING_STRATEGY` | Invalid reasoning strategy          |
+| `LEARNING_DISABLED`          | Learning not enabled for this agent |
+| `INSUFFICIENT_CONTEXT`       | Insufficient context for task       |
+| `TASK_TIMEOUT`               | Task execution timed out            |
+| `REASONING_FAILED`           | Reasoning process failed            |
+| `SYNTHESIS_FAILED`           | Synthesis failed                    |
+| `CONSOLIDATION_FAILED`       | Learning consolidation failed       |
+| `INVALID_FEEDBACK`           | Invalid feedback format             |
+| `AGENT_NOT_FOUND`            | Agent does not exist                |
+
+## Semantic Patterns
+
+AGI agents use semantic patterns throughout:
+
+```typescript
+// Agent roles
+$.AGIAgent
+$.AGIAgent.Researcher
+$.AGIAgent.Strategist
+$.AGIAgent.Analyst
+$.AGIAgent.Coordinator
+
+// Capabilities
+$.AGIAgent.reasoning.advanced
+$.AGIAgent.learning.meta
+$.AGIAgent.expertise.multiDomain
+$.AGIAgent.synthesis.research
+
+// Actions
+$.AGIAgent.analyze.problem
+$.AGIAgent.reason.about
+$.AGIAgent.learn.from
+$.AGIAgent.synthesize.knowledge
+$.AGIAgent.plan.strategy
+
+// Results
+$.StrategicAnalysis
+$.ResearchReport
+$.StrategicPlan
+$.CompetitiveLandscape
+$.MarketIntelligence
+```
+
+## License
+
+MIT (Open Source)

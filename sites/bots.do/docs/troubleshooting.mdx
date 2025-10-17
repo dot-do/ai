@@ -1,0 +1,618 @@
+---
+$id: https://bots.do/docs/troubleshooting
+$type: TechArticle
+title: Bot Troubleshooting Guide
+description: Common issues and solutions when building and operating bots with bots.do framework.
+keywords: [troubleshooting, debugging, issues, solutions, bot problems]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Bot Troubleshooting Guide
+
+Common issues and solutions for bots.do.
+
+## Bot Won't Start
+
+### Symptom
+
+Bot fails to start or throws initialization error.
+
+### Common Causes
+
+1. **Invalid Configuration**
+
+```typescript
+// Check configuration
+const bot = await bot.create({
+  name: 'Test Bot',
+  // Missing required fields?
+  task: 'Process data',
+  capabilities: ['processing'],
+})
+```
+
+2. **Missing Dependencies**
+
+```bash
+# Verify SDK installation
+pnpm list sdk.do
+
+# Reinstall if needed
+pnpm add sdk.do
+```
+
+3. **API Credentials**
+
+```typescript
+// Verify credentials are set
+if (!process.env.API_KEY) {
+  throw new Error('API_KEY environment variable not set')
+}
+```
+
+### Solutions
+
+```typescript
+// Enable debug mode
+const bot = await bot.create({
+  name: 'Debug Bot',
+  debug: true, // Enables verbose logging
+  logging: {
+    level: 'debug',
+  },
+})
+
+// Check bot status
+try {
+  await bot.start()
+  console.log('Bot started successfully')
+} catch (error) {
+  console.error('Failed to start bot:', error)
+  console.error('Stack trace:', error.stack)
+}
+```
+
+## High Error Rate
+
+### Symptom
+
+Bot is processing tasks but many are failing.
+
+### Common Causes
+
+1. **External Service Issues**
+2. **Invalid Input Data**
+3. **Timeout Issues**
+4. **Rate Limiting**
+
+### Solutions
+
+**Check Error Logs**
+
+```typescript
+// Get recent errors
+const errors = await bot.getLogs({
+  level: 'error',
+  limit: 50,
+})
+
+console.log('Recent errors:', errors)
+```
+
+**Adjust Retry Policy**
+
+```typescript
+await bot.configure({
+  errorHandling: {
+    retry: {
+      attempts: 5, // Increase retries
+      backoff: 'exponential',
+      maxDelay: 60000, // Increase max delay
+    },
+  },
+})
+```
+
+**Add Input Validation**
+
+```typescript
+const bot = await bot.create({
+  name: 'Validated Bot',
+  validation: {
+    schema: {
+      type: 'object',
+      required: ['id', 'type'],
+      properties: {
+        id: { type: 'string' },
+        type: { type: 'string' },
+      },
+    },
+  },
+  handler: async (input) => {
+    // Input is pre-validated
+    return await processInput(input)
+  },
+})
+```
+
+**Handle Rate Limits**
+
+```typescript
+const bot = await bot.create({
+  name: 'Rate Limited Bot',
+  errorHandling: {
+    retry: {
+      retryOn: ['RATE_LIMIT'],
+      backoff: 'exponential',
+      maxDelay: 120000, // Wait up to 2 minutes
+    },
+  },
+})
+```
+
+## Low Throughput
+
+### Symptom
+
+Bot is processing tasks slower than expected.
+
+### Common Causes
+
+1. **Low Concurrency**
+2. **Blocking Operations**
+3. **Network Latency**
+4. **Resource Constraints**
+
+### Solutions
+
+**Increase Concurrency**
+
+```typescript
+await bot.configure({
+  concurrency: 10, // Process 10 tasks simultaneously
+  batchSize: 50, // Fetch 50 tasks at a time
+})
+```
+
+**Enable Batching**
+
+```typescript
+const bot = await bot.create({
+  name: 'Batch Bot',
+  batching: {
+    enabled: true,
+    size: 100,
+    timeout: 5000,
+  },
+  handler: async (batch) => {
+    // Process all items in one operation
+    return await db.bulkInsert($.Item, batch)
+  },
+})
+```
+
+**Profile Performance**
+
+```typescript
+// Enable performance profiling
+const bot = await bot.create({
+  name: 'Profiled Bot',
+  profiling: {
+    enabled: true,
+    sampleRate: 0.1, // Profile 10% of requests
+  },
+})
+
+// Check metrics
+const metrics = await bot.getMetrics()
+console.log('Avg processing time:', metrics.avgProcessingTime)
+console.log('P95 latency:', metrics.p95Latency)
+```
+
+**Optimize Database Queries**
+
+```typescript
+// Bad: N+1 queries
+for (const item of items) {
+  await db.get($.Item, item.id) // Separate query for each!
+}
+
+// Good: Single query
+const itemIds = items.map((i) => i.id)
+const results = await db.list($.Item, {
+  where: { id: { in: itemIds } },
+})
+```
+
+## Memory Issues
+
+### Symptom
+
+Bot crashes with out-of-memory errors or memory usage grows over time.
+
+### Common Causes
+
+1. **Memory Leaks**
+2. **Large Batch Sizes**
+3. **Caching Too Much Data**
+4. **Event Listener Leaks**
+
+### Solutions
+
+**Monitor Memory Usage**
+
+```typescript
+const bot = await bot.create({
+  name: 'Monitored Bot',
+  monitoring: {
+    memory: {
+      enabled: true,
+      threshold: 500 * 1024 * 1024, // Alert at 500MB
+      interval: 60000, // Check every minute
+    },
+  },
+})
+
+// Check current usage
+const usage = await bot.getMemoryUsage()
+console.log('Memory:', usage.heapUsed / 1024 / 1024, 'MB')
+```
+
+**Reduce Batch Size**
+
+```typescript
+await bot.configure({
+  batchSize: 50, // Reduce from 100
+  concurrency: 5, // Reduce from 10
+})
+```
+
+**Implement Cache Limits**
+
+```typescript
+const bot = await bot.create({
+  name: 'Cached Bot',
+  caching: {
+    maxSize: 500, // Reduce from 1000
+    ttl: 1800, // Reduce from 3600
+    evictionPolicy: 'lru', // Evict least recently used
+  },
+})
+```
+
+**Clean Up Resources**
+
+```typescript
+const bot = await bot.create({
+  name: 'Clean Bot',
+  handler: async (task) => {
+    const connection = await getConnection()
+
+    try {
+      const result = await processTask(task, connection)
+      return result
+    } finally {
+      // Always clean up!
+      await connection.close()
+    }
+  },
+})
+```
+
+## Connection Issues
+
+### Symptom
+
+Bot fails to connect to databases, APIs, or other services.
+
+### Common Causes
+
+1. **Network Connectivity**
+2. **Invalid Credentials**
+3. **Firewall Rules**
+4. **Connection Pool Exhaustion**
+
+### Solutions
+
+**Test Connectivity**
+
+```typescript
+// Add health checks
+const bot = await bot.create({
+  name: 'Healthy Bot',
+  health: {
+    enabled: true,
+    checks: [
+      {
+        name: 'database',
+        check: async () => {
+          try {
+            await db.query('SELECT 1')
+            return true
+          } catch (error) {
+            console.error('Database health check failed:', error)
+            return false
+          }
+        },
+      },
+    ],
+  },
+})
+```
+
+**Configure Connection Pooling**
+
+```typescript
+const bot = await bot.create({
+  name: 'Pooled Bot',
+  connections: {
+    database: {
+      pool: {
+        min: 2,
+        max: 10,
+        acquireTimeout: 30000,
+        idleTimeout: 60000,
+      },
+    },
+  },
+})
+```
+
+**Add Retry Logic**
+
+```typescript
+const bot = await bot.create({
+  name: 'Resilient Bot',
+  errorHandling: {
+    retry: {
+      attempts: 3,
+      retryOn: ['CONNECTION_ERROR', 'TIMEOUT'],
+      backoff: 'exponential',
+    },
+  },
+})
+```
+
+## Event Handling Issues
+
+### Symptom
+
+Bot isn't receiving or processing events correctly.
+
+### Common Causes
+
+1. **Wrong Event Name**
+2. **Event Subscription Not Active**
+3. **Event Filter Too Restrictive**
+4. **Handler Errors**
+
+### Solutions
+
+**Verify Event Names**
+
+```typescript
+import $ from 'sdk.do'
+
+// Correct semantic event names
+await on($.Order.created, handler) // ✓ Correct
+await on('order.created', handler) // ✗ Wrong format
+```
+
+**Check Subscriptions**
+
+```typescript
+// List active subscriptions
+const subscriptions = await bot.getEventSubscriptions()
+console.log('Active subscriptions:', subscriptions)
+
+// Verify subscription is active
+const active = subscriptions.find((s) => s.event === '$.Order.created' && s.status === 'active')
+
+if (!active) {
+  console.error('Subscription not active!')
+}
+```
+
+**Debug Event Handler**
+
+```typescript
+await on($.Order.created, async (order) => {
+  console.log('Event received:', order)
+
+  try {
+    const result = await processOrder(order)
+    console.log('Event processed:', result)
+  } catch (error) {
+    console.error('Event handler failed:', error)
+    throw error // Re-throw for retry
+  }
+})
+```
+
+**Test Events Locally**
+
+```typescript
+import { send } from 'sdk.do'
+
+// Manually trigger event for testing
+await send($.Order.created, {
+  id: 'test-order-123',
+  customer: 'test@example.com',
+  total: 99.99,
+})
+```
+
+## Performance Degradation
+
+### Symptom
+
+Bot performance degrades over time.
+
+### Common Causes
+
+1. **Memory Leaks**
+2. **Growing Queue**
+3. **Database Fragmentation**
+4. **Cache Invalidation Issues**
+
+### Solutions
+
+**Monitor Trends**
+
+```typescript
+// Track performance over time
+const history = await bot.getMetricsHistory({
+  metrics: ['throughput', 'latency', 'memory'],
+  period: 'last_24_hours',
+})
+
+// Check for degradation
+const latencyTrend = calculateTrend(history.latency)
+if (latencyTrend === 'increasing') {
+  console.warn('Latency is trending up!')
+}
+```
+
+**Restart on Schedule**
+
+```typescript
+import { every } from 'sdk.do'
+
+// Restart bot daily to clear any leaks
+await every($.Daily, async () => {
+  await bot.restart({ graceful: true })
+})
+```
+
+**Clear Cache Periodically**
+
+```typescript
+import { every } from 'sdk.do'
+
+await every($.Hourly, async () => {
+  await bot.clearCache()
+})
+```
+
+## Debugging Tips
+
+### Enable Debug Logging
+
+```typescript
+const bot = await bot.create({
+  name: 'Debug Bot',
+  logging: {
+    level: 'debug',
+    includeContext: true,
+    includeTimestamp: true,
+  },
+})
+```
+
+### Use Distributed Tracing
+
+```typescript
+const bot = await bot.create({
+  name: 'Traced Bot',
+  tracing: {
+    enabled: true,
+    provider: 'opentelemetry',
+    sampleRate: 1.0, // 100% during debugging
+  },
+})
+```
+
+### Test in Isolation
+
+```typescript
+// Test bot handler without dependencies
+const mockHandler = async (input) => {
+  // Isolated logic
+  return { result: 'test' }
+}
+
+const testBot = await bot.create({
+  name: 'Test Bot',
+  handler: mockHandler,
+})
+
+// Test directly
+const result = await testBot.execute({ test: 'data' })
+console.log('Test result:', result)
+```
+
+### Check Bot Health
+
+```typescript
+// Comprehensive health check
+const health = await bot.getHealth()
+console.log('Health status:', health)
+// {
+//   status: 'healthy',
+//   uptime: 3600000,
+//   checks: {
+//     database: { status: 'pass' },
+//     api: { status: 'pass' },
+//     queue: { status: 'pass' }
+//   },
+//   metrics: {
+//     throughput: 100,
+//     errorRate: 0.01,
+//     latency: 234
+//   }
+// }
+```
+
+## Getting Help
+
+### Diagnostic Report
+
+Generate a diagnostic report:
+
+```typescript
+const report = await bot.getDiagnostics()
+console.log(JSON.stringify(report, null, 2))
+```
+
+### Support Channels
+
+- **Documentation**: [bots.do](https://bots.do)
+- **Community Forum**: [community.do](https://community.do)
+- **GitHub Issues**: [github.com/dot-do/platform/issues](https://github.com/dot-do/platform/issues)
+- **Discord**: [discord.gg/dotdo](https://discord.gg/dotdo)
+
+### Filing Bug Reports
+
+Include in your bug report:
+
+1. Bot configuration (sanitize secrets!)
+2. Error logs and stack traces
+3. Expected vs actual behavior
+4. Steps to reproduce
+5. Environment details (Node version, OS, etc.)
+6. Diagnostic report
+
+```typescript
+// Generate sanitized report
+const report = await bot.getDiagnostics({
+  sanitize: true, // Remove sensitive data
+  includeConfig: true,
+  includeLogs: true,
+  includeMetrics: true,
+})
+
+console.log('Bug report:', report)
+```
+
+## See Also
+
+- [Getting Started](./getting-started) - Basic bot setup
+- [Architecture](./architecture) - Bot architecture patterns
+- [Best Practices](./best-practices) - Development guidelines
+- [API Reference](../api/) - Complete API documentation
+
+---
+
+For more help, visit our [community forum](https://community.do) or [open an issue](https://github.com/dot-do/platform/issues).

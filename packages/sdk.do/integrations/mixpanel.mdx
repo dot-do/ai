@@ -1,0 +1,524 @@
+---
+$id: https://integrations.do/mixpanel
+$type: Integration
+name: Mixpanel
+service: mixpanel
+description: Product analytics platform for tracking user behavior and engagement
+category: analytics
+sdkBased: true
+sdkPackage: 'mixpanel'
+sdkVersion: ^0.18.0
+sdkImport: init
+
+auth:
+  type: api-key
+  location: header
+  headerName: Authorization
+  scheme: Bearer
+
+resources:
+  - name: Event
+    plural: Events
+    description: Track user events
+    operations:
+      - name: track
+        method: POST
+        path: /track
+        params:
+          - name: distinct_id
+            type: string
+            required: true
+            description: Unique user identifier
+          - name: event
+            type: string
+            required: true
+            description: Event name
+          - name: properties
+            type: object
+            required: false
+            description: Event properties
+          - name: ip
+            type: string
+            required: false
+            description: IP address for geolocation
+        returns: Event
+
+      - name: import
+        method: POST
+        path: /import
+        params:
+          - name: distinct_id
+            type: string
+            required: true
+            description: Unique user identifier
+          - name: event
+            type: string
+            required: true
+            description: Event name
+          - name: time
+            type: number
+            required: true
+            description: Unix timestamp
+          - name: properties
+            type: object
+            required: false
+            description: Event properties
+        returns: Event
+
+  - name: User
+    plural: Users
+    description: Manage user profiles
+    operations:
+      - name: set
+        method: POST
+        path: /engage
+        params:
+          - name: distinct_id
+            type: string
+            required: true
+            description: Unique user identifier
+          - name: properties
+            type: object
+            required: true
+            description: User properties to set
+          - name: ip
+            type: string
+            required: false
+            description: IP address
+        returns: User
+
+      - name: increment
+        method: POST
+        path: /engage
+        params:
+          - name: distinct_id
+            type: string
+            required: true
+            description: Unique user identifier
+          - name: properties
+            type: object
+            required: true
+            description: Properties to increment
+        returns: User
+
+      - name: append
+        method: POST
+        path: /engage
+        params:
+          - name: distinct_id
+            type: string
+            required: true
+            description: Unique user identifier
+          - name: properties
+            type: object
+            required: true
+            description: Properties to append to lists
+        returns: User
+
+      - name: delete
+        method: POST
+        path: /engage
+        params:
+          - name: distinct_id
+            type: string
+            required: true
+            description: Unique user identifier
+        returns: boolean
+
+  - name: Cohort
+    plural: Cohorts
+    description: Manage user cohorts
+    operations:
+      - name: get
+        method: GET
+        path: /cohorts/list
+        params:
+          - name: project_id
+            type: number
+            required: true
+            description: Project ID
+        returns: Cohort[]
+
+      - name: list
+        method: GET
+        path: /cohorts/list
+        params:
+          - name: project_id
+            type: number
+            required: true
+            description: Project ID
+        returns: Cohort[]
+
+  - name: Report
+    plural: Reports
+    description: Query analytics reports
+    operations:
+      - name: insights
+        method: GET
+        path: /insights
+        params:
+          - name: project_id
+            type: number
+            required: true
+            description: Project ID
+          - name: from_date
+            type: string
+            required: true
+            description: Start date (YYYY-MM-DD)
+          - name: to_date
+            type: string
+            required: true
+            description: End date (YYYY-MM-DD)
+          - name: event
+            type: string
+            required: true
+            description: Event name
+        returns: Report
+
+      - name: funnels
+        method: GET
+        path: /funnels
+        params:
+          - name: project_id
+            type: number
+            required: true
+            description: Project ID
+          - name: from_date
+            type: string
+            required: true
+            description: Start date (YYYY-MM-DD)
+          - name: to_date
+            type: string
+            required: true
+            description: End date (YYYY-MM-DD)
+          - name: funnel_id
+            type: number
+            required: true
+            description: Funnel ID
+        returns: Report
+
+webhooks:
+  enabled: true
+  signatureHeader: X-Mixpanel-Signature
+  signatureAlgorithm: sha1
+  verificationMethod: signature
+  events:
+    - name: cohort.updated
+      type: cohort.updated
+      description: Cohort membership updated
+    - name: cohort.synced
+      type: cohort.synced
+      description: Cohort synced to destination
+
+errors:
+  mapping:
+    - code: invalid_token
+      type: authentication
+      statusCode: 401
+      message: Invalid project token
+      retryable: false
+    - code: forbidden
+      type: authorization
+      statusCode: 403
+      message: Forbidden
+      retryable: false
+    - code: invalid_request
+      type: validation
+      statusCode: 400
+      message: Invalid request parameters
+      retryable: false
+    - code: rate_limit
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+    - code: server_error
+      type: server
+      statusCode: 500
+      message: Internal server error
+      retryable: true
+  retryable: [rate_limit, server_error, 429, 500, 503]
+  nonRetryable: [invalid_token, forbidden, invalid_request, 401, 403, 400]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Event Tracking
+      description: Test event tracking operations
+      steps:
+        - action: custom
+          resource: Event
+
+    - name: User Profile Operations
+      description: Test user profile management
+      steps:
+        - action: custom
+          resource: User
+
+    - name: Cohort Operations
+      description: Test cohort retrieval
+      steps:
+        - action: list
+          resource: Cohort
+
+    - name: Report Operations
+      description: Test analytics queries
+      steps:
+        - action: custom
+          resource: Report
+
+    - name: Webhook Verification
+      description: Test webhook signature verification
+      steps:
+        - action: assert
+          expects:
+            status: 200
+
+docs:
+  homepage: https://mixpanel.com
+  apiDocs: https://developer.mixpanel.com/reference/overview
+  sdkDocs: https://github.com/mixpanel/mixpanel-node
+  guides:
+    quickstart: https://docs.mixpanel.com/docs/quickstart/install-mixpanel
+    webhooks: https://docs.mixpanel.com/docs/cohort-sync/webhooks
+    authentication: https://docs.mixpanel.com/docs/tracking-methods/sdks/nodejs
+---
+
+# Mixpanel Integration
+
+Mixpanel is a product analytics platform that helps you understand how users interact with your product through event tracking and behavioral analytics.
+
+## Features
+
+- **Event Tracking**: Track user actions and behaviors
+- **User Profiles**: Manage user profile properties
+- **Cohorts**: Segment users based on behavior
+- **Reports**: Query analytics data (Insights, Funnels, Retention)
+- **Import API**: Import historical events
+- **Webhooks**: Receive cohort sync notifications
+
+## Quick Start
+
+```typescript
+import { MixpanelClient } from '@dotdo/sdk.do/integrations/mixpanel'
+
+const mixpanel = new MixpanelClient({
+  apiKey: process.env.MIXPANEL_TOKEN,
+})
+
+// Track an event
+await mixpanel.event.track({
+  distinct_id: 'user123',
+  event: 'Button Clicked',
+  properties: {
+    button: 'signup',
+    page: 'homepage',
+    plan: 'pro',
+  },
+})
+
+// Set user properties
+await mixpanel.user.set({
+  distinct_id: 'user123',
+  properties: {
+    $name: 'John Doe',
+    $email: 'john@example.com',
+    plan: 'pro',
+  },
+})
+```
+
+## Authentication
+
+Mixpanel uses project token authentication:
+
+```bash
+export MIXPANEL_TOKEN=your_project_token
+```
+
+## Resources
+
+### Events
+
+Track user events:
+
+```typescript
+// Track real-time event
+await mixpanel.event.track({
+  distinct_id: 'user123',
+  event: 'Product Purchased',
+  properties: {
+    product: 'Pro Plan',
+    revenue: 99.0,
+    currency: 'USD',
+  },
+})
+
+// Track with IP for geolocation
+await mixpanel.event.track({
+  distinct_id: 'user123',
+  event: 'Page Viewed',
+  properties: {
+    page: '/pricing',
+  },
+  ip: '192.168.1.1',
+})
+
+// Import historical event (> 5 days old)
+await mixpanel.event.import({
+  distinct_id: 'user123',
+  event: 'Account Created',
+  time: 1698023982, // Unix timestamp
+  properties: {
+    plan: 'free',
+  },
+})
+```
+
+### Users
+
+Manage user profiles:
+
+```typescript
+// Set user properties
+await mixpanel.user.set({
+  distinct_id: 'user123',
+  properties: {
+    $name: 'Jane Smith',
+    $email: 'jane@example.com',
+    company: 'Acme Inc',
+    plan: 'enterprise',
+    signupDate: '2025-01-01',
+  },
+})
+
+// Increment numeric properties
+await mixpanel.user.increment({
+  distinct_id: 'user123',
+  properties: {
+    logins: 1,
+    purchases: 1,
+  },
+})
+
+// Append to list properties
+await mixpanel.user.append({
+  distinct_id: 'user123',
+  properties: {
+    interests: 'technology',
+  },
+})
+
+// Delete user profile
+await mixpanel.user.delete({
+  distinct_id: 'user123',
+})
+```
+
+### Cohorts
+
+Retrieve cohorts:
+
+```typescript
+// List all cohorts
+const cohorts = await mixpanel.cohort.list({
+  project_id: 123456,
+})
+
+// Get specific cohort
+const cohort = await mixpanel.cohort.get({
+  project_id: 123456,
+})
+```
+
+### Reports
+
+Query analytics reports:
+
+```typescript
+// Insights query
+const insights = await mixpanel.report.insights({
+  project_id: 123456,
+  from_date: '2025-01-01',
+  to_date: '2025-01-31',
+  event: 'Product Purchased',
+})
+
+// Funnel analysis
+const funnel = await mixpanel.report.funnels({
+  project_id: 123456,
+  from_date: '2025-01-01',
+  to_date: '2025-01-31',
+  funnel_id: 789,
+})
+```
+
+## Webhooks
+
+Mixpanel supports webhooks for cohort sync with SHA-1 HMAC signature verification:
+
+```typescript
+import { MixpanelWebhookHandler, WebhookEventRouter } from '@dotdo/sdk.do/integrations/mixpanel'
+
+const handler = new MixpanelWebhookHandler(process.env.MIXPANEL_WEBHOOK_SECRET)
+const event = await handler.handleRequest(request)
+
+const router = new WebhookEventRouter()
+router.onCohortUpdated(async (event) => {
+  console.log('Cohort updated:', event.data)
+})
+
+router.onCohortSynced(async (event) => {
+  console.log('Cohort synced:', event.data)
+})
+
+await router.route(event)
+```
+
+## Error Handling
+
+```typescript
+import { MixpanelError } from '@dotdo/sdk.do/integrations/mixpanel'
+
+try {
+  await mixpanel.event.track({
+    /* ... */
+  })
+} catch (error) {
+  if (error instanceof MixpanelError) {
+    console.error('Mixpanel Error:', error.code, error.message)
+    if (error.isRetriable()) {
+      // Retry logic
+    }
+  }
+}
+```
+
+## Best Practices
+
+1. **User Identification**: Always provide consistent distinct_id for users
+2. **Event Names**: Use clear, descriptive event names (e.g., "Product Purchased")
+3. **Properties**: Include relevant context in event and user properties
+4. **Special Properties**: Use Mixpanel's special properties (prefixed with $)
+5. **Timestamps**: Use Unix timestamps for historical imports
+6. **Rate Limits**: Be aware of API rate limits (60 queries/hour for export API)
+
+## Special Properties
+
+Mixpanel recognizes special properties prefixed with `$`:
+
+- `$name` - User name
+- `$email` - User email
+- `$phone` - User phone number
+- `$created` - User creation timestamp
+- `$ip` - IP address (for geolocation)
+- `$city`, `$region`, `$country` - Location properties
+
+## API Reference
+
+Full API documentation: https://developer.mixpanel.com/reference/overview
+
+## License
+
+MIT

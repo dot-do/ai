@@ -1,0 +1,639 @@
+---
+$id: https://agents.do/examples/sales-agent
+$type: HowTo
+title: Sales Agent Example - SDR/BDR
+description: Build an autonomous Sales Development Representative agent that qualifies leads and books meetings
+keywords: [sales agent, SDR agent, BDR agent, sales automation, lead qualification, autonomous sales]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Sales Agent Example - SDR/BDR
+
+Build an autonomous Sales Development Representative (SDR) agent that researches leads, sends personalized outreach, qualifies prospects, and books meetings.
+
+## Overview
+
+This example creates a complete SDR agent that:
+
+1. **Researches** companies and decision makers
+2. **Qualifies** leads based on fit criteria
+3. **Personalizes** outreach based on insights
+4. **Sends** emails with appropriate follow-up cadence
+5. **Qualifies** responses and interest level
+6. **Books** discovery meetings with qualified prospects
+7. **Updates** CRM with all activities
+
+## The Sales Agent
+
+```typescript
+import $, { agent, db, on, send } from 'sdk.do'
+
+// Create SDR agent with persona
+const sarahSDR = await agent.create({
+  // Identity
+  $type: 'Agent',
+  $id: 'https://example.com/agents/sarah-sdr',
+  name: 'Sarah Chen',
+  role: 'Sales Development Representative',
+
+  // Persona
+  persona: {
+    background: `
+      Former tech recruiter with 5 years in B2B SaaS sales.
+      Consistently exceeded quota by 120% through consultative approach.
+      Specialized in enterprise accounts in healthcare and fintech verticals.
+    `,
+    expertise: ['lead qualification', 'cold outreach', 'discovery calls', 'objection handling', 'MEDDIC methodology', 'multi-threading'],
+    style: 'consultative, relationship-focused, data-driven, proactive',
+    communication: {
+      tone: 'professional yet personable',
+      approach: 'value-focused, insight-led',
+      format: 'concise with clear call-to-action',
+      preferences: [
+        'leads with relevant insights and data',
+        'asks discovery questions to uncover needs',
+        'focuses on business outcomes over features',
+        'maintains persistent but respectful follow-up',
+      ],
+    },
+    values: [
+      'Build trust through demonstrated expertise',
+      'Qualify rigorously to respect everyones time',
+      'Focus on customer outcomes over quota',
+      'Follow up consistently and promptly',
+      'Maintain detailed notes and context',
+    ],
+  },
+
+  // Goals with metrics
+  goals: [
+    {
+      $type: 'Goal',
+      name: 'Qualify Leads',
+      description: 'Research and qualify inbound and outbound leads',
+      target: {
+        metric: 'leads_qualified',
+        value: 20,
+        period: 'week',
+      },
+      priority: 'high',
+    },
+    {
+      $type: 'Goal',
+      name: 'Book Meetings',
+      description: 'Schedule discovery calls with qualified leads',
+      target: {
+        metric: 'meetings_booked',
+        value: 10,
+        period: 'week',
+      },
+      priority: 'high',
+    },
+    {
+      $type: 'Goal',
+      name: 'Meeting Show Rate',
+      description: 'Maintain high meeting attendance rate',
+      target: {
+        metric: 'show_rate',
+        value: 0.5,
+        period: 'week',
+      },
+      priority: 'medium',
+    },
+    {
+      $type: 'Goal',
+      name: 'Response Rate',
+      description: 'Achieve high email response rate',
+      target: {
+        metric: 'response_rate',
+        value: 0.15,
+        period: 'month',
+      },
+      priority: 'medium',
+    },
+  ],
+
+  // Capabilities
+  capabilities: [
+    'company_research',
+    'contact_discovery',
+    'lead_qualification',
+    'personalized_outreach',
+    'follow_up_management',
+    'discovery_calls',
+    'meeting_scheduling',
+    'objection_handling',
+    'crm_management',
+  ],
+
+  // Tools
+  tools: {
+    // Email tool
+    email: {
+      $type: 'Tool',
+      name: 'email',
+      description: 'Send and manage personalized emails',
+      functions: {
+        send: async (params: { to: string; subject: string; body: string; cc?: string[] }) => {
+          const result = await sendEmail(params)
+          await logActivity('email_sent', params)
+          return result
+        },
+        read: async (id: string) => {
+          return await getEmail(id)
+        },
+        trackOpen: async (emailId: string) => {
+          return await getEmailMetrics(emailId)
+        },
+      },
+    },
+
+    // CRM tool
+    crm: {
+      $type: 'Tool',
+      name: 'crm',
+      description: 'Manage leads and track activities',
+      functions: {
+        createLead: async (data: any) => {
+          return await db.create($.Lead, data)
+        },
+        updateLead: async (id: string, data: any) => {
+          return await db.update($.Lead, id, data)
+        },
+        getLead: async (id: string) => {
+          return await db.get($.Lead, id)
+        },
+        logActivity: async (leadId: string, activity: any) => {
+          return await db.create($.Activity, { lead: leadId, ...activity })
+        },
+        getActivities: async (leadId: string) => {
+          return await db.list($.Activity, { where: { lead: leadId } })
+        },
+      },
+    },
+
+    // Calendar tool
+    calendar: {
+      $type: 'Tool',
+      name: 'calendar',
+      description: 'Schedule and manage meetings',
+      functions: {
+        checkAvailability: async (date: string) => {
+          return await getAvailability(date)
+        },
+        bookMeeting: async (params: any) => {
+          return await createMeeting(params)
+        },
+        sendInvite: async (meetingId: string, attendees: string[]) => {
+          return await sendCalendarInvite(meetingId, attendees)
+        },
+      },
+    },
+
+    // Research tool
+    research: {
+      $type: 'Tool',
+      name: 'research',
+      description: 'Research companies and contacts',
+      functions: {
+        companyProfile: async (company: string) => {
+          return await getCompanyProfile(company)
+        },
+        findDecisionMakers: async (company: string, role: string) => {
+          return await findContacts(company, role)
+        },
+        getNews: async (company: string) => {
+          return await getCompanyNews(company)
+        },
+        getTechStack: async (company: string) => {
+          return await getTechStack(company)
+        },
+      },
+    },
+
+    // LinkedIn tool
+    linkedin: {
+      $type: 'Tool',
+      name: 'linkedin',
+      description: 'Research prospects on LinkedIn',
+      functions: {
+        getProfile: async (url: string) => {
+          return await getLinkedInProfile(url)
+        },
+        getCompanyPage: async (company: string) => {
+          return await getLinkedInCompany(company)
+        },
+        findConnections: async (name: string, company: string) => {
+          return await findLinkedInConnections(name, company)
+        },
+      },
+    },
+  },
+
+  // AI model configuration
+  model: 'claude-sonnet-4.5',
+  temperature: 0.7,
+  reasoning: {
+    strategy: 'deliberative',
+    planning_depth: 3,
+    self_reflection: true,
+  },
+
+  // Memory configuration
+  memory: {
+    short_term: {
+      enabled: true,
+      capacity: 10000,
+    },
+    long_term: {
+      enabled: true,
+      storage: 'database',
+      indexing: 'semantic',
+    },
+    episodic: {
+      enabled: true,
+      retention: '90_days',
+      max_entries: 1000,
+    },
+  },
+})
+
+// Configure agent behavior
+await sarahSDR.configure({
+  autonomy: 'supervised', // Require approval for sending emails
+  approval_required: ['send_email', 'book_meeting'],
+  notifications: ['lead_qualified', 'email_responded', 'meeting_booked', 'task_complete', 'approval_required'],
+  error_handling: {
+    retry: { attempts: 3, backoff: 'exponential' },
+    fallback: 'escalate_to_human',
+    notification: true,
+  },
+  rate_limits: {
+    emails_per_day: 50,
+    linkedin_searches_per_hour: 20,
+  },
+})
+```
+
+## Lead Processing Workflow
+
+### 1. Receive New Lead
+
+```typescript
+// Listen for new leads
+on($.Lead.created, async (lead) => {
+  console.log(`New lead: ${lead.company}`)
+
+  // Agent processes lead
+  await sarahSDR.execute({
+    task: 'process_new_lead',
+    input: lead,
+  })
+})
+```
+
+### 2. Research Company
+
+```typescript
+// Agent researches company
+const companyResearch = async (company: string) => {
+  // Gather comprehensive company intel
+  const [profile, news, techStack, decisionMakers] = await Promise.all([
+    sarahSDR.tool.research.companyProfile(company),
+    sarahSDR.tool.research.getNews(company),
+    sarahSDR.tool.research.getTechStack(company),
+    sarahSDR.tool.research.findDecisionMakers(company, 'CTO,VP Engineering'),
+  ])
+
+  return {
+    profile,
+    news,
+    techStack,
+    decisionMakers,
+    insights: await analyzeResearch({ profile, news, techStack }),
+  }
+}
+```
+
+### 3. Qualify Lead
+
+```typescript
+// Agent qualifies lead
+const qualificationResult = await sarahSDR.execute({
+  task: 'qualify_lead',
+  input: {
+    lead: leadData,
+    research: companyResearch,
+  },
+  qualification_criteria: {
+    // Must-haves
+    company_size: { min: 50, max: 5000 },
+    industry: ['SaaS', 'Technology', 'Fintech'],
+    revenue: { min: 5000000 }, // $5M+
+
+    // Good-to-haves (scored)
+    tech_stack_match: { tools: ['Docker', 'Kubernetes', 'AWS'], weight: 0.3 },
+    growth_signals: { signals: ['funding', 'hiring', 'expansion'], weight: 0.3 },
+    pain_indicators: { indicators: ['manual_deployments', 'downtime'], weight: 0.4 },
+  },
+})
+
+// Result structure
+// {
+//   qualified: true,
+//   score: 85,
+//   tier: 'high_priority',
+//   reasoning: {
+//     fit: 'Excellent fit - enterprise SaaS with strong tech stack',
+//     signals: ['Recent Series B', 'Hiring 10+ engineers', 'Using Docker/K8s'],
+//     pain_points: ['Manual deployment process', 'Frequent downtime'],
+//     opportunity: 'Can reduce deployment time by 80% and eliminate downtime'
+//   },
+//   recommended_action: 'personalized_outreach',
+//   decision_maker: {
+//     name: 'John Doe',
+//     title: 'CTO',
+//     linkedin: 'linkedin.com/in/johndoe'
+//   }
+// }
+```
+
+### 4. Personalized Outreach
+
+```typescript
+// Agent crafts personalized email
+const email = await sarahSDR.execute({
+  task: 'craft_outreach_email',
+  input: {
+    lead: leadData,
+    research: companyResearch,
+    qualification: qualificationResult,
+  },
+  guidelines: {
+    tone: 'professional yet personable',
+    length: 'concise (under 150 words)',
+    structure: 'insight → pain point → value prop → clear CTA',
+    personalization: 'high (reference specific company details)',
+    cta: 'single clear next step',
+  },
+})
+
+// Example generated email:
+// Subject: Quick question about [Company]'s deployment process
+//
+// Hi John,
+//
+// Congrats on the Series B! Noticed you're scaling the engineering
+// team significantly.
+//
+// I work with CTOs at SaaS companies using Docker/K8s who are
+// struggling with manual deployments as they scale. Most tell me
+// it's costing them 10-15 hours per week and causing unnecessary
+// downtime.
+//
+// We've helped companies like [Similar Company] reduce deployment
+// time by 80% and eliminate deployment-related incidents entirely.
+//
+// Worth a quick chat to see if we could help [Company] as you scale?
+//
+// Best,
+// Sarah
+
+// Request approval to send
+await sarahSDR.requestApproval({
+  action: 'send_email',
+  to: 'john@acme.com',
+  subject: email.subject,
+  body: email.body,
+  context: {
+    lead_score: 85,
+    tier: 'high_priority',
+    personalization_quality: 'high',
+  },
+})
+```
+
+### 5. Follow-up Sequence
+
+```typescript
+// Agent manages follow-up cadence
+const followUpSequence = {
+  $type: 'EmailSequence',
+  emails: [
+    { day: 0, template: 'initial_outreach' },
+    { day: 3, template: 'value_add_follow_up', condition: 'no_response' },
+    { day: 7, template: 'case_study_share', condition: 'no_response' },
+    { day: 14, template: 'final_touch', condition: 'no_response' },
+    { day: 30, template: 'breakup_email', condition: 'no_response' },
+  ],
+}
+
+// Agent automatically schedules follow-ups
+await sarahSDR.execute({
+  task: 'schedule_follow_up_sequence',
+  input: {
+    lead: leadData,
+    sequence: followUpSequence,
+  },
+})
+```
+
+### 6. Handle Response
+
+```typescript
+// Listen for email responses
+on($.Email.received, async (email) => {
+  if (email.from === 'john@acme.com') {
+    // Agent analyzes response
+    const analysis = await sarahSDR.execute({
+      task: 'analyze_response',
+      input: {
+        email: email,
+        lead: leadData,
+      },
+    })
+
+    // {
+    //   sentiment: 'positive',
+    //   interest_level: 'high',
+    //   intent: 'schedule_call',
+    //   pain_points_mentioned: ['deployment time', 'downtime'],
+    //   objections: [],
+    //   recommended_action: 'schedule_discovery_call'
+    // }
+
+    if (analysis.intent === 'schedule_call') {
+      await sarahSDR.execute({
+        task: 'schedule_discovery_call',
+        input: {
+          lead: leadData,
+          response: analysis,
+        },
+      })
+    }
+  }
+})
+```
+
+### 7. Schedule Meeting
+
+```typescript
+// Agent books discovery call
+const meeting = await sarahSDR.execute({
+  task: 'book_discovery_call',
+  input: {
+    lead: leadData,
+    duration: 30,
+    preferred_times: 'weekday_afternoons',
+  },
+})
+
+// Agent sends calendar invite with prep materials
+await sarahSDR.tool.calendar.bookMeeting({
+  title: 'Discovery Call - Acme Corp',
+  participants: ['sarah@company.com', 'john@acme.com'],
+  duration: 30,
+  datetime: meeting.datetime,
+  location: 'Zoom',
+  agenda: `
+    1. Learn about Acme's deployment process (10 min)
+    2. Discuss pain points and goals (10 min)
+    3. Share how we can help (5 min)
+    4. Next steps (5 min)
+  `,
+  prep_materials: ['Case study: Similar Company', 'Product overview deck', 'ROI calculator'],
+})
+
+// Update CRM
+await sarahSDR.tool.crm.updateLead(leadData.id, {
+  status: 'meeting_scheduled',
+  meeting_date: meeting.datetime,
+  stage: 'qualification',
+})
+```
+
+## Complete Workflow Example
+
+```typescript
+// End-to-end lead processing
+async function processLead(lead: Lead) {
+  // Step 1: Research
+  console.log('Researching company...')
+  const research = await sarahSDR.execute({
+    task: 'research_company',
+    input: { company: lead.company },
+  })
+
+  // Step 2: Qualify
+  console.log('Qualifying lead...')
+  const qualification = await sarahSDR.execute({
+    task: 'qualify_lead',
+    input: { lead, research },
+  })
+
+  if (!qualification.qualified) {
+    console.log('Lead not qualified')
+    await sarahSDR.tool.crm.updateLead(lead.id, {
+      status: 'disqualified',
+      reason: qualification.reasoning,
+    })
+    return
+  }
+
+  // Step 3: Craft outreach
+  console.log('Crafting personalized email...')
+  const email = await sarahSDR.execute({
+    task: 'craft_outreach_email',
+    input: { lead, research, qualification },
+  })
+
+  // Step 4: Request approval and send
+  console.log('Requesting approval...')
+  const approved = await sarahSDR.requestApproval({
+    action: 'send_email',
+    email: email,
+  })
+
+  if (approved) {
+    await sarahSDR.tool.email.send(email)
+    await sarahSDR.tool.crm.logActivity(lead.id, {
+      type: 'email_sent',
+      subject: email.subject,
+      timestamp: new Date(),
+    })
+    console.log('Email sent!')
+  }
+
+  // Step 5: Schedule follow-ups
+  await sarahSDR.execute({
+    task: 'schedule_follow_up_sequence',
+    input: { lead },
+  })
+
+  console.log('Lead processing complete')
+}
+
+// Process new lead
+await processLead({
+  id: 'lead-123',
+  company: 'Acme Corp',
+  contact: 'John Doe',
+  email: 'john@acme.com',
+  source: 'whitepaper_download',
+  created_at: new Date(),
+})
+```
+
+## Performance Monitoring
+
+```typescript
+// Monitor Sarah's performance
+const metrics = await sarahSDR.getMetrics({
+  timeframe: 'last_30_days',
+})
+
+console.log(metrics)
+// {
+//   leads_processed: 120,
+//   leads_qualified: 85,
+//   qualification_rate: 0.71,
+//
+//   emails_sent: 340,
+//   emails_opened: 170,
+//   open_rate: 0.50,
+//   emails_responded: 51,
+//   response_rate: 0.15,
+//
+//   meetings_booked: 42,
+//   meetings_held: 38,
+//   show_rate: 0.90,
+//
+//   avg_lead_processing_time: 15_000, // 15 seconds
+//   avg_email_craft_time: 8_000,
+//
+//   goal_progress: {
+//     'Qualify Leads': { current: 85, target: 80, status: 'ahead' },
+//     'Book Meetings': { current: 42, target: 40, status: 'ahead' },
+//     'Meeting Show Rate': { current: 0.90, target: 0.50, status: 'ahead' },
+//     'Response Rate': { current: 0.15, target: 0.15, status: 'on_track' }
+//   }
+// }
+```
+
+## Next Steps
+
+- [Multi-Agent Example](./multi-agent) - Multiple agents working together
+- [Agent Communication](../docs/agent-communication) - Agent-to-agent patterns
+- [API Reference](../api/) - Complete API documentation
+
+## See Also
+
+- [Basic Agent Example](./basic-agent)
+- [Creating Agents](../docs/creating-agents)
+- [Getting Started](../docs/getting-started)
+
+---
+
+This sales agent demonstrates how to build autonomous digital workers that can handle complex, multi-step workflows. Next, see how multiple agents can collaborate in the [Multi-Agent Example](./multi-agent).

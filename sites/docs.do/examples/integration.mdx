@@ -1,0 +1,99 @@
+---
+$id: https://docs.do/examples/integration
+$type: HowTo
+title: Integration Example - docs.do
+description: Integrate docs.do with your application and other platforms
+keywords: [integration, api, webhook, plugins]
+---
+
+# Integration Example
+
+Integrate docs.do into your application and workflows.
+
+## Web Application Integration
+
+```typescript
+import { docs } from 'docs.do'
+import express from 'express'
+
+const app = express()
+
+// Search endpoint
+app.get('/api/search', async (req, res) => {
+  const { q, domain, limit = 20 } = req.query
+
+  const results = await docs.search(q, {
+    domains: domain ? [domain] : undefined,
+    limit: parseInt(limit),
+  })
+
+  res.json({ results })
+})
+
+// Document endpoint
+app.get('/api/docs/:domain/:slug', async (req, res) => {
+  const { domain, slug } = req.params
+  const { version } = req.query
+
+  const doc = await docs.get(`${domain}/${slug}`, { version })
+
+  if (!doc) {
+    return res.status(404).json({ error: 'Not found' })
+  }
+
+  res.json({ doc })
+})
+
+// Analytics tracking
+app.post('/api/track', async (req, res) => {
+  const { event, data } = req.body
+
+  await docs.track(event, {
+    ...data,
+    timestamp: new Date(),
+  })
+
+  res.json({ success: true })
+})
+
+app.listen(3000)
+```
+
+## CLI Integration
+
+```typescript
+import { docs } from 'docs.do'
+import { Command } from 'commander'
+
+const program = new Command()
+
+program
+  .command('search <query>')
+  .option('-d, --domain <domain>', 'Filter by domain')
+  .action(async (query, options) => {
+    const results = await docs.search(query, {
+      domains: options.domain ? [options.domain] : undefined,
+    })
+
+    results.forEach((r) => {
+      console.log(`${r.title} (${r.domain})`)
+      console.log(`  ${r.url}`)
+    })
+  })
+
+program.command('create <file>').action(async (file) => {
+  const content = await readFile(file, 'utf-8')
+  const parsed = await docs.parse(content, { format: 'markdown' })
+
+  const doc = await docs.create($.TechArticle, parsed)
+  console.log(`Created: ${doc.$id}`)
+})
+
+program.parse()
+```
+
+## See Also
+
+- [Basic Usage](./basic-usage)
+- [Advanced Patterns](./advanced-patterns)
+- [Real-World Use Case](./real-world-use-case)

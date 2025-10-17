@@ -1,0 +1,442 @@
+---
+$type: BusinessEvent
+$id: https://events.org.ai/OrderShipped
+$context: https://schema.org
+name: Order Shipped
+description: Business event triggered when an order leaves the warehouse or distribution center for delivery to the customer
+eventType: Shipping
+eventCategory: Logistics
+businessStep: Shipping
+disposition: In Transit
+epcisEventType: ObjectEvent
+action: OBSERVE
+license: CC-BY-4.0
+source: gs1.org
+---
+
+# Order Shipped Event
+
+The Order Shipped event is triggered when an order transitions from warehouse/fulfillment status to in-transit status, representing the physical movement of goods from seller to buyer.
+
+## Event Classification
+
+**Type**: Shipping Event
+**Category**: Logistics & Supply Chain
+**GS1 EPCIS**: ObjectEvent with OBSERVE action
+
+## 5W+H Model (GS1 EPCIS)
+
+### What (Objects/Entities)
+
+**Primary Object**: The order being shipped
+
+```typescript
+{
+  $type: 'Order',
+  $id: 'https://commerce.do/orders/ORD-12345',
+  orderNumber: 'ORD-12345',
+  items: [
+    { productId: 'PROD-001', quantity: 2 },
+    { productId: 'PROD-002', quantity: 1 }
+  ]
+}
+```
+
+**Related Objects**:
+- Package/Shipment ($.Package)
+- Carrier ($.Carrier)
+- Tracking information ($.TrackingInfo)
+
+### When (Temporal)
+
+```typescript
+{
+  eventTime: '2024-10-16T14:30:00Z',
+  eventTimeZone: 'America/Los_Angeles',
+  recordTime: '2024-10-16T14:30:05Z'
+}
+```
+
+**Key Timestamps**:
+- Order placed
+- Order confirmed
+- **Order shipped** ← This event
+- In transit
+- Out for delivery
+- Delivered
+
+### Where (Location)
+
+```typescript
+{
+  // Read Point - Where event was observed
+  readPoint: {
+    $id: 'https://locations.do/warehouses/SF-MAIN',
+    $type: 'Warehouse',
+    address: '123 Warehouse St, San Francisco, CA'
+  },
+
+  // Business Location - Current location
+  bizLocation: {
+    $id: 'https://locations.do/warehouses/SF-MAIN/dock-3',
+    $type: 'ShippingDock'
+  },
+
+  // Destination - Where it's going
+  destination: {
+    $id: 'https://locations.do/addresses/CUST-789',
+    $type: 'CustomerAddress'
+  }
+}
+```
+
+### Who (Actors)
+
+```typescript
+{
+  // Primary actor - Who performed the action
+  actor: {
+    $id: 'https://platform.do/users/warehouse-clerk-42',
+    $type: 'WarehouseClerk',
+    name: 'John Smith'
+  },
+
+  // Owner - Who owns the goods
+  owner: {
+    $id: 'https://platform.do/companies/acme-corp',
+    $type: 'Organization'
+  },
+
+  // Customer - End recipient
+  customer: {
+    $id: 'https://platform.do/customers/CUST-789',
+    $type: 'Customer'
+  },
+
+  // Carrier - Transport provider
+  carrier: {
+    $id: 'https://carriers.do/fedex',
+    $type: 'Carrier',
+    name: 'FedEx'
+  }
+}
+```
+
+### Why (Business Context)
+
+```typescript
+{
+  businessStep: 'Shipping',
+  disposition: 'In Transit',
+
+  // Business transaction
+  businessTransaction: {
+    $id: 'https://commerce.do/orders/ORD-12345',
+    type: 'Purchase Order'
+  },
+
+  // Source
+  source: {
+    $id: 'https://locations.do/warehouses/SF-MAIN',
+    type: 'Possessing Party'
+  },
+
+  // Destination
+  destination: {
+    $id: 'https://locations.do/addresses/CUST-789',
+    type: 'Owning Party'
+  }
+}
+```
+
+### How (Process & Technology)
+
+```typescript
+{
+  // Process that triggered event
+  process: {
+    $id: 'https://process.org.ai/OrderFulfillment',
+    $type: 'BusinessProcess',
+    step: 'Shipping'
+  },
+
+  // Technology used
+  technology: {
+    shipping: {
+      $id: 'https://tech.org.ai/ShipStation',
+      $type: 'Technology'
+    },
+    scanner: {
+      $id: 'https://tools.org.ai/BarcodeScanner',
+      $type: 'Tool'
+    },
+    wms: {
+      $id: 'https://tech.org.ai/WarehouseManagementSystem',
+      $type: 'Technology'
+    }
+  },
+
+  // Method
+  shippingMethod: 'Ground',
+  serviceLevel: 'Standard',
+
+  // Tracking
+  tracking: {
+    carrier: 'FedEx',
+    trackingNumber: '1234567890',
+    trackingUrl: 'https://fedex.com/track/1234567890'
+  }
+}
+```
+
+## Semantic Relationships
+
+### Triggered By
+
+- Order confirmed ($.Event:OrderConfirmed)
+- Inventory allocated ($.Event:InventoryAllocated)
+- Package prepared ($.Event:PackagePrepared)
+- Carrier pickup completed ($.Event:CarrierPickup)
+
+### Triggers
+
+- Customer notification sent ($.Event:ShipmentNotificationSent)
+- Tracking activated ($.Event:TrackingActivated)
+- Inventory decremented ($.Event:InventoryDecremented)
+- Invoice generated ($.Event:InvoiceGenerated)
+
+### Part Of Process
+
+Order Fulfillment ($.Process:OrderFulfillment)
+
+**Workflow**:
+1. Order received
+2. Payment processed
+3. Inventory allocated
+4. Order picked
+5. Order packed
+6. **Order shipped** ← This event
+7. In transit
+8. Delivered
+9. Order completed
+
+### Involves Occupations
+
+- Warehouse Workers ($.Occupation:53-7065.00)
+- Shipping Clerks ($.Occupation:43-5071.00)
+- Delivery Drivers ($.Occupation:53-3031.00)
+
+## Event Payload Structure
+
+```typescript
+interface OrderShippedEvent {
+  // Event metadata
+  $type: 'OrderShippedEvent'
+  $id: string
+  eventId: string
+  eventTime: string
+  eventTimeZone: string
+  recordTime: string
+
+  // What
+  order: {
+    $id: string
+    orderNumber: string
+    items: OrderItem[]
+  }
+  shipment: {
+    $id: string
+    trackingNumber: string
+    carrier: string
+  }
+
+  // When
+  shippedAt: string
+  estimatedDelivery: string
+
+  // Where
+  originLocation: Location
+  destinationAddress: Address
+
+  // Who
+  shipper: Organization
+  customer: Customer
+  carrier: Carrier
+
+  // Why
+  businessReason: 'CustomerOrder' | 'Transfer' | 'Return'
+  priority: 'Standard' | 'Expedited' | 'Overnight'
+
+  // How
+  shippingMethod: string
+  trackingInfo: TrackingInfo
+
+  // GS1 EPCIS compatibility
+  epcisEventType: 'ObjectEvent'
+  action: 'OBSERVE'
+  businessStep: 'Shipping'
+  disposition: 'In Transit'
+}
+```
+
+## Downstream Effects
+
+### Customer Communications
+
+1. **Email Notification**
+   - Order shipped confirmation
+   - Tracking link
+   - Estimated delivery date
+
+2. **SMS Notification** (if opted in)
+   - Short confirmation
+   - Tracking number
+
+3. **Push Notification** (mobile app)
+   - Real-time update
+   - Track shipment CTA
+
+### System Updates
+
+1. **Order Management System**
+   - Status: Shipped
+   - Tracking info updated
+
+2. **Inventory System**
+   - Stock decremented
+   - Warehouse capacity updated
+
+3. **CRM**
+   - Customer timeline updated
+   - Touchpoint logged
+
+4. **Analytics**
+   - Fulfillment time tracked
+   - Carrier performance logged
+
+## Event Handlers
+
+```typescript
+import { $, on, send } from 'sdk.do'
+
+// Listen for order shipped events
+on($.Event.OrderShipped, async (event) => {
+  // Send customer notification
+  await send($.Notification.Email, {
+    to: event.customer.email,
+    template: 'order-shipped',
+    data: {
+      orderNumber: event.order.orderNumber,
+      trackingUrl: event.shipment.trackingUrl,
+      estimatedDelivery: event.estimatedDelivery,
+    },
+  })
+
+  // Update order status
+  await send($.Order.updateStatus, {
+    orderId: event.order.$id,
+    status: 'Shipped',
+    trackingNumber: event.shipment.trackingNumber,
+  })
+
+  // Decrement inventory
+  await send($.Inventory.decrement, {
+    items: event.order.items,
+    location: event.originLocation.$id,
+  })
+
+  // Log analytics
+  await send($.Analytics.track, {
+    event: 'order_shipped',
+    properties: {
+      orderId: event.order.$id,
+      carrier: event.carrier.name,
+      shippingMethod: event.shippingMethod,
+      fulfillmentTime: calculateFulfillmentTime(event),
+    },
+  })
+})
+```
+
+## Usage with sdk.do
+
+```typescript
+import { $, send } from 'sdk.do'
+
+// Emit order shipped event
+await send($.Event.OrderShipped, {
+  order: {
+    $id: 'https://commerce.do/orders/ORD-12345',
+    orderNumber: 'ORD-12345',
+  },
+  shipment: {
+    $id: 'https://shipments.do/SHIP-67890',
+    trackingNumber: '1234567890',
+    carrier: 'FedEx',
+  },
+  shippedAt: new Date().toISOString(),
+  estimatedDelivery: '2024-10-20T17:00:00Z',
+  originLocation: {
+    $id: 'https://locations.do/warehouses/SF-MAIN',
+  },
+  destinationAddress: {
+    $id: 'https://locations.do/addresses/CUST-789',
+  },
+  customer: {
+    $id: 'https://platform.do/customers/CUST-789',
+    email: 'customer@example.com',
+  },
+  carrier: {
+    $id: 'https://carriers.do/fedex',
+    name: 'FedEx',
+  },
+  shippingMethod: 'Ground',
+  businessStep: 'Shipping',
+  disposition: 'In Transit',
+})
+```
+
+## Analytics & Metrics
+
+### Key Metrics
+
+- **Fulfillment Time**: Order placed → Order shipped
+  - Target: < 24 hours
+
+- **Shipping Accuracy**: Correct items shipped
+  - Target: > 99.5%
+
+- **On-Time Shipment**: Shipped by promised date
+  - Target: > 98%
+
+### Query Examples
+
+```typescript
+// Average fulfillment time
+const avgFulfillment = await db.query({
+  aggregate: 'AVG',
+  field: 'fulfillmentTime',
+  subject: $.Event.OrderShipped,
+  where: {
+    shippedAt: { $gte: '2024-10-01' }
+  }
+})
+
+// Shipments by carrier
+const byCarrier = await db.query({
+  aggregate: 'COUNT',
+  groupBy: 'carrier',
+  subject: $.Event.OrderShipped,
+  where: {
+    shippedAt: { $gte: '2024-10-01' }
+  }
+})
+```
+
+## Related Events
+
+- Order confirmed ($.Event:OrderConfirmed)
+- Package prepared ($.Event:PackagePrepared)
+- Tracking updated ($.Event:TrackingUpdated)
+- Order delivered ($.Event:OrderDelivered)
+- Delivery exception ($.Event:DeliveryException)

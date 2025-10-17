@@ -1,0 +1,108 @@
+---
+$id: https://integrations.do/bitbucket
+$type: Integration
+name: Bitbucket
+service: bitbucket
+description: Bitbucket is a Git-based code hosting and collaboration platform supporting private and public repositories, enabling teams to manage and review code through pull requests and integrations
+category: developer-tools
+sdkBased: false
+baseUrl: https://api.bitbucket.com
+
+auth:
+  type: oauth2
+  authorizationUrl: https://bitbucket.org/site/oauth2/authorize
+  tokenUrl: https://bitbucket.org/site/oauth2/access_token
+  scopes:
+    - webhook
+    - pullrequest:write
+    - project:admin
+    - runner:write
+    - project:write
+    - snippet:write
+    - team:write
+    - pipeline:variable
+    - repository:delete
+    - repository:admin
+    - account:write
+    - wiki
+    - issue:write
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Bitbucket actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: false
+  events: []
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://bitbucket.org/
+  apiDocs: https://bitbucket.org/
+---
+
+# Bitbucket Integration
+
+Bitbucket is a Git-based code hosting and collaboration platform supporting private and public repositories, enabling teams to manage and review code through pull requests and integrations
+
+## Quick Start
+
+```typescript
+import { BitbucketClient } from '@dotdo/sdk.do/integrations/bitbucket'
+
+const bitbucket = new BitbucketClient({
+  apiKey: process.env.BITBUCKET_API_KEY,
+})
+
+const result = await bitbucket.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Bitbucket provides 17 actions through the Composio API.
+
+## License
+
+MIT

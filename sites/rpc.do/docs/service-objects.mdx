@@ -1,0 +1,658 @@
+---
+$id: https://rpc.do/docs/service-objects
+$type: TechArticle
+title: Durable Objects for RPC
+description: Using Cloudflare Durable Objects for stateful RPC communication
+keywords: [durable-objects, rpc, stateful, distributed-state, consistency, service-objects]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Durable Objects for RPC
+
+Learn how to use Cloudflare Durable Objects to create stateful RPC services with strong consistency guarantees.
+
+## Overview
+
+Durable Objects provide stateful, consistent RPC endpoints that:
+
+- Maintain state across requests
+- Guarantee single-threaded execution per instance
+- Automatically migrate to optimal edge locations
+- Provide transactional storage
+- Enable WebSocket connections with state
+
+## Basic Durable Object RPC
+
+### Define the Durable Object
+
+```typescript
+import { DurableObject } from 'cloudflare:workers'
+
+export class CounterService extends DurableObject {
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url)
+
+    // Handle RPC endpoints
+    if (url.pathname === '/rpc/increment') {
+      const body = await request.json()
+      const count = (await this.ctx.storage.get<number>('count')) || 0
+      const newCount = count + (body.params?.amount || 1)
+
+      await this.ctx.storage.put('count', newCount)
+
+      return Response.json({
+        success: true,
+        data: { count: newCount },
+      })
+    }
+
+    if (url.pathname === '/rpc/getCount') {
+      const count = (await this.ctx.storage.get<number>('count')) || 0
+
+      return Response.json({
+        success: true,
+        data: { count },
+      })
+    }
+
+    if (url.pathname === '/rpc/reset') {
+      await this.ctx.storage.put('count', 0)
+
+      return Response.json({
+        success: true,
+        data: { count: 0 },
+      })
+    }
+
+    return Response.json({ success: false, error: 'Method not found' }, { status: 404 })
+  }
+}
+```
+
+### Configure wrangler.jsonc
+
+```jsonc
+{
+  "name": "counter-service",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-03-07",
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "COUNTER_SERVICE",
+        "class_name": "CounterService",
+      },
+    ],
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_classes": ["CounterService"],
+    },
+  ],
+}
+```
+
+### Call the Durable Object
+
+```typescript
+interface Env {
+  COUNTER_SERVICE: DurableObjectNamespace
+}
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    // Get or create Durable Object instance
+    const id = env.COUNTER_SERVICE.idFromName('global-counter')
+    const stub = env.COUNTER_SERVICE.get(id)
+
+    // Call RPC method
+    const response = await stub.fetch('http://do/rpc/increment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        method: 'increment',
+        params: { amount: 5 },
+      }),
+    })
+
+    const result = await response.json()
+    return Response.json(result)
+  },
+}
+```
+
+## Typed Durable Object RPC
+
+### Define RPC Types
+
+```typescript
+// counter-rpc-types.ts
+export namespace CounterServiceRPC {
+  export interface IncrementParams {
+    amount?: number
+  }
+
+  export interface IncrementResponse {
+    count: number
+  }
+
+  export interface GetCountParams {
+    // No params needed
+  }
+
+  export interface GetCountResponse {
+    count: number
+  }
+
+  export type Methods = {
+    increment: {
+      params: IncrementParams
+      response: IncrementResponse
+    }
+    getCount: {
+      params: GetCountParams
+      response: GetCountResponse
+    }
+    reset: {
+      params: {}
+      response: { count: number }
+    }
+  }
+}
+```
+
+### Create Typed Client
+
+```typescript
+export function createDurableObjectClient<T extends Record<string, { params: any; response: any }>>(stub: DurableObjectStub): TypedRpcClient<T> {
+  return {
+    async call<TMethod extends keyof T>(method: TMethod, params: T[TMethod]['params']): Promise<T[TMethod]['response']> {
+      const response = await stub.fetch(`http://do/rpc/${String(method)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ method, params }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`RPC call to ${String(method)} failed: ${response.statusText}`)
+      }
+
+      const result = await response.json()
+
+      if (!result.success) {
+        throw new Error(result.error || `RPC call to ${String(method)} failed`)
+      }
+
+      return result.data
+    },
+  }
+}
+
+// Usage
+const id = env.COUNTER_SERVICE.idFromName('my-counter')
+const stub = env.COUNTER_SERVICE.get(id)
+const client = createDurableObjectClient<CounterServiceRPC.Methods>(stub)
+
+const result = await client.call('increment', { amount: 10 })
+console.log(`New count: ${result.count}`)
+```
+
+## Common Patterns
+
+### Session Management
+
+```typescript
+export class SessionService extends DurableObject {
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url)
+    const body = await request.json()
+
+    if (url.pathname === '/rpc/createSession') {
+      const sessionId = crypto.randomUUID()
+      const session = {
+        id: sessionId,
+        userId: body.params.userId,
+        createdAt: Date.now(),
+        lastAccess: Date.now(),
+        data: body.params.data || {},
+      }
+
+      await this.ctx.storage.put(`session:${sessionId}`, session)
+
+      return Response.json({
+        success: true,
+        data: { sessionId },
+      })
+    }
+
+    if (url.pathname === '/rpc/getSession') {
+      const session = await this.ctx.storage.get(`session:${body.params.sessionId}`)
+
+      if (!session) {
+        return Response.json({ success: false, error: 'Session not found' }, { status: 404 })
+      }
+
+      // Update last access
+      await this.ctx.storage.put(`session:${body.params.sessionId}`, {
+        ...session,
+        lastAccess: Date.now(),
+      })
+
+      return Response.json({
+        success: true,
+        data: session,
+      })
+    }
+
+    if (url.pathname === '/rpc/destroySession') {
+      await this.ctx.storage.delete(`session:${body.params.sessionId}`)
+
+      return Response.json({
+        success: true,
+        data: { deleted: true },
+      })
+    }
+
+    return Response.json({ success: false, error: 'Method not found' }, { status: 404 })
+  }
+
+  // Automatic session cleanup with alarms
+  async alarm() {
+    const sessions = await this.ctx.storage.list({ prefix: 'session:' })
+    const now = Date.now()
+    const maxAge = 24 * 60 * 60 * 1000 // 24 hours
+
+    for (const [key, session] of sessions) {
+      if (now - session.lastAccess > maxAge) {
+        await this.ctx.storage.delete(key)
+      }
+    }
+
+    // Schedule next cleanup in 1 hour
+    await this.ctx.storage.setAlarm(Date.now() + 60 * 60 * 1000)
+  }
+}
+```
+
+### Rate Limiting
+
+```typescript
+export class RateLimiter extends DurableObject {
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url)
+    const body = await request.json()
+
+    if (url.pathname === '/rpc/checkLimit') {
+      const { key, limit, window } = body.params
+      const now = Date.now()
+      const windowStart = now - window
+
+      // Get recent requests
+      const requests = (await this.ctx.storage.get<number[]>(`requests:${key}`)) || []
+
+      // Filter out old requests
+      const recentRequests = requests.filter((timestamp) => timestamp > windowStart)
+
+      // Check if limit exceeded
+      if (recentRequests.length >= limit) {
+        return Response.json({
+          success: true,
+          data: {
+            allowed: false,
+            remaining: 0,
+            resetAt: recentRequests[0] + window,
+          },
+        })
+      }
+
+      // Add new request
+      recentRequests.push(now)
+      await this.ctx.storage.put(`requests:${key}`, recentRequests)
+
+      return Response.json({
+        success: true,
+        data: {
+          allowed: true,
+          remaining: limit - recentRequests.length,
+          resetAt: now + window,
+        },
+      })
+    }
+
+    return Response.json({ success: false, error: 'Method not found' }, { status: 404 })
+  }
+}
+
+// Usage
+const id = env.RATE_LIMITER.idFromName(`user:${userId}`)
+const stub = env.RATE_LIMITER.get(id)
+
+const response = await stub.fetch('http://do/rpc/checkLimit', {
+  method: 'POST',
+  body: JSON.stringify({
+    method: 'checkLimit',
+    params: {
+      key: userId,
+      limit: 100,
+      window: 60000, // 1 minute
+    },
+  }),
+})
+
+const result = await response.json()
+if (!result.data.allowed) {
+  return Response.json({ error: 'Rate limit exceeded' }, { status: 429 })
+}
+```
+
+### Distributed Lock
+
+```typescript
+export class LockService extends DurableObject {
+  private locks = new Map<string, { holder: string; expiresAt: number }>()
+
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url)
+    const body = await request.json()
+
+    if (url.pathname === '/rpc/acquireLock') {
+      const { lockId, holder, ttl = 30000 } = body.params
+      const now = Date.now()
+
+      // Check if lock exists and is valid
+      const existingLock = this.locks.get(lockId)
+      if (existingLock && existingLock.expiresAt > now) {
+        return Response.json({
+          success: true,
+          data: {
+            acquired: false,
+            holder: existingLock.holder,
+            expiresAt: existingLock.expiresAt,
+          },
+        })
+      }
+
+      // Acquire lock
+      const lock = {
+        holder,
+        expiresAt: now + ttl,
+      }
+      this.locks.set(lockId, lock)
+
+      return Response.json({
+        success: true,
+        data: {
+          acquired: true,
+          expiresAt: lock.expiresAt,
+        },
+      })
+    }
+
+    if (url.pathname === '/rpc/releaseLock') {
+      const { lockId, holder } = body.params
+      const existingLock = this.locks.get(lockId)
+
+      if (!existingLock) {
+        return Response.json({
+          success: true,
+          data: { released: false, reason: 'Lock not found' },
+        })
+      }
+
+      if (existingLock.holder !== holder) {
+        return Response.json({
+          success: true,
+          data: { released: false, reason: 'Not lock holder' },
+        })
+      }
+
+      this.locks.delete(lockId)
+
+      return Response.json({
+        success: true,
+        data: { released: true },
+      })
+    }
+
+    return Response.json({ success: false, error: 'Method not found' }, { status: 404 })
+  }
+
+  // Clean up expired locks
+  async alarm() {
+    const now = Date.now()
+    for (const [lockId, lock] of this.locks.entries()) {
+      if (lock.expiresAt <= now) {
+        this.locks.delete(lockId)
+      }
+    }
+
+    // Schedule next cleanup
+    await this.ctx.storage.setAlarm(Date.now() + 10000) // Every 10 seconds
+  }
+}
+```
+
+### Event Aggregation
+
+```typescript
+export class EventAggregator extends DurableObject {
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url)
+    const body = await request.json()
+
+    if (url.pathname === '/rpc/recordEvent') {
+      const { eventType, data } = body.params
+      const key = `events:${eventType}:${new Date().toISOString().split('T')[0]}`
+
+      // Get existing events
+      const events = (await this.ctx.storage.get<any[]>(key)) || []
+
+      // Add new event
+      events.push({
+        timestamp: Date.now(),
+        data,
+      })
+
+      await this.ctx.storage.put(key, events)
+
+      return Response.json({
+        success: true,
+        data: { recorded: true, count: events.length },
+      })
+    }
+
+    if (url.pathname === '/rpc/getStats') {
+      const { eventType, date } = body.params
+      const key = `events:${eventType}:${date}`
+
+      const events = (await this.ctx.storage.get<any[]>(key)) || []
+
+      return Response.json({
+        success: true,
+        data: {
+          count: events.length,
+          events,
+        },
+      })
+    }
+
+    return Response.json({ success: false, error: 'Method not found' }, { status: 404 })
+  }
+}
+```
+
+## WebSocket RPC
+
+Durable Objects support WebSocket connections with state:
+
+```typescript
+export class ChatRoom extends DurableObject {
+  private sessions = new Set<WebSocket>()
+
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url)
+
+    // Handle WebSocket upgrade
+    if (request.headers.get('Upgrade') === 'websocket') {
+      const pair = new WebSocketPair()
+      const [client, server] = Object.values(pair)
+
+      this.ctx.acceptWebSocket(server)
+      this.sessions.add(server)
+
+      return new Response(null, {
+        status: 101,
+        webSocket: client,
+      })
+    }
+
+    // Handle RPC endpoints
+    if (url.pathname === '/rpc/broadcast') {
+      const body = await request.json()
+      const message = body.params.message
+
+      // Broadcast to all connected clients
+      for (const ws of this.sessions) {
+        ws.send(JSON.stringify({ type: 'message', data: message }))
+      }
+
+      return Response.json({
+        success: true,
+        data: { sent: this.sessions.size },
+      })
+    }
+
+    return Response.json({ success: false, error: 'Method not found' }, { status: 404 })
+  }
+
+  async webSocketMessage(ws: WebSocket, message: string): Promise<void> {
+    // Handle incoming WebSocket messages
+    const data = JSON.parse(message)
+
+    // Broadcast to all other clients
+    for (const session of this.sessions) {
+      if (session !== ws) {
+        session.send(message)
+      }
+    }
+  }
+
+  async webSocketClose(ws: WebSocket): Promise<void> {
+    this.sessions.delete(ws)
+  }
+}
+```
+
+## Best Practices
+
+### 1. Use Named IDs for Consistent Routing
+
+```typescript
+// Good - Named IDs ensure same instance handles related requests
+const id = env.COUNTER_SERVICE.idFromName(`user:${userId}`)
+
+// Avoid - Random IDs create new instances
+const id = env.COUNTER_SERVICE.newUniqueId()
+```
+
+### 2. Implement Timeouts
+
+```typescript
+const timeout = (ms: number) => new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), ms))
+
+const result = await Promise.race([stub.fetch('http://do/rpc/getData'), timeout(5000)])
+```
+
+### 3. Handle Storage Limits
+
+```typescript
+// Durable Objects have 128 KB of storage per key
+// Break large data into multiple keys
+async function storeData(data: any) {
+  const chunks = chunkData(data, 100000) // 100KB chunks
+
+  for (let i = 0; i < chunks.length; i++) {
+    await this.ctx.storage.put(`data:${i}`, chunks[i])
+  }
+
+  await this.ctx.storage.put('data:count', chunks.length)
+}
+```
+
+### 4. Use Alarms for Cleanup
+
+```typescript
+async alarm() {
+  // Clean up old data
+  const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000 // 7 days
+
+  const entries = await this.ctx.storage.list()
+  for (const [key, value] of entries) {
+    if (value.timestamp < cutoff) {
+      await this.ctx.storage.delete(key)
+    }
+  }
+
+  // Schedule next cleanup
+  await this.ctx.storage.setAlarm(Date.now() + 24 * 60 * 60 * 1000)
+}
+```
+
+### 5. Graceful Degradation
+
+```typescript
+try {
+  const result = await stub.fetch('http://do/rpc/getData')
+  return await result.json()
+} catch (error) {
+  console.error('Durable Object call failed:', error)
+
+  // Fallback to alternative data source
+  return await fetchFromBackup()
+}
+```
+
+## Performance Considerations
+
+- **Location**: Durable Objects automatically migrate to optimal locations
+- **Cold Starts**: First request may have higher latency
+- **Throughput**: Single-threaded per instance (use multiple instances for scale)
+- **Storage**: Transactional storage adds ~2-5ms per write
+- **WebSockets**: Very efficient for real-time communication
+
+## Debugging
+
+```typescript
+export class DebugService extends DurableObject {
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url)
+
+    if (url.pathname === '/debug/storage') {
+      const entries = await this.ctx.storage.list()
+      return Response.json({
+        count: entries.size,
+        keys: Array.from(entries.keys()),
+      })
+    }
+
+    if (url.pathname === '/debug/id') {
+      return Response.json({
+        id: this.ctx.id.toString(),
+        name: this.ctx.id.name,
+      })
+    }
+
+    return Response.json({ error: 'Not found' }, { status: 404 })
+  }
+}
+```
+
+## See Also
+
+- [Getting Started](./getting-started) - Basic RPC setup
+- [RPC Patterns](./rpc-patterns) - Communication patterns
+- [API Reference](../api/) - Complete API documentation
+- [Examples](../examples/) - Real-world examples

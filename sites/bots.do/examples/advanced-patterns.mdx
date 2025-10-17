@@ -1,0 +1,526 @@
+---
+$id: https://bots.do/examples/advanced-patterns
+$type: HowTo
+title: Advanced Bot Patterns
+description: Advanced patterns for building sophisticated bot systems including multi-bot orchestration, state management, and complex workflows.
+keywords: [advanced patterns, multi-bot, orchestration, state management, workflows]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Advanced Bot Patterns
+
+Learn advanced patterns for building sophisticated bot systems.
+
+## Multi-Bot Orchestration
+
+Coordinate multiple bots working together:
+
+```typescript
+import $, { bot } from 'sdk.do'
+
+// Create specialized bots
+const validatorBot = await bot.create({
+  name: 'Validator Bot',
+  task: 'Validate order data',
+  capabilities: ['data_validation'],
+})
+
+const inventoryBot = await bot.create({
+  name: 'Inventory Bot',
+  task: 'Check inventory',
+  capabilities: ['inventory_management'],
+})
+
+const paymentBot = await bot.create({
+  name: 'Payment Bot',
+  task: 'Process payments',
+  capabilities: ['payment_processing'],
+})
+
+const fulfillmentBot = await bot.create({
+  name: 'Fulfillment Bot',
+  task: 'Create fulfillment orders',
+  capabilities: ['fulfillment'],
+})
+
+// Create orchestration team
+const orderTeam = await bot.createTeam({
+  name: 'Order Processing Team',
+  bots: [
+    { id: 'validator', bot: validatorBot },
+    { id: 'inventory', bot: inventoryBot },
+    { id: 'payment', bot: paymentBot },
+    { id: 'fulfillment', bot: fulfillmentBot },
+  ],
+  workflow: {
+    type: 'sequential',
+    stages: [
+      {
+        bot: 'validator',
+        continueOnSuccess: true,
+        onFailure: 'abort',
+      },
+      {
+        bot: 'inventory',
+        continueOnSuccess: true,
+        onFailure: 'abort',
+      },
+      {
+        bot: 'payment',
+        continueOnSuccess: true,
+        onFailure: 'rollback',
+      },
+      {
+        bot: 'fulfillment',
+        continueOnSuccess: true,
+        onFailure: 'alert',
+      },
+    ],
+  },
+})
+
+// Process order through team
+const result = await orderTeam.process({
+  order: {
+    id: 'order-123',
+    customer: 'john@example.com',
+    items: [{ sku: 'PROD-001', quantity: 2 }],
+    total: 199.98,
+  },
+})
+```
+
+## State Management Pattern
+
+Maintain bot state across executions:
+
+```typescript
+import $, { bot, db } from 'sdk.do'
+
+const statefulBot = await bot.create({
+  name: 'Stateful Bot',
+  task: 'Process with state',
+  state: {
+    type: 'distributed',
+    backend: 'database',
+  },
+  handler: async (input, state) => {
+    // Load current state
+    const currentState = await state.load()
+
+    // Update counter
+    currentState.processedCount = (currentState.processedCount || 0) + 1
+    currentState.lastProcessed = new Date()
+    currentState.items = currentState.items || []
+    currentState.items.push(input.id)
+
+    // Process input
+    const result = await processWithContext(input, currentState)
+
+    // Save updated state
+    await state.save(currentState)
+
+    return result
+  },
+})
+
+async function processWithContext(input, context) {
+  console.log(`Processing item ${context.processedCount}`)
+  console.log(`Previous items:`, context.items.slice(-5))
+
+  return {
+    processed: true,
+    count: context.processedCount,
+  }
+}
+```
+
+## Circuit Breaker Pattern
+
+Prevent cascading failures:
+
+```typescript
+import $, { bot } from 'sdk.do'
+
+const resilientBot = await bot.create({
+  name: 'Circuit Breaker Bot',
+  errorHandling: {
+    strategy: 'circuit-breaker',
+    circuitBreaker: {
+      threshold: 5, // Open after 5 failures
+      timeout: 60000, // Try again after 60s
+      halfOpenRequests: 3,
+      onOpen: async () => {
+        console.warn('Circuit breaker opened!')
+        await sendAlert('Circuit breaker opened')
+      },
+      onClose: async () => {
+        console.log('Circuit breaker closed')
+        await sendAlert('Circuit breaker closed - service recovered')
+      },
+    },
+  },
+  handler: async (input) => {
+    // Will automatically use circuit breaker
+    return await callExternalService(input)
+  },
+})
+```
+
+## Saga Pattern
+
+Handle distributed transactions:
+
+```typescript
+import $, { bot } from 'sdk.do'
+
+const sagaBot = await bot.create({
+  name: 'Saga Bot',
+  task: 'Execute saga transaction',
+  handler: async (order) => {
+    const compensation Stack = []
+
+    try {
+      // Step 1: Reserve inventory
+      const inventory = await reserveInventory(order.items)
+      compensationStack.push(() => releaseInventory(inventory))
+
+      // Step 2: Process payment
+      const payment = await processPayment(order.payment)
+      compensationStack.push(() => refundPayment(payment))
+
+      // Step 3: Create shipment
+      const shipment = await createShipment(order)
+      compensationStack.push(() => cancelShipment(shipment))
+
+      // Success!
+      return {
+        success: true,
+        inventory,
+        payment,
+        shipment
+      }
+    } catch (error) {
+      // Compensate in reverse order
+      console.error('Saga failed, compensating:', error)
+
+      for (const compensate of compensationStack.reverse()) {
+        try {
+          await compensate()
+        } catch (compensateError) {
+          console.error('Compensation failed:', compensateError)
+        }
+      }
+
+      throw error
+    }
+  }
+})
+```
+
+## Event Sourcing Pattern
+
+Maintain complete event history:
+
+```typescript
+import $, { bot, db, send } from 'sdk.do'
+
+const eventSourcedBot = await bot.create({
+  name: 'Event Sourced Bot',
+  task: 'Process with event sourcing',
+  handler: async (command) => {
+    // Generate events from command
+    const events = await generateEvents(command)
+
+    // Store events
+    for (const event of events) {
+      await db.create($.Event, {
+        aggregateId: command.orderId,
+        type: event.type,
+        data: event.data,
+        timestamp: new Date(),
+      })
+
+      // Publish event
+      await send(event.type, event.data)
+    }
+
+    // Build current state from events
+    const allEvents = await db.list($.Event, {
+      where: { aggregateId: command.orderId },
+      orderBy: { timestamp: 'asc' },
+    })
+
+    const currentState = await rebuildState(allEvents)
+
+    return currentState
+  },
+})
+
+async function generateEvents(command) {
+  switch (command.type) {
+    case 'create_order':
+      return [
+        { type: $.Order.created, data: command.data },
+        { type: $.Inventory.reserved, data: command.data.items },
+      ]
+    case 'cancel_order':
+      return [
+        { type: $.Order.cancelled, data: command.data },
+        { type: $.Inventory.released, data: command.data.items },
+      ]
+    default:
+      return []
+  }
+}
+
+async function rebuildState(events) {
+  let state = { status: 'new' }
+
+  for (const event of events) {
+    state = applyEvent(state, event)
+  }
+
+  return state
+}
+
+function applyEvent(state, event) {
+  switch (event.type) {
+    case $.Order.created:
+      return { ...state, status: 'created', ...event.data }
+    case $.Order.cancelled:
+      return { ...state, status: 'cancelled' }
+    default:
+      return state
+  }
+}
+```
+
+## CQRS Pattern
+
+Separate read and write operations:
+
+```typescript
+import $, { bot, db } from 'sdk.do'
+
+// Write bot - handles commands
+const writeBot = await bot.create({
+  name: 'Write Bot',
+  task: 'Handle write operations',
+  handler: async (command) => {
+    // Validate command
+    if (!command.valid) {
+      throw new Error('Invalid command')
+    }
+
+    // Execute command
+    const result = await executeCommand(command)
+
+    // Update write model
+    await db.create($.Command, result)
+
+    // Update read model asynchronously
+    await updateReadModel(result)
+
+    return result
+  },
+})
+
+// Read bot - handles queries
+const readBot = await bot.create({
+  name: 'Read Bot',
+  task: 'Handle read operations',
+  caching: {
+    enabled: true,
+    ttl: 300,
+  },
+  handler: async (query) => {
+    // Query optimized read model
+    return await db.list($.ReadModel, query)
+  },
+})
+
+async function updateReadModel(writeResult) {
+  // Project write model to read model
+  await db.create($.ReadModel, {
+    id: writeResult.id,
+    // Denormalized, optimized for queries
+    ...projectToReadModel(writeResult),
+  })
+}
+```
+
+## Fan-Out/Fan-In Pattern
+
+Distribute work and aggregate results:
+
+```typescript
+import $, { bot } from 'sdk.do'
+
+const fanOutBot = await bot.create({
+  name: 'Fan-Out Bot',
+  task: 'Distribute and aggregate',
+  handler: async (input) => {
+    // Fan-out: distribute to workers
+    const chunks = chunkData(input.data, 10)
+
+    const results = await Promise.all(chunks.map((chunk, index) => processChunk(chunk, index)))
+
+    // Fan-in: aggregate results
+    const aggregated = results.reduce(
+      (acc, result) => ({
+        ...acc,
+        processed: acc.processed + result.processed,
+        errors: [...acc.errors, ...result.errors],
+      }),
+      { processed: 0, errors: [] }
+    )
+
+    return aggregated
+  },
+})
+
+function chunkData(data, size) {
+  const chunks = []
+  for (let i = 0; i < data.length; i += size) {
+    chunks.push(data.slice(i, i + size))
+  }
+  return chunks
+}
+
+async function processChunk(chunk, index) {
+  console.log(`Processing chunk ${index}`)
+
+  const results = await Promise.all(chunk.map((item) => processItem(item)))
+
+  return {
+    processed: results.filter((r) => r.success).length,
+    errors: results.filter((r) => !r.success),
+  }
+}
+```
+
+## Priority Queue Pattern
+
+Process high-priority items first:
+
+```typescript
+import $, { bot } from 'sdk.do'
+
+const priorityBot = await bot.create({
+  name: 'Priority Bot',
+  task: 'Process by priority',
+  handler: async (batch) => {
+    // Sort by priority
+    const sorted = batch.sort((a, b) => {
+      const priorities = { critical: 0, high: 1, medium: 2, low: 3 }
+      return priorities[a.priority] - priorities[b.priority]
+    })
+
+    // Process in priority order
+    const results = []
+    for (const item of sorted) {
+      const result = await processWithPriority(item)
+      results.push(result)
+
+      // For critical items, process immediately
+      if (item.priority === 'critical') {
+        await escalate(result)
+      }
+    }
+
+    return results
+  },
+})
+
+async function processWithPriority(item) {
+  console.log(`Processing ${item.priority} priority item:`, item.id)
+
+  // Adjust timeout based on priority
+  const timeouts = {
+    critical: 5000,
+    high: 10000,
+    medium: 30000,
+    low: 60000,
+  }
+
+  return await processWithTimeout(item, timeouts[item.priority])
+}
+```
+
+## Backpressure Pattern
+
+Handle overload gracefully:
+
+```typescript
+import $, { bot } from 'sdk.do'
+
+const backpressureBot = await bot.create({
+  name: 'Backpressure Bot',
+  task: 'Handle load with backpressure',
+  concurrency: 10,
+  maxQueueSize: 100,
+  backpressure: {
+    enabled: true,
+    strategy: 'reject', // or 'delay' or 'shed'
+    threshold: 80, // Start backpressure at 80% capacity
+    onBackpressure: async (metrics) => {
+      console.warn('Backpressure activated:', metrics)
+      await sendAlert('System under load')
+    },
+  },
+  handler: async (input) => {
+    // Check current load
+    const metrics = await bot.getMetrics()
+
+    if (metrics.queueDepth > 90) {
+      // Shed lowest priority tasks
+      if (input.priority === 'low') {
+        throw new Error('Shedding low priority task due to load')
+      }
+    }
+
+    return await processTask(input)
+  },
+})
+```
+
+## Retry with Exponential Backoff
+
+Smart retry logic:
+
+```typescript
+import $, { bot } from 'sdk.do'
+
+const smartRetryBot = await bot.create({
+  name: 'Smart Retry Bot',
+  errorHandling: {
+    retry: {
+      attempts: 5,
+      backoff: 'exponential',
+      multiplier: 2,
+      maxDelay: 60000,
+      jitter: true,
+      retryOn: ['TIMEOUT', 'CONNECTION_ERROR', 'RATE_LIMIT'],
+      onRetry: async (error, attempt, delay) => {
+        console.log(`Retry attempt ${attempt} after ${delay}ms due to:`, error.code)
+
+        // Adjust strategy based on error type
+        if (error.code === 'RATE_LIMIT') {
+          // Wait longer for rate limits
+          return delay * 2
+        }
+
+        return delay
+      },
+    },
+  },
+  handler: async (input) => {
+    return await callExternalAPI(input)
+  },
+})
+```
+
+See [Integration Examples](./integration) and [Real-World Use Cases](./real-world-use-case) for more patterns.

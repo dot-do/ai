@@ -1,0 +1,420 @@
+---
+$id: https://agents.do/examples/basic-agent
+$type: HowTo
+title: Basic Agent Example
+description: Create a simple autonomous agent that can research and analyze information
+keywords: [basic agent, simple agent, agent example, autonomous agent tutorial]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Basic Agent Example
+
+Create a simple autonomous agent that can research and analyze information.
+
+## Overview
+
+This example demonstrates how to create a basic agent that:
+
+1. Researches companies from web sources
+2. Analyzes the information gathered
+3. Generates structured insights
+4. Stores results for future reference
+
+## Code
+
+```typescript
+import $, { agent, db } from 'sdk.do'
+
+// Define the research agent
+const researchAgent = await agent.create({
+  $type: 'Agent',
+  name: 'Research Assistant',
+  role: 'Business Research Analyst',
+
+  // Agent's purpose
+  goal: 'Research companies and provide actionable business insights',
+
+  // What the agent can do
+  capabilities: ['web_search', 'data_analysis', 'information_synthesis', 'report_generation'],
+
+  // Tools the agent can use
+  tools: {
+    search: {
+      $type: 'Tool',
+      name: 'search',
+      description: 'Search the web for information',
+      functions: {
+        query: async (params: { query: string }) => {
+          // Implement web search
+          const results = await fetch(`https://api.search.com/v1/search?q=${params.query}`)
+          return await results.json()
+        },
+      },
+    },
+
+    scraper: {
+      $type: 'Tool',
+      name: 'scraper',
+      description: 'Extract content from web pages',
+      functions: {
+        extract: async (params: { url: string }) => {
+          const response = await fetch(params.url)
+          const html = await response.text()
+          // Extract relevant content
+          return extractContent(html)
+        },
+      },
+    },
+
+    analyzer: {
+      $type: 'Tool',
+      name: 'analyzer',
+      description: 'Analyze and summarize text',
+      functions: {
+        summarize: async (params: { text: string }) => {
+          // Use AI to summarize
+          return await ai.generate({
+            prompt: `Summarize this information concisely:\n\n${params.text}`,
+            model: 'gpt-5',
+          })
+        },
+      },
+    },
+  },
+
+  // AI model configuration
+  model: 'claude-sonnet-4.5',
+  temperature: 0.7,
+
+  // Memory configuration
+  memory: {
+    short_term: { enabled: true, capacity: 10000 },
+    long_term: { enabled: true, storage: 'database' },
+  },
+})
+
+// Configure agent behavior
+await researchAgent.configure({
+  autonomy: 'autonomous', // Agent works independently
+  logging: 'detailed',
+  notifications: ['task_complete', 'error'],
+})
+
+// Execute research task
+const result = await researchAgent.execute({
+  task: 'Research company and generate insights',
+  input: {
+    company: 'Acme Corp',
+    focus_areas: ['market_position', 'product_offerings', 'recent_news', 'competitors', 'growth_signals'],
+  },
+})
+
+console.log(result)
+```
+
+## Agent Execution Flow
+
+When you execute the agent, here's what happens:
+
+### 1. Agent Perceives the Task
+
+```typescript
+// Agent understands what's being asked
+const perception = {
+  task: 'Research company',
+  subject: 'Acme Corp',
+  required_outputs: ['market_position', 'competitors', 'growth_signals'],
+}
+```
+
+### 2. Agent Plans Actions
+
+```typescript
+// Agent creates a plan
+const plan = [
+  { action: 'search_web', params: { query: 'Acme Corp company profile' } },
+  { action: 'search_web', params: { query: 'Acme Corp competitors' } },
+  { action: 'search_web', params: { query: 'Acme Corp recent news' } },
+  { action: 'scrape_website', params: { url: 'acme.com' } },
+  { action: 'analyze_data', params: { data: 'collected_information' } },
+  { action: 'generate_insights', params: { analysis: 'analyzed_data' } },
+]
+```
+
+### 3. Agent Executes Actions
+
+```typescript
+// Agent executes each action
+for (const action of plan) {
+  const tool = agent.selectTool(action)
+  const result = await tool.execute(action.params)
+  agent.addToMemory(result)
+}
+```
+
+### 4. Agent Generates Result
+
+```typescript
+// Agent synthesizes findings
+const insights = {
+  company: 'Acme Corp',
+  market_position: {
+    industry: 'Enterprise SaaS',
+    segment: 'Project Management',
+    position: 'Mid-market leader',
+    market_share: '15%',
+  },
+  product_offerings: ['Project Management Platform', 'Team Collaboration Tools', 'Resource Planning Suite'],
+  recent_news: [
+    {
+      date: '2025-09-15',
+      headline: 'Acme Corp raises $50M Series B',
+      impact: 'positive',
+      relevance: 'high',
+    },
+    {
+      date: '2025-10-01',
+      headline: 'Acme launches AI-powered features',
+      impact: 'positive',
+      relevance: 'high',
+    },
+  ],
+  competitors: [
+    { name: 'CompetitorA', overlap: 'high' },
+    { name: 'CompetitorB', overlap: 'medium' },
+  ],
+  growth_signals: ['Recent funding round', 'Expanding engineering team', 'New product launches', 'Enterprise customer wins'],
+  overall_assessment: {
+    opportunity_score: 85,
+    priority: 'high',
+    recommendation: 'High-value target with strong growth trajectory',
+  },
+}
+```
+
+## Expected Output
+
+```json
+{
+  "task": "research_company",
+  "status": "completed",
+  "company": "Acme Corp",
+  "insights": {
+    "market_position": {
+      "industry": "Enterprise SaaS",
+      "segment": "Project Management",
+      "position": "Mid-market leader"
+    },
+    "competitors": ["CompetitorA", "CompetitorB"],
+    "growth_signals": ["Recent Series B funding", "Expanding engineering team", "New product launches"],
+    "opportunity_score": 85,
+    "priority": "high"
+  },
+  "recommendations": ["High-value target", "Focus on enterprise tier", "Decision makers: CTO, VP Engineering"],
+  "execution_metadata": {
+    "duration_ms": 12500,
+    "tools_used": ["search", "scraper", "analyzer"],
+    "data_sources": 8,
+    "confidence": 0.85
+  }
+}
+```
+
+## Storing Results
+
+Store the research results for future use:
+
+```typescript
+// Agent stores results in database
+await db.create($.CompanyProfile, {
+  $type: 'CompanyProfile',
+  company: 'Acme Corp',
+  researched_at: new Date().toISOString(),
+  insights: result.insights,
+  opportunity_score: result.insights.opportunity_score,
+  priority: result.insights.priority,
+})
+
+// Future agents can retrieve this
+const profile = await db.get($.CompanyProfile, {
+  where: { company: 'Acme Corp' },
+})
+```
+
+## Monitoring Agent Activity
+
+Monitor what the agent is doing:
+
+```typescript
+// Listen to agent events
+researchAgent.on('task_start', (event) => {
+  console.log(`Agent started: ${event.task}`)
+})
+
+researchAgent.on('tool_used', (event) => {
+  console.log(`Using tool: ${event.tool} with params:`, event.params)
+})
+
+researchAgent.on('action_complete', (event) => {
+  console.log(`Completed: ${event.action}, Duration: ${event.duration}ms`)
+})
+
+researchAgent.on('task_complete', (event) => {
+  console.log(`Task finished: ${event.task}`)
+  console.log(`Total duration: ${event.duration}ms`)
+  console.log(`Tools used: ${event.tools_used.join(', ')}`)
+})
+
+researchAgent.on('error', (event) => {
+  console.error(`Error: ${event.error}`)
+  console.error(`Context:`, event.context)
+})
+```
+
+## Advanced Usage
+
+### Custom Context
+
+Provide additional context to improve results:
+
+```typescript
+const result = await researchAgent.execute({
+  task: 'Research company',
+  input: {
+    company: 'Acme Corp',
+  },
+  context: {
+    // Our company context
+    our_industry: 'DevOps Tools',
+    our_product: 'CI/CD Platform',
+    target_customer: 'Engineering teams at SaaS companies',
+
+    // Research focus
+    focus: 'integration_opportunities',
+    depth: 'comprehensive',
+
+    // Previous interactions
+    previous_research: await db.get($.CompanyProfile, { company: 'Acme Corp' }),
+  },
+})
+```
+
+### Iterative Research
+
+Let the agent iterate to improve results:
+
+```typescript
+const result = await researchAgent.execute({
+  task: 'Deep research on company',
+  input: {
+    company: 'Acme Corp',
+  },
+  options: {
+    max_iterations: 5,
+    improvement_threshold: 0.9, // Keep iterating until 90% confidence
+    feedback_loop: true,
+  },
+})
+
+// Agent will:
+// 1. Do initial research
+// 2. Evaluate confidence in results
+// 3. Identify gaps in information
+// 4. Research gaps
+// 5. Repeat until confidence threshold met
+```
+
+### Batch Processing
+
+Research multiple companies:
+
+```typescript
+const companies = ['Acme Corp', 'Beta Inc', 'Gamma LLC']
+
+const results = await Promise.all(
+  companies.map((company) =>
+    researchAgent.execute({
+      task: 'Research company',
+      input: { company },
+    })
+  )
+)
+
+// Agent processes all companies concurrently
+console.log(`Researched ${results.length} companies`)
+```
+
+## Error Handling
+
+Handle agent errors gracefully:
+
+```typescript
+try {
+  const result = await researchAgent.execute({
+    task: 'Research company',
+    input: { company: 'Acme Corp' },
+  })
+} catch (error) {
+  if (error.type === 'rate_limit') {
+    // Wait and retry
+    await new Promise((resolve) => setTimeout(resolve, 60000))
+    const result = await researchAgent.execute(task)
+  } else if (error.type === 'insufficient_data') {
+    // Fall back to manual research
+    console.log('Agent needs more data sources')
+    await notifyHuman({ task, error })
+  } else {
+    // Log and escalate
+    console.error('Agent error:', error)
+    await escalateToHuman({ task, error })
+  }
+}
+```
+
+## Performance Metrics
+
+Monitor agent performance:
+
+```typescript
+// Get performance metrics
+const metrics = await researchAgent.getMetrics({
+  timeframe: 'last_7_days',
+})
+
+console.log(metrics)
+// {
+//   tasks_completed: 150,
+//   success_rate: 0.92,
+//   avg_execution_time: 12500,
+//   avg_confidence: 0.87,
+//   tools_usage: {
+//     search: 450,
+//     scraper: 300,
+//     analyzer: 150
+//   },
+//   errors: 12,
+//   error_types: {
+//     rate_limit: 5,
+//     timeout: 4,
+//     insufficient_data: 3
+//   }
+// }
+```
+
+## Next Steps
+
+- [Sales Agent Example](./sales-agent) - SDR/BDR agent with full workflow
+- [Multi-Agent Example](./multi-agent) - Multiple agents working together
+- [Creating Agents](../docs/creating-agents) - Deep dive into agent design
+
+## See Also
+
+- [Getting Started](../docs/getting-started)
+- [Agent Communication](../docs/agent-communication)
+- [API Reference](../api/)
+
+---
+
+This basic example demonstrates the core concepts of autonomous agents. Next, see how to build specialized agents like the [Sales Agent](./sales-agent).

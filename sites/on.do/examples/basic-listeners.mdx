@@ -1,0 +1,632 @@
+---
+$id: https://on.do/examples/basic-listeners
+$type: HowTo
+title: Basic Event Listeners
+description: Simple examples of event listeners for common Business-as-Code scenarios
+keywords: [examples, basic, event-listeners, getting-started]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Basic Event Listeners
+
+Simple examples of event listeners for common Business-as-Code scenarios using the `on` function.
+
+## User Registration
+
+Handle new user registration:
+
+```typescript
+import { on, send, db, $ } from 'sdk.do'
+
+// Listen for new user registrations
+on('User.registered', async (event) => {
+  const user = event.data
+
+  console.log(`New user registered: ${user.email}`)
+
+  // Send welcome email
+  await send('Email.sendRequested', {
+    to: user.email,
+    subject: 'Welcome to our platform!',
+    template: 'welcome',
+    data: {
+      name: user.name,
+      loginUrl: 'https://app.example.com/login',
+    },
+  })
+
+  // Create default user preferences
+  await db.create($.UserPreferences, {
+    userId: user.id,
+    notifications: true,
+    newsletter: true,
+    theme: 'light',
+  })
+
+  // Track registration in analytics
+  await send('Analytics.eventTracked', {
+    event: 'user_registered',
+    userId: user.id,
+    properties: {
+      source: event.metadata.source,
+      timestamp: new Date(),
+    },
+  })
+})
+```
+
+## Order Processing
+
+Process new orders:
+
+```typescript
+import { on, send } from 'sdk.do'
+
+// Listen for new orders
+on('Order.created', async (event) => {
+  const order = event.data
+
+  console.log(`New order: ${order.id} ($${order.total})`)
+
+  // Send confirmation email to customer
+  await send('Email.sendRequested', {
+    to: order.customer.email,
+    subject: `Order Confirmation - ${order.id}`,
+    template: 'order-confirmation',
+    data: {
+      orderId: order.id,
+      items: order.items,
+      total: order.total,
+      estimatedDelivery: calculateDeliveryDate(order),
+    },
+  })
+
+  // Notify warehouse
+  await send('Warehouse.orderReceived', {
+    orderId: order.id,
+    items: order.items,
+    shippingAddress: order.shippingAddress,
+    priority: order.priority || 'standard',
+  })
+
+  // Update inventory
+  for (const item of order.items) {
+    await send('Inventory.reserved', {
+      productId: item.product,
+      quantity: item.quantity,
+      orderId: order.id,
+    })
+  }
+})
+
+function calculateDeliveryDate(order) {
+  const days = order.priority === 'express' ? 2 : 5
+  const date = new Date()
+  date.setDate(date.getDate() + days)
+  return date.toLocaleDateString()
+}
+```
+
+## Payment Processing
+
+Handle payment events:
+
+```typescript
+import { on, send, db, $ } from 'sdk.do'
+
+// Payment completed
+on('Payment.completed', async (event) => {
+  const payment = event.data
+
+  console.log(`Payment completed: ${payment.transactionId}`)
+
+  // Update order status
+  await db.update($.Order, payment.orderId, {
+    status: 'paid',
+    paymentId: payment.transactionId,
+    paidAt: new Date(),
+  })
+
+  // Send receipt
+  await send('Email.sendRequested', {
+    to: payment.customer.email,
+    subject: `Payment Receipt - ${payment.transactionId}`,
+    template: 'payment-receipt',
+    data: {
+      amount: payment.amount,
+      transactionId: payment.transactionId,
+      date: new Date(),
+    },
+  })
+
+  // Trigger fulfillment
+  await send('Order.fulfillmentRequested', {
+    orderId: payment.orderId,
+  })
+})
+
+// Payment failed
+on('Payment.failed', async (event) => {
+  const payment = event.data
+
+  console.error(`Payment failed: ${payment.reason}`)
+
+  // Update order status
+  await db.update($.Order, payment.orderId, {
+    status: 'payment-failed',
+    failureReason: payment.reason,
+  })
+
+  // Notify customer
+  await send('Email.sendRequested', {
+    to: payment.customer.email,
+    subject: 'Payment Failed',
+    template: 'payment-failed',
+    data: {
+      orderId: payment.orderId,
+      reason: payment.reason,
+      retryUrl: `https://app.example.com/orders/${payment.orderId}/retry`,
+    },
+  })
+
+  // Release inventory
+  await send('Inventory.releaseRequested', {
+    orderId: payment.orderId,
+  })
+})
+```
+
+## Product Updates
+
+React to product changes:
+
+```typescript
+import { on, send, db, $ } from 'sdk.do'
+
+// Product created
+on('Product.created', async (event) => {
+  const product = event.data
+
+  console.log(`New product: ${product.name}`)
+
+  // Index for search
+  await send('Search.indexRequested', {
+    type: 'product',
+    id: product.id,
+    data: product,
+  })
+
+  // Sync to external systems
+  await send('Integration.syncRequested', {
+    type: 'product',
+    action: 'create',
+    data: product,
+  })
+})
+
+// Product out of stock
+on('Product.updated', async (event) => {
+  const product = event.data
+
+  if (product.stock === 0) {
+    console.log(`Product out of stock: ${product.name}`)
+
+    // Notify subscribed customers
+    const subscribers = await db.list($.ProductSubscription, {
+      where: { productId: product.id },
+    })
+
+    for (const subscription of subscribers) {
+      await send('Email.sendRequested', {
+        to: subscription.customer.email,
+        subject: `${product.name} is back in stock!`,
+        template: 'back-in-stock',
+        data: {
+          productName: product.name,
+          productUrl: `https://shop.example.com/products/${product.id}`,
+        },
+      })
+    }
+
+    // Trigger reorder
+    if (product.autoReorder) {
+      await send('Inventory.reorderRequested', {
+        productId: product.id,
+        quantity: product.reorderQuantity || 100,
+      })
+    }
+  }
+})
+```
+
+## Customer Support
+
+Handle support tickets:
+
+```typescript
+import { on, send, db, $ } from 'sdk.do'
+
+// New support ticket
+on('Support.ticketCreated', async (event) => {
+  const ticket = event.data
+
+  console.log(`New support ticket: ${ticket.id}`)
+
+  // Send confirmation to customer
+  await send('Email.sendRequested', {
+    to: ticket.customer.email,
+    subject: `Support Ticket Created - ${ticket.id}`,
+    template: 'ticket-confirmation',
+    data: {
+      ticketId: ticket.id,
+      subject: ticket.subject,
+      estimatedResponse: '24 hours',
+    },
+  })
+
+  // Assign to team based on category
+  const team = getTeamForCategory(ticket.category)
+
+  await db.update($.SupportTicket, ticket.id, {
+    assignedTo: team.id,
+    status: 'assigned',
+  })
+
+  // Notify team
+  await send('Notification.sendRequested', {
+    type: 'slack',
+    channel: team.slackChannel,
+    message: `New ticket: ${ticket.subject} (${ticket.id})`,
+  })
+
+  // Check for VIP customer
+  if (ticket.customer.vipStatus) {
+    await send('Support.vipTicketCreated', {
+      ticketId: ticket.id,
+      customerId: ticket.customer.id,
+    })
+  }
+})
+
+// Ticket resolved
+on('Support.ticketResolved', async (event) => {
+  const ticket = event.data
+
+  console.log(`Ticket resolved: ${ticket.id}`)
+
+  // Send resolution email
+  await send('Email.sendRequested', {
+    to: ticket.customer.email,
+    subject: `Ticket Resolved - ${ticket.id}`,
+    template: 'ticket-resolved',
+    data: {
+      ticketId: ticket.id,
+      resolution: ticket.resolution,
+      feedbackUrl: `https://app.example.com/support/feedback/${ticket.id}`,
+    },
+  })
+
+  // Request feedback after 24 hours
+  setTimeout(
+    () => {
+      send('Feedback.requested', {
+        type: 'support',
+        ticketId: ticket.id,
+        customerId: ticket.customer.id,
+      })
+    },
+    24 * 60 * 60 * 1000
+  )
+})
+
+function getTeamForCategory(category) {
+  const teams = {
+    technical: { id: 'team-tech', slackChannel: '#tech-support' },
+    billing: { id: 'team-billing', slackChannel: '#billing-support' },
+    general: { id: 'team-general', slackChannel: '#general-support' },
+  }
+  return teams[category] || teams['general']
+}
+```
+
+## Notification System
+
+Send notifications across multiple channels:
+
+```typescript
+import { on } from 'sdk.do'
+
+// Email notifications
+on('Notification.sendRequested', async (event) => {
+  if (event.data.type === 'email') {
+    await sendEmail({
+      to: event.data.to,
+      subject: event.data.subject,
+      body: event.data.body,
+      template: event.data.template,
+    })
+  }
+})
+
+// SMS notifications
+on('Notification.sendRequested', async (event) => {
+  if (event.data.type === 'sms') {
+    await sendSMS({
+      to: event.data.to,
+      message: event.data.message,
+    })
+  }
+})
+
+// Push notifications
+on('Notification.sendRequested', async (event) => {
+  if (event.data.type === 'push') {
+    await sendPushNotification({
+      userId: event.data.userId,
+      title: event.data.title,
+      body: event.data.body,
+      data: event.data.data,
+    })
+  }
+})
+
+// Slack notifications
+on('Notification.sendRequested', async (event) => {
+  if (event.data.type === 'slack') {
+    await sendSlackMessage({
+      channel: event.data.channel,
+      message: event.data.message,
+      attachments: event.data.attachments,
+    })
+  }
+})
+```
+
+## Analytics Tracking
+
+Track user actions and events:
+
+```typescript
+import { on, send } from 'sdk.do'
+
+// Track all order events
+on('Order.*', async (event) => {
+  await send('Analytics.eventTracked', {
+    event: event.type,
+    userId: event.metadata.userId,
+    properties: {
+      orderId: event.data.id,
+      total: event.data.total,
+      timestamp: event.metadata.timestamp,
+    },
+  })
+})
+
+// Track page views
+on('Page.viewed', async (event) => {
+  await send('Analytics.pageViewTracked', {
+    userId: event.data.userId,
+    page: event.data.page,
+    referrer: event.data.referrer,
+    timestamp: new Date(),
+  })
+})
+
+// Track feature usage
+on('Feature.used', async (event) => {
+  await send('Analytics.featureUsageTracked', {
+    userId: event.data.userId,
+    feature: event.data.feature,
+    duration: event.data.duration,
+    timestamp: new Date(),
+  })
+})
+```
+
+## Audit Logging
+
+Log important business events:
+
+```typescript
+import { on, db, $ } from 'sdk.do'
+
+// Log all entity changes
+on(['*.created', '*.updated', '*.deleted'], async (event) => {
+  const [entityType, action] = event.type.split('.')
+
+  await db.create($.AuditLog, {
+    entityType,
+    action,
+    entityId: event.data.id || event.data.$id,
+    changes: event.data,
+    userId: event.metadata.userId,
+    timestamp: event.metadata.timestamp || new Date(),
+    source: event.metadata.source,
+    correlationId: event.metadata.correlationId,
+  })
+})
+
+// Log admin actions
+on('Admin.*', async (event) => {
+  console.warn(`Admin action: ${event.type}`, {
+    userId: event.metadata.userId,
+    data: event.data,
+  })
+
+  await db.create($.AdminAuditLog, {
+    action: event.type,
+    userId: event.metadata.userId,
+    data: event.data,
+    timestamp: new Date(),
+  })
+})
+```
+
+## Error Handling
+
+Handle errors gracefully:
+
+```typescript
+import { on, send } from 'sdk.do'
+
+// Wrap handlers with error handling
+on('Order.created', async (event) => {
+  try {
+    await processOrder(event.data)
+  } catch (error) {
+    console.error('Failed to process order:', error)
+
+    // Publish error event
+    await send('Order.processingFailed', {
+      orderId: event.data.id,
+      error: error.message,
+      stack: error.stack,
+      timestamp: new Date(),
+    })
+  }
+})
+
+// Handle processing failures
+on('Order.processingFailed', async (event) => {
+  // Notify admin
+  await send('Notification.sendRequested', {
+    type: 'slack',
+    channel: '#alerts',
+    message: `Order processing failed: ${event.data.orderId}\nError: ${event.data.error}`,
+  })
+
+  // Update order status
+  await db.update($.Order, event.data.orderId, {
+    status: 'processing-failed',
+    errorMessage: event.data.error,
+  })
+
+  // Notify customer
+  await send('Email.sendRequested', {
+    to: event.data.customer?.email,
+    subject: 'Order Processing Issue',
+    template: 'order-error',
+    data: {
+      orderId: event.data.orderId,
+    },
+  })
+})
+```
+
+## Multiple Event Handlers
+
+Register multiple handlers for the same event:
+
+```typescript
+import { on } from 'sdk.do'
+
+// Handler 1: Send email
+on('User.registered', async (event) => {
+  await sendWelcomeEmail(event.data.email)
+})
+
+// Handler 2: Create preferences
+on('User.registered', async (event) => {
+  await createUserPreferences(event.data.id)
+})
+
+// Handler 3: Track in analytics
+on('User.registered', async (event) => {
+  await trackRegistration(event.data)
+})
+
+// Handler 4: Send notification to admin
+on('User.registered', async (event) => {
+  await notifyAdmin(event.data)
+})
+
+// All four handlers execute in parallel when User.registered is published
+```
+
+## Helper Functions
+
+Common helper functions used in examples:
+
+```typescript
+// Email helper
+async function sendEmail({ to, subject, body, template }) {
+  // Implementation depends on email service
+  console.log(`Sending email to ${to}: ${subject}`)
+}
+
+// SMS helper
+async function sendSMS({ to, message }) {
+  // Implementation depends on SMS service
+  console.log(`Sending SMS to ${to}: ${message}`)
+}
+
+// Push notification helper
+async function sendPushNotification({ userId, title, body, data }) {
+  // Implementation depends on push notification service
+  console.log(`Sending push to ${userId}: ${title}`)
+}
+
+// Slack helper
+async function sendSlackMessage({ channel, message, attachments }) {
+  // Implementation depends on Slack API
+  console.log(`Sending Slack message to ${channel}: ${message}`)
+}
+```
+
+## Testing Examples
+
+Test event listeners:
+
+```typescript
+import { on, send } from 'sdk.do'
+import { expect, test } from 'vitest'
+
+test('sends welcome email on user registration', async () => {
+  let emailSent = false
+
+  // Mock email sending
+  on('Email.sendRequested', async (event) => {
+    emailSent = true
+    expect(event.data.template).toBe('welcome')
+  })
+
+  // Register user handler
+  on('User.registered', async (event) => {
+    await send('Email.sendRequested', {
+      to: event.data.email,
+      template: 'welcome',
+    })
+  })
+
+  // Trigger event
+  await send('User.registered', {
+    email: 'test@example.com',
+  })
+
+  // Assert
+  expect(emailSent).toBe(true)
+})
+```
+
+## Best Practices
+
+1. **Keep handlers focused**: Each handler should do one thing well
+2. **Handle errors gracefully**: Use try-catch and publish error events
+3. **Use semantic naming**: Follow `Object.Action` pattern
+4. **Log important events**: Use console.log or proper logging
+5. **Test handlers**: Write tests for event handlers
+6. **Document complex logic**: Add comments for clarity
+7. **Monitor performance**: Track slow handlers
+
+## See Also
+
+- [Workflow Listeners](./workflow-listeners) - Complex multi-step workflows
+- [Event Patterns](../docs/patterns) - Advanced patterns
+- [Event Filtering](../docs/filtering) - Filter events
+- [API Reference](../api/) - Complete API documentation
+
+---
+
+Ready for more complex examples? Continue to [Workflow Listeners](./workflow-listeners).

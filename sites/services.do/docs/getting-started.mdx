@@ -1,0 +1,551 @@
+---
+$id: https://services.do/docs/getting-started
+$type: TechArticle
+title: Getting Started with services.do
+description: Learn how to deploy your first service to Cloudflare Workers using services.do
+keywords: [getting-started, tutorial, deployment, cloudflare-workers, services]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Getting Started with services.do
+
+This guide will walk you through deploying your first service to Cloudflare Workers using services.do.
+
+## Prerequisites
+
+Before you begin, ensure you have:
+
+- Node.js 18 or later installed
+- A Cloudflare account with Workers enabled
+- Basic familiarity with TypeScript
+
+## Installation
+
+Install the `.do` SDK:
+
+```bash
+pnpm add sdk.do
+```
+
+Or using npm:
+
+```bash
+npm install sdk.do
+```
+
+## Your First Service
+
+Let's create a simple "Hello World" service.
+
+### Step 1: Define the Service
+
+Create a new file `hello.service.ts`:
+
+```typescript
+import $, { service } from 'sdk.do'
+
+export const helloService = service({
+  $type: 'Service',
+  name: 'HelloService',
+  description: 'A simple greeting service',
+  version: '1.0.0',
+  routes: {
+    'GET /': async (request) => {
+      return Response.json({
+        message: 'Hello from services.do!',
+        timestamp: new Date().toISOString(),
+      })
+    },
+    'GET /greet/:name': async (request) => {
+      const name = request.params.name
+      return Response.json({
+        message: `Hello, ${name}!`,
+        timestamp: new Date().toISOString(),
+      })
+    },
+  },
+})
+```
+
+### Step 2: Configure Cloudflare Credentials
+
+Set your Cloudflare credentials as environment variables:
+
+```bash
+# .env
+CLOUDFLARE_ACCOUNT_ID=your-account-id
+CLOUDFLARE_API_TOKEN=your-api-token
+```
+
+To get these values:
+
+1. Log in to [Cloudflare Dashboard](https://dash.cloudflare.com)
+2. Go to "My Profile" > "API Tokens"
+3. Create a token with "Workers Scripts: Edit" permission
+4. Copy your Account ID from the Workers dashboard
+
+### Step 3: Deploy the Service
+
+Create a deployment script `deploy.ts`:
+
+```typescript
+import { helloService } from './hello.service'
+
+async function deploy() {
+  console.log('Deploying HelloService...')
+
+  const result = await helloService.deploy({
+    environment: 'production',
+    accountId: process.env.CLOUDFLARE_ACCOUNT_ID,
+    apiToken: process.env.CLOUDFLARE_API_TOKEN,
+  })
+
+  console.log('Service deployed successfully!')
+  console.log('URL:', result.url)
+}
+
+deploy().catch(console.error)
+```
+
+Run the deployment:
+
+```bash
+pnpm tsx deploy.ts
+```
+
+### Step 4: Test the Service
+
+Once deployed, test your service:
+
+```bash
+# Test the root endpoint
+curl https://hello-service.your-account.workers.dev/
+
+# Test the greeting endpoint
+curl https://hello-service.your-account.workers.dev/greet/World
+```
+
+## Adding Business Logic
+
+Let's create a more realistic service that manages users.
+
+### Define User Schema
+
+```typescript
+import $ from 'sdk.do'
+
+// Define user type using Schema.org
+interface User extends $.Person {
+  $id: string
+  $type: 'Person'
+  name: string
+  email: string
+  createdAt: string
+}
+```
+
+### Create User Service
+
+```typescript
+import $, { service, db } from 'sdk.do'
+
+export const userService = service({
+  $type: 'Service',
+  name: 'UserService',
+  description: 'User management service',
+  version: '1.0.0',
+  routes: {
+    // List all users
+    'GET /users': async (request) => {
+      const users = await db.list($.Person)
+      return Response.json(users)
+    },
+
+    // Get user by ID
+    'GET /users/:id': async (request) => {
+      const user = await db.get($.Person, request.params.id)
+      if (!user) {
+        return Response.json({ error: 'User not found' }, { status: 404 })
+      }
+      return Response.json(user)
+    },
+
+    // Create new user
+    'POST /users': async (request) => {
+      const data = await request.json()
+
+      // Validate required fields
+      if (!data.name || !data.email) {
+        return Response.json({ error: 'Name and email are required' }, { status: 400 })
+      }
+
+      // Create user
+      const user = await db.create($.Person, {
+        $type: 'Person',
+        name: data.name,
+        email: data.email,
+        createdAt: new Date().toISOString(),
+      })
+
+      return Response.json(user, { status: 201 })
+    },
+
+    // Update user
+    'PUT /users/:id': async (request) => {
+      const data = await request.json()
+      const user = await db.update($.Person, request.params.id, data)
+
+      if (!user) {
+        return Response.json({ error: 'User not found' }, { status: 404 })
+      }
+
+      return Response.json(user)
+    },
+
+    // Delete user
+    'DELETE /users/:id': async (request) => {
+      const deleted = await db.delete($.Person, request.params.id)
+
+      if (!deleted) {
+        return Response.json({ error: 'User not found' }, { status: 404 })
+      }
+
+      return Response.json({ success: true })
+    },
+  },
+})
+```
+
+### Deploy User Service
+
+```typescript
+await userService.deploy({
+  environment: 'production',
+  resources: {
+    cpu: 100,
+    memory: 128,
+  },
+})
+```
+
+## Adding Middleware
+
+Enhance your service with middleware for common functionality:
+
+```typescript
+import $, { service, middleware } from 'sdk.do'
+
+const apiService = service({
+  name: 'APIService',
+  middleware: [
+    // CORS middleware
+    middleware.cors({
+      origin: '*',
+      methods: ['GET', 'POST', 'PUT', 'DELETE'],
+      headers: ['Content-Type', 'Authorization'],
+    }),
+
+    // Authentication middleware
+    middleware.auth({
+      type: 'bearer',
+      verify: async (token) => {
+        // Verify JWT token
+        return await verifyToken(token)
+      },
+    }),
+
+    // Rate limiting
+    middleware.rateLimit({
+      requests: 100,
+      window: 60000, // 1 minute
+      identifier: (request) => request.headers.get('x-real-ip'),
+    }),
+
+    // Logging middleware
+    middleware.logging({
+      level: 'info',
+      format: 'json',
+    }),
+  ],
+  routes: {
+    'GET /data': async (request) => {
+      // This route is protected by all middleware above
+      return Response.json({ data: 'protected' })
+    },
+  },
+})
+```
+
+## Service Communication
+
+Services can communicate with each other using semantic patterns:
+
+```typescript
+import $, { service, call, discover } from 'sdk.do'
+
+// Order service that depends on user service
+const orderService = service({
+  name: 'OrderService',
+  dependencies: [$.UserService],
+  routes: {
+    'POST /orders': async (request) => {
+      const data = await request.json()
+
+      // Discover and call user service
+      const userService = await discover($.UserService)
+      const user = await userService.call('getUser', { id: data.userId })
+
+      if (!user) {
+        return Response.json({ error: 'User not found' }, { status: 404 })
+      }
+
+      // Create order
+      const order = await db.create($.Order, {
+        $type: 'Order',
+        user: user.$id,
+        items: data.items,
+        total: calculateTotal(data.items),
+        createdAt: new Date().toISOString(),
+      })
+
+      return Response.json(order, { status: 201 })
+    },
+  },
+})
+```
+
+## Environment Configuration
+
+Configure services for different environments:
+
+```typescript
+import $, { service } from 'sdk.do'
+
+const apiService = service({
+  name: 'APIService',
+  environments: {
+    development: {
+      vars: {
+        API_URL: 'http://localhost:8787',
+        LOG_LEVEL: 'debug',
+      },
+    },
+    staging: {
+      vars: {
+        API_URL: 'https://api-staging.example.com',
+        LOG_LEVEL: 'info',
+      },
+    },
+    production: {
+      vars: {
+        API_URL: 'https://api.example.com',
+        LOG_LEVEL: 'warn',
+      },
+    },
+  },
+  routes: {
+    'GET /config': async (request) => {
+      return Response.json({
+        environment: process.env.ENVIRONMENT,
+        apiUrl: process.env.API_URL,
+      })
+    },
+  },
+})
+
+// Deploy to specific environment
+await apiService.deploy({
+  environment: 'production',
+})
+```
+
+## Health Checks
+
+Add health checks to monitor service status:
+
+```typescript
+import $, { service } from 'sdk.do'
+
+const apiService = service({
+  name: 'APIService',
+  health: {
+    endpoint: '/health',
+    interval: 30000, // Check every 30 seconds
+    timeout: 5000,
+    checks: [
+      {
+        name: 'database',
+        check: async () => {
+          try {
+            await db.ping()
+            return { status: 'healthy' }
+          } catch (error) {
+            return { status: 'unhealthy', error: error.message }
+          }
+        },
+      },
+      {
+        name: 'cache',
+        check: async () => {
+          try {
+            await cache.ping()
+            return { status: 'healthy' }
+          } catch (error) {
+            return { status: 'unhealthy', error: error.message }
+          }
+        },
+      },
+    ],
+  },
+  routes: {
+    'GET /api/data': async (request) => {
+      // Your API logic
+    },
+  },
+})
+```
+
+Test the health endpoint:
+
+```bash
+curl https://api-service.your-account.workers.dev/health
+```
+
+## Error Handling
+
+Implement robust error handling:
+
+```typescript
+import $, { service } from 'sdk.do'
+
+const apiService = service({
+  name: 'APIService',
+  errorHandler: async (error, request) => {
+    // Log error
+    console.error('Service error:', error)
+
+    // Determine status code
+    const status = error.status || 500
+
+    // Return error response
+    return Response.json(
+      {
+        error: error.message,
+        code: error.code,
+        timestamp: new Date().toISOString(),
+      },
+      { status }
+    )
+  },
+  routes: {
+    'GET /data': async (request) => {
+      try {
+        const data = await fetchData()
+        return Response.json(data)
+      } catch (error) {
+        throw error // Will be handled by errorHandler
+      }
+    },
+  },
+})
+```
+
+## Local Development
+
+Test services locally before deploying:
+
+```typescript
+import $, { service } from 'sdk.do'
+
+const apiService = service({
+  name: 'APIService',
+  routes: {
+    'GET /': async () => Response.json({ message: 'Hello!' }),
+  },
+})
+
+// Run locally
+if (import.meta.env.DEV) {
+  apiService.dev({
+    port: 8787,
+    host: 'localhost',
+  })
+} else {
+  // Deploy to production
+  await apiService.deploy()
+}
+```
+
+Run the local server:
+
+```bash
+pnpm dev
+```
+
+## Next Steps
+
+Now that you've deployed your first service, explore:
+
+- [Deployment Strategies](./deployment.mdx) - Learn about rolling, canary, and blue-green deployments
+- [Service Management](./management.mdx) - Scaling, monitoring, and version management
+- [API Reference](../api/) - Complete API documentation
+- [Examples](../examples/) - Real-world service examples
+
+## Common Issues
+
+### Deployment Fails
+
+**Issue**: Deployment fails with authentication error
+
+**Solution**: Verify your Cloudflare credentials:
+
+```bash
+# Check your .env file
+cat .env
+
+# Verify API token has correct permissions
+# Should have "Workers Scripts: Edit" permission
+```
+
+### Service Not Found
+
+**Issue**: Service deployed but returns 404
+
+**Solution**: Check route configuration:
+
+```typescript
+// Ensure routes are properly defined
+routes: {
+  'GET /': async (request) => { /* handler */ }
+}
+```
+
+### CORS Errors
+
+**Issue**: Browser shows CORS errors
+
+**Solution**: Add CORS middleware:
+
+```typescript
+middleware: [
+  middleware.cors({
+    origin: '*', // Or specific domain
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  }),
+]
+```
+
+## Resources
+
+- [Cloudflare Workers Documentation](https://developers.cloudflare.com/workers/)
+- [services.do API Reference](../api/)
+- [Example Services](../examples/)
+- [Deployment Guide](./deployment.mdx)
+
+## Need Help?
+
+- Check the [API Reference](../api/)
+- Browse [Examples](../examples/)
+- Visit [sdk.do](https://sdk.do) for core SDK documentation

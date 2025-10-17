@@ -1,0 +1,631 @@
+---
+$id: https://database.do/examples/basic-crud
+$type: HowTo
+title: Basic CRUD Operations
+description: Practical examples of Create, Read, Update, and Delete operations
+keywords: [crud, create, read, update, delete, examples]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Basic CRUD Operations
+
+Practical examples of Create, Read, Update, and Delete operations in database.do.
+
+## Overview
+
+This guide demonstrates the fundamental CRUD operations with real-world examples using Business-as-Code patterns.
+
+## Setup
+
+```typescript
+import $, { db } from 'sdk.do'
+import type { Business, Person, Product, Order } from 'schema.org.ai'
+```
+
+## Create Operations
+
+### Create a Business
+
+```typescript
+const business: Business = await db.create($.Business, {
+  $type: 'Business',
+  name: 'Acme Corporation',
+  alternateName: 'Acme Corp',
+  legalName: 'Acme Corporation Inc.',
+  industry: 'Technology',
+  description: 'Leading provider of innovative technology solutions',
+  foundingDate: '2020-03-15',
+  numberOfEmployees: 150,
+  url: 'https://acme.com',
+  address: {
+    $type: 'PostalAddress',
+    streetAddress: '123 Innovation Drive',
+    addressLocality: 'San Francisco',
+    addressRegion: 'CA',
+    postalCode: '94105',
+    addressCountry: 'US',
+  },
+  contactPoint: {
+    $type: 'ContactPoint',
+    telephone: '+1-415-555-0123',
+    email: 'contact@acme.com',
+    contactType: 'customer service',
+  },
+})
+
+console.log('Created business:', business.$id)
+console.log('Business name:', business.name)
+```
+
+### Create a Person
+
+```typescript
+const person: Person = await db.create($.Person, {
+  $type: 'Person',
+  givenName: 'Jane',
+  familyName: 'Smith',
+  email: 'jane.smith@acme.com',
+  telephone: '+1-415-555-0124',
+  jobTitle: 'Chief Executive Officer',
+  worksFor: {
+    $id: business.$id,
+  },
+  address: {
+    $type: 'PostalAddress',
+    streetAddress: '456 Market Street',
+    addressLocality: 'San Francisco',
+    addressRegion: 'CA',
+    postalCode: '94103',
+    addressCountry: 'US',
+  },
+})
+
+console.log('Created person:', person.$id)
+console.log('Full name:', `${person.givenName} ${person.familyName}`)
+```
+
+### Create a Product
+
+```typescript
+const product: Product = await db.create($.Product, {
+  $type: 'Product',
+  name: 'Enterprise Cloud Platform',
+  description: 'Scalable cloud infrastructure for modern applications',
+  brand: {
+    $type: 'Brand',
+    name: 'Acme Cloud',
+  },
+  manufacturer: {
+    $id: business.$id,
+  },
+  offers: {
+    $type: 'Offer',
+    price: '999.00',
+    priceCurrency: 'USD',
+    priceValidUntil: '2025-12-31',
+    availability: 'https://schema.org/InStock',
+  },
+  aggregateRating: {
+    $type: 'AggregateRating',
+    ratingValue: 4.8,
+    ratingCount: 245,
+    bestRating: 5,
+    worstRating: 1,
+  },
+})
+
+console.log('Created product:', product.$id)
+console.log('Product name:', product.name)
+```
+
+### Create an Order
+
+```typescript
+const order: Order = await db.create($.Order, {
+  $type: 'Order',
+  orderNumber: 'ORD-2025-10-001',
+  orderStatus: 'https://schema.org/OrderProcessing',
+  orderDate: new Date().toISOString(),
+  customer: {
+    $id: person.$id,
+  },
+  seller: {
+    $id: business.$id,
+  },
+  orderedItem: [
+    {
+      $type: 'OrderItem',
+      orderItemNumber: '001',
+      orderedItem: {
+        $id: product.$id,
+      },
+      orderQuantity: 1,
+      orderItemStatus: 'https://schema.org/OrderProcessing',
+    },
+  ],
+  acceptedOffer: {
+    $type: 'Offer',
+    price: '999.00',
+    priceCurrency: 'USD',
+  },
+  paymentMethod: 'https://schema.org/CreditCard',
+  billingAddress: person.address,
+  confirmationNumber: 'CONF-ABC123',
+})
+
+console.log('Created order:', order.$id)
+console.log('Order number:', order.orderNumber)
+```
+
+## Read Operations
+
+### Get by ID
+
+```typescript
+// Get business by ID
+const business = await db.get($.Business, 'biz_abc123')
+
+console.log('Business:', business.name)
+console.log('Industry:', business.industry)
+console.log('Founded:', business.foundingDate)
+```
+
+### Get with Related Data
+
+```typescript
+// Get business with all related data
+const business = await db.get($.Business, 'biz_abc123', {
+  include: ['address', 'contactPoint', 'employees'],
+})
+
+console.log('Business:', business.name)
+console.log('Address:', business.address.streetAddress)
+console.log('Email:', business.contactPoint.email)
+console.log('Employees:', business.employees.length)
+```
+
+### List All Entities
+
+```typescript
+// List all businesses
+const businesses = await db.list($.Business)
+
+console.log(`Found ${businesses.length} businesses`)
+
+businesses.forEach((business) => {
+  console.log(`- ${business.name} (${business.industry})`)
+})
+```
+
+### List with Filters
+
+```typescript
+// List technology businesses
+const techBusinesses = await db.list($.Business, {
+  where: {
+    industry: 'Technology',
+  },
+})
+
+console.log(`Found ${techBusinesses.length} technology businesses`)
+```
+
+### List with Sorting
+
+```typescript
+// List businesses sorted by name
+const businesses = await db.list($.Business, {
+  orderBy: {
+    name: 'asc',
+  },
+})
+
+businesses.forEach((business, i) => {
+  console.log(`${i + 1}. ${business.name}`)
+})
+```
+
+### List with Pagination
+
+```typescript
+// Get first page (50 items)
+const page1 = await db.list($.Business, {
+  limit: 50,
+  offset: 0,
+  orderBy: {
+    dateCreated: 'desc',
+  },
+})
+
+console.log(`Page 1: ${page1.length} businesses`)
+
+// Get second page
+const page2 = await db.list($.Business, {
+  limit: 50,
+  offset: 50,
+  orderBy: {
+    dateCreated: 'desc',
+  },
+})
+
+console.log(`Page 2: ${page2.length} businesses`)
+```
+
+## Update Operations
+
+### Update Basic Fields
+
+```typescript
+// Update business industry
+const updated = await db.update($.Business, 'biz_abc123', {
+  industry: 'Software',
+  description: 'Leading software company',
+})
+
+console.log('Updated business:', updated.name)
+console.log('New industry:', updated.industry)
+```
+
+### Update Nested Objects
+
+```typescript
+// Update business address
+await db.update($.Business, 'biz_abc123', {
+  address: {
+    streetAddress: '789 New Street',
+    postalCode: '94106',
+  },
+})
+
+console.log('Address updated')
+```
+
+### Update Multiple Fields
+
+```typescript
+// Update several fields at once
+await db.update($.Business, 'biz_abc123', {
+  description: 'Updated description',
+  numberOfEmployees: 200,
+  url: 'https://newdomain.com',
+  contactPoint: {
+    telephone: '+1-415-555-9999',
+    email: 'info@newdomain.com',
+  },
+})
+
+console.log('Multiple fields updated')
+```
+
+### Update References
+
+```typescript
+// Update person's employer
+await db.update($.Person, 'person_xyz789', {
+  worksFor: {
+    $id: 'biz_different123',
+  },
+  jobTitle: 'Senior Engineer',
+})
+
+console.log('Employment updated')
+```
+
+### Conditional Update
+
+```typescript
+// Only update if status is active
+try {
+  const business = await db.get($.Business, 'biz_abc123')
+
+  if (business.status === 'active') {
+    await db.update($.Business, 'biz_abc123', {
+      verified: true,
+      verifiedDate: new Date().toISOString(),
+    })
+    console.log('Business verified')
+  } else {
+    console.log('Business not active, skipping verification')
+  }
+} catch (error) {
+  console.error('Update failed:', error.message)
+}
+```
+
+## Delete Operations
+
+### Delete by ID
+
+```typescript
+// Delete a business
+await db.delete($.Business, 'biz_abc123')
+
+console.log('Business deleted')
+```
+
+### Delete with Confirmation
+
+```typescript
+// Delete with existence check
+try {
+  const business = await db.get($.Business, 'biz_abc123')
+  console.log(`Deleting business: ${business.name}`)
+
+  await db.delete($.Business, 'biz_abc123')
+  console.log('Business deleted successfully')
+} catch (error) {
+  if (error.code === 'NOT_FOUND') {
+    console.log('Business not found')
+  } else {
+    console.error('Delete failed:', error.message)
+  }
+}
+```
+
+### Soft Delete
+
+```typescript
+// Mark as deleted instead of removing
+await db.update($.Business, 'biz_abc123', {
+  status: 'deleted',
+  deletedDate: new Date().toISOString(),
+})
+
+console.log('Business marked as deleted')
+
+// Later, exclude deleted items in queries
+const activeBusinesses = await db.list($.Business, {
+  where: {
+    status: { $ne: 'deleted' },
+  },
+})
+```
+
+## Complete CRUD Example
+
+Here's a complete example showing all CRUD operations:
+
+```typescript
+import $, { db } from 'sdk.do'
+import type { Business } from 'schema.org.ai'
+
+async function businessCRUD() {
+  // CREATE
+  console.log('\n=== CREATE ===')
+  const business = await db.create($.Business, {
+    $type: 'Business',
+    name: 'Example Corp',
+    industry: 'Technology',
+    description: 'Example business for CRUD operations',
+    foundingDate: '2025-01-01',
+    address: {
+      $type: 'PostalAddress',
+      addressLocality: 'San Francisco',
+      addressRegion: 'CA',
+      addressCountry: 'US',
+    },
+  })
+  console.log('Created:', business.$id)
+  console.log('Name:', business.name)
+
+  // READ
+  console.log('\n=== READ ===')
+  const retrieved = await db.get($.Business, business.$id)
+  console.log('Retrieved:', retrieved.name)
+  console.log('Industry:', retrieved.industry)
+
+  // LIST
+  console.log('\n=== LIST ===')
+  const techBusinesses = await db.list($.Business, {
+    where: { industry: 'Technology' },
+    limit: 10,
+  })
+  console.log(`Found ${techBusinesses.length} technology businesses`)
+
+  // UPDATE
+  console.log('\n=== UPDATE ===')
+  const updated = await db.update($.Business, business.$id, {
+    industry: 'Software',
+    numberOfEmployees: 50,
+  })
+  console.log('Updated industry:', updated.industry)
+  console.log('Employees:', updated.numberOfEmployees)
+
+  // DELETE
+  console.log('\n=== DELETE ===')
+  await db.delete($.Business, business.$id)
+  console.log('Deleted:', business.$id)
+
+  // VERIFY DELETION
+  try {
+    await db.get($.Business, business.$id)
+    console.log('ERROR: Business still exists')
+  } catch (error) {
+    if (error.code === 'NOT_FOUND') {
+      console.log('Verified: Business successfully deleted')
+    }
+  }
+}
+
+// Run the example
+businessCRUD().catch(console.error)
+```
+
+## Batch Operations
+
+### Create Multiple Entities
+
+```typescript
+const businesses = await db.createMany($.Business, [
+  {
+    $type: 'Business',
+    name: 'Business 1',
+    industry: 'Technology',
+  },
+  {
+    $type: 'Business',
+    name: 'Business 2',
+    industry: 'Manufacturing',
+  },
+  {
+    $type: 'Business',
+    name: 'Business 3',
+    industry: 'Retail',
+  },
+])
+
+console.log(`Created ${businesses.length} businesses`)
+```
+
+### Get Multiple Entities
+
+```typescript
+const ids = ['biz_1', 'biz_2', 'biz_3']
+const businesses = await db.getMany($.Business, ids)
+
+console.log(`Retrieved ${businesses.length} businesses`)
+```
+
+### Update Multiple Entities
+
+```typescript
+const updated = await db.updateMany($.Business, {
+  where: {
+    industry: 'Technology',
+  },
+  data: {
+    verified: true,
+  },
+})
+
+console.log(`Updated ${updated.count} businesses`)
+```
+
+### Delete Multiple Entities
+
+```typescript
+const deleted = await db.deleteMany($.Business, {
+  where: {
+    status: 'inactive',
+  },
+})
+
+console.log(`Deleted ${deleted.count} inactive businesses`)
+```
+
+## Error Handling
+
+### Handle Not Found
+
+```typescript
+try {
+  const business = await db.get($.Business, 'invalid_id')
+} catch (error) {
+  if (error.code === 'NOT_FOUND') {
+    console.log('Business not found')
+  } else {
+    console.error('Unexpected error:', error.message)
+  }
+}
+```
+
+### Handle Validation Errors
+
+```typescript
+try {
+  const business = await db.create($.Business, {
+    $type: 'Business',
+    // Missing required fields
+  })
+} catch (error) {
+  if (error.code === 'VALIDATION_ERROR') {
+    console.error('Validation failed:', error.details)
+  }
+}
+```
+
+### Handle Conflicts
+
+```typescript
+try {
+  const business = await db.update($.Business, 'biz_123', {
+    version: 1, // Optimistic locking
+    name: 'Updated Name',
+  })
+} catch (error) {
+  if (error.code === 'CONFLICT') {
+    console.error('Concurrent modification detected')
+    // Retry or reload
+  }
+}
+```
+
+## Best Practices
+
+### Always Include $type
+
+```typescript
+// Good
+await db.create($.Business, {
+  $type: 'Business',
+  name: 'Example',
+})
+
+// Bad - may cause errors
+await db.create($.Business, {
+  name: 'Example',
+})
+```
+
+### Use Type Annotations
+
+```typescript
+// Good - type-safe
+const business: Business = await db.get($.Business, 'biz_123')
+
+// Also good - inferred types
+const businesses = await db.list<Business>($.Business)
+```
+
+### Handle Errors Properly
+
+```typescript
+// Good - specific error handling
+try {
+  const business = await db.get($.Business, id)
+  // Use business
+} catch (error) {
+  if (error.code === 'NOT_FOUND') {
+    // Handle not found
+  } else if (error.code === 'UNAUTHORIZED') {
+    // Handle auth error
+  } else {
+    // Handle other errors
+    throw error
+  }
+}
+```
+
+### Use Transactions for Related Operations
+
+```typescript
+// Good - atomic operations
+await db.transaction(async (tx) => {
+  const business = await tx.create($.Business, businessData)
+  const person = await tx.create($.Person, personData)
+  await tx.relate(business, $.employs, person)
+})
+```
+
+## See Also
+
+- [Operations Reference](../docs/operations) - Complete CRUD documentation
+- [Relationships Example](./relationships) - Working with semantic relationships
+- [Query Examples](./queries) - Advanced query patterns
+- [API Reference](../api/) - Full API documentation
+
+---
+
+Next: Learn how to work with [semantic relationships](./relationships) between entities.

@@ -1,0 +1,855 @@
+---
+$id: https://data.do/api/reference
+$type: https://schema.org/TechArticle
+name: data.do API Reference
+description: Complete API documentation for data.do functions, types, and error codes
+author:
+  $type: https://schema.org/Organization
+  name: .do
+  url: https://do.inc
+license:
+  documentation: CC-BY-4.0
+  code: MIT
+---
+
+# API Reference
+
+Complete API documentation for data.do.
+
+## Core Functions
+
+### data.create()
+
+Create a new record.
+
+```typescript
+function create<T>(type: SemanticType, data: T, options?: CreateOptions): Promise<T>
+```
+
+**Parameters:**
+
+- `type` - Semantic type (e.g., `$.Customer`, `$.Order`)
+- `data` - Record data
+- `options` - Optional configuration
+  - `validate?: boolean` - Validate before creating (default: `false`)
+  - `schema?: Schema` - Schema to validate against
+  - `normalize?: boolean` - Normalize data (default: `false`)
+  - `cache?: boolean` - Cache result (default: `true`)
+
+**Returns:** Created record with `$id` and `$type`
+
+**Throws:**
+
+- `ValidationError` - If validation fails
+- `DuplicateKeyError` - If unique constraint violated
+
+**Example:**
+
+```typescript
+const customer = await data.create(
+  $.Customer,
+  {
+    name: 'Alice Johnson',
+    email: 'alice@example.com',
+  },
+  {
+    validate: true,
+    schema: $.Customer,
+  }
+)
+```
+
+### data.get()
+
+Retrieve a record by ID.
+
+```typescript
+function get<T>(type: SemanticType, id: string, options?: GetOptions): Promise<T>
+```
+
+**Parameters:**
+
+- `type` - Semantic type
+- `id` - Record ID
+- `options` - Optional configuration
+  - `include?: Include` - Relationships to include
+  - `cache?: boolean` - Use cache (default: `true`)
+  - `select?: string[]` - Fields to select
+
+**Returns:** Record or `null` if not found
+
+**Throws:**
+
+- `NotFoundError` - If record doesn't exist
+
+**Example:**
+
+```typescript
+const order = await data.get($.Order, 'order-123', {
+  include: {
+    customer: true,
+    items: true,
+  },
+})
+```
+
+### data.list()
+
+List records with filtering and pagination.
+
+```typescript
+function list<T>(type: SemanticType, options?: ListOptions): Promise<T[]>
+```
+
+**Parameters:**
+
+- `type` - Semantic type
+- `options` - Optional configuration
+  - `where?: Conditions` - Filter conditions
+  - `orderBy?: Sort` - Sorting
+  - `limit?: number` - Maximum records
+  - `offset?: number` - Offset for pagination
+  - `select?: string[]` - Fields to select
+  - `include?: Include` - Relationships to include
+
+**Returns:** Array of records
+
+**Example:**
+
+```typescript
+const activeCustomers = await data.list($.Customer, {
+  where: { status: 'active' },
+  orderBy: { createdAt: 'desc' },
+  limit: 10,
+})
+```
+
+### data.update()
+
+Update an existing record.
+
+```typescript
+function update<T>(id: string, changes: Partial<T>, options?: UpdateOptions): Promise<T>
+```
+
+**Parameters:**
+
+- `id` - Record ID
+- `changes` - Fields to update
+- `options` - Optional configuration
+  - `validate?: boolean` - Validate after update
+  - `where?: Conditions` - Additional conditions
+
+**Returns:** Updated record
+
+**Throws:**
+
+- `NotFoundError` - If record doesn't exist
+- `ValidationError` - If validation fails
+
+**Example:**
+
+```typescript
+await data.update(
+  'customer-123',
+  {
+    phone: '+1-555-9999',
+    lastUpdated: new Date(),
+  },
+  {
+    validate: true,
+  }
+)
+```
+
+### data.delete()
+
+Delete a record.
+
+```typescript
+function delete(id: string, options?: DeleteOptions): Promise<void>
+```
+
+**Parameters:**
+
+- `id` - Record ID
+- `options` - Optional configuration
+  - `cascade?: CascadeOptions` - Delete related records
+  - `confirm?: boolean` - Require confirmation
+  - `reason?: string` - Deletion reason
+
+**Returns:** `void`
+
+**Throws:**
+
+- `NotFoundError` - If record doesn't exist
+
+**Example:**
+
+```typescript
+await data.delete('customer-123', {
+  cascade: {
+    orders: true,
+    addresses: true,
+  },
+})
+```
+
+### data.upsert()
+
+Create or update a record.
+
+```typescript
+function upsert<T>(type: SemanticType, data: T, options: UpsertOptions): Promise<T>
+```
+
+**Parameters:**
+
+- `type` - Semantic type
+- `data` - Record data
+- `options` - Configuration
+  - `key: string | string[]` - Fields to match on
+  - `validate?: boolean` - Validate data
+  - `schema?: Schema` - Validation schema
+
+**Returns:** Created or updated record
+
+**Example:**
+
+```typescript
+await data.upsert(
+  $.Customer,
+  {
+    email: 'alice@example.com',
+    name: 'Alice Johnson',
+  },
+  {
+    key: 'email',
+    validate: true,
+  }
+)
+```
+
+## Validation Functions
+
+### validate()
+
+Validate data against a schema.
+
+```typescript
+function validate<T>(data: T, schema: Schema, options?: ValidationOptions): Promise<ValidationResult>
+```
+
+**Parameters:**
+
+- `data` - Data to validate
+- `schema` - Schema or semantic type
+- `options` - Optional configuration
+  - `detailed?: boolean` - Include error details
+
+**Returns:** Validation result
+
+```typescript
+interface ValidationResult {
+  valid: boolean
+  errors?: ValidationError[]
+}
+
+interface ValidationError {
+  path: string
+  message: string
+}
+```
+
+**Example:**
+
+```typescript
+const result = await validate(customerData, $.Customer, {
+  detailed: true,
+})
+
+if (!result.valid) {
+  console.log('Errors:', result.errors)
+}
+```
+
+## Transform Functions
+
+### transform()
+
+Transform data.
+
+```typescript
+function transform<T, U>(data: T, transform: Transform, options?: TransformOptions): Promise<U>
+```
+
+**Parameters:**
+
+- `data` - Data to transform
+- `transform` - Transform function or name
+- `options` - Optional configuration
+
+**Returns:** Transformed data
+
+**Example:**
+
+```typescript
+const normalized = await transform(rawData, $.Customer.normalize, {
+  lowercase: ['email'],
+  trim: ['name'],
+})
+```
+
+### pipeline()
+
+Create a transformation pipeline.
+
+```typescript
+function pipeline(): TransformPipeline
+```
+
+**Returns:** Pipeline builder
+
+**Example:**
+
+```typescript
+await pipeline()
+  .extract({ source: 'csv', path: './data.csv' })
+  .transform([data.normalize($.Customer), data.validate($.Customer)])
+  .load({ destination: 'database' })
+  .execute()
+```
+
+## Query Builder
+
+### query()
+
+Create a query builder.
+
+```typescript
+function query<T>(type: SemanticType): QueryBuilder<T>
+```
+
+**Returns:** Query builder
+
+**Methods:**
+
+- `where(conditions: Conditions): this` - Add filter conditions
+- `orderBy(field: string, direction: 'asc' | 'desc'): this` - Add sorting
+- `limit(count: number): this` - Limit results
+- `offset(count: number): this` - Set offset
+- `select(fields: string[]): this` - Select specific fields
+- `include(relations: Include): this` - Include relationships
+- `count(): Promise<number>` - Count records
+- `sum(field: string): Promise<number>` - Sum field values
+- `avg(field: string): Promise<number>` - Average field values
+- `min(field: string): Promise<any>` - Minimum value
+- `max(field: string): Promise<any>` - Maximum value
+- `aggregate(spec: AggregateSpec): this` - Add aggregations
+- `groupBy(fields: string | string[]): this` - Group results
+- `having(conditions: Conditions): this` - Filter groups
+- `explain(): Promise<QueryPlan>` - Get query plan
+- `execute(): Promise<T[]>` - Execute query
+
+**Example:**
+
+```typescript
+const orders = await query($.Order).where({ status: 'pending' }).orderBy('createdAt', 'desc').limit(10).execute()
+```
+
+### Query Operators
+
+**Comparison:**
+
+- `$eq` - Equal
+- `$ne` - Not equal
+- `$gt` - Greater than
+- `$gte` - Greater than or equal
+- `$lt` - Less than
+- `$lte` - Less than or equal
+
+**Array:**
+
+- `$in` - In array
+- `$nin` - Not in array
+
+**String:**
+
+- `$like` - Like pattern
+- `$regex` - Regular expression
+
+**Logical:**
+
+- `$and` - Logical AND
+- `$or` - Logical OR
+- `$not` - Logical NOT
+
+**Example:**
+
+```typescript
+const results = await query($.Order)
+  .where({
+    status: { $in: ['pending', 'processing'] },
+    total: { $gte: 100, $lte: 1000 },
+    createdAt: { $gte: '2025-01-01' },
+  })
+  .execute()
+```
+
+## Batch Functions
+
+### batch.create()
+
+Create multiple records.
+
+```typescript
+function create<T>(type: SemanticType, records: T[], options?: BatchOptions): Promise<void>
+```
+
+**Parameters:**
+
+- `type` - Semantic type
+- `records` - Array of records
+- `options` - Optional configuration
+  - `batchSize?: number` - Batch size (default: `100`)
+  - `parallel?: number` - Parallel batches (default: `4`)
+  - `onProgress?: (processed: number, total: number) => void` - Progress callback
+  - `onError?: (error: Error, record: T) => void` - Error callback
+
+**Example:**
+
+```typescript
+await batch.create($.User, users, {
+  batchSize: 100,
+  parallel: 4,
+  onProgress: (processed, total) => {
+    console.log(`${processed}/${total}`)
+  },
+})
+```
+
+### batch.update()
+
+Update multiple records.
+
+```typescript
+function update<T>(type: SemanticType, options: BatchUpdateOptions): Promise<void>
+```
+
+**Parameters:**
+
+- `type` - Semantic type
+- `options` - Configuration
+  - `where: Conditions` - Filter conditions
+  - `set: Partial<T>` - Fields to update
+  - `batchSize?: number` - Batch size
+
+**Example:**
+
+```typescript
+await batch.update($.Product, {
+  where: { category: 'Electronics' },
+  set: { onSale: true },
+  batchSize: 500,
+})
+```
+
+### batch.transform()
+
+Transform multiple records.
+
+```typescript
+function transform<T, U>(records: T[], transformer: (record: T) => Promise<U>, options?: BatchOptions): Promise<U[]>
+```
+
+**Parameters:**
+
+- `records` - Records to transform
+- `transformer` - Transform function
+- `options` - Optional configuration
+
+**Returns:** Transformed records
+
+**Example:**
+
+```typescript
+const normalized = await batch.transform(records, async (record) => await normalize(record), {
+  concurrency: 10,
+})
+```
+
+## Pipeline Builder
+
+### pipeline()
+
+Create an ETL pipeline.
+
+```typescript
+function pipeline(): Pipeline
+```
+
+**Methods:**
+
+- `extract(config: ExtractConfig | ExtractConfig[]): this` - Extract data
+- `transform(transforms: Transform | TransformMap): this` - Transform data
+- `load(config: LoadConfig): this` - Load data
+- `join(spec: JoinSpec): this` - Join datasets
+- `aggregate(spec: AggregateSpec): this` - Aggregate data
+- `filter(predicate: (record: any) => boolean): this` - Filter records
+- `branch(branches: BranchSpec): this` - Branch execution
+- `checkpoint(handler: (data: any) => Promise<void>): this` - Save checkpoint
+- `onComplete(handler: (result: any) => Promise<void>): this` - Completion handler
+- `execute(): Promise<void>` - Execute pipeline
+- `run(): void` - Start streaming pipeline
+
+**Example:**
+
+```typescript
+await pipeline().extract({ source: 'api', url: 'https://api.example.com/data' }).transform([normalize, validate]).load({ destination: 'database' }).execute()
+```
+
+## Quality Functions
+
+### quality.define()
+
+Define quality rules.
+
+```typescript
+function define(type: SemanticType, rules: QualityRules): Promise<void>
+```
+
+**Parameters:**
+
+- `type` - Semantic type
+- `rules` - Quality rules
+  - `completeness?: CompletenessRules` - Required fields
+  - `accuracy?: AccuracyRules` - Format validation
+  - `consistency?: ConsistencyRules` - Value constraints
+  - `timeliness?: TimelinessRules` - Age limits
+  - `uniqueness?: UniquenessRules` - Duplicate detection
+
+**Example:**
+
+```typescript
+await quality.define($.Customer, {
+  completeness: {
+    required: ['name', 'email'],
+    threshold: 0.98,
+  },
+  accuracy: {
+    email: { format: 'email' },
+  },
+})
+```
+
+### quality.check()
+
+Check data quality.
+
+```typescript
+function check(type: SemanticType, options?: QualityCheckOptions): Promise<QualityReport>
+```
+
+**Parameters:**
+
+- `type` - Semantic type
+- `options` - Optional configuration
+  - `sample?: number` - Sample percentage
+  - `detailed?: boolean` - Include details
+
+**Returns:** Quality report
+
+```typescript
+interface QualityReport {
+  score: number
+  completeness: number
+  accuracy: number
+  consistency: number
+  timeliness: number
+  uniqueness: number
+  issues: QualityIssue[]
+}
+```
+
+**Example:**
+
+```typescript
+const report = await quality.check($.Customer)
+console.log('Quality score:', report.score)
+```
+
+### quality.fix()
+
+Auto-fix quality issues.
+
+```typescript
+function fix(type: SemanticType, options: QualityFixOptions): Promise<QualityFixResult>
+```
+
+**Parameters:**
+
+- `type` - Semantic type
+- `options` - Configuration
+  - `strategies: string[]` - Fix strategies
+  - `dryRun?: boolean` - Preview only
+
+**Returns:** Fix result
+
+**Example:**
+
+```typescript
+const result = await quality.fix($.Customer, {
+  strategies: ['normalize', 'validate'],
+  dryRun: false,
+})
+```
+
+## Types
+
+### SemanticType
+
+Semantic type from Schema.org or custom vocabulary.
+
+```typescript
+type SemanticType = string // e.g., 'https://schema.org/Customer'
+```
+
+### Conditions
+
+Query conditions.
+
+```typescript
+type Conditions =
+  | {
+      [field: string]:
+        | any
+        | {
+            $eq?: any
+            $ne?: any
+            $gt?: any
+            $gte?: any
+            $lt?: any
+            $lte?: any
+            $in?: any[]
+            $nin?: any[]
+            $like?: string
+            $regex?: RegExp
+          }
+    }
+  | {
+      $and?: Conditions[]
+      $or?: Conditions[]
+      $not?: Conditions
+    }
+```
+
+### Include
+
+Relationship includes.
+
+```typescript
+type Include = {
+  [relation: string]: boolean | QueryBuilder
+}
+```
+
+### Schema
+
+Validation schema.
+
+```typescript
+interface Schema {
+  $type: SemanticType
+  version?: number
+  required?: string[]
+  rules?: {
+    [field: string]: FieldRules
+  }
+  validators?: Validator[]
+}
+
+interface FieldRules {
+  type?: string
+  required?: boolean
+  min?: number
+  max?: number
+  minLength?: number
+  maxLength?: number
+  pattern?: RegExp
+  enum?: any[]
+  format?: string
+  validate?: (value: any) => boolean | Promise<boolean>
+}
+```
+
+## Error Codes
+
+### VALIDATION_ERROR
+
+Data validation failed.
+
+```typescript
+{
+  code: 'VALIDATION_ERROR',
+  message: 'Validation failed',
+  details: ValidationError[]
+}
+```
+
+### DUPLICATE_KEY
+
+Unique constraint violated.
+
+```typescript
+{
+  code: 'DUPLICATE_KEY',
+  message: 'Duplicate key error',
+  field: string,
+  value: any
+}
+```
+
+### NOT_FOUND
+
+Record not found.
+
+```typescript
+{
+  code: 'NOT_FOUND',
+  message: 'Record not found',
+  id: string
+}
+```
+
+### CONSTRAINT_VIOLATION
+
+Database constraint violated.
+
+```typescript
+{
+  code: 'CONSTRAINT_VIOLATION',
+  message: 'Constraint violation',
+  constraint: string
+}
+```
+
+### CONNECTION_ERROR
+
+Database connection error.
+
+```typescript
+{
+  code: 'CONNECTION_ERROR',
+  message: 'Connection failed',
+  details: any
+}
+```
+
+### QUERY_TIMEOUT
+
+Query exceeded timeout.
+
+```typescript
+{
+  code: 'QUERY_TIMEOUT',
+  message: 'Query timeout',
+  duration: number
+}
+```
+
+### TRANSFORM_FAILED
+
+Data transformation failed.
+
+```typescript
+{
+  code: 'TRANSFORM_FAILED',
+  message: 'Transform failed',
+  transform: string,
+  error: any
+}
+```
+
+### BATCH_PARTIAL_FAILURE
+
+Batch operation partially failed.
+
+```typescript
+{
+  code: 'BATCH_PARTIAL_FAILURE',
+  message: 'Batch partially failed',
+  successful: number,
+  failed: number,
+  errors: Error[]
+}
+```
+
+## Configuration
+
+### configure()
+
+Configure data.do globally.
+
+```typescript
+function configure(config: DataConfig): void
+```
+
+**Parameters:**
+
+```typescript
+interface DataConfig {
+  validation?: {
+    strict?: boolean
+    throwOnError?: boolean
+    autoValidate?: boolean
+  }
+  transforms?: {
+    autoNormalize?: boolean
+    autoTrim?: boolean
+    autoLowercase?: string[]
+  }
+  batch?: {
+    defaultSize?: number
+    maxConcurrency?: number
+  }
+  cache?: {
+    enabled?: boolean
+    ttl?: string
+    invalidateOnUpdate?: boolean
+  }
+  connection?: {
+    pool?: {
+      min?: number
+      max?: number
+      acquireTimeout?: number
+      idleTimeout?: number
+    }
+  }
+  logging?: {
+    enabled?: boolean
+    level?: 'debug' | 'info' | 'warn' | 'error'
+    queries?: boolean
+    performance?: boolean
+  }
+}
+```
+
+**Example:**
+
+```typescript
+configure({
+  validation: {
+    strict: true,
+    throwOnError: true,
+  },
+  cache: {
+    enabled: true,
+    ttl: '5m',
+  },
+})
+```
+
+## License
+
+- Documentation: [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/)
+- Code Examples: [MIT](https://opensource.org/licenses/MIT)

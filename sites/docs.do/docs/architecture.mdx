@@ -1,0 +1,752 @@
+---
+$id: https://docs.do/docs/architecture
+$type: TechArticle
+title: docs.do Architecture
+description: System architecture and design patterns for the docs.do documentation platform
+keywords: [architecture, design, system, components, infrastructure]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# docs.do Architecture
+
+This document describes the architecture and design patterns used in docs.do, the unified documentation platform for the `.do` ecosystem.
+
+## System Overview
+
+docs.do is built as a distributed documentation platform with the following core components:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        docs.do Platform                      │
+├─────────────────────────────────────────────────────────────┤
+│                                                               │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
+│  │   Ingestion  │  │    Search    │  │  Generation  │      │
+│  │   Pipeline   │──│    Engine    │──│    Service   │      │
+│  └──────────────┘  └──────────────┘  └──────────────┘      │
+│         │                  │                  │              │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
+│  │   Version    │  │  Analytics   │  │ Translation  │      │
+│  │   Control    │──│   Service    │──│   Service    │      │
+│  └──────────────┘  └──────────────┘  └──────────────┘      │
+│         │                  │                  │              │
+│  ┌──────────────────────────────────────────────────┐      │
+│  │              Storage Layer                        │      │
+│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐       │      │
+│  │  │ Document │  │  Search  │  │  Cache   │       │      │
+│  │  │    DB    │  │  Index   │  │  Store   │       │      │
+│  │  └──────────┘  └──────────┘  └──────────┘       │      │
+│  └──────────────────────────────────────────────────┘      │
+│                                                               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Core Components
+
+### 1. Ingestion Pipeline
+
+The ingestion pipeline processes and indexes documentation from multiple sources:
+
+**Architecture:**
+
+```typescript
+interface IngestionPipeline {
+  // Source adapters
+  sources: {
+    markdown: MarkdownAdapter
+    mdx: MDXAdapter
+    openapi: OpenAPIAdapter
+    typescript: TypeScriptAdapter
+    git: GitAdapter
+  }
+
+  // Processing stages
+  stages: {
+    parse: DocumentParser
+    validate: SchemaValidator
+    enrich: ContentEnricher
+    index: DocumentIndexer
+  }
+
+  // Output targets
+  targets: {
+    database: PostgresWriter
+    search: ElasticsearchWriter
+    cache: RedisWriter
+  }
+}
+```
+
+**Implementation:**
+
+```typescript
+import { docs } from 'docs.do'
+
+class IngestionPipeline {
+  async ingest(source: DocumentSource) {
+    // Parse source format
+    const parsed = await this.parse(source)
+
+    // Validate against schema
+    const validated = await this.validate(parsed)
+
+    // Enrich with metadata
+    const enriched = await this.enrich(validated)
+
+    // Extract semantic information
+    const semantic = await this.extractSemantics(enriched)
+
+    // Index for search
+    await this.index(semantic)
+
+    // Store in database
+    await this.store(semantic)
+
+    // Cache for fast access
+    await this.cache(semantic)
+
+    return semantic
+  }
+
+  private async parse(source: DocumentSource) {
+    const adapter = this.getAdapter(source.format)
+    return adapter.parse(source.content)
+  }
+
+  private async validate(doc: Document) {
+    return this.validator.validate(doc, {
+      schema: $.TechArticle,
+      strict: false,
+    })
+  }
+
+  private async enrich(doc: Document) {
+    return {
+      ...doc,
+      metadata: await this.extractMetadata(doc),
+      relationships: await this.extractRelationships(doc),
+      keywords: await this.extractKeywords(doc),
+      embedding: await this.generateEmbedding(doc),
+    }
+  }
+
+  private async extractSemantics(doc: Document) {
+    return {
+      ...doc,
+      entities: await this.extractEntities(doc),
+      concepts: await this.extractConcepts(doc),
+      graph: await this.buildGraph(doc),
+    }
+  }
+}
+```
+
+### 2. Search Engine
+
+Multi-strategy search engine with semantic capabilities:
+
+**Architecture:**
+
+```typescript
+interface SearchEngine {
+  // Search strategies
+  strategies: {
+    keyword: KeywordSearch // Traditional full-text
+    semantic: SemanticSearch // AI embeddings
+    hybrid: HybridSearch // Combined approach
+    graph: GraphSearch // Relationship-based
+  }
+
+  // Ranking
+  ranking: {
+    scorer: RelevanceScorer
+    reranker: AIReranker
+    personalizer: PersonalizationEngine
+  }
+
+  // Infrastructure
+  infrastructure: {
+    index: SearchIndex
+    cache: QueryCache
+    analytics: SearchAnalytics
+  }
+}
+```
+
+**Implementation:**
+
+```typescript
+import { docs, ai } from 'docs.do'
+
+class SearchEngine {
+  async search(query: string, options: SearchOptions) {
+    // Check cache
+    const cached = await this.cache.get(query)
+    if (cached) return cached
+
+    // Determine search strategy
+    const strategy = this.selectStrategy(query, options)
+
+    // Execute search
+    let results = await strategy.search(query, options)
+
+    // Rank results
+    results = await this.rank(results, query)
+
+    // Personalize for user
+    if (options.userId) {
+      results = await this.personalize(results, options.userId)
+    }
+
+    // Track analytics
+    await this.trackSearch(query, results)
+
+    // Cache results
+    await this.cache.set(query, results)
+
+    return results
+  }
+
+  private selectStrategy(query: string, options: SearchOptions) {
+    // Use semantic search for natural language
+    if (this.isNaturalLanguage(query)) {
+      return this.strategies.semantic
+    }
+
+    // Use keyword search for specific terms
+    if (this.hasSpecificTerms(query)) {
+      return this.strategies.keyword
+    }
+
+    // Default to hybrid
+    return this.strategies.hybrid
+  }
+
+  private async rank(results: SearchResult[], query: string) {
+    // Initial relevance scoring
+    let scored = await this.scorer.score(results, query)
+
+    // AI reranking for better results
+    scored = await this.reranker.rerank(scored, query)
+
+    // Sort by score
+    return scored.sort((a, b) => b.score - a.score)
+  }
+}
+
+// Semantic search implementation
+class SemanticSearch {
+  async search(query: string, options: SearchOptions) {
+    // Generate query embedding
+    const embedding = await ai.embed(query)
+
+    // Find similar documents
+    const results = await docs.findSimilar(embedding, {
+      threshold: options.minScore || 0.7,
+      limit: options.limit || 20,
+    })
+
+    return results
+  }
+}
+
+// Hybrid search implementation
+class HybridSearch {
+  async search(query: string, options: SearchOptions) {
+    // Run both searches in parallel
+    const [keyword, semantic] = await Promise.all([this.keywordSearch.search(query, options), this.semanticSearch.search(query, options)])
+
+    // Merge and deduplicate
+    return this.merge(keyword, semantic, {
+      keywordWeight: 0.4,
+      semanticWeight: 0.6,
+    })
+  }
+}
+```
+
+### 3. Version Control System
+
+Git-inspired version control for documentation:
+
+**Architecture:**
+
+```typescript
+interface VersionControl {
+  // Version management
+  versions: {
+    create: (doc: Document, version: string) => Promise<Version>
+    get: (id: string, version: string) => Promise<Document>
+    list: (id: string) => Promise<Version[]>
+    diff: (id: string, v1: string, v2: string) => Promise<Diff>
+  }
+
+  // Branching
+  branches: {
+    create: (from: string, name: string) => Promise<Branch>
+    merge: (source: string, target: string) => Promise<MergeResult>
+    compare: (branch1: string, branch2: string) => Promise<Comparison>
+  }
+
+  // History
+  history: {
+    log: (id: string) => Promise<Commit[]>
+    blame: (id: string) => Promise<BlameInfo>
+    revert: (id: string, version: string) => Promise<Document>
+  }
+}
+```
+
+**Implementation:**
+
+```typescript
+import { docs } from 'docs.do'
+
+class VersionControl {
+  async createVersion(doc: Document, version: string) {
+    // Create version snapshot
+    const snapshot = await this.snapshot(doc)
+
+    // Store version
+    await this.store(snapshot, {
+      id: doc.$id,
+      version,
+      previousVersion: doc.version,
+      timestamp: new Date(),
+      author: doc.author,
+      changeLog: doc.changeLog,
+    })
+
+    // Update version graph
+    await this.updateVersionGraph(doc.$id, version)
+
+    return snapshot
+  }
+
+  async diff(id: string, v1: string, v2: string) {
+    // Get both versions
+    const [doc1, doc2] = await Promise.all([this.getVersion(id, v1), this.getVersion(id, v2)])
+
+    // Compute diff
+    return this.computeDiff(doc1, doc2)
+  }
+
+  private computeDiff(doc1: Document, doc2: Document) {
+    const changes: Change[] = []
+
+    // Compare content
+    if (doc1.content !== doc2.content) {
+      changes.push({
+        type: 'content',
+        diff: this.textDiff(doc1.content, doc2.content),
+      })
+    }
+
+    // Compare metadata
+    for (const key of Object.keys(doc1.metadata)) {
+      if (doc1.metadata[key] !== doc2.metadata[key]) {
+        changes.push({
+          type: 'metadata',
+          field: key,
+          old: doc1.metadata[key],
+          new: doc2.metadata[key],
+        })
+      }
+    }
+
+    return { changes, additions: 0, deletions: 0 }
+  }
+}
+```
+
+### 4. Translation Service
+
+Multi-language support with AI-powered translation:
+
+**Architecture:**
+
+```typescript
+interface TranslationService {
+  // Translation
+  translate: {
+    auto: (doc: Document, targetLang: string) => Promise<Document>
+    manual: (doc: Document, translation: Translation) => Promise<Document>
+    batch: (docs: Document[], targetLang: string) => Promise<Document[]>
+  }
+
+  // Quality
+  quality: {
+    validate: (translation: Translation) => Promise<ValidationResult>
+    review: (translation: Translation) => Promise<ReviewResult>
+    improve: (translation: Translation) => Promise<Translation>
+  }
+
+  // Management
+  management: {
+    languages: () => Promise<string[]>
+    coverage: (docId: string) => Promise<LanguageCoverage>
+    sync: (docId: string) => Promise<SyncResult>
+  }
+}
+```
+
+**Implementation:**
+
+```typescript
+import { docs, ai } from 'docs.do'
+
+class TranslationService {
+  async translate(doc: Document, targetLang: string) {
+    // Check if translation exists
+    const existing = await this.getTranslation(doc.$id, targetLang)
+    if (existing && !this.isStale(existing, doc)) {
+      return existing
+    }
+
+    // Generate translation with AI
+    const translated = await ai.generate(`Translate this documentation to ${targetLang}`, {
+      context: doc,
+      targetLanguage: targetLang,
+      preserveCodeBlocks: true,
+      preserveLinks: true,
+    })
+
+    // Validate translation
+    const validated = await this.validate(translated, doc)
+
+    // Store translation
+    await docs.storeTranslation(doc.$id, targetLang, validated)
+
+    return validated
+  }
+
+  async batchTranslate(docs: Document[], targetLang: string) {
+    // Use batch API for cost savings (50%)
+    return ai.batch(
+      docs.map((doc) => ({
+        prompt: `Translate this documentation to ${targetLang}`,
+        context: doc,
+        targetLanguage: targetLang,
+      }))
+    )
+  }
+
+  private async validate(translation: Document, original: Document) {
+    // Check completeness
+    if (!this.isComplete(translation, original)) {
+      throw new Error('Translation incomplete')
+    }
+
+    // Check quality
+    const quality = await this.assessQuality(translation, original)
+    if (quality.score < 0.8) {
+      // Improve translation
+      return this.improve(translation, original)
+    }
+
+    return translation
+  }
+}
+```
+
+## Data Models
+
+### Document Model
+
+```typescript
+interface Document {
+  $id: string
+  $type: 'TechArticle' | 'APIReference' | 'HowTo' | 'CodeSnippet'
+
+  // Content
+  headline: string
+  articleBody: string
+  keywords: string[]
+
+  // Metadata
+  author: Organization | Person
+  datePublished: Date
+  dateModified: Date
+  version: string
+  language: string
+  domain: string
+
+  // Semantic
+  about: Thing
+  mentions: Thing[]
+  embedding: number[]
+
+  // Relationships
+  relatedTo: Document[]
+  isPartOf: Document[]
+  hasPart: Document[]
+
+  // Versioning
+  previousVersion?: string
+  changeLog?: string
+
+  // Analytics
+  views: number
+  searches: number
+}
+```
+
+### Search Index Schema
+
+```typescript
+interface SearchIndex {
+  // Document fields
+  id: string
+  type: string
+  title: string
+  content: string
+  excerpt: string
+
+  // Metadata
+  domain: string
+  version: string
+  language: string
+  tags: string[]
+
+  // Semantic fields
+  embedding: number[]
+  entities: string[]
+  concepts: string[]
+
+  // Ranking factors
+  popularity: number
+  recency: number
+  quality: number
+
+  // Full-text search
+  title_text: string
+  content_text: string
+
+  // Dates
+  published: Date
+  modified: Date
+  indexed: Date
+}
+```
+
+## Scaling Architecture
+
+### Horizontal Scaling
+
+```typescript
+// Load balancer configuration
+const loadBalancer = {
+  algorithm: 'least-connections',
+  healthCheck: {
+    interval: 30,
+    timeout: 5,
+    unhealthyThreshold: 3,
+  },
+  nodes: [
+    { host: 'docs-1.do', weight: 1 },
+    { host: 'docs-2.do', weight: 1 },
+    { host: 'docs-3.do', weight: 1 },
+  ],
+}
+
+// Distributed search
+class DistributedSearch {
+  async search(query: string) {
+    // Shard query across nodes
+    const shards = this.getShards(query)
+
+    // Search in parallel
+    const results = await Promise.all(shards.map((shard) => shard.search(query)))
+
+    // Merge and rank
+    return this.mergeResults(results)
+  }
+}
+```
+
+### Caching Strategy
+
+```typescript
+// Multi-level caching
+class CacheStrategy {
+  // L1: In-memory cache (hot data)
+  private memory = new Map<string, any>()
+
+  // L2: Redis cache (warm data)
+  private redis = createRedisClient()
+
+  // L3: CDN cache (public data)
+  private cdn = createCDNClient()
+
+  async get(key: string) {
+    // Check L1
+    if (this.memory.has(key)) {
+      return this.memory.get(key)
+    }
+
+    // Check L2
+    const cached = await this.redis.get(key)
+    if (cached) {
+      this.memory.set(key, cached)
+      return cached
+    }
+
+    // Check L3
+    const cdn = await this.cdn.get(key)
+    if (cdn) {
+      await this.redis.set(key, cdn, 'EX', 3600)
+      this.memory.set(key, cdn)
+      return cdn
+    }
+
+    return null
+  }
+}
+```
+
+## Security Architecture
+
+### Access Control
+
+```typescript
+interface AccessControl {
+  // Authentication
+  authenticate: (token: string) => Promise<User>
+
+  // Authorization
+  authorize: (user: User, resource: string, action: string) => Promise<boolean>
+
+  // Permissions
+  permissions: {
+    read: Permission
+    write: Permission
+    admin: Permission
+  }
+}
+
+// Implementation
+class AccessControl {
+  async authorize(user: User, docId: string, action: string) {
+    // Get document permissions
+    const doc = await docs.get(docId)
+
+    // Check ownership
+    if (doc.author.$id === user.$id) {
+      return true
+    }
+
+    // Check role
+    if (user.role === 'admin') {
+      return true
+    }
+
+    // Check specific permissions
+    return this.hasPermission(user, doc, action)
+  }
+}
+```
+
+## Performance Optimization
+
+### Query Optimization
+
+```typescript
+// Query caching
+const queryCache = new Map<string, CachedResult>()
+
+async function optimizedSearch(query: string) {
+  // Check cache
+  const cacheKey = this.computeCacheKey(query)
+  const cached = queryCache.get(cacheKey)
+
+  if (cached && !this.isStale(cached)) {
+    return cached.results
+  }
+
+  // Execute query with timeout
+  const results = await Promise.race([this.executeSearch(query), this.timeout(5000)])
+
+  // Cache results
+  queryCache.set(cacheKey, {
+    results,
+    timestamp: Date.now(),
+    ttl: 3600,
+  })
+
+  return results
+}
+```
+
+### Indexing Strategy
+
+```typescript
+// Incremental indexing
+class IncrementalIndexer {
+  async index(docs: Document[]) {
+    // Batch documents
+    const batches = this.batch(docs, 100)
+
+    // Index in parallel
+    await Promise.all(batches.map((batch) => this.indexBatch(batch)))
+  }
+
+  private async indexBatch(docs: Document[]) {
+    // Bulk index operation
+    return this.elasticsearch.bulk({
+      operations: docs.flatMap((doc) => [{ index: { _id: doc.$id } }, this.toIndexDocument(doc)]),
+    })
+  }
+}
+```
+
+## Monitoring and Observability
+
+### Metrics Collection
+
+```typescript
+// Metrics
+const metrics = {
+  // Search metrics
+  'search.latency': histogram(),
+  'search.results': histogram(),
+  'search.errors': counter(),
+
+  // Index metrics
+  'index.size': gauge(),
+  'index.documents': gauge(),
+  'index.latency': histogram(),
+
+  // Cache metrics
+  'cache.hits': counter(),
+  'cache.misses': counter(),
+  'cache.size': gauge(),
+}
+
+// Track metrics
+async function search(query: string) {
+  const start = Date.now()
+
+  try {
+    const results = await executeSearch(query)
+    metrics['search.latency'].observe(Date.now() - start)
+    metrics['search.results'].observe(results.length)
+    return results
+  } catch (error) {
+    metrics['search.errors'].inc()
+    throw error
+  }
+}
+```
+
+## See Also
+
+- [Getting Started](./getting-started) - Setup guide
+- [Best Practices](./best-practices) - Implementation best practices
+- [API Reference](../api/reference) - Complete API documentation
+- [Troubleshooting](./troubleshooting) - Common issues
+
+---
+
+Learn about implementation best practices in [Best Practices](./best-practices).

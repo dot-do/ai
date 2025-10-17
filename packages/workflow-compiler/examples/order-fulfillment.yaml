@@ -1,0 +1,35 @@
+$id: order-fulfillment
+$type: Workflow
+name: Order Fulfillment
+description: Process high-value orders and send notifications
+version: "1.0.0"
+triggers:
+  - on: $.Order.created
+  - every: "0 */4 * * *"
+steps:
+  - id: check-inventory
+    action: $.Inventory.check
+    input:
+      orderId: "{{context.orderId}}"
+    onSuccess: process-payment
+    onError: notify-team
+  - id: process-payment
+    action: $.Payment.process
+    input:
+      orderId: "{{context.orderId}}"
+    onSuccess: send-confirmation
+    onError: notify-team
+  - id: send-confirmation
+    action: $.Email.send
+    input:
+      to: "{{customer.email}}"
+      template: order-confirmation
+  - id: notify-team
+    action: $.Slack.send
+    input:
+      channel: "#alerts"
+      message: "Order processing failed"
+metadata:
+  tags:
+    - ecommerce
+    - orders

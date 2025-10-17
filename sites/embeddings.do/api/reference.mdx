@@ -1,0 +1,473 @@
+---
+$id: https://embeddings.do/api/reference
+$type: APIReference
+title: embeddings.do API Reference
+description: Complete API reference for vector embeddings and semantic search
+keywords: [embeddings, api, reference, functions, types, interfaces]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# API Reference
+
+Complete API reference for vector embeddings and semantic search.
+
+## ai.embed()
+
+Generate vector embeddings for text.
+
+### Signature
+
+```typescript
+function embed(text: string | string[], options?: EmbedOptions): Promise<number[] | number[][]>
+```
+
+### Parameters
+
+- **text**: `string | string[]` - Text or array of texts to embed
+- **options**: `EmbedOptions` (optional) - Embedding options
+
+```typescript
+interface EmbedOptions {
+  model?: string // Embedding model (default: 'text-embedding-3-large')
+  timeout?: number // Request timeout in ms (default: 30000)
+}
+```
+
+### Returns
+
+- `Promise<number[]>` - Single embedding if text is string
+- `Promise<number[][]>` - Array of embeddings if text is array
+
+### Examples
+
+```typescript
+// Single embedding
+const embedding = await ai.embed('machine learning')
+console.log(embedding.length) // 1536
+
+// Multiple embeddings
+const embeddings = await ai.embed(['text one', 'text two', 'text three'])
+console.log(embeddings.length) // 3
+
+// With options
+const embedding = await ai.embed('text', {
+  model: 'text-embedding-3-small',
+  timeout: 10000,
+})
+```
+
+### Errors
+
+- `INVALID_API_KEY` - API key is missing or invalid
+- `TEXT_TOO_LONG` - Text exceeds token limit
+- `RATE_LIMIT_EXCEEDED` - Too many requests
+- `MODEL_NOT_FOUND` - Invalid model name
+- `TIMEOUT` - Request timed out
+
+## Similarity Functions
+
+Calculate similarity between embeddings.
+
+### cosineSimilarity()
+
+Calculate cosine similarity between two vectors.
+
+```typescript
+function cosineSimilarity(a: number[], b: number[]): number
+```
+
+**Parameters**:
+
+- `a`: First embedding vector
+- `b`: Second embedding vector
+
+**Returns**: Similarity score (0 to 1, higher is more similar)
+
+**Example**:
+
+```typescript
+const embed1 = await ai.embed('machine learning')
+const embed2 = await ai.embed('artificial intelligence')
+
+const similarity = cosineSimilarity(embed1, embed2)
+console.log(similarity) // ~0.85
+```
+
+### euclideanDistance()
+
+Calculate Euclidean distance between two vectors.
+
+```typescript
+function euclideanDistance(a: number[], b: number[]): number
+```
+
+**Parameters**:
+
+- `a`: First embedding vector
+- `b`: Second embedding vector
+
+**Returns**: Distance (0 to ∞, lower is more similar)
+
+**Example**:
+
+```typescript
+const distance = euclideanDistance(embed1, embed2)
+console.log(distance) // Lower = more similar
+```
+
+### dotProduct()
+
+Calculate dot product of two vectors.
+
+```typescript
+function dotProduct(a: number[], b: number[]): number
+```
+
+**Parameters**:
+
+- `a`: First embedding vector
+- `b`: Second embedding vector
+
+**Returns**: Dot product (higher is more similar)
+
+**Example**:
+
+```typescript
+const product = dotProduct(embed1, embed2)
+console.log(product) // Higher = more similar
+```
+
+## Types
+
+### Embedding
+
+Vector embedding with metadata.
+
+```typescript
+interface Embedding {
+  $id: string
+  $type: 'Embedding'
+  text: string // Original text
+  vector: number[] // Embedding vector
+  model: string // Model used
+  modelVersion: string // Model version
+  dimensions: number // Vector dimensions
+  createdAt: string // ISO 8601 timestamp
+}
+```
+
+### EmbeddingModel
+
+Available embedding models.
+
+```typescript
+type EmbeddingModel =
+  | 'text-embedding-3-large' // 1536 dims, best accuracy
+  | 'text-embedding-3-small' // 512 dims, fast & efficient
+  | 'text-embedding-ada-002' // 1536 dims, stable
+```
+
+### SimilarityMetric
+
+Similarity measurement methods.
+
+```typescript
+type SimilarityMetric = 'cosine' | 'euclidean' | 'dot'
+```
+
+### SearchOptions
+
+Options for semantic search.
+
+```typescript
+interface SearchOptions {
+  limit?: number // Max results (default: 10)
+  threshold?: number // Min similarity (default: 0.0)
+  metric?: SimilarityMetric // Similarity metric (default: 'cosine')
+  filters?: Record<string, any> // Pre-filters
+}
+```
+
+## Search Functions
+
+### semanticSearch()
+
+Perform semantic search across entities.
+
+```typescript
+async function semanticSearch(query: string, entities: any[], options?: SearchOptions): Promise<SearchResult[]>
+```
+
+**Parameters**:
+
+- `query`: Search query text
+- `entities`: Array of entities with embeddings
+- `options`: Search options
+
+**Returns**: Array of search results
+
+```typescript
+interface SearchResult {
+  entity: any
+  similarity: number
+}
+```
+
+**Example**:
+
+```typescript
+const results = await semanticSearch('affordable laptop for students', products, {
+  limit: 10,
+  threshold: 0.7,
+  filters: { category: 'Electronics' },
+})
+```
+
+### findSimilar()
+
+Find similar entities to a given entity.
+
+```typescript
+async function findSimilar(entity: any, entities: any[], options?: SearchOptions): Promise<SearchResult[]>
+```
+
+**Parameters**:
+
+- `entity`: Entity to find similar items for
+- `entities`: Array of entities to search
+- `options`: Search options
+
+**Returns**: Array of similar entities
+
+**Example**:
+
+```typescript
+const similar = await findSimilar(product, allProducts, { limit: 5 })
+```
+
+## Batch Operations
+
+### batchEmbed()
+
+Generate embeddings for large datasets.
+
+```typescript
+async function batchEmbed(texts: string[], options?: BatchEmbedOptions): Promise<number[][]>
+```
+
+**Parameters**:
+
+- `texts`: Array of texts to embed
+- `options`: Batch options
+
+```typescript
+interface BatchEmbedOptions extends EmbedOptions {
+  batchSize?: number // Items per batch (default: 100)
+  onProgress?: (progress: number) => void // Progress callback
+}
+```
+
+**Returns**: Array of embeddings
+
+**Example**:
+
+```typescript
+const embeddings = await batchEmbed(texts, {
+  batchSize: 100,
+  onProgress: (progress) => {
+    console.log(`Progress: ${progress}%`)
+  },
+})
+```
+
+## Caching
+
+### EmbeddingCache
+
+Cache for embeddings.
+
+```typescript
+class EmbeddingCache {
+  async get(text: string): Promise<number[] | null>
+  async set(text: string, embedding: number[]): Promise<void>
+  async has(text: string): Promise<boolean>
+  async delete(text: string): Promise<void>
+  async clear(): Promise<void>
+}
+```
+
+**Example**:
+
+```typescript
+const cache = new EmbeddingCache()
+
+// Check cache
+let embedding = await cache.get(text)
+if (!embedding) {
+  // Generate and cache
+  embedding = await ai.embed(text)
+  await cache.set(text, embedding)
+}
+```
+
+## Utilities
+
+### normalizeText()
+
+Normalize text for consistent embeddings.
+
+```typescript
+function normalizeText(text: string): string
+```
+
+**Example**:
+
+```typescript
+const normalized = normalizeText('  Machine Learning!  ')
+// 'machine learning'
+```
+
+### truncateText()
+
+Truncate text to token limit.
+
+```typescript
+function truncateText(text: string, maxTokens?: number): string
+```
+
+**Example**:
+
+```typescript
+const truncated = truncateText(longText, 8000)
+```
+
+### hashText()
+
+Generate hash for text.
+
+```typescript
+function hashText(text: string): string
+```
+
+**Example**:
+
+```typescript
+const hash = hashText('machine learning')
+// 'a3c4f9b2...'
+```
+
+## Configuration
+
+### ai.config()
+
+Configure embedding service.
+
+```typescript
+function config(options: ConfigOptions): void
+
+interface ConfigOptions {
+  embeddingModel?: EmbeddingModel
+  batchSize?: number
+  timeout?: number
+  cacheEnabled?: boolean
+  cacheTTL?: number
+}
+```
+
+**Example**:
+
+```typescript
+ai.config({
+  embeddingModel: 'text-embedding-3-large',
+  batchSize: 100,
+  timeout: 30000,
+  cacheEnabled: true,
+  cacheTTL: 3600,
+})
+```
+
+## Constants
+
+### EMBEDDING_DIMENSIONS
+
+Dimensions for each model.
+
+```typescript
+const EMBEDDING_DIMENSIONS = {
+  'text-embedding-3-large': 1536,
+  'text-embedding-3-small': 512,
+  'text-embedding-ada-002': 1536,
+} as const
+```
+
+### MAX_TEXT_LENGTH
+
+Maximum text length in tokens.
+
+```typescript
+const MAX_TEXT_LENGTH = 8191 // tokens
+```
+
+### DEFAULT_MODEL
+
+Default embedding model.
+
+```typescript
+const DEFAULT_MODEL = 'text-embedding-3-large'
+```
+
+## CLI Commands
+
+### do ai embed
+
+Generate embeddings from CLI.
+
+```bash
+# Single text
+do ai embed "machine learning"
+
+# Multiple texts
+do ai embed "text one" "text two" "text three"
+
+# With model option
+do ai embed "text" --model text-embedding-3-small
+
+# Output to file
+do ai embed "text" --output embedding.json
+```
+
+### do embeddings search
+
+Search with embeddings.
+
+```bash
+# Search products
+do embeddings search Product "affordable laptop" --limit 10
+
+# With filters
+do embeddings search Product "laptop" --where '{"category": "Electronics"}'
+
+# Output results
+do embeddings search Product "laptop" --output results.json
+```
+
+### do embeddings index
+
+Index entities with embeddings.
+
+```bash
+# Index all products
+do embeddings index Product
+
+# Index with filters
+do embeddings index Product --where '{"status": "active"}'
+
+# Show progress
+do embeddings index Product --progress
+```
+
+## License
+
+CC-BY-4.0 (Open Source)

@@ -1,0 +1,490 @@
+---
+$id: https://events.do
+$type: WebSite
+name: events.do
+description: Event-driven architecture for Business-as-Code with semantic event patterns
+license: CC-BY-4.0
+keywords: [events, event-driven, pub-sub, listeners, publishers, workflows, business-as-code]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# events.do
+
+**Event-driven architecture for Business-as-Code with semantic event patterns**
+
+events.do provides a comprehensive event system for building event-driven Business-as-Code applications using semantic `Object.Action` naming patterns. It combines event listeners (`on`) and publishers (`send`) to create reactive, autonomous workflows.
+
+## Quick Start
+
+```bash
+pnpm add sdk.do
+```
+
+```typescript
+import { on, send } from 'sdk.do'
+
+// Listen for events
+on('Order.created', async (event) => {
+  console.log('New order:', event.data)
+
+  // Publish follow-up event
+  await send('Payment.requested', {
+    orderId: event.data.id,
+    amount: event.data.total,
+  })
+})
+
+// Publish an event
+await send('Order.created', {
+  id: '12345',
+  customer: 'acme-corp',
+  total: 1500.0,
+})
+```
+
+## Overview
+
+events.do enables event-driven architectures through semantic event patterns that are both human-readable and AI-understandable. Events follow the `Object.Action` naming convention, making it clear what entity changed and what action occurred.
+
+### Key Concepts
+
+**Event Naming**: `Object.Action` pattern (e.g., `Order.created`, `Payment.completed`, `User.registered`)
+
+- **Object**: The business entity (Order, Payment, User, Product, etc.)
+- **Action**: Past tense verb describing what happened (created, updated, deleted, shipped, etc.)
+
+**Event Listeners**: Use `on` to subscribe to events and react to changes
+**Event Publishers**: Use `send` to publish events when actions occur
+**Event Chains**: Events can trigger other events, creating reactive workflows
+
+## Features
+
+### Event Listeners with `on`
+
+Subscribe to business events and execute logic when they occur:
+
+```typescript
+import { on } from 'sdk.do'
+
+// Single event listener
+on('Order.created', async (event) => {
+  await processNewOrder(event.data)
+})
+
+// Multiple events with same handler
+on(['Payment.completed', 'Payment.refunded'], async (event) => {
+  await updateAccountingRecords(event)
+})
+
+// Pattern matching
+on('Order.*', async (event) => {
+  await auditOrderEvent(event)
+})
+```
+
+### Event Publishing with `send`
+
+Publish events when business actions occur:
+
+```typescript
+import { send } from 'sdk.do'
+
+// Publish single event
+await send('Order.created', {
+  id: '12345',
+  customer: 'acme-corp',
+  items: [...],
+  total: 1500.00,
+})
+
+// Publish with metadata
+await send('Order.shipped', {
+  orderId: '12345',
+  trackingNumber: 'TRACK123',
+  carrier: 'FedEx',
+}, {
+  timestamp: new Date(),
+  source: 'warehouse-system',
+  correlationId: 'batch-456',
+})
+```
+
+### Semantic Event Patterns
+
+Events follow semantic `$.Subject.predicate.Object` patterns for AI understanding:
+
+```typescript
+import $, { on, send } from 'sdk.do'
+
+// Semantic event with full context
+on($.Order.statusChanged, async (event) => {
+  const order = event.data
+
+  if (order.status === 'shipped') {
+    await send($.Customer.notified, {
+      customerId: order.customer,
+      type: 'order-shipped',
+      orderId: order.id,
+    })
+  }
+})
+```
+
+### Event-Driven Workflows
+
+Chain events together to create autonomous business processes:
+
+```typescript
+// Order workflow
+on('Order.created', async (event) => {
+  // Validate inventory
+  const available = await checkInventory(event.data.items)
+
+  if (available) {
+    await send('Order.validated', event.data)
+  } else {
+    await send('Order.rejected', {
+      ...event.data,
+      reason: 'insufficient-inventory',
+    })
+  }
+})
+
+on('Order.validated', async (event) => {
+  // Request payment
+  await send('Payment.requested', {
+    orderId: event.data.id,
+    amount: event.data.total,
+  })
+})
+
+on('Payment.completed', async (event) => {
+  // Ship order
+  await send('Order.shipped', {
+    orderId: event.data.orderId,
+    trackingNumber: await generateTracking(),
+  })
+})
+```
+
+## Event Patterns
+
+### Object.Action Naming
+
+Standard event naming follows past-tense verbs:
+
+**Lifecycle Events**:
+
+- `Object.created` - Entity was created
+- `Object.updated` - Entity was modified
+- `Object.deleted` - Entity was removed
+- `Object.archived` - Entity was archived
+
+**State Change Events**:
+
+- `Order.submitted` - Order submitted by customer
+- `Order.validated` - Order validated by system
+- `Order.fulfilled` - Order fulfilled by warehouse
+- `Order.shipped` - Order shipped to customer
+- `Order.delivered` - Order delivered to customer
+- `Order.completed` - Order process completed
+- `Order.cancelled` - Order cancelled
+
+**Action Events**:
+
+- `Payment.requested` - Payment requested
+- `Payment.authorized` - Payment authorized
+- `Payment.captured` - Payment captured
+- `Payment.completed` - Payment completed
+- `Payment.failed` - Payment failed
+- `Payment.refunded` - Payment refunded
+
+**User Events**:
+
+- `User.registered` - User created account
+- `User.verified` - User verified email
+- `User.loggedIn` - User logged in
+- `User.loggedOut` - User logged out
+- `User.updated` - User updated profile
+- `User.deleted` - User deleted account
+
+## Integration with `.do` Platform
+
+events.do integrates seamlessly with the entire `.do` platform:
+
+### With Database Operations
+
+```typescript
+import { db, on, send } from 'sdk.do'
+
+// Automatically publish events on database changes
+db.on('create', async (entity) => {
+  await send(`${entity.$type}.created`, entity)
+})
+
+// React to events and update database
+on('Order.completed', async (event) => {
+  await db.update($.Order, event.data.id, {
+    status: 'completed',
+    completedAt: new Date(),
+  })
+})
+```
+
+### With Scheduled Workflows
+
+```typescript
+import { every, send } from 'sdk.do'
+
+// Periodic event generation
+every($.Daily, async () => {
+  const report = await generateDailyReport()
+  await send('Report.generated', report)
+})
+```
+
+### With AI Services
+
+```typescript
+import { ai, on } from 'sdk.do'
+
+// AI-powered event processing
+on('CustomerFeedback.received', async (event) => {
+  const sentiment = await ai.generate({
+    prompt: `Analyze sentiment: ${event.data.feedback}`,
+    schema: $.SentimentAnalysis,
+  })
+
+  if (sentiment.score < 0.3) {
+    await send('CustomerIssue.detected', {
+      feedbackId: event.data.id,
+      sentiment,
+      priority: 'high',
+    })
+  }
+})
+```
+
+## Documentation
+
+- [Getting Started](./docs/getting-started) - Install and configure event system
+- [Event Listeners](./docs/listeners) - Subscribe to events with `on`
+- [Event Publishers](./docs/publishers) - Publish events with `send`
+- [API Reference](./api/) - Complete API documentation
+- [Examples](./examples/) - Real-world event patterns
+
+## Examples
+
+### Basic Events
+
+```typescript
+// Listen for user registration
+on('User.registered', async (event) => {
+  // Send welcome email
+  await sendWelcomeEmail(event.data.email)
+
+  // Create default preferences
+  await createUserPreferences(event.data.id)
+})
+
+// Publish registration event
+await send('User.registered', {
+  id: 'user-123',
+  email: 'user@example.com',
+  name: 'John Doe',
+})
+```
+
+### Order Workflow
+
+See [Order Workflow Example](./examples/order-workflow) for a complete order processing workflow using event chains.
+
+### Event Chains
+
+See [Event Chains Example](./examples/event-chains) for patterns on chaining multiple events together.
+
+## Best Practices
+
+### 1. Use Semantic Naming
+
+Always use clear `Object.Action` naming:
+
+```typescript
+// Good
+on('Order.created', handler)
+on('Payment.completed', handler)
+on('User.registered', handler)
+
+// Bad
+on('order_create', handler)
+on('payment-done', handler)
+on('newUser', handler)
+```
+
+### 2. Include Full Context
+
+Event data should contain all necessary information:
+
+```typescript
+// Good - Complete context
+await send('Order.created', {
+  id: '12345',
+  customer: { id: 'cust-1', name: 'Acme Corp' },
+  items: [...],
+  total: 1500.00,
+  currency: 'USD',
+  createdAt: new Date(),
+})
+
+// Bad - Missing context
+await send('Order.created', { id: '12345' })
+```
+
+### 3. Handle Errors Gracefully
+
+Event handlers should handle errors without breaking the chain:
+
+```typescript
+on('Order.created', async (event) => {
+  try {
+    await processOrder(event.data)
+  } catch (error) {
+    console.error('Failed to process order:', error)
+
+    // Publish error event
+    await send('Order.processingFailed', {
+      orderId: event.data.id,
+      error: error.message,
+    })
+  }
+})
+```
+
+### 4. Use Event Metadata
+
+Include metadata for tracing and debugging:
+
+```typescript
+await send('Order.created', orderData, {
+  timestamp: new Date(),
+  source: 'checkout-service',
+  correlationId: sessionId,
+  userId: currentUser.id,
+})
+```
+
+### 5. Keep Handlers Focused
+
+Each handler should do one thing well:
+
+```typescript
+// Good - Focused handlers
+on('Order.created', validateOrder)
+on('Order.validated', requestPayment)
+on('Payment.completed', fulfillOrder)
+
+// Bad - Kitchen sink handler
+on('Order.created', async (event) => {
+  // validates, processes payment, fulfills, ships...
+})
+```
+
+## Event Types
+
+### Standard Events
+
+events.do provides TypeScript types for common event patterns:
+
+```typescript
+import type { Event, EventHandler, EventMetadata } from 'events.do'
+
+interface Event<T = any> {
+  type: string // Event name (e.g., 'Order.created')
+  data: T // Event payload
+  metadata?: EventMetadata
+}
+
+interface EventMetadata {
+  timestamp: Date
+  source?: string
+  correlationId?: string
+  causationId?: string
+  userId?: string
+}
+
+type EventHandler<T = any> = (event: Event<T>) => Promise<void> | void
+```
+
+### Custom Event Types
+
+Define custom types for your domain events:
+
+```typescript
+import type { Event } from 'events.do'
+
+// Order events
+interface OrderCreatedEvent
+  extends Event<{
+    id: string
+    customer: { id: string; name: string }
+    items: Array<{ product: string; quantity: number; price: number }>
+    total: number
+  }> {
+  type: 'Order.created'
+}
+
+// Handler with typed event
+on('Order.created', async (event: OrderCreatedEvent) => {
+  // TypeScript knows event.data structure
+  console.log(`Order ${event.data.id} total: $${event.data.total}`)
+})
+```
+
+## Integration with Related Systems
+
+events.do works seamlessly with related `.do` platform domains:
+
+- **[triggers.org.ai](https://triggers.org.ai)**: Complex trigger patterns and conditions
+- **[actions.org.ai](https://actions.org.ai)**: Actions to execute on events
+- **[agents.org.ai](https://agents.org.ai)**: AI agents that react to events
+- **[workflows.do](https://workflows.do)**: Orchestrated multi-step workflows
+- **[sdk.do](https://sdk.do)**: Core SDK functions
+
+## License
+
+events.do is released under the [Creative Commons Attribution 4.0 International License (CC-BY-4.0)](https://creativecommons.org/licenses/by/4.0/).
+
+This means you are free to:
+
+- **Share**: Copy and redistribute the material in any medium or format
+- **Adapt**: Remix, transform, and build upon the material for any purpose, even commercially
+
+Under the following terms:
+
+- **Attribution**: You must give appropriate credit, provide a link to the license, and indicate if changes were made
+
+## Resources
+
+- [sdk.do](https://sdk.do) - Core SDK documentation
+- [on.do](https://on.do) - Event listener documentation
+- [send.do](https://send.do) - Event publisher documentation
+- [triggers.org.ai](https://triggers.org.ai) - Event trigger patterns
+- [actions.org.ai](https://actions.org.ai) - Actions ontology
+- [workflows.do](https://workflows.do) - Workflow orchestration
+
+## Contributing
+
+events.do is part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem. Contributions are welcome!
+
+To contribute:
+
+1. Propose new event patterns for common business scenarios
+2. Share real-world event-driven architecture examples
+3. Improve documentation and examples
+4. Submit TypeScript type definitions for domain events
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

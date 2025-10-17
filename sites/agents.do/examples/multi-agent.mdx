@@ -1,0 +1,644 @@
+---
+$id: https://agents.do/examples/multi-agent
+$type: HowTo
+title: Multi-Agent System Example
+description: Build a team of agents that collaborate to accomplish complex tasks
+keywords: [multi-agent, agent collaboration, agent team, agent orchestration, distributed agents]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Multi-Agent System Example
+
+Build a team of specialized agents that collaborate to accomplish complex sales workflows.
+
+## Overview
+
+This example demonstrates a multi-agent system with:
+
+1. **Research Agent** - Researches companies and decision makers
+2. **Qualification Agent** - Qualifies leads based on fit criteria
+3. **Outreach Agent** - Crafts and sends personalized emails
+4. **Meeting Agent** - Schedules and manages discovery calls
+5. **Orchestrator Agent** - Coordinates the team and manages workflow
+
+## System Architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│              Orchestrator Agent                     │
+│         (Coordinates all agents)                    │
+└──────────────┬──────────────────────────────────────┘
+               │
+       ┌───────┴───────┬──────────┬──────────┐
+       │               │          │          │
+       ▼               ▼          ▼          ▼
+┌──────────┐   ┌──────────┐  ┌──────────┐  ┌──────────┐
+│ Research │   │  Qualify │  │ Outreach │  │ Meeting  │
+│  Agent   │──▶│  Agent   │─▶│  Agent   │─▶│  Agent   │
+└──────────┘   └──────────┘  └──────────┘  └──────────┘
+```
+
+## Agent Definitions
+
+### Research Agent
+
+```typescript
+const researchAgent = await agent.create({
+  $type: 'Agent',
+  name: 'Alex - Research Specialist',
+  role: 'Lead Research Analyst',
+
+  persona: {
+    background: 'Former data analyst with expertise in B2B intelligence',
+    expertise: ['company research', 'contact discovery', 'data enrichment'],
+    style: 'thorough, data-driven, detail-oriented',
+  },
+
+  capabilities: ['company_profiling', 'decision_maker_identification', 'tech_stack_analysis', 'news_monitoring', 'competitive_intelligence'],
+
+  tools: {
+    research: researchTool,
+    linkedin: linkedInTool,
+    database: databaseTool,
+  },
+
+  model: 'gpt-5',
+  temperature: 0.3, // Low temperature for consistent, factual research
+})
+```
+
+### Qualification Agent
+
+```typescript
+const qualificationAgent = await agent.create({
+  $type: 'Agent',
+  name: 'Jamie - Qualification Specialist',
+  role: 'Lead Qualification Analyst',
+
+  persona: {
+    background: 'Former sales operations with deep understanding of ICP',
+    expertise: ['lead scoring', 'fit analysis', 'opportunity assessment'],
+    style: 'analytical, strategic, ROI-focused',
+  },
+
+  capabilities: ['lead_scoring', 'fit_analysis', 'opportunity_sizing', 'priority_ranking'],
+
+  tools: {
+    crm: crmTool,
+    scoring: scoringTool,
+  },
+
+  model: 'claude-sonnet-4.5',
+  temperature: 0.5,
+})
+```
+
+### Outreach Agent
+
+```typescript
+const outreachAgent = await agent.create({
+  $type: 'Agent',
+  name: 'Taylor - Outreach Specialist',
+  role: 'Email Outreach Specialist',
+
+  persona: {
+    background: 'Former copywriter with 7 years in sales enablement',
+    expertise: ['email copywriting', 'personalization', 'A/B testing'],
+    style: 'creative, persuasive, metric-driven',
+    communication: {
+      tone: 'professional yet personable',
+      approach: 'insight-led, value-focused',
+    },
+  },
+
+  capabilities: ['email_crafting', 'personalization', 'sequence_management', 'response_handling'],
+
+  tools: {
+    email: emailTool,
+    crm: crmTool,
+    templates: templateTool,
+  },
+
+  model: 'claude-sonnet-4.5',
+  temperature: 0.8, // Higher temperature for creative writing
+})
+```
+
+### Meeting Agent
+
+```typescript
+const meetingAgent = await agent.create({
+  $type: 'Agent',
+  name: 'Morgan - Meeting Coordinator',
+  role: 'Meeting Scheduling Specialist',
+
+  persona: {
+    background: 'Former executive assistant with calendar management expertise',
+    expertise: ['scheduling', 'logistics', 'meeting preparation'],
+    style: 'organized, responsive, detail-oriented',
+  },
+
+  capabilities: ['availability_checking', 'meeting_scheduling', 'reminder_management', 'meeting_preparation'],
+
+  tools: {
+    calendar: calendarTool,
+    email: emailTool,
+    crm: crmTool,
+  },
+
+  model: 'gpt-5-mini',
+  temperature: 0.3,
+})
+```
+
+### Orchestrator Agent
+
+```typescript
+const orchestratorAgent = await agent.create({
+  $type: 'Agent',
+  name: 'Sam - Team Orchestrator',
+  role: 'Sales Operations Manager',
+
+  persona: {
+    background: 'Former sales operations leader managing SDR teams',
+    expertise: ['workflow management', 'team coordination', 'process optimization'],
+    style: 'strategic, efficient, data-driven',
+  },
+
+  capabilities: ['workflow_orchestration', 'task_delegation', 'progress_monitoring', 'escalation_handling', 'performance_optimization'],
+
+  team: [researchAgent, qualificationAgent, outreachAgent, meetingAgent],
+
+  model: 'claude-sonnet-4.5',
+  temperature: 0.6,
+})
+```
+
+## Multi-Agent Workflow
+
+### Complete Lead Processing Pipeline
+
+```typescript
+// Orchestrator receives new lead
+on($.Lead.created, async (lead) => {
+  await orchestratorAgent.execute({
+    task: 'process_lead',
+    input: lead,
+  })
+})
+
+// Orchestrator coordinates the team
+const processLead = async (lead: Lead) => {
+  try {
+    // Stage 1: Research (Research Agent)
+    console.log('Stage 1: Research')
+    const research = await orchestratorAgent.delegate({
+      to: researchAgent,
+      task: {
+        type: 'research_lead',
+        input: { company: lead.company, contact: lead.contact },
+      },
+      priority: 'high',
+      deadline: Date.now() + 300000, // 5 minutes
+    })
+
+    // Stage 2: Qualification (Qualification Agent)
+    console.log('Stage 2: Qualification')
+    const qualification = await orchestratorAgent.delegate({
+      to: qualificationAgent,
+      task: {
+        type: 'qualify_lead',
+        input: { lead, research },
+      },
+      priority: 'high',
+    })
+
+    // Decision: Is lead qualified?
+    if (!qualification.qualified) {
+      console.log('Lead not qualified. Workflow complete.')
+      await updateLeadStatus(lead.id, 'disqualified', qualification.reasoning)
+      return
+    }
+
+    // Stage 3: Personalized Outreach (Outreach Agent)
+    console.log('Stage 3: Outreach')
+    const outreach = await orchestratorAgent.delegate({
+      to: outreachAgent,
+      task: {
+        type: 'send_personalized_outreach',
+        input: { lead, research, qualification },
+      },
+      priority: qualification.tier === 'high_priority' ? 'urgent' : 'normal',
+      approval_required: true, // Orchestrator must approve
+    })
+
+    // Orchestrator reviews and approves
+    const approved = await orchestratorAgent.review(outreach)
+    if (!approved) {
+      console.log('Outreach not approved. Requesting revision.')
+      await orchestratorAgent.delegate({
+        to: outreachAgent,
+        task: {
+          type: 'revise_outreach',
+          input: { original: outreach, feedback: approved.feedback },
+        },
+      })
+      return
+    }
+
+    // Stage 4: Monitor Response
+    console.log('Stage 4: Monitoring for response')
+    await orchestratorAgent.monitor({
+      lead: lead.id,
+      event: 'email_response',
+      timeout: 3 * 24 * 60 * 60 * 1000, // 3 days
+      on_response: async (response) => {
+        // Stage 5: Schedule Meeting (Meeting Agent)
+        if (response.intent === 'interested') {
+          console.log('Stage 5: Scheduling meeting')
+          await orchestratorAgent.delegate({
+            to: meetingAgent,
+            task: {
+              type: 'schedule_discovery_call',
+              input: { lead, response },
+            },
+            priority: 'urgent',
+          })
+        }
+      },
+      on_timeout: async () => {
+        // Trigger follow-up
+        await orchestratorAgent.delegate({
+          to: outreachAgent,
+          task: {
+            type: 'send_follow_up',
+            input: { lead, sequence_step: 2 },
+          },
+        })
+      },
+    })
+  } catch (error) {
+    // Orchestrator handles errors
+    console.error('Workflow error:', error)
+    await orchestratorAgent.escalate({
+      type: 'workflow_error',
+      lead: lead,
+      error: error,
+      escalate_to: 'human_sales_manager',
+    })
+  }
+}
+```
+
+## Agent Communication
+
+### Agent-to-Agent Messages
+
+```typescript
+// Research Agent → Qualification Agent
+await researchAgent.send({
+  to: qualificationAgent,
+  message: {
+    $type: 'LeadResearchComplete',
+    lead: leadData,
+    research: {
+      company_profile: { ... },
+      decision_makers: [ ... ],
+      tech_stack: [ ... ],
+      growth_signals: [ ... ],
+      competitive_position: { ... }
+    },
+    confidence: 0.92
+  }
+})
+
+// Qualification Agent → Outreach Agent
+await qualificationAgent.send({
+  to: outreachAgent,
+  message: {
+    $type: 'LeadQualified',
+    lead: leadData,
+    qualification: {
+      qualified: true,
+      score: 85,
+      tier: 'high_priority',
+      fit_reasoning: '...',
+      pain_points: [ ... ],
+      opportunity_value: '$50K ARR'
+    },
+    research: researchData
+  }
+})
+
+// Outreach Agent → Meeting Agent
+await outreachAgent.send({
+  to: meetingAgent,
+  message: {
+    $type: 'LeadResponded',
+    lead: leadData,
+    response: {
+      sentiment: 'positive',
+      interest_level: 'high',
+      intent: 'schedule_call',
+      availability: 'next week'
+    }
+  }
+})
+```
+
+### Team Channel Communication
+
+```typescript
+// Create team communication channel
+const teamChannel = await orchestratorAgent.createChannel({
+  type: 'team',
+  name: 'Sales Pipeline',
+  participants: [researchAgent, qualificationAgent, outreachAgent, meetingAgent],
+})
+
+// Orchestrator broadcasts to team
+await orchestratorAgent.broadcast({
+  channel: teamChannel,
+  message: {
+    $type: 'TeamAnnouncement',
+    priority: 'high',
+    subject: 'New Target Account',
+    content: 'High-value enterprise account just entered pipeline. Prioritize.',
+    action_items: {
+      research: 'Complete deep research within 24 hours',
+      qualification: 'Fast-track qualification',
+      outreach: 'Prepare executive-level messaging',
+    },
+  },
+})
+
+// Agents acknowledge
+researchAgent.on('team_announcement', async (msg) => {
+  console.log(`Research Agent: Acknowledged - ${msg.subject}`)
+  await researchAgent.send({
+    channel: teamChannel,
+    message: {
+      $type: 'Acknowledgment',
+      agent: 'Research Agent',
+      action: 'Starting deep research',
+      eta: '4 hours',
+    },
+  })
+})
+```
+
+## Collaborative Decision Making
+
+### Consensus-Based Qualification
+
+```typescript
+// Multiple agents vote on qualification
+const qualificationVote = async (lead: Lead, research: Research) => {
+  // Collect votes from multiple agents
+  const votes = await Promise.all([
+    qualificationAgent.evaluate({ lead, research }),
+    researchAgent.evaluate({ lead, research }),
+    orchestratorAgent.evaluate({ lead, research }),
+  ])
+
+  // Aggregate votes
+  const consensus = {
+    qualified: votes.filter((v) => v.qualified).length >= 2,
+    avg_score: votes.reduce((sum, v) => sum + v.score, 0) / votes.length,
+    reasoning: votes.map((v) => v.reasoning),
+    dissent: votes
+      .filter((v) => !v.qualified)
+      .map((v) => ({
+        agent: v.agent,
+        concern: v.reasoning,
+      })),
+  }
+
+  return consensus
+}
+```
+
+### Collaborative Email Review
+
+```typescript
+// Multiple agents review outreach email
+const reviewEmail = async (email: Email) => {
+  // Parallel review by multiple agents
+  const reviews = await Promise.all([
+    outreachAgent.review(email, 'messaging_effectiveness'),
+    qualificationAgent.review(email, 'alignment_with_needs'),
+    orchestratorAgent.review(email, 'brand_compliance'),
+  ])
+
+  // Aggregate feedback
+  const finalReview = {
+    approved: reviews.every((r) => r.approved),
+    score: reviews.reduce((sum, r) => sum + r.score, 0) / reviews.length,
+    feedback: reviews.flatMap((r) => r.suggestions),
+    revisions_needed: reviews.filter((r) => !r.approved).length > 0,
+  }
+
+  return finalReview
+}
+```
+
+## Parallel Processing
+
+### Process Multiple Leads Simultaneously
+
+```typescript
+// Orchestrator processes batch of leads
+const processBatch = async (leads: Lead[]) => {
+  console.log(`Processing ${leads.length} leads in parallel`)
+
+  // Assign leads to available agents
+  const assignments = orchestratorAgent.distributeWork({
+    tasks: leads.map((lead) => ({ type: 'process_lead', input: lead })),
+    agents: [researchAgent, qualificationAgent],
+    strategy: 'load_balanced',
+  })
+
+  // Process all leads concurrently
+  const results = await Promise.all(leads.map((lead) => processLead(lead)))
+
+  // Aggregate results
+  const summary = {
+    total: leads.length,
+    qualified: results.filter((r) => r.qualified).length,
+    outreach_sent: results.filter((r) => r.outreach_sent).length,
+    meetings_booked: results.filter((r) => r.meeting_booked).length,
+    avg_processing_time: results.reduce((sum, r) => sum + r.time, 0) / results.length,
+  }
+
+  return summary
+}
+
+// Process 100 leads
+const result = await processBatch(leads)
+console.log(result)
+// {
+//   total: 100,
+//   qualified: 72,
+//   outreach_sent: 68,
+//   meetings_booked: 24,
+//   avg_processing_time: 45000
+// }
+```
+
+## Team Performance Monitoring
+
+### Real-time Team Metrics
+
+```typescript
+// Monitor team performance
+const teamMetrics = await orchestratorAgent.getTeamMetrics({
+  timeframe: 'last_7_days',
+})
+
+console.log(teamMetrics)
+// {
+//   team_name: 'Sales Pipeline',
+//   team_efficiency: 0.87,
+//
+//   // Individual agent metrics
+//   agents: {
+//     'Research Agent': {
+//       tasks_completed: 150,
+//       avg_task_time: 8000,
+//       success_rate: 0.98,
+//       utilization: 0.85
+//     },
+//     'Qualification Agent': {
+//       tasks_completed: 145,
+//       avg_task_time: 5000,
+//       success_rate: 0.92,
+//       utilization: 0.80
+//     },
+//     'Outreach Agent': {
+//       tasks_completed: 125,
+//       avg_task_time: 12000,
+//       success_rate: 0.88,
+//       utilization: 0.90
+//     },
+//     'Meeting Agent': {
+//       tasks_completed: 48,
+//       avg_task_time: 15000,
+//       success_rate: 0.95,
+//       utilization: 0.65
+//     }
+//   },
+//
+//   // Team-wide metrics
+//   pipeline_metrics: {
+//     leads_processed: 150,
+//     leads_qualified: 108,
+//     qualification_rate: 0.72,
+//     outreach_sent: 102,
+//     responses_received: 28,
+//     response_rate: 0.27,
+//     meetings_booked: 48,
+//     booking_rate: 0.47
+//   },
+//
+//   // Bottlenecks
+//   bottlenecks: [
+//     {
+//       stage: 'outreach',
+//       agent: 'Outreach Agent',
+//       issue: 'High utilization causing delays',
+//       recommendation: 'Consider adding second outreach agent'
+//     }
+//   ],
+//
+//   // Collaboration metrics
+//   collaboration: {
+//     avg_handoff_time: 2500,
+//     successful_handoffs: 0.96,
+//     communication_volume: 450,
+//     consensus_agreements: 0.89
+//   }
+// }
+```
+
+### Optimize Team Performance
+
+```typescript
+// Orchestrator optimizes workflow based on metrics
+const optimize = async () => {
+  const metrics = await orchestratorAgent.getTeamMetrics()
+
+  // Identify bottlenecks
+  const bottlenecks = orchestratorAgent.analyzeBottlenecks(metrics)
+
+  // Adjust workload distribution
+  if (bottlenecks.includes('outreach_overload')) {
+    await orchestratorAgent.rebalanceWork({
+      from: outreachAgent,
+      distribute_to: [otherOutreachAgent],
+      percentage: 30,
+    })
+  }
+
+  // Optimize task assignment
+  await orchestratorAgent.updateAssignmentStrategy({
+    strategy: 'skill_based', // Match tasks to agent strengths
+    consider_current_load: true,
+    prioritize_urgent: true,
+  })
+}
+```
+
+## Error Handling and Escalation
+
+```typescript
+// Orchestrator handles agent errors
+orchestratorAgent.on('agent_error', async (event) => {
+  const { agent, task, error } = event
+
+  // Retry with different agent
+  if (error.type === 'timeout') {
+    await orchestratorAgent.delegate({
+      to: findBackupAgent(agent),
+      task: task,
+      note: 'Original agent timed out',
+    })
+  }
+
+  // Escalate to human
+  else if (error.type === 'approval_required') {
+    await orchestratorAgent.escalate({
+      type: 'human_approval_needed',
+      task: task,
+      agent: agent,
+      escalate_to: 'sales_manager',
+    })
+  }
+
+  // Automatic recovery
+  else if (error.type === 'rate_limit') {
+    await orchestratorAgent.schedule({
+      task: task,
+      delay: 3600000, // 1 hour
+      retry_count: task.retry_count + 1,
+    })
+  }
+})
+```
+
+## Next Steps
+
+- [API Reference](../api/) - Complete API documentation
+- [Agent Communication](../docs/agent-communication) - Deep dive into communication patterns
+- [Creating Agents](../docs/creating-agents) - Design advanced agents
+
+## See Also
+
+- [Basic Agent](./basic-agent)
+- [Sales Agent](./sales-agent)
+- [Getting Started](../docs/getting-started)
+
+---
+
+This multi-agent example demonstrates the power of collaborative autonomous systems. Multiple specialized agents working together can accomplish complex workflows more efficiently than any single agent.

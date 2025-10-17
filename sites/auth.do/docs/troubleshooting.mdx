@@ -1,0 +1,750 @@
+---
+$id: https://auth.do/docs/troubleshooting
+$type: TechArticle
+title: Authentication Troubleshooting
+description: Common authentication issues and solutions in auth.do
+keywords: [auth, troubleshooting, errors, debugging, issues]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Troubleshooting
+
+Common authentication issues and solutions in auth.do.
+
+## Token Issues
+
+### "Token expired" Error
+
+**Problem**: Access token has expired.
+
+**Solution**: Use refresh token to get new access token:
+
+```typescript
+import { auth } from 'sdk.do'
+
+try {
+  const payload = await auth.verifyToken(token)
+} catch (error) {
+  if (error.code === 'TOKEN_EXPIRED') {
+    // Refresh token
+    const newSession = await auth.refreshToken(refreshToken)
+    // Use newSession.token
+  }
+}
+```
+
+### "Invalid token" Error
+
+**Problem**: Token is malformed or signature is invalid.
+
+**Solutions**:
+
+1. Ensure token is properly formatted:
+
+```typescript
+// Correct: Bearer prefix removed
+const token = authHeader.replace('Bearer ', '')
+
+// Incorrect: Including Bearer prefix
+const token = authHeader // "Bearer eyJhbG..."
+```
+
+2. Verify JWT_SECRET matches between generation and verification:
+
+```bash
+# .env - Must be the same everywhere
+JWT_SECRET=your-secret-key-at-least-32-characters-long
+```
+
+3. Check for token corruption during transmission:
+
+```typescript
+// Ensure no whitespace or encoding issues
+const token = authHeader.replace('Bearer ', '').trim()
+```
+
+### Token Not Being Set
+
+**Problem**: Token not appearing in requests.
+
+**Solution**: Verify token storage and transmission:
+
+```typescript
+// Client-side: Set Authorization header
+fetch('/api/protected', {
+  headers: {
+    Authorization: `Bearer ${token}`,
+  },
+})
+
+// Server-side: Extract token
+const authHeader = request.headers.get('Authorization')
+const token = authHeader?.replace('Bearer ', '')
+```
+
+## Login Issues
+
+### "Invalid credentials" Error
+
+**Problem**: Email or password is incorrect.
+
+**Solutions**:
+
+1. Verify password hashing:
+
+```typescript
+// During registration
+const hashedPassword = await auth.hashPassword(password)
+
+// During login
+const isValid = await auth.verifyPassword(password, hashedPassword)
+```
+
+2. Check database query:
+
+```typescript
+// Ensure case-insensitive email lookup
+const users = await db.list($.Person, {
+  where: { email: email.toLowerCase() },
+})
+```
+
+3. Add detailed error logging (development only):
+
+```typescript
+try {
+  await auth.login({ email, password })
+} catch (error) {
+  console.error('Login failed:', {
+    email,
+    error: error.message,
+    code: error.code,
+  })
+  throw error
+}
+```
+
+### "Too many login attempts" Error
+
+**Problem**: Rate limiting triggered.
+
+**Solution**: Implement exponential backoff:
+
+```typescript
+let retryCount = 0
+const maxRetries = 3
+
+async function loginWithRetry(email: string, password: string) {
+  try {
+    return await auth.login({ email, password })
+  } catch (error) {
+    if (error.message.includes('Too many') && retryCount < maxRetries) {
+      retryCount++
+      const delay = Math.pow(2, retryCount) * 1000 // Exponential backoff
+      await new Promise((resolve) => setTimeout(resolve, delay))
+      return loginWithRetry(email, password)
+    }
+    throw error
+  }
+}
+```
+
+### MFA Code Not Working
+
+**Problem**: TOTP code validation fails.
+
+**Solutions**:
+
+1. Check time synchronization:
+
+```typescript
+// Verify server time is correct
+console.log('Server time:', new Date().toISOString())
+```
+
+2. Allow time window for code validation:
+
+```typescript
+// Verify with window (±1 time step)
+const isValid = await auth.verifyMFA({
+  userId: 'user_123',
+  code: '123456',
+  window: 1, // Allow ±30 seconds
+})
+```
+
+3. Verify secret is correct:
+
+```typescript
+const mfaConfig = await db.get($.MFAConfig, userId)
+console.log('MFA secret:', mfaConfig.secret)
+```
+
+## API Key Issues
+
+### "Invalid API key" Error
+
+**Problem**: API key not recognized.
+
+**Solutions**:
+
+1. Verify key format:
+
+```typescript
+// Correct format
+const apiKey = 'sk_live_[32_hex_characters]'
+
+// Check prefix
+if (!apiKey.startsWith('sk_live_') && !apiKey.startsWith('sk_test_')) {
+  throw new Error('Invalid API key format')
+}
+```
+
+2. Check key hasn't been revoked:
+
+```typescript
+const apiKeyData = await db.list($.ApiKey, {
+  where: { keyHash: await auth.hashApiKey(apiKey) },
+})
+
+if (apiKeyData.length === 0) {
+  console.log('API key not found or revoked')
+}
+```
+
+3. Verify header name:
+
+```typescript
+// Correct header
+const apiKey = request.headers.get('X-API-Key')
+
+// Not: Authorization header
+// const apiKey = request.headers.get('Authorization')
+```
+
+### API Key Scope Issues
+
+**Problem**: API key lacks required permissions.
+
+**Solution**: Check and update scopes:
+
+```typescript
+const keyData = await auth.authenticateApiKey(apiKey)
+
+const requiredScope = 'write:products'
+if (!keyData.scopes.includes(requiredScope) && !keyData.scopes.includes('*')) {
+  throw new Error(`API key missing required scope: ${requiredScope}`)
+}
+
+// Update scopes if needed
+await db.update($.ApiKey, keyData.$id, {
+  scopes: [...keyData.scopes, requiredScope],
+})
+```
+
+## Permission Issues
+
+### "Forbidden" Error
+
+**Problem**: User lacks required permission.
+
+**Solutions**:
+
+1. Check user roles:
+
+```typescript
+const userRoles = await auth.getUserRoles(userId)
+console.log('User roles:', userRoles)
+```
+
+2. Verify role permissions:
+
+```typescript
+const role = await db.get($.Role, 'editor')
+console.log('Role permissions:', role.permissions)
+```
+
+3. Assign missing permission:
+
+```typescript
+// Option 1: Add permission to role
+await auth.updateRole('editor', {
+  permissions: [...role.permissions, 'delete:Product'],
+})
+
+// Option 2: Assign higher role
+await auth.assignRole(userId, 'admin')
+```
+
+### Permission Check Returns False
+
+**Problem**: Permission check fails unexpectedly.
+
+**Solution**: Debug permission resolution:
+
+```typescript
+import { $, auth } from 'sdk.do'
+
+async function debugPermission(userId: string, action: string, resource: string) {
+  console.log('Checking permission:', { userId, action, resource })
+
+  // Get user roles
+  const userRoles = await auth.getUserRoles(userId)
+  console.log('User roles:', userRoles)
+
+  // Get role permissions
+  for (const roleName of userRoles) {
+    const role = await db.get($.Role, roleName)
+    console.log(`Role ${roleName} permissions:`, role.permissions)
+  }
+
+  // Check permission
+  const hasPermission = await auth.authorize(action, resource)
+  console.log('Has permission:', hasPermission)
+
+  return hasPermission
+}
+```
+
+## OAuth Issues
+
+### OAuth Callback Fails
+
+**Problem**: OAuth provider callback returns error.
+
+**Solutions**:
+
+1. Verify redirect URI:
+
+```typescript
+// Must match exactly in OAuth provider settings
+const redirectUri = 'https://app.example.com/auth/callback'
+
+// Check for trailing slashes, http vs https, etc.
+```
+
+2. Validate state parameter:
+
+```typescript
+export async function handleCallback(code: string, state: string) {
+  // Verify state to prevent CSRF
+  if (!(await verifyState(state))) {
+    throw new Error('Invalid state parameter')
+  }
+
+  // Continue with callback
+}
+```
+
+3. Check OAuth scopes:
+
+```typescript
+// Request appropriate scopes
+const authUrl = await auth.oauth({
+  provider: 'google',
+  redirectUri: 'https://app.example.com/auth/callback',
+  scopes: ['email', 'profile'], // Ensure provider supports these
+})
+```
+
+### "Invalid authorization code" Error
+
+**Problem**: OAuth authorization code is invalid or expired.
+
+**Solution**: Authorization codes are single-use and short-lived:
+
+```typescript
+export async function handleCallback(code: string) {
+  try {
+    // Use code immediately
+    const tokens = await auth.oauthCallback({ code })
+    return tokens
+  } catch (error) {
+    if (error.message.includes('Invalid authorization code')) {
+      // Code expired or already used
+      return { error: 'Authorization code expired. Please try again.' }
+    }
+    throw error
+  }
+}
+```
+
+## Session Issues
+
+### Session Not Persisting
+
+**Problem**: User logged out unexpectedly.
+
+**Solutions**:
+
+1. Check session storage:
+
+```typescript
+// Verify session is created
+const session = await db.create($.Session, {
+  userId: 'user_123',
+  createdAt: new Date(),
+  expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+})
+
+console.log('Session created:', session.$id)
+```
+
+2. Verify cookie settings:
+
+```typescript
+// Ensure cookie is persistent
+response.headers.set('Set-Cookie', `session=${sessionId}; HttpOnly; Secure; SameSite=Strict; Max-Age=86400`)
+```
+
+3. Check session validation:
+
+```typescript
+export async function validateSession(sessionId: string) {
+  const session = await db.get($.Session, sessionId)
+
+  if (new Date() > new Date(session.expiresAt)) {
+    console.log('Session expired')
+    await db.delete($.Session, sessionId)
+    return null
+  }
+
+  return session
+}
+```
+
+### Session Expires Too Quickly
+
+**Problem**: Session timeout too short.
+
+**Solution**: Adjust session duration:
+
+```bash
+# .env
+SESSION_DURATION=86400000  # 24 hours (increase if needed)
+SESSION_IDLE_TIMEOUT=3600000  # 1 hour
+```
+
+```typescript
+// Update session expiration
+await db.update($.Session, sessionId, {
+  expiresAt: new Date(Date.now() + SESSION_DURATION),
+})
+```
+
+## Password Issues
+
+### Password Hashing Fails
+
+**Problem**: bcrypt hashing errors.
+
+**Solutions**:
+
+1. Verify password length:
+
+```typescript
+// bcrypt has 72-byte limit
+if (password.length > 72) {
+  throw new Error('Password too long (max 72 characters)')
+}
+```
+
+2. Check bcrypt rounds:
+
+```bash
+# .env - Ensure reasonable rounds
+PASSWORD_HASH_ROUNDS=12  # Default, adjust as needed
+```
+
+3. Handle errors gracefully:
+
+```typescript
+try {
+  const hashedPassword = await auth.hashPassword(password)
+} catch (error) {
+  console.error('Hashing failed:', error)
+  throw new Error('Password processing failed')
+}
+```
+
+### Password Reset Token Invalid
+
+**Problem**: Reset token not working.
+
+**Solutions**:
+
+1. Check token expiration:
+
+```typescript
+export async function validateResetToken(token: string) {
+  const resetRequest = await db.list($.PasswordReset, {
+    where: { token },
+  })
+
+  if (resetRequest.length === 0) {
+    throw new Error('Invalid reset token')
+  }
+
+  const reset = resetRequest[0]
+
+  // Check expiration (24 hours)
+  if (new Date() > new Date(reset.expiresAt)) {
+    throw new Error('Reset token expired')
+  }
+
+  return reset
+}
+```
+
+2. Ensure token is single-use:
+
+```typescript
+export async function useResetToken(token: string, newPassword: string) {
+  const reset = await validateResetToken(token)
+
+  // Update password
+  const hashedPassword = await auth.hashPassword(newPassword)
+  await db.update($.Credentials, reset.credentialsId, {
+    passwordHash: hashedPassword,
+  })
+
+  // Delete token (single-use)
+  await db.delete($.PasswordReset, reset.$id)
+}
+```
+
+## Database Issues
+
+### User Not Found
+
+**Problem**: Cannot find user in database.
+
+**Solutions**:
+
+1. Verify user exists:
+
+```typescript
+const users = await db.list($.Person, {
+  where: { email: email.toLowerCase() },
+})
+
+if (users.length === 0) {
+  console.log('User not found:', email)
+}
+```
+
+2. Check database connection:
+
+```typescript
+try {
+  await db.list($.Person, { limit: 1 })
+  console.log('Database connected')
+} catch (error) {
+  console.error('Database connection failed:', error)
+}
+```
+
+3. Verify indexes:
+
+```typescript
+// Ensure email field is indexed for fast lookup
+// Check database schema/indexes
+```
+
+### Credentials Not Found
+
+**Problem**: User exists but credentials missing.
+
+**Solution**: Ensure credentials created with user:
+
+```typescript
+export async function register(email: string, password: string, name: string) {
+  // Create user
+  const user = await db.create($.Person, { email, name })
+
+  // IMPORTANT: Create credentials
+  const hashedPassword = await auth.hashPassword(password)
+  await db.create($.Credentials, {
+    userId: user.$id,
+    passwordHash: hashedPassword,
+  })
+
+  return user
+}
+```
+
+## Environment Issues
+
+### JWT_SECRET Not Set
+
+**Problem**: Missing JWT secret configuration.
+
+**Solution**: Set environment variable:
+
+```bash
+# .env
+JWT_SECRET=your-secret-key-at-least-32-characters-long
+
+# Generate secure secret:
+# node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+### Configuration Not Loading
+
+**Problem**: Environment variables not available.
+
+**Solutions**:
+
+1. Verify .env file location:
+
+```typescript
+// Should be in project root
+// .env
+```
+
+2. Load environment variables:
+
+```typescript
+// At app entry point
+import 'dotenv/config'
+
+// Or manually
+import { config } from 'dotenv'
+config()
+```
+
+3. Check variable access:
+
+```typescript
+console.log('JWT_SECRET set:', !!process.env.JWT_SECRET)
+console.log('JWT_SECRET length:', process.env.JWT_SECRET?.length)
+```
+
+## Testing Issues
+
+### Tests Failing in CI
+
+**Problem**: Tests pass locally but fail in CI.
+
+**Solutions**:
+
+1. Ensure environment variables set in CI:
+
+```yaml
+# .github/workflows/test.yml
+env:
+  JWT_SECRET: test-secret-key-for-ci-only
+  PASSWORD_HASH_ROUNDS: 4 # Lower for faster tests
+```
+
+2. Use test database:
+
+```typescript
+// test setup
+const testDb = process.env.NODE_ENV === 'test' ? testDatabase : productionDatabase
+```
+
+3. Mock external services:
+
+```typescript
+// Mock OAuth providers in tests
+jest.mock('sdk.do', () => ({
+  auth: {
+    oauth: jest.fn().mockResolvedValue({ authUrl: 'https://mock-auth.com' }),
+  },
+}))
+```
+
+## Performance Issues
+
+### Slow Token Verification
+
+**Problem**: Token verification taking too long.
+
+**Solutions**:
+
+1. Use symmetric algorithm (HS256) instead of asymmetric (RS256) for better performance:
+
+```bash
+# .env
+JWT_ALGORITHM=HS256  # Faster than RS256
+```
+
+2. Cache role permissions:
+
+```typescript
+const permissionCache = new Map<string, string[]>()
+
+export async function getUserPermissions(userId: string): Promise<string[]> {
+  const cached = permissionCache.get(userId)
+  if (cached) return cached
+
+  const permissions = await loadUserPermissions(userId)
+  permissionCache.set(userId, permissions)
+
+  // Cache for 5 minutes
+  setTimeout(() => permissionCache.delete(userId), 5 * 60 * 1000)
+
+  return permissions
+}
+```
+
+### Slow Password Hashing
+
+**Problem**: bcrypt hashing slow.
+
+**Solution**: Adjust rounds for environment:
+
+```bash
+# Production .env
+PASSWORD_HASH_ROUNDS=12  # Secure
+
+# Development .env
+PASSWORD_HASH_ROUNDS=4   # Faster for development
+
+# Test .env
+PASSWORD_HASH_ROUNDS=4   # Faster for tests
+```
+
+## Getting Help
+
+### Enable Debug Logging
+
+```typescript
+// Enable detailed logging
+process.env.DEBUG = 'auth:*'
+
+// Or for specific components
+process.env.DEBUG = 'auth:token,auth:password'
+```
+
+### Check Error Codes
+
+```typescript
+try {
+  await auth.login({ email, password })
+} catch (error) {
+  console.error('Error code:', error.code)
+  console.error('Error message:', error.message)
+  console.error('Error details:', error.details)
+}
+```
+
+### Report Issues
+
+- [GitHub Issues](https://github.com/dot-do/ai/issues)
+- [Discord Community](https://discord.gg/dotdo)
+- [Documentation](https://auth.do)
+
+## Related Documentation
+
+- [Getting Started](./getting-started) - Quick start guide
+- [Architecture](./architecture) - Auth architecture
+- [Best Practices](./best-practices) - Security practices
+- [API Reference](../api/) - Complete API
+
+## License
+
+CC-BY-4.0 (Open Source)

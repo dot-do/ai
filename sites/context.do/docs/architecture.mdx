@@ -1,0 +1,1217 @@
+---
+$id: https://context.do/docs/architecture
+$type: https://schema.org/TechArticle
+name: Context Management Architecture
+description: Technical architecture, compression algorithms, and implementation details for context.do
+version: 1.0.0
+license: CC-BY-4.0
+author:
+  $type: https://schema.org/Organization
+  name: .do
+  url: https://do.inc
+keywords:
+  - architecture
+  - compression algorithms
+  - token counting
+  - semantic patterns
+  - implementation
+---
+
+# Context Management Architecture
+
+This document describes the technical architecture, compression algorithms, and implementation details of `context.do`.
+
+## Overview
+
+`context.do` provides intelligent context management through a layered architecture:
+
+```
+┌─────────────────────────────────────────┐
+│         Application Layer               │
+│  (Your AI Application Code)             │
+└─────────────────────────────────────────┘
+                 ↓
+┌─────────────────────────────────────────┐
+│         Context API Layer               │
+│  $.Context, $.Conversation, etc.        │
+└─────────────────────────────────────────┘
+                 ↓
+┌─────────────────────────────────────────┐
+│      Compression Strategy Layer         │
+│  Sliding, Semantic, Hierarchical, etc.  │
+└─────────────────────────────────────────┘
+                 ↓
+┌─────────────────────────────────────────┐
+│        Token Management Layer           │
+│  Counting, Budgeting, Monitoring        │
+└─────────────────────────────────────────┘
+                 ↓
+┌─────────────────────────────────────────┐
+│         Storage & Cache Layer           │
+│  Context Persistence, Compression Cache │
+└─────────────────────────────────────────┘
+```
+
+## Token Counting
+
+### Tokenization Basics
+
+Different AI models use different tokenizers:
+
+**GPT Models (GPT-5, GPT-5 Mini, GPT-5 Nano)**
+
+- Tokenizer: `cl100k_base` (OpenAI)
+- Vocabulary: 100,000 tokens
+- Encoding: Byte-Pair Encoding (BPE)
+- Average: 1 token ≈ 4 characters
+
+**Claude Models (Claude Sonnet 4.5)**
+
+- Tokenizer: Custom (Anthropic)
+- Vocabulary: ~100,000 tokens
+- Encoding: BPE variant
+- Average: 1 token ≈ 3.8 characters
+
+### Token Counting Implementation
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Internal implementation
+class TokenCounter {
+  private tokenizers: Map<string, Tokenizer> = new Map()
+
+  async countTokens(options: { text: string; model: string }): Promise<number> {
+    // Get model-specific tokenizer
+    const tokenizer = await this.getTokenizer(options.model)
+
+    // Encode text to tokens
+    const tokens = tokenizer.encode(options.text)
+
+    return tokens.length
+  }
+
+  async countMessagesTokens(options: { messages: Message[]; model: string }): Promise<number> {
+    let total = 0
+
+    // Add overhead for message structure
+    // Each message adds: role delimiter + content delimiter
+    const messageOverhead = 4 // tokens per message
+
+    for (const message of options.messages) {
+      total += messageOverhead
+      total += await this.countTokens({
+        text: message.role,
+        model: options.model,
+      })
+      total += await this.countTokens({
+        text: message.content,
+        model: options.model,
+      })
+    }
+
+    // Add overhead for completion priming
+    total += 3
+
+    return total
+  }
+
+  private async getTokenizer(model: string): Promise<Tokenizer> {
+    if (this.tokenizers.has(model)) {
+      return this.tokenizers.get(model)!
+    }
+
+    // Load tokenizer for model
+    let tokenizer: Tokenizer
+
+    if (model.startsWith('gpt-')) {
+      tokenizer = await loadGPTTokenizer()
+    } else if (model.startsWith('claude-')) {
+      tokenizer = await loadClaudeTokenizer()
+    } else {
+      throw new Error(`Unknown model: ${model}`)
+    }
+
+    this.tokenizers.set(model, tokenizer)
+    return tokenizer
+  }
+}
+```
+
+### Byte-Pair Encoding (BPE)
+
+BPE is the algorithm used to tokenize text:
+
+```typescript
+// Simplified BPE implementation
+class BPETokenizer {
+  private vocab: Map<string, number>
+  private merges: Array<[string, string]>
+
+  encode(text: string): number[] {
+    // 1. Convert text to bytes
+    const bytes = new TextEncoder().encode(text)
+
+    // 2. Convert bytes to initial tokens
+    let tokens = Array.from(bytes).map((b) => String.fromCharCode(b))
+
+    // 3. Apply merges iteratively
+    for (const [a, b] of this.merges) {
+      tokens = this.applyMerge(tokens, a, b)
+    }
+
+    // 4. Convert tokens to IDs
+    return tokens.map((token) => this.vocab.get(token) ?? 0)
+  }
+
+  decode(tokenIds: number[]): string {
+    // Convert token IDs back to text
+    const tokens = tokenIds.map((id) => this.getToken(id))
+    const text = tokens.join('')
+    return new TextDecoder().decode(new TextEncoder().encode(text))
+  }
+
+  private applyMerge(tokens: string[], a: string, b: string): string[] {
+    const result: string[] = []
+    let i = 0
+
+    while (i < tokens.length) {
+      if (i < tokens.length - 1 && tokens[i] === a && tokens[i + 1] === b) {
+        result.push(a + b)
+        i += 2
+      } else {
+        result.push(tokens[i])
+        i += 1
+      }
+    }
+
+    return result
+  }
+
+  private getToken(id: number): string {
+    for (const [token, tokenId] of this.vocab) {
+      if (tokenId === id) return token
+    }
+    return ''
+  }
+}
+```
+
+### Token Budget Management
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Token budget manager
+class TokenBudget {
+  private maxTokens: number
+  private usedTokens: number = 0
+  private reservedTokens: number = 0
+
+  constructor(maxTokens: number) {
+    this.maxTokens = maxTokens
+  }
+
+  reserve(tokens: number): boolean {
+    if (this.usedTokens + this.reservedTokens + tokens > this.maxTokens) {
+      return false
+    }
+
+    this.reservedTokens += tokens
+    return true
+  }
+
+  use(tokens: number): void {
+    this.usedTokens += tokens
+    this.reservedTokens -= tokens
+  }
+
+  release(tokens: number): void {
+    this.reservedTokens -= tokens
+  }
+
+  available(): number {
+    return this.maxTokens - this.usedTokens - this.reservedTokens
+  }
+
+  utilizationPercent(): number {
+    return ((this.usedTokens + this.reservedTokens) / this.maxTokens) * 100
+  }
+}
+
+// Usage
+const budget = new TokenBudget(100000) // GPT-5 with 20% headroom
+
+if (budget.reserve(5000)) {
+  // Process request
+  budget.use(5000)
+} else {
+  // Compress context or split request
+}
+```
+
+## Compression Strategies
+
+### 1. Sliding Window Compression
+
+Keep N most recent messages, discard older ones:
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Sliding window implementation
+class SlidingWindowCompressor {
+  async compress(options: { messages: Message[]; windowSize: number; preserveFirst?: number }): Promise<CompressedContext> {
+    const { messages, windowSize, preserveFirst = 0 } = options
+
+    // Keep first N messages (system prompt, etc.)
+    const preserved = messages.slice(0, preserveFirst)
+
+    // Keep last windowSize messages
+    const recent = messages.slice(-windowSize)
+
+    // Combine preserved + recent
+    const compressed = [...preserved, ...recent]
+
+    return {
+      messages: compressed,
+      originalCount: messages.length,
+      compressedCount: compressed.length,
+      strategy: 'sliding',
+      tokens: await this.countTokens(compressed),
+    }
+  }
+
+  private async countTokens(messages: Message[]): Promise<number> {
+    return $.Context.countTokens({ messages, model: 'gpt-5' })
+  }
+}
+
+// Usage
+const compressor = new SlidingWindowCompressor()
+
+const compressed = await compressor.compress({
+  messages: conversationHistory,
+  windowSize: 10,
+  preserveFirst: 1, // Keep system prompt
+})
+```
+
+**Characteristics:**
+
+- Time Complexity: O(1)
+- Space Complexity: O(windowSize)
+- No AI calls required
+- Predictable token usage
+- Complete loss of historical context
+
+### 2. Semantic Summarization
+
+Compress old messages into AI-generated summaries:
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Semantic summarization implementation
+class SemanticSummarizer {
+  async compress(options: { messages: Message[]; targetTokens: number; preserveRecent: number; summaryTokens: number }): Promise<CompressedContext> {
+    const { messages, targetTokens, preserveRecent, summaryTokens } = options
+
+    // Split messages into old and recent
+    const recentMessages = messages.slice(-preserveRecent)
+    const oldMessages = messages.slice(0, -preserveRecent)
+
+    // Generate summary of old messages
+    const summary = await this.summarize({
+      messages: oldMessages,
+      targetTokens: summaryTokens,
+    })
+
+    // Create summary message
+    const summaryMessage: Message = {
+      role: 'system',
+      content: `Previous conversation summary:\n${summary}`,
+    }
+
+    // Combine summary + recent messages
+    const compressed = [summaryMessage, ...recentMessages]
+
+    return {
+      messages: compressed,
+      summary: summary,
+      originalCount: messages.length,
+      compressedCount: compressed.length,
+      strategy: 'summarize',
+      tokens: await this.countTokens(compressed),
+    }
+  }
+
+  private async summarize(options: { messages: Message[]; targetTokens: number }): Promise<string> {
+    const { messages, targetTokens } = options
+
+    // Convert messages to text
+    const conversationText = messages.map((m) => `${m.role}: ${m.content}`).join('\n\n')
+
+    // Generate summary using AI
+    const summary = await $.ai.generate({
+      model: 'gpt-5',
+      messages: [
+        {
+          role: 'system',
+          content: `Summarize the following conversation in approximately ${targetTokens} tokens. Preserve key facts, decisions, and context.`,
+        },
+        {
+          role: 'user',
+          content: conversationText,
+        },
+      ],
+      temperature: 0.3, // Low temperature for factual summary
+    })
+
+    return summary.content
+  }
+
+  private async countTokens(messages: Message[]): Promise<number> {
+    return $.Context.countTokens({ messages, model: 'gpt-5' })
+  }
+}
+
+// Usage
+const summarizer = new SemanticSummarizer()
+
+const compressed = await summarizer.compress({
+  messages: conversationHistory,
+  targetTokens: 4000,
+  preserveRecent: 5,
+  summaryTokens: 1000,
+})
+```
+
+**Characteristics:**
+
+- Time Complexity: O(n) + AI call
+- Space Complexity: O(summaryTokens + preserveRecent)
+- Requires AI call (~1-2 seconds)
+- Good semantic preservation
+- Configurable compression ratio
+
+### 3. Hierarchical Compression
+
+Multiple compression levels based on recency:
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Hierarchical compression implementation
+class HierarchicalCompressor {
+  async compress(options: {
+    messages: Message[]
+    levels: {
+      recent: number // Full detail
+      medium: number // Moderate detail
+      old: 'summary' | 'discard' // Summarized or discarded
+    }
+    targetTokens: number
+  }): Promise<CompressedContext> {
+    const { messages, levels, targetTokens } = options
+
+    // Split into levels
+    const recentMessages = messages.slice(-levels.recent)
+    const mediumStart = Math.max(0, messages.length - levels.recent - levels.medium)
+    const mediumMessages = messages.slice(mediumStart, -levels.recent)
+    const oldMessages = messages.slice(0, mediumStart)
+
+    // Process each level
+    const recentProcessed = recentMessages // Full detail
+
+    const mediumProcessed = await this.compressModerate({
+      messages: mediumMessages,
+      compressionRatio: 0.5, // 50% compression
+    })
+
+    let oldProcessed: Message[] = []
+    if (levels.old === 'summary' && oldMessages.length > 0) {
+      const summary = await this.summarize({
+        messages: oldMessages,
+        targetTokens: 500,
+      })
+      oldProcessed = [
+        {
+          role: 'system',
+          content: `Earlier conversation summary:\n${summary}`,
+        },
+      ]
+    }
+
+    // Combine all levels
+    const compressed = [...oldProcessed, ...mediumProcessed, ...recentProcessed]
+
+    return {
+      messages: compressed,
+      levels: {
+        recent: recentProcessed.length,
+        medium: mediumProcessed.length,
+        old: oldProcessed.length,
+      },
+      originalCount: messages.length,
+      compressedCount: compressed.length,
+      strategy: 'hierarchical',
+      tokens: await this.countTokens(compressed),
+    }
+  }
+
+  private async compressModerate(options: { messages: Message[]; compressionRatio: number }): Promise<Message[]> {
+    const { messages, compressionRatio } = options
+
+    // Compress each message to target ratio
+    const compressed: Message[] = []
+
+    for (const message of messages) {
+      const targetLength = Math.floor(message.content.length * compressionRatio)
+
+      const compressedContent = await $.ai.generate({
+        model: 'gpt-5',
+        messages: [
+          {
+            role: 'system',
+            content: `Compress the following message to approximately ${targetLength} characters while preserving key information.`,
+          },
+          {
+            role: 'user',
+            content: message.content,
+          },
+        ],
+        temperature: 0.3,
+      })
+
+      compressed.push({
+        ...message,
+        content: compressedContent.content,
+      })
+    }
+
+    return compressed
+  }
+
+  private async summarize(options: { messages: Message[]; targetTokens: number }): Promise<string> {
+    // Same as SemanticSummarizer.summarize
+    // (implementation omitted for brevity)
+    return 'Summary of old messages...'
+  }
+
+  private async countTokens(messages: Message[]): Promise<number> {
+    return $.Context.countTokens({ messages, model: 'gpt-5' })
+  }
+}
+
+// Usage
+const compressor = new HierarchicalCompressor()
+
+const compressed = await compressor.compress({
+  messages: conversationHistory,
+  levels: {
+    recent: 5, // Last 5: full detail
+    medium: 10, // Next 10: 50% compressed
+    old: 'summary', // Older: summarized
+  },
+  targetTokens: 8000,
+})
+```
+
+**Characteristics:**
+
+- Time Complexity: O(n) + multiple AI calls
+- Space Complexity: O(recent + medium + summary)
+- Flexible compression levels
+- Balances detail and compression
+- Higher latency due to multiple AI calls
+
+### 4. Semantic Memory Extraction
+
+Extract structured facts from conversation:
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Semantic memory implementation
+class SemanticMemoryExtractor {
+  async compress(options: { messages: Message[]; factTypes: string[]; preserveRecent: number; targetTokens: number }): Promise<CompressedContext> {
+    const { messages, factTypes, preserveRecent, targetTokens } = options
+
+    // Extract facts from all messages
+    const facts = await this.extractFacts({
+      messages: messages,
+      factTypes: factTypes,
+    })
+
+    // Keep recent messages in full
+    const recentMessages = messages.slice(-preserveRecent)
+
+    // Create facts message
+    const factsMessage: Message = {
+      role: 'system',
+      content: this.formatFacts(facts),
+    }
+
+    // Combine facts + recent messages
+    const compressed = [factsMessage, ...recentMessages]
+
+    return {
+      messages: compressed,
+      facts: facts,
+      originalCount: messages.length,
+      compressedCount: compressed.length,
+      strategy: 'semantic',
+      tokens: await this.countTokens(compressed),
+    }
+  }
+
+  private async extractFacts(options: { messages: Message[]; factTypes: string[] }): Promise<Record<string, any>> {
+    const { messages, factTypes } = options
+
+    // Convert messages to text
+    const conversationText = messages.map((m) => `${m.role}: ${m.content}`).join('\n\n')
+
+    // Extract facts using AI with structured output
+    const extraction = await $.ai.generate({
+      model: 'gpt-5',
+      messages: [
+        {
+          role: 'system',
+          content: `Extract the following facts from the conversation: ${factTypes.join(', ')}. Return as JSON.`,
+        },
+        {
+          role: 'user',
+          content: conversationText,
+        },
+      ],
+      responseFormat: { type: 'json_object' },
+      temperature: 0.1, // Very low temperature for factual extraction
+    })
+
+    // Parse JSON response
+    return JSON.parse(extraction.content)
+  }
+
+  private formatFacts(facts: Record<string, any>): string {
+    const lines = ['Key facts from conversation:']
+
+    for (const [key, value] of Object.entries(facts)) {
+      lines.push(`- ${key}: ${JSON.stringify(value)}`)
+    }
+
+    return lines.join('\n')
+  }
+
+  private async countTokens(messages: Message[]): Promise<number> {
+    return $.Context.countTokens({ messages, model: 'gpt-5' })
+  }
+}
+
+// Usage
+const extractor = new SemanticMemoryExtractor()
+
+const compressed = await extractor.compress({
+  messages: conversationHistory,
+  factTypes: ['$.Customer.Name', '$.Customer.Email', '$.Order.ID', '$.Issue.Type', '$.Resolution.Status'],
+  preserveRecent: 3,
+  targetTokens: 4000,
+})
+
+// Access extracted facts
+console.log(compressed.facts)
+// {
+//   '$.Customer.Name': 'John Smith',
+//   '$.Customer.Email': 'john@example.com',
+//   '$.Order.ID': 'ORD-12345',
+//   '$.Issue.Type': 'billing',
+//   '$.Resolution.Status': 'pending'
+// }
+```
+
+**Characteristics:**
+
+- Time Complexity: O(n) + AI call
+- Space Complexity: O(facts + preserveRecent)
+- Perfect recall of key facts
+- Excellent compression ratio
+- Requires schema definition
+- Structured, queryable output
+
+## Context Storage
+
+### In-Memory Context Store
+
+```typescript
+import { $ } from 'sdk.do'
+
+// In-memory context storage
+class ContextStore {
+  private contexts: Map<string, Context> = new Map()
+  private cache: Map<string, CompressedContext> = new Map()
+
+  async save(id: string, context: Context): Promise<void> {
+    this.contexts.set(id, context)
+  }
+
+  async get(id: string): Promise<Context | null> {
+    return this.contexts.get(id) ?? null
+  }
+
+  async delete(id: string): Promise<void> {
+    this.contexts.delete(id)
+    this.cache.delete(id)
+  }
+
+  async getCached(key: string): Promise<CompressedContext | null> {
+    return this.cache.get(key) ?? null
+  }
+
+  async setCached(key: string, context: CompressedContext, ttl: number): Promise<void> {
+    this.cache.set(key, context)
+
+    // Auto-expire after TTL
+    setTimeout(() => {
+      this.cache.delete(key)
+    }, ttl * 1000)
+  }
+}
+```
+
+### Database Context Persistence
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Database-backed context storage
+class DatabaseContextStore {
+  async save(id: string, context: Context): Promise<void> {
+    await $.db.create('Context', {
+      id: id,
+      messages: context.messages,
+      metadata: context.metadata,
+      tokenCount: context.tokenCount,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
+  }
+
+  async get(id: string): Promise<Context | null> {
+    const record = await $.db.get('Context', id)
+    if (!record) return null
+
+    return {
+      messages: record.messages,
+      metadata: record.metadata,
+      tokenCount: record.tokenCount,
+    }
+  }
+
+  async update(id: string, context: Partial<Context>): Promise<void> {
+    await $.db.update('Context', id, {
+      ...context,
+      updatedAt: new Date(),
+    })
+  }
+
+  async delete(id: string): Promise<void> {
+    await $.db.delete('Context', id)
+  }
+
+  async list(filter?: ContextFilter): Promise<Context[]> {
+    return $.db.list('Context', { where: filter })
+  }
+}
+```
+
+## Multi-Turn Conversation Management
+
+### Conversation State Machine
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Conversation state machine
+class ConversationManager {
+  private id: string
+  private turns: Message[] = []
+  private systemPrompt: string
+  private config: ConversationConfig
+  private state: ConversationState
+
+  constructor(config: ConversationConfig) {
+    this.id = generateId()
+    this.systemPrompt = config.systemPrompt
+    this.config = config
+    this.state = {
+      currentTokens: 0,
+      compressedTurns: 0,
+      totalTurns: 0,
+    }
+  }
+
+  async addTurn(message: Message): Promise<void> {
+    // Add message to turns
+    this.turns.push(message)
+    this.state.totalTurns++
+
+    // Update token count
+    this.state.currentTokens = await this.countTokens()
+
+    // Check if compression needed
+    if (this.shouldCompress()) {
+      await this.compress()
+    }
+
+    // Persist to storage
+    await this.persist()
+  }
+
+  async generate(options: GenerateOptions): Promise<Message> {
+    // Get current context
+    const context = await this.getContext()
+
+    // Generate response
+    const response = await $.ai.generate({
+      model: options.model,
+      messages: context,
+      temperature: options.temperature ?? 0.7,
+    })
+
+    // Add assistant response to turns
+    await this.addTurn({
+      role: 'assistant',
+      content: response.content,
+    })
+
+    return {
+      role: 'assistant',
+      content: response.content,
+    }
+  }
+
+  private shouldCompress(): boolean {
+    return this.state.totalTurns > this.config.compressionThreshold
+  }
+
+  private async compress(): Promise<void> {
+    // Compress using configured strategy
+    const compressed = await $.Context.compress({
+      messages: this.turns,
+      strategy: this.config.compressionStrategy,
+      targetTokens: this.config.maxTokens,
+      preserveRecent: this.config.windowSize,
+    })
+
+    // Update turns with compressed context
+    this.turns = compressed.messages
+    this.state.compressedTurns++
+    this.state.currentTokens = compressed.tokens
+  }
+
+  private async getContext(): Promise<Message[]> {
+    // Build context with system prompt + turns
+    return [
+      {
+        role: 'system',
+        content: this.systemPrompt,
+      },
+      ...this.turns,
+    ]
+  }
+
+  private async countTokens(): Promise<number> {
+    const context = await this.getContext()
+    return $.Context.countTokens({
+      messages: context,
+      model: this.config.model,
+    })
+  }
+
+  private async persist(): Promise<void> {
+    await $.db.update('Conversation', this.id, {
+      turns: this.turns,
+      state: this.state,
+      updatedAt: new Date(),
+    })
+  }
+}
+```
+
+## Workflow Context Passing
+
+### Workflow Context Protocol
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Workflow context for inter-agent communication
+class WorkflowContext {
+  private data: Record<string, any>
+  private metadata: ContextMetadata
+  private compressionState: CompressionState | null = null
+
+  constructor(data: Record<string, any>, metadata?: ContextMetadata) {
+    this.data = data
+    this.metadata = metadata ?? {}
+  }
+
+  async compress(options: { targetTokens: number; strategy?: CompressionStrategy }): Promise<WorkflowContext> {
+    const { targetTokens, strategy = 'semantic' } = options
+
+    // Serialize data
+    const serialized = JSON.stringify(this.data)
+
+    // Count tokens
+    const currentTokens = await $.Context.countTokens({
+      text: serialized,
+      model: 'gpt-5',
+    })
+
+    // If already under budget, return as-is
+    if (currentTokens <= targetTokens) {
+      return this
+    }
+
+    // Compress data based on strategy
+    let compressed: any
+
+    if (strategy === 'semantic') {
+      compressed = await this.compressSemantic(targetTokens)
+    } else if (strategy === 'hierarchical') {
+      compressed = await this.compressHierarchical(targetTokens)
+    } else {
+      compressed = await this.compressTruncate(targetTokens)
+    }
+
+    // Create new context with compressed data
+    return new WorkflowContext(compressed, {
+      ...this.metadata,
+      compressed: true,
+      originalTokens: currentTokens,
+      compressedTokens: await $.Context.countTokens({
+        text: JSON.stringify(compressed),
+        model: 'gpt-5',
+      }),
+    })
+  }
+
+  async expand(): Promise<WorkflowContext> {
+    // If not compressed, return as-is
+    if (!this.metadata.compressed) {
+      return this
+    }
+
+    // Expand compressed data (if expansion data available)
+    // For now, return compressed data
+    return this
+  }
+
+  private async compressSemantic(targetTokens: number): Promise<any> {
+    // Use AI to intelligently compress data
+    const serialized = JSON.stringify(this.data, null, 2)
+
+    const compressed = await $.ai.generate({
+      model: 'gpt-5',
+      messages: [
+        {
+          role: 'system',
+          content: `Compress the following data to approximately ${targetTokens} tokens while preserving essential information. Return as JSON.`,
+        },
+        {
+          role: 'user',
+          content: serialized,
+        },
+      ],
+      responseFormat: { type: 'json_object' },
+      temperature: 0.1,
+    })
+
+    return JSON.parse(compressed.content)
+  }
+
+  private async compressHierarchical(targetTokens: number): Promise<any> {
+    // Prioritize fields based on importance
+    const prioritized = this.prioritizeFields(this.data)
+
+    // Include fields until token budget reached
+    const compressed: any = {}
+    let currentTokens = 0
+
+    for (const [key, value] of prioritized) {
+      const fieldTokens = await $.Context.countTokens({
+        text: JSON.stringify({ [key]: value }),
+        model: 'gpt-5',
+      })
+
+      if (currentTokens + fieldTokens <= targetTokens) {
+        compressed[key] = value
+        currentTokens += fieldTokens
+      } else {
+        break
+      }
+    }
+
+    return compressed
+  }
+
+  private async compressTruncate(targetTokens: number): Promise<any> {
+    // Simple truncation of large fields
+    const compressed = { ...this.data }
+
+    for (const [key, value] of Object.entries(compressed)) {
+      if (typeof value === 'string' && value.length > 1000) {
+        // Truncate long strings
+        compressed[key] = value.slice(0, 1000) + '... [truncated]'
+      }
+    }
+
+    return compressed
+  }
+
+  private prioritizeFields(data: Record<string, any>): Array<[string, any]> {
+    // Priority order based on field name patterns
+    const priorities: Record<string, number> = {
+      id: 1,
+      type: 1,
+      status: 2,
+      priority: 2,
+      metadata: 5,
+      description: 7,
+      content: 10,
+    }
+
+    return Object.entries(data).sort((a, b) => {
+      const aPriority = priorities[a[0]] ?? 5
+      const bPriority = priorities[b[0]] ?? 5
+      return aPriority - bPriority
+    })
+  }
+
+  toJSON(): any {
+    return this.data
+  }
+}
+```
+
+## Performance Optimization
+
+### Token Counting Cache
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Cache token counts to avoid re-counting
+class TokenCountCache {
+  private cache: Map<string, number> = new Map()
+
+  async count(text: string, model: string): Promise<number> {
+    const key = `${model}:${this.hash(text)}`
+
+    if (this.cache.has(key)) {
+      return this.cache.get(key)!
+    }
+
+    const tokens = await $.Context.countTokens({ text, model })
+    this.cache.set(key, tokens)
+
+    return tokens
+  }
+
+  private hash(text: string): string {
+    // Simple hash function (use crypto hash in production)
+    let hash = 0
+    for (let i = 0; i < text.length; i++) {
+      const char = text.charCodeAt(i)
+      hash = (hash << 5) - hash + char
+      hash = hash & hash // Convert to 32-bit integer
+    }
+    return hash.toString(36)
+  }
+
+  clear(): void {
+    this.cache.clear()
+  }
+}
+```
+
+### Compression Result Cache
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Cache compression results
+class CompressionCache {
+  private cache: Map<string, CompressedContext> = new Map()
+  private ttl: number = 3600 // 1 hour default
+
+  async get(key: string): Promise<CompressedContext | null> {
+    const cached = this.cache.get(key)
+    if (!cached) return null
+
+    // Check if expired
+    const age = Date.now() - cached.timestamp
+    if (age > this.ttl * 1000) {
+      this.cache.delete(key)
+      return null
+    }
+
+    return cached
+  }
+
+  async set(key: string, context: CompressedContext): Promise<void> {
+    this.cache.set(key, {
+      ...context,
+      timestamp: Date.now(),
+    })
+  }
+
+  clear(): void {
+    this.cache.clear()
+  }
+
+  // Generate cache key from messages
+  generateKey(messages: Message[], options: CompressionOptions): string {
+    const messagesHash = this.hashMessages(messages)
+    const optionsHash = JSON.stringify(options)
+    return `${messagesHash}:${optionsHash}`
+  }
+
+  private hashMessages(messages: Message[]): string {
+    const text = messages.map((m) => `${m.role}:${m.content}`).join('|')
+    return this.hash(text)
+  }
+
+  private hash(text: string): string {
+    // Same hash function as TokenCountCache
+    let hash = 0
+    for (let i = 0; i < text.length; i++) {
+      const char = text.charCodeAt(i)
+      hash = (hash << 5) - hash + char
+      hash = hash & hash
+    }
+    return hash.toString(36)
+  }
+}
+```
+
+## Monitoring and Metrics
+
+### Context Metrics Collector
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Collect and export context metrics
+class ContextMetrics {
+  private metrics: MetricsCollector
+
+  constructor() {
+    this.metrics = new MetricsCollector()
+  }
+
+  recordTokenCount(tokens: number, model: string): void {
+    this.metrics.gauge('context.tokens', tokens, {
+      model: model,
+    })
+  }
+
+  recordCompression(metrics: CompressionMetrics): void {
+    this.metrics.histogram('context.compression.ratio', metrics.compressionRatio, {
+      strategy: metrics.strategy,
+    })
+
+    this.metrics.histogram('context.compression.duration', metrics.durationMs, {
+      strategy: metrics.strategy,
+    })
+
+    this.metrics.counter('context.compression.total', 1, {
+      strategy: metrics.strategy,
+    })
+  }
+
+  recordOverflow(actualTokens: number, maxTokens: number): void {
+    this.metrics.counter('context.overflow.total', 1)
+    this.metrics.gauge('context.overflow.amount', actualTokens - maxTokens)
+  }
+
+  recordConversationTurn(turnNumber: number, tokenCount: number): void {
+    this.metrics.gauge('conversation.turns', turnNumber)
+    this.metrics.gauge('conversation.tokens', tokenCount)
+  }
+}
+```
+
+## Security Considerations
+
+### Context Data Sanitization
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Sanitize context before compression/storage
+class ContextSanitizer {
+  async sanitize(context: Context): Promise<Context> {
+    const sanitized = { ...context }
+
+    // Remove sensitive data patterns
+    sanitized.messages = await Promise.all(
+      sanitized.messages.map(async (m) => ({
+        ...m,
+        content: await this.sanitizeContent(m.content),
+      }))
+    )
+
+    return sanitized
+  }
+
+  private async sanitizeContent(content: string): Promise<string> {
+    let sanitized = content
+
+    // Remove PII patterns
+    sanitized = this.removePII(sanitized)
+
+    // Remove API keys/secrets
+    sanitized = this.removeSecrets(sanitized)
+
+    return sanitized
+  }
+
+  private removePII(text: string): string {
+    // Email addresses
+    text = text.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '[EMAIL]')
+
+    // Phone numbers
+    text = text.replace(/\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/g, '[PHONE]')
+
+    // SSN
+    text = text.replace(/\b\d{3}-\d{2}-\d{4}\b/g, '[SSN]')
+
+    // Credit card numbers
+    text = text.replace(/\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g, '[CREDIT_CARD]')
+
+    return text
+  }
+
+  private removeSecrets(text: string): string {
+    // API keys
+    text = text.replace(/\b[A-Za-z0-9_-]{32,}\b/g, '[API_KEY]')
+
+    // JWT tokens
+    text = text.replace(/eyJ[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]*/g, '[JWT_TOKEN]')
+
+    return text
+  }
+}
+```
+
+## Related Resources
+
+- [Getting Started](./getting-started.mdx) - Basic setup and usage
+- [Best Practices](./best-practices.mdx) - Optimization techniques
+- [API Reference](../api/reference.mdx) - Complete API documentation
+- [Examples](../examples/) - Implementation examples
+
+---
+
+Built with [sdk.do](https://sdk.do) - The semantic SDK for Business-as-Code

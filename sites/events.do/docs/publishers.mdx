@@ -1,0 +1,752 @@
+---
+$id: https://events.do/docs/publishers
+$type: TechArticle
+title: Event Publishing with send
+description: Publish business events to trigger workflows and notify subscribers
+keywords: [event-publishing, send, publish, emit, dispatch]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Event Publishing with `send`
+
+Event publishers allow you to emit business events that trigger workflows and notify subscribers. The `send` function provides a simple, powerful way to publish events across your application.
+
+## Basic Usage
+
+```typescript
+import { send } from 'sdk.do'
+
+await send('Order.created', {
+  id: '12345',
+  customer: 'acme-corp',
+  total: 1500.0,
+})
+```
+
+## Function Signature
+
+```typescript
+function send<T = any>(eventType: string, data: T, metadata?: EventMetadata): Promise<void>
+
+interface EventMetadata {
+  timestamp?: Date
+  source?: string
+  correlationId?: string
+  causationId?: string
+  userId?: string
+  version?: number
+  [key: string]: any
+}
+```
+
+## Publishing Events
+
+### Simple Event
+
+```typescript
+await send('User.registered', {
+  id: 'user-123',
+  email: 'user@example.com',
+  name: 'John Doe',
+})
+```
+
+### Event with Full Data
+
+```typescript
+await send('Order.created', {
+  id: 'order-12345',
+  customer: {
+    id: 'cust-456',
+    name: 'Acme Corporation',
+    email: 'orders@acme.com',
+  },
+  items: [
+    {
+      product: 'widget-pro',
+      quantity: 10,
+      price: 99.99,
+      total: 999.9,
+    },
+    {
+      product: 'gadget-ultra',
+      quantity: 5,
+      price: 199.99,
+      total: 999.95,
+    },
+  ],
+  subtotal: 1999.85,
+  tax: 199.99,
+  total: 2199.84,
+  currency: 'USD',
+  createdAt: new Date(),
+})
+```
+
+### Event with Metadata
+
+```typescript
+await send('Order.created', orderData, {
+  timestamp: new Date(),
+  source: 'checkout-service',
+  correlationId: sessionId,
+  userId: currentUser.id,
+  version: 2,
+})
+```
+
+## Event Naming
+
+Follow the `Object.Action` pattern:
+
+### Lifecycle Events
+
+```typescript
+// Entity creation
+await send('Order.created', orderData)
+await send('User.created', userData)
+await send('Product.created', productData)
+
+// Entity updates
+await send('Order.updated', orderData)
+await send('User.updated', userData)
+await send('Product.updated', productData)
+
+// Entity deletion
+await send('Order.deleted', { id: orderId })
+await send('User.deleted', { id: userId })
+await send('Product.deleted', { id: productId })
+```
+
+### State Changes
+
+```typescript
+// Order lifecycle
+await send('Order.submitted', orderData)
+await send('Order.validated', orderData)
+await send('Order.paid', orderData)
+await send('Order.fulfilled', orderData)
+await send('Order.shipped', orderData)
+await send('Order.delivered', orderData)
+await send('Order.completed', orderData)
+await send('Order.cancelled', orderData)
+
+// Payment states
+await send('Payment.requested', paymentData)
+await send('Payment.authorized', paymentData)
+await send('Payment.captured', paymentData)
+await send('Payment.completed', paymentData)
+await send('Payment.failed', paymentData)
+await send('Payment.refunded', paymentData)
+
+// User states
+await send('User.registered', userData)
+await send('User.verified', userData)
+await send('User.activated', userData)
+await send('User.suspended', userData)
+await send('User.deactivated', userData)
+```
+
+### Business Actions
+
+```typescript
+// Customer actions
+await send('Customer.contacted', contactData)
+await send('Customer.onboarded', onboardingData)
+await send('Customer.upgraded', upgradeData)
+await send('Customer.churned', churnData)
+
+// Inventory actions
+await send('Inventory.reserved', reservationData)
+await send('Inventory.released', releaseData)
+await send('Inventory.restocked', restockData)
+await send('Inventory.depleted', depletionData)
+
+// Notification actions
+await send('Notification.sent', notificationData)
+await send('Notification.delivered', deliveryData)
+await send('Notification.opened', openData)
+await send('Notification.clicked', clickData)
+```
+
+## Event Data Patterns
+
+### Complete Context
+
+Always include full context in event data:
+
+```typescript
+// ✅ Good - Complete context
+await send('Order.created', {
+  id: '12345',
+  customer: { id: 'cust-1', name: 'Acme Corp', email: 'orders@acme.com' },
+  items: [{ product: 'widget', quantity: 10, price: 99.99 }],
+  subtotal: 999.9,
+  tax: 99.99,
+  total: 1099.89,
+  currency: 'USD',
+  createdAt: new Date(),
+  createdBy: 'user-456',
+})
+
+// ❌ Bad - Missing context
+await send('Order.created', {
+  id: '12345',
+})
+```
+
+### Immutable Data
+
+Event data should be immutable snapshots:
+
+```typescript
+// ✅ Good - Snapshot of current state
+const orderSnapshot = JSON.parse(JSON.stringify(order))
+await send('Order.created', orderSnapshot)
+
+// ❌ Bad - Reference to mutable object
+await send('Order.created', order) // order may change later
+```
+
+### Typed Data
+
+Use TypeScript for type safety:
+
+```typescript
+interface OrderCreatedData {
+  id: string
+  customer: {
+    id: string
+    name: string
+    email: string
+  }
+  items: Array<{
+    product: string
+    quantity: number
+    price: number
+    total: number
+  }>
+  total: number
+  currency: string
+  createdAt: Date
+}
+
+await send<OrderCreatedData>('Order.created', {
+  id: '12345',
+  customer: {
+    id: 'cust-1',
+    name: 'Acme Corp',
+    email: 'orders@acme.com',
+  },
+  items: [{ product: 'widget', quantity: 10, price: 99.99, total: 999.9 }],
+  total: 999.9,
+  currency: 'USD',
+  createdAt: new Date(),
+})
+```
+
+## Metadata Patterns
+
+### Timestamp
+
+Always include timestamp in metadata:
+
+```typescript
+await send('Order.created', orderData, {
+  timestamp: new Date(),
+})
+```
+
+### Source Service
+
+Identify the source of events:
+
+```typescript
+await send('Order.created', orderData, {
+  source: 'checkout-service',
+  sourceVersion: '2.1.0',
+})
+```
+
+### Correlation ID
+
+Track related events across services:
+
+```typescript
+const correlationId = generateCorrelationId() // or from request
+
+await send('Order.created', orderData, {
+  correlationId,
+})
+
+await send('Payment.requested', paymentData, {
+  correlationId, // Same ID links events
+})
+
+await send('Order.shipped', shippingData, {
+  correlationId,
+})
+```
+
+### Causation ID
+
+Track event chains:
+
+```typescript
+on('Order.created', async (event) => {
+  await send('Payment.requested', paymentData, {
+    causationId: event.metadata.eventId, // This event caused by Order.created
+    correlationId: event.metadata.correlationId,
+  })
+})
+```
+
+### User Context
+
+Include user who triggered the event:
+
+```typescript
+await send('Order.created', orderData, {
+  userId: currentUser.id,
+  userEmail: currentUser.email,
+  userRole: currentUser.role,
+})
+```
+
+### Event Versioning
+
+Version your events for backwards compatibility:
+
+```typescript
+await send('Order.created', orderData, {
+  version: 2, // Event schema version
+  schemaUrl: 'https://schemas.example.com/Order.created/v2',
+})
+```
+
+## Publishing Patterns
+
+### Fire and Forget
+
+Publish event without waiting for handlers:
+
+```typescript
+// Event is published asynchronously
+send('Metrics.updated', metricsData)
+
+// Continue without waiting
+return response
+```
+
+### Wait for Acknowledgment
+
+Wait for event to be published:
+
+```typescript
+// Wait for publish to complete
+await send('Order.created', orderData)
+
+// Now safe to return
+return { success: true, orderId: orderData.id }
+```
+
+### Transactional Publishing
+
+Publish events as part of a transaction:
+
+```typescript
+import { db, send } from 'sdk.do'
+
+await db.transaction(async (tx) => {
+  // Create order in database
+  const order = await tx.create($.Order, orderData)
+
+  // Publish event (will rollback if transaction fails)
+  await send('Order.created', order)
+
+  return order
+})
+```
+
+### Batch Publishing
+
+Publish multiple events efficiently:
+
+```typescript
+import { sendBatch } from 'sdk.do'
+
+await sendBatch([
+  { type: 'Order.created', data: order1 },
+  { type: 'Order.created', data: order2 },
+  { type: 'Order.created', data: order3 },
+])
+```
+
+### Conditional Publishing
+
+Only publish if conditions are met:
+
+```typescript
+async function updateOrder(orderId: string, updates: any) {
+  const order = await db.get($.Order, orderId)
+  const updated = await db.update($.Order, orderId, updates)
+
+  // Only publish if status actually changed
+  if (order.status !== updated.status) {
+    await send('Order.statusChanged', {
+      orderId,
+      oldStatus: order.status,
+      newStatus: updated.status,
+      changedAt: new Date(),
+    })
+  }
+
+  return updated
+}
+```
+
+### Deferred Publishing
+
+Publish events after operations complete:
+
+```typescript
+const eventsToPublish = []
+
+async function processOrders(orders: Order[]) {
+  for (const order of orders) {
+    await processOrder(order)
+
+    // Defer event publishing
+    eventsToPublish.push({
+      type: 'Order.processed',
+      data: order,
+    })
+  }
+
+  // Publish all events at once
+  await sendBatch(eventsToPublish)
+}
+```
+
+## Integration Patterns
+
+### Database Integration
+
+Automatically publish events on database changes:
+
+```typescript
+import { db, send } from 'sdk.do'
+
+// Configure database to auto-publish events
+db.on('create', async (entity) => {
+  await send(`${entity.$type}.created`, entity)
+})
+
+db.on('update', async (entity, changes) => {
+  await send(`${entity.$type}.updated`, {
+    ...entity,
+    changes,
+  })
+})
+
+db.on('delete', async (entity) => {
+  await send(`${entity.$type}.deleted`, {
+    id: entity.id,
+    deletedAt: new Date(),
+  })
+})
+```
+
+### API Integration
+
+Publish events from API endpoints:
+
+```typescript
+app.post('/orders', async (req, res) => {
+  try {
+    // Create order
+    const order = await createOrder(req.body)
+
+    // Publish event
+    await send('Order.created', order, {
+      source: 'orders-api',
+      userId: req.user.id,
+      correlationId: req.id,
+    })
+
+    res.json({ success: true, order })
+  } catch (error) {
+    // Publish error event
+    await send('Order.creationFailed', {
+      data: req.body,
+      error: error.message,
+    })
+
+    res.status(500).json({ error: error.message })
+  }
+})
+```
+
+### Webhook Integration
+
+Publish events from incoming webhooks:
+
+```typescript
+app.post('/webhooks/stripe', async (req, res) => {
+  const event = req.body
+
+  // Publish Stripe webhook as internal event
+  await send(`Stripe.${event.type}`, event.data, {
+    source: 'stripe-webhook',
+    webhookId: event.id,
+    timestamp: new Date(event.created * 1000),
+  })
+
+  res.json({ received: true })
+})
+```
+
+### Queue Integration
+
+Publish events from message queues:
+
+```typescript
+import { processQueue, send } from 'sdk.do'
+
+processQueue('orders', async (message) => {
+  const order = message.data
+
+  // Process order
+  await processOrder(order)
+
+  // Publish completion event
+  await send('Order.processed', order, {
+    source: 'order-processor',
+    queueMessageId: message.id,
+  })
+})
+```
+
+## Error Handling
+
+### Try-Catch
+
+Handle publish errors:
+
+```typescript
+try {
+  await send('Order.created', orderData)
+} catch (error) {
+  console.error('Failed to publish event:', error)
+
+  // Store for retry
+  await storeFailedEvent({
+    type: 'Order.created',
+    data: orderData,
+    error: error.message,
+  })
+}
+```
+
+### Retry Logic
+
+Automatically retry failed publishes:
+
+```typescript
+async function sendWithRetry(type: string, data: any, maxRetries = 3) {
+  let lastError
+
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      await send(type, data)
+      return
+    } catch (error) {
+      lastError = error
+      await delay(Math.pow(2, i) * 1000) // Exponential backoff
+    }
+  }
+
+  throw new Error(`Failed after ${maxRetries} retries: ${lastError.message}`)
+}
+```
+
+### Dead Letter Queue
+
+Store events that fail repeatedly:
+
+```typescript
+async function sendWithDLQ(type: string, data: any) {
+  try {
+    await sendWithRetry(type, data)
+  } catch (error) {
+    // Store in dead letter queue for manual review
+    await db.create($.DeadLetterQueue, {
+      eventType: type,
+      eventData: data,
+      error: error.message,
+      timestamp: new Date(),
+    })
+
+    // Notify administrators
+    await send('Event.deadLettered', {
+      type,
+      error: error.message,
+    })
+  }
+}
+```
+
+## Testing
+
+### Unit Testing
+
+```typescript
+import { send } from 'sdk.do'
+import { vi } from 'vitest'
+
+// Mock send function
+vi.mock('sdk.do', () => ({
+  send: vi.fn(),
+}))
+
+test('publishes order created event', async () => {
+  await createOrder({ id: '12345' })
+
+  expect(send).toHaveBeenCalledWith(
+    'Order.created',
+    expect.objectContaining({
+      id: '12345',
+    })
+  )
+})
+```
+
+### Integration Testing
+
+```typescript
+import { send, on } from 'sdk.do'
+import { expect, test } from 'vitest'
+
+test('event flow', async () => {
+  const receivedEvents = []
+
+  on('Order.*', async (event) => {
+    receivedEvents.push(event.type)
+  })
+
+  await send('Order.created', { id: '12345' })
+  await send('Order.validated', { id: '12345' })
+  await send('Order.shipped', { id: '12345' })
+
+  await delay(100) // Wait for handlers
+
+  expect(receivedEvents).toEqual(['Order.created', 'Order.validated', 'Order.shipped'])
+})
+```
+
+### Event Assertions
+
+```typescript
+import { captureEvents, send } from 'sdk.do/testing'
+
+test('publishes correct events', async () => {
+  const capture = captureEvents()
+
+  await processOrder({ id: '12345' })
+
+  expect(capture.events).toHaveLength(3)
+  expect(capture.events[0].type).toBe('Order.created')
+  expect(capture.events[1].type).toBe('Payment.requested')
+  expect(capture.events[2].type).toBe('Order.completed')
+})
+```
+
+## Performance Considerations
+
+### Async Publishing
+
+Don't block on event publishing:
+
+```typescript
+// ✅ Good - async, non-blocking
+app.post('/orders', async (req, res) => {
+  const order = await createOrder(req.body)
+
+  // Publish asynchronously
+  send('Order.created', order).catch(console.error)
+
+  // Return immediately
+  res.json({ success: true, order })
+})
+
+// ❌ Bad - blocks response
+app.post('/orders', async (req, res) => {
+  const order = await createOrder(req.body)
+
+  await send('Order.created', order) // Waits for publish
+
+  res.json({ success: true, order })
+})
+```
+
+### Batch Publishing
+
+Publish multiple events efficiently:
+
+```typescript
+// ✅ Good - batch publish
+const events = orders.map((order) => ({
+  type: 'Order.created',
+  data: order,
+}))
+await sendBatch(events)
+
+// ❌ Bad - individual publishes
+for (const order of orders) {
+  await send('Order.created', order)
+}
+```
+
+### Event Size
+
+Keep event payloads reasonable:
+
+```typescript
+// ✅ Good - essential data only
+await send('Order.created', {
+  id: order.id,
+  customerId: order.customer.id,
+  total: order.total,
+  itemCount: order.items.length,
+})
+
+// ❌ Bad - huge payload
+await send('Order.created', {
+  ...order,
+  customer: { ...fullCustomerData },
+  items: order.items.map((item) => ({ ...item, ...fullProductData })),
+  analytics: { ...massiveAnalyticsData },
+})
+```
+
+## Best Practices
+
+1. **Use semantic naming**: Follow `Object.Action` pattern
+2. **Include full context**: Event data should be self-contained
+3. **Add metadata**: Timestamp, source, correlation ID
+4. **Type your events**: Use TypeScript interfaces
+5. **Version events**: Include version in metadata
+6. **Handle errors**: Don't let failed publishes break your app
+7. **Keep payloads small**: Only include necessary data
+8. **Document events**: Document event structure and purpose
+9. **Test event flows**: Write tests for event publishing
+10. **Monitor publishing**: Track publish success/failure rates
+
+## See Also
+
+- [Event Listeners](./listeners) - Subscribing to events with `on`
+- [Getting Started](./getting-started) - Basic setup and usage
+- [API Reference](../api/) - Complete API documentation
+- [Examples](../examples/) - Real-world examples

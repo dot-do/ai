@@ -1,0 +1,636 @@
+---
+$id: https://embeddings.do/docs/best-practices
+$type: TechArticle
+title: embeddings.do Best Practices
+description: Best practices for vector embeddings and semantic search optimization
+keywords: [embeddings, best practices, optimization, performance, caching, scaling]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Best Practices
+
+Optimize your vector embeddings and semantic search implementation.
+
+## Text Preparation
+
+### Normalize Text
+
+Clean and normalize text before embedding:
+
+```typescript
+function normalizeText(text: string): string {
+  return text
+    .toLowerCase() // Lowercase
+    .trim() // Remove whitespace
+    .replace(/\s+/g, ' ') // Normalize spaces
+    .replace(/[^\w\s]/g, '') // Remove special chars
+}
+
+const embedding = await ai.embed(normalizeText(rawText))
+```
+
+### Combine Relevant Fields
+
+Include all semantically relevant information:
+
+```typescript
+// Good: Complete context
+const text = [product.name, product.description, product.category, product.brand, product.features?.join(' '), product.benefits?.join(' ')]
+  .filter(Boolean)
+  .join(' ')
+
+// Avoid: Missing context
+const text = product.name
+```
+
+### Handle Long Text
+
+Truncate or chunk long text:
+
+```typescript
+function truncateText(text: string, maxTokens = 8000): string {
+  // Rough estimate: 1 token ≈ 4 characters
+  const maxChars = maxTokens * 4
+  if (text.length <= maxChars) return text
+
+  // Truncate intelligently at sentence boundary
+  const truncated = text.slice(0, maxChars)
+  const lastPeriod = truncated.lastIndexOf('.')
+  return lastPeriod > 0 ? truncated.slice(0, lastPeriod + 1) : truncated
+}
+```
+
+## Batch Processing
+
+### Use Batch API
+
+Generate multiple embeddings at once:
+
+```typescript
+// Good: Batch processing
+const texts = products.map((p) => `${p.name} ${p.description}`)
+const embeddings = await ai.embed(texts)
+
+// Avoid: Individual requests
+for (const product of products) {
+  const embedding = await ai.embed(`${product.name} ${product.description}`)
+}
+```
+
+### Chunk Large Batches
+
+Process in manageable chunks:
+
+```typescript
+async function batchEmbed(texts: string[], batchSize = 100) {
+  const results: number[][] = []
+
+  for (let i = 0; i < texts.length; i += batchSize) {
+    const batch = texts.slice(i, i + batchSize)
+    const embeddings = await ai.embed(batch)
+    results.push(...embeddings)
+
+    console.log(`Processed ${i + batch.length}/${texts.length}`)
+  }
+
+  return results
+}
+```
+
+## Caching
+
+### Cache Embeddings
+
+Avoid regenerating embeddings:
+
+```typescript
+import { $, ai, db } from 'sdk.do'
+
+async function getOrCreateEmbedding(text: string): Promise<number[]> {
+  const hash = hashText(text)
+  const cacheKey = `embed:${hash}`
+
+  // Check cache
+  const cached = await db.get($.Embedding, cacheKey)
+  if (cached) return cached.vector
+
+  // Generate new embedding
+  const embedding = await ai.embed(text)
+
+  // Store in cache
+  await db.create($.Embedding, {
+    $id: cacheKey,
+    text,
+    vector: embedding,
+    createdAt: new Date().toISOString(),
+  })
+
+  return embedding
+}
+
+function hashText(text: string): string {
+  return crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)).then((buf) =>
+    Array.from(new Uint8Array(buf))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('')
+  )
+}
+```
+
+### Multi-Level Caching
+
+Implement tiered caching:
+
+```typescript
+class EmbeddingCache {
+  private memory = new Map<string, number[]>()
+
+  async get(text: string): Promise<number[]> {
+    // L1: Memory (instant)
+    if (this.memory.has(text)) {
+      return this.memory.get(text)!
+    }
+
+    // L2: Redis (< 1ms)
+    const redisKey = `embed:${hash(text)}`
+    const cached = await redis.get(redisKey)
+    if (cached) {
+      const embedding = JSON.parse(cached)
+      this.memory.set(text, embedding)
+      return embedding
+    }
+
+    // L3: Database (< 10ms)
+    const dbRecord = await db.get($.Embedding, redisKey)
+    if (dbRecord) {
+      await redis.set(redisKey, JSON.stringify(dbRecord.vector), 'EX', 3600)
+      this.memory.set(text, dbRecord.vector)
+      return dbRecord.vector
+    }
+
+    // L4: Generate (100-500ms)
+    const embedding = await ai.embed(text)
+    await this.store(text, embedding)
+    return embedding
+  }
+
+  private async store(text: string, embedding: number[]) {
+    const key = `embed:${hash(text)}`
+    this.memory.set(text, embedding)
+    await redis.set(key, JSON.stringify(embedding), 'EX', 3600)
+    await db.create($.Embedding, { $id: key, text, vector: embedding })
+  }
+}
+```
+
+## Similarity Search
+
+### Pre-filtering
+
+Reduce search space before computing similarity:
+
+```typescript
+async function search(query: string, filters?: any) {
+  const queryEmbedding = await ai.embed(query)
+
+  // Pre-filter by category, price, etc.
+  const candidates = await db.list($.Product, {
+    where: filters,
+  })
+
+  // Compute similarity only for candidates
+  return candidates
+    .map((p) => ({
+      product: p,
+      similarity: cosineSimilarity(queryEmbedding, p.embedding),
+    }))
+    .sort((a, b) => b.similarity - a.similarity)
+    .slice(0, 10)
+}
+```
+
+### Approximate Nearest Neighbors
+
+Use ANN algorithms for large-scale search:
+
+```typescript
+// Use vector databases like Pinecone for ANN
+const index = pinecone.index('products')
+
+await index.query({
+  vector: queryEmbedding,
+  topK: 10,
+  filter: { category: 'electronics' },
+})
+// Much faster than brute-force search
+```
+
+### Set Similarity Thresholds
+
+Filter by minimum similarity:
+
+```typescript
+const results = candidates
+  .map((p) => ({
+    product: p,
+    similarity: cosineSimilarity(queryEmbedding, p.embedding),
+  }))
+  .filter((r) => r.similarity > 0.7) // Only return relevant results
+  .sort((a, b) => b.similarity - a.similarity)
+```
+
+## Storage Optimization
+
+### Quantization
+
+Reduce storage with quantization:
+
+```typescript
+// Convert float32 to int8
+function quantize(embedding: number[]): Int8Array {
+  // Find min/max
+  const min = Math.min(...embedding)
+  const max = Math.max(...embedding)
+  const scale = (max - min) / 255
+
+  // Quantize to int8
+  return new Int8Array(embedding.map((v) => Math.round((v - min) / scale)))
+}
+
+function dequantize(quantized: Int8Array, min: number, scale: number): number[] {
+  return Array.from(quantized).map((v) => v * scale + min)
+}
+
+// Storage savings: 1536 × 4 bytes → 1536 × 1 byte (75% reduction)
+```
+
+### Compression
+
+Compress embeddings before storage:
+
+```typescript
+import { compress, decompress } from 'lz4'
+
+async function storeEmbedding(id: string, embedding: number[]) {
+  const buffer = Buffer.from(new Float32Array(embedding).buffer)
+  const compressed = compress(buffer)
+
+  await db.create($.Embedding, {
+    $id: id,
+    vector: compressed, // Store compressed
+    originalSize: buffer.length,
+    compressedSize: compressed.length,
+  })
+}
+```
+
+## Performance
+
+### Parallel Processing
+
+Process embeddings concurrently:
+
+```typescript
+import pLimit from 'p-limit'
+
+const limit = pLimit(10) // Max 10 concurrent
+
+const embeddings = await Promise.all(texts.map((text) => limit(() => ai.embed(text))))
+```
+
+### Lazy Loading
+
+Load embeddings on-demand:
+
+```typescript
+interface ProductWithEmbedding {
+  product: Product
+  _embedding?: number[]
+
+  get embedding(): Promise<number[]> {
+    if (!this._embedding) {
+      this._embedding = this.loadEmbedding()
+    }
+    return this._embedding
+  }
+
+  private async loadEmbedding(): Promise<number[]> {
+    const record = await db.get($.Embedding, `prod:${this.product.$id}`)
+    return record.vector
+  }
+}
+```
+
+### Dimensionality Reduction
+
+Reduce dimensions for faster computation:
+
+```typescript
+import { PCA } from 'ml-pca'
+
+// Reduce from 1536 to 256 dimensions
+const pca = new PCA(embeddings)
+const reduced = pca.predict(embeddings, { nComponents: 256 })
+
+// 6x faster similarity computation
+```
+
+## Error Handling
+
+### Retry Logic
+
+Handle transient failures:
+
+```typescript
+async function embedWithRetry(text: string, maxRetries = 3, delay = 1000): Promise<number[]> {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await ai.embed(text)
+    } catch (error) {
+      if (i === maxRetries - 1) throw error
+
+      if (error.code === 'RATE_LIMIT_EXCEEDED') {
+        await new Promise((r) => setTimeout(r, delay * (i + 1)))
+        continue
+      }
+
+      throw error
+    }
+  }
+
+  throw new Error('Max retries exceeded')
+}
+```
+
+### Graceful Degradation
+
+Provide fallbacks:
+
+```typescript
+async function search(query: string) {
+  try {
+    const embedding = await ai.embed(query)
+    return await semanticSearch(embedding)
+  } catch (error) {
+    console.error('Embedding failed, falling back to keyword search')
+    return await keywordSearch(query)
+  }
+}
+```
+
+## Monitoring
+
+### Track Metrics
+
+Monitor performance:
+
+```typescript
+interface EmbeddingMetrics {
+  totalRequests: number
+  cacheHits: number
+  cacheMisses: number
+  avgLatency: number
+  errors: number
+}
+
+class MetricsCollector {
+  private metrics: EmbeddingMetrics = {
+    totalRequests: 0,
+    cacheHits: 0,
+    cacheMisses: 0,
+    avgLatency: 0,
+    errors: 0,
+  }
+
+  recordRequest(latency: number, cacheHit: boolean) {
+    this.metrics.totalRequests++
+    if (cacheHit) {
+      this.metrics.cacheHits++
+    } else {
+      this.metrics.cacheMisses++
+    }
+
+    // Update rolling average
+    this.metrics.avgLatency = (this.metrics.avgLatency * (this.metrics.totalRequests - 1) + latency) / this.metrics.totalRequests
+  }
+
+  get cacheHitRate(): number {
+    return this.metrics.cacheHits / this.metrics.totalRequests
+  }
+}
+```
+
+### Set Alerts
+
+Monitor system health:
+
+```typescript
+function checkHealth(metrics: EmbeddingMetrics) {
+  // Alert on high latency
+  if (metrics.avgLatency > 1000) {
+    sendAlert('High embedding latency', { latency: metrics.avgLatency })
+  }
+
+  // Alert on low cache hit rate
+  const hitRate = metrics.cacheHits / metrics.totalRequests
+  if (hitRate < 0.7) {
+    sendAlert('Low cache hit rate', { rate: hitRate })
+  }
+
+  // Alert on high error rate
+  const errorRate = metrics.errors / metrics.totalRequests
+  if (errorRate > 0.05) {
+    sendAlert('High error rate', { rate: errorRate })
+  }
+}
+```
+
+## Security
+
+### Validate Input
+
+Sanitize text before embedding:
+
+```typescript
+function sanitizeText(text: string): string {
+  // Remove potentially malicious content
+  return text
+    .replace(/<script[^>]*>.*?<\/script>/gi, '')
+    .replace(/<[^>]+>/g, '')
+    .trim()
+    .slice(0, 50000) // Limit length
+}
+
+const embedding = await ai.embed(sanitizeText(userInput))
+```
+
+### Rate Limiting
+
+Prevent abuse:
+
+```typescript
+class RateLimiter {
+  private limits = new Map<string, number[]>()
+
+  async checkLimit(userId: string, maxPerMinute = 60): Promise<boolean> {
+    const now = Date.now()
+    const requests = this.limits.get(userId) || []
+
+    // Clean old requests
+    const recent = requests.filter((t) => now - t < 60000)
+
+    if (recent.length >= maxPerMinute) {
+      return false
+    }
+
+    recent.push(now)
+    this.limits.set(userId, recent)
+    return true
+  }
+}
+```
+
+## Cost Optimization
+
+### Choose Right Model
+
+Balance cost and quality:
+
+```typescript
+// High quality, higher cost
+const largeEmbed = await ai.embed(text, {
+  model: 'text-embedding-3-large',
+})
+
+// Good quality, lower cost
+const smallEmbed = await ai.embed(text, {
+  model: 'text-embedding-3-small',
+})
+```
+
+### Deduplication
+
+Avoid embedding duplicate content:
+
+```typescript
+async function dedupeAndEmbed(texts: string[]) {
+  // Remove exact duplicates
+  const unique = [...new Set(texts)]
+
+  // Generate embeddings
+  const embeddings = await ai.embed(unique)
+
+  // Map back to original
+  return texts.map((text) => {
+    const index = unique.indexOf(text)
+    return embeddings[index]
+  })
+}
+```
+
+## Testing
+
+### Unit Tests
+
+Test embedding functions:
+
+```typescript
+import { describe, it, expect } from 'vitest'
+
+describe('embeddings', () => {
+  it('generates consistent embeddings', async () => {
+    const text = 'test text'
+    const embed1 = await ai.embed(text)
+    const embed2 = await ai.embed(text)
+
+    expect(cosineSimilarity(embed1, embed2)).toBeGreaterThan(0.99)
+  })
+
+  it('similar texts have high similarity', async () => {
+    const embed1 = await ai.embed('machine learning')
+    const embed2 = await ai.embed('artificial intelligence')
+
+    expect(cosineSimilarity(embed1, embed2)).toBeGreaterThan(0.7)
+  })
+})
+```
+
+### Integration Tests
+
+Test full workflow:
+
+```typescript
+describe('semantic search', () => {
+  it('finds relevant products', async () => {
+    // Index test products
+    await indexProducts(testProducts)
+
+    // Search
+    const results = await search('laptop for coding')
+
+    // Verify results
+    expect(results).toHaveLength(10)
+    expect(results[0].product.category).toBe('Computers')
+  })
+})
+```
+
+## Documentation
+
+### Document Schema
+
+Document embedding fields:
+
+```typescript
+interface Product {
+  $id: string
+  $type: 'Product'
+  name: string
+  description: string
+  /**
+   * Vector embedding generated from name, description, and category.
+   * Dimensions: 1536 (text-embedding-3-large)
+   * Updated: On product create/update
+   */
+  embedding: number[]
+}
+```
+
+### Track Model Versions
+
+Document which model generated embeddings:
+
+```typescript
+interface Embedding {
+  $id: string
+  vector: number[]
+  model: string // 'text-embedding-3-large'
+  modelVersion: string // '1.0.0'
+  createdAt: string
+}
+```
+
+## Summary
+
+Key takeaways:
+
+1. **Always normalize** text before embedding
+2. **Use batch API** for multiple embeddings
+3. **Cache aggressively** to avoid regeneration
+4. **Pre-filter** before similarity computation
+5. **Monitor performance** and set alerts
+6. **Handle errors** gracefully with retries
+7. **Choose appropriate model** for use case
+8. **Test thoroughly** with unit and integration tests
+
+## Next Steps
+
+- [Troubleshooting](./troubleshooting) - Common issues
+- [API Reference](../api/reference) - Complete API docs
+- [Examples](../examples/) - Practical implementations
+
+## License
+
+CC-BY-4.0 (Open Source)

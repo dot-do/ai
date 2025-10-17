@@ -1,0 +1,1334 @@
+---
+$id: https://integrations.do/sendgrid
+$type: Integration
+name: SendGrid
+service: sendgrid
+description: Email delivery and marketing platform for transactional and marketing emails
+category: communication
+sdkBased: true
+sdkPackage: '@sendgrid/mail'
+sdkVersion: ^8.1.4
+sdkImport: sgMail
+
+auth:
+  type: api-key
+  location: header
+  headerName: Authorization
+  scheme: Bearer
+
+apiVersion: v3
+
+resources:
+  - name: Email
+    plural: Emails
+    sdkPath: mail
+    operations:
+      - name: send
+        method: send
+        params:
+          - name: options
+            type: SendEmailOptions
+            required: true
+            description: Email sending options including from, to, subject, and content
+        returns: SendGridResponse
+
+      - name: sendBulk
+        method: send
+        params:
+          - name: options
+            type: BulkEmail
+            required: true
+            description: Bulk email with multiple personalizations
+        returns: SendGridResponse
+
+      - name: sendTemplate
+        method: send
+        params:
+          - name: options
+            type: TemplateEmail
+            required: true
+            description: Template email with dynamic template data
+        returns: SendGridResponse
+
+      - name: sendDynamicTemplate
+        method: send
+        params:
+          - name: options
+            type: DynamicTemplateEmail
+            required: true
+            description: Dynamic template email with personalizations
+        returns: SendGridResponse
+
+      - name: validate
+        method: POST
+        path: /v3/validations/email
+        params:
+          - name: email
+            type: string
+            required: true
+            description: Email address to validate
+        returns: EmailValidation
+
+  - name: Contact
+    plural: Contacts
+    sdkPath: client
+    operations:
+      - name: create
+        method: PUT
+        path: /v3/marketing/contacts
+        params:
+          - name: options
+            type: CreateContactOptions
+            required: true
+            description: Contacts to create or update
+        returns: '{ job_id: string }'
+
+      - name: get
+        method: GET
+        path: /v3/marketing/contacts/{id}
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Contact ID
+        returns: Contact
+
+      - name: update
+        method: PUT
+        path: /v3/marketing/contacts
+        params:
+          - name: options
+            type: UpdateContactOptions
+            required: true
+            description: Contacts to update
+        returns: '{ job_id: string }'
+
+      - name: delete
+        method: DELETE
+        path: /v3/marketing/contacts
+        params:
+          - name: ids
+            type: string[]
+            required: true
+            description: Array of contact IDs to delete
+        returns: '{ job_id: string }'
+
+      - name: list
+        method: GET
+        path: /v3/marketing/contacts
+        params:
+          - name: options
+            type: ListContactsOptions
+            required: false
+            description: List pagination options
+        returns: '{ result: Contact[], _metadata: { next?: string } }'
+        pagination:
+          type: cursor
+          cursorParam: page_token
+          limitParam: page_size
+          defaultLimit: 100
+          maxLimit: 1000
+
+      - name: search
+        method: POST
+        path: /v3/marketing/contacts/search
+        params:
+          - name: options
+            type: SearchContactsOptions
+            required: true
+            description: Search query and pagination
+        returns: '{ result: Contact[], contact_count: number }'
+
+  - name: List
+    plural: Lists
+    sdkPath: client
+    operations:
+      - name: create
+        method: POST
+        path: /v3/marketing/lists
+        params:
+          - name: options
+            type: CreateListOptions
+            required: true
+            description: List name
+        returns: ContactList
+
+      - name: get
+        method: GET
+        path: /v3/marketing/lists/{id}
+        params:
+          - name: id
+            type: string
+            required: true
+            description: List ID
+        returns: ContactList
+
+      - name: update
+        method: PATCH
+        path: /v3/marketing/lists/{id}
+        params:
+          - name: id
+            type: string
+            required: true
+            description: List ID
+          - name: options
+            type: UpdateListOptions
+            required: true
+            description: Updated list properties
+        returns: ContactList
+
+      - name: delete
+        method: DELETE
+        path: /v3/marketing/lists/{id}
+        params:
+          - name: id
+            type: string
+            required: true
+            description: List ID
+        returns: '{ job_id: string }'
+
+      - name: list
+        method: GET
+        path: /v3/marketing/lists
+        returns: '{ result: ContactList[] }'
+
+      - name: addContacts
+        method: POST
+        path: /v3/marketing/lists/{listId}/contacts
+        params:
+          - name: listId
+            type: string
+            required: true
+            description: List ID
+          - name: contactIds
+            type: string[]
+            required: true
+            description: Array of contact IDs to add
+        returns: '{ job_id: string }'
+
+      - name: removeContacts
+        method: DELETE
+        path: /v3/marketing/lists/{listId}/contacts
+        params:
+          - name: listId
+            type: string
+            required: true
+            description: List ID
+          - name: contactIds
+            type: string[]
+            required: true
+            description: Array of contact IDs to remove
+        returns: '{ job_id: string }'
+
+  - name: Segment
+    plural: Segments
+    sdkPath: client
+    operations:
+      - name: create
+        method: POST
+        path: /v3/marketing/segments
+        params:
+          - name: options
+            type: CreateSegmentOptions
+            required: true
+            description: Segment name and query DSL
+        returns: Segment
+
+      - name: get
+        method: GET
+        path: /v3/marketing/segments/{id}
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Segment ID
+        returns: Segment
+
+      - name: update
+        method: PATCH
+        path: /v3/marketing/segments/{id}
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Segment ID
+          - name: options
+            type: UpdateSegmentOptions
+            required: true
+            description: Updated segment properties
+        returns: Segment
+
+      - name: delete
+        method: DELETE
+        path: /v3/marketing/segments/{id}
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Segment ID
+        returns: void
+
+      - name: list
+        method: GET
+        path: /v3/marketing/segments
+        returns: '{ results: Segment[] }'
+
+  - name: Template
+    plural: Templates
+    sdkPath: client
+    operations:
+      - name: create
+        method: POST
+        path: /v3/templates
+        params:
+          - name: options
+            type: CreateTemplateOptions
+            required: true
+            description: Template name and generation type
+        returns: Template
+
+      - name: get
+        method: GET
+        path: /v3/templates/{id}
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Template ID
+        returns: Template
+
+      - name: update
+        method: PATCH
+        path: /v3/templates/{id}
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Template ID
+          - name: options
+            type: UpdateTemplateOptions
+            required: true
+            description: Updated template properties
+        returns: Template
+
+      - name: delete
+        method: DELETE
+        path: /v3/templates/{id}
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Template ID
+        returns: void
+
+      - name: list
+        method: GET
+        path: /v3/templates
+        returns: '{ result: Template[] }'
+
+  - name: Campaign
+    plural: Campaigns
+    sdkPath: client
+    operations:
+      - name: create
+        method: POST
+        path: /v3/marketing/singlesends
+        params:
+          - name: options
+            type: CreateCampaignOptions
+            required: true
+            description: Campaign configuration
+        returns: Campaign
+
+      - name: get
+        method: GET
+        path: /v3/marketing/singlesends/{id}
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Campaign ID
+        returns: Campaign
+
+      - name: update
+        method: PATCH
+        path: /v3/marketing/singlesends/{id}
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Campaign ID
+          - name: options
+            type: UpdateCampaignOptions
+            required: true
+            description: Updated campaign properties
+        returns: Campaign
+
+      - name: delete
+        method: DELETE
+        path: /v3/marketing/singlesends/{id}
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Campaign ID
+        returns: void
+
+      - name: list
+        method: GET
+        path: /v3/marketing/singlesends
+        returns: '{ result: Campaign[] }'
+
+      - name: send
+        method: PUT
+        path: /v3/marketing/singlesends/{id}/schedule
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Campaign ID
+        returns: '{ status: string }'
+
+      - name: schedule
+        method: PUT
+        path: /v3/marketing/singlesends/{id}/schedule
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Campaign ID
+          - name: options
+            type: ScheduleCampaignOptions
+            required: true
+            description: Schedule timestamp
+        returns: '{ status: string }'
+
+  - name: Suppression
+    plural: Suppressions
+    sdkPath: client
+    operations:
+      - name: addToGroup
+        method: POST
+        path: /v3/asm/groups/{groupId}/suppressions
+        params:
+          - name: groupId
+            type: number
+            required: true
+            description: Suppression group ID
+          - name: emails
+            type: string[]
+            required: true
+            description: Array of email addresses to suppress
+        returns: '{ recipient_emails: string[] }'
+
+      - name: removeFromGroup
+        method: DELETE
+        path: /v3/asm/groups/{groupId}/suppressions/{emails}
+        params:
+          - name: groupId
+            type: number
+            required: true
+            description: Suppression group ID
+          - name: emails
+            type: string[]
+            required: true
+            description: Array of email addresses to remove
+        returns: void
+
+      - name: listGroups
+        method: GET
+        path: /v3/asm/groups
+        returns: SuppressionGroup[]
+
+  - name: Stats
+    plural: Stats
+    sdkPath: client
+    operations:
+      - name: get
+        method: GET
+        path: /v3/stats
+        params:
+          - name: options
+            type: StatsOptions
+            required: true
+            description: Date range and aggregation options
+        returns: EmailStats[]
+
+      - name: getGlobal
+        method: GET
+        path: /v3/stats
+        params:
+          - name: options
+            type: StatsOptions
+            required: true
+            description: Date range and aggregation options
+        returns: GlobalStats[]
+
+      - name: getCategory
+        method: GET
+        path: /v3/categories/stats
+        params:
+          - name: options
+            type: StatsOptions
+            required: true
+            description: Date range, categories, and aggregation options
+        returns: CategoryStats[]
+
+webhooks:
+  enabled: true
+  signatureHeader: X-Twilio-Email-Event-Webhook-Signature
+  signatureAlgorithm: sha256
+  verificationMethod: signature
+  events:
+    - name: processed
+      type: processed
+      description: Message has been received and is ready to be delivered
+    - name: dropped
+      type: dropped
+      description: Message has been dropped and will not be delivered
+    - name: delivered
+      type: delivered
+      description: Message has been successfully delivered to the receiving server
+    - name: deferred
+      type: deferred
+      description: Receiving server temporarily rejected the message
+    - name: bounce
+      type: bounce
+      description: Receiving server could not or would not accept the message
+    - name: open
+      type: open
+      description: Recipient has opened the HTML message
+    - name: click
+      type: click
+      description: Recipient clicked on a link within the message
+    - name: spam_report
+      type: spam_report
+      description: Recipient marked the message as spam
+    - name: unsubscribe
+      type: unsubscribe
+      description: Recipient clicked on the unsubscribe link
+    - name: group_unsubscribe
+      type: group_unsubscribe
+      description: Recipient unsubscribed from a specific group
+    - name: group_resubscribe
+      type: group_resubscribe
+      description: Recipient resubscribed to a specific group
+
+errors:
+  mapping:
+    - code: INVALID_REQUEST
+      statusCode: 400
+      type: validation
+      message: Invalid request parameters
+      retryable: false
+    - code: AUTHENTICATION_FAILED
+      statusCode: 401
+      type: authentication
+      message: Invalid API key or authentication failed
+      retryable: false
+    - code: PERMISSION_DENIED
+      statusCode: 403
+      type: authorization
+      message: Insufficient permissions for this operation
+      retryable: false
+    - code: NOT_FOUND
+      statusCode: 404
+      type: not_found
+      message: Resource not found
+      retryable: false
+    - code: PAYLOAD_TOO_LARGE
+      statusCode: 413
+      type: validation
+      message: Request payload is too large
+      retryable: false
+    - code: RATE_LIMIT_EXCEEDED
+      statusCode: 429
+      type: rate_limit
+      message: Rate limit exceeded - please retry after some time
+      retryable: true
+    - code: SERVER_ERROR
+      statusCode: 500
+      type: server
+      message: SendGrid server error
+      retryable: true
+    - code: SERVICE_UNAVAILABLE
+      statusCode: 503
+      type: server
+      message: SendGrid service is temporarily unavailable
+      retryable: true
+    - code: TIMEOUT
+      type: network
+      message: Request timeout
+      retryable: true
+    - code: NETWORK_ERROR
+      type: network
+      message: Network error
+      retryable: true
+  retryable: [RATE_LIMIT_EXCEEDED, SERVER_ERROR, SERVICE_UNAVAILABLE, TIMEOUT, NETWORK_ERROR]
+  nonRetryable: [INVALID_REQUEST, AUTHENTICATION_FAILED, PERMISSION_DENIED, NOT_FOUND, PAYLOAD_TOO_LARGE]
+
+tests:
+  enabled: true
+  cleanup: true
+  scenarios:
+    - name: Email Operations
+      description: Test email sending with various configurations
+      steps:
+        - action: create
+          resource: Email
+          params:
+            from: test@example.com
+            to: recipient@example.com
+            subject: Test Email
+            text: Test content
+        - action: create
+          resource: Email
+          params:
+            from: test@example.com
+            to: recipient@example.com
+            subject: Test Email with Attachment
+            attachments:
+              - content: base64content
+                filename: test.txt
+    - name: Contact Operations
+      description: Test contact CRUD operations
+      steps:
+        - action: create
+          resource: Contact
+        - action: retrieve
+          resource: Contact
+        - action: update
+          resource: Contact
+        - action: delete
+          resource: Contact
+        - action: list
+          resource: Contact
+    - name: List Management
+      description: Test contact list operations
+      steps:
+        - action: create
+          resource: List
+        - action: retrieve
+          resource: List
+        - action: update
+          resource: List
+        - action: delete
+          resource: List
+    - name: Segment Operations
+      description: Test segment creation and management
+      steps:
+        - action: create
+          resource: Segment
+        - action: retrieve
+          resource: Segment
+        - action: update
+          resource: Segment
+        - action: delete
+          resource: Segment
+        - action: list
+          resource: Segment
+    - name: Template Operations
+      description: Test email template management
+      steps:
+        - action: create
+          resource: Template
+        - action: retrieve
+          resource: Template
+        - action: update
+          resource: Template
+        - action: delete
+          resource: Template
+        - action: list
+          resource: Template
+    - name: Campaign Operations
+      description: Test marketing campaign management
+      steps:
+        - action: create
+          resource: Campaign
+        - action: retrieve
+          resource: Campaign
+        - action: update
+          resource: Campaign
+        - action: list
+          resource: Campaign
+    - name: Suppression Management
+      description: Test suppression group operations
+      steps:
+        - action: create
+          resource: Suppression
+        - action: list
+          resource: Suppression
+    - name: Webhook Handling
+      description: Test webhook signature verification
+      steps:
+        - action: assert
+          expects:
+            status: 200
+
+docs:
+  homepage: https://sendgrid.com
+  apiDocs: https://docs.sendgrid.com/api-reference
+  sdkDocs: https://github.com/sendgrid/sendgrid-nodejs
+  guides:
+    quickstart: https://docs.sendgrid.com/for-developers/sending-email/quickstart-nodejs
+    webhooks: https://docs.sendgrid.com/for-developers/tracking-events/event
+    testing: https://docs.sendgrid.com/for-developers/sending-email/sandbox-mode
+    authentication: https://docs.sendgrid.com/ui/account-and-settings/api-keys
+---
+
+# SendGrid Email Delivery Platform
+
+SendGrid is a cloud-based email delivery platform that provides reliable transactional and marketing email delivery at scale. Trusted by developers and marketers worldwide, SendGrid delivers over 100 billion emails per month for companies like Uber, Spotify, and Airbnb.
+
+## Features
+
+- **Transactional Email**: Send password resets, order confirmations, and account notifications
+- **Marketing Campaigns**: Create and send newsletters, promotions, and announcements
+- **Email Validation**: Validate email addresses before sending to reduce bounces
+- **Contact Management**: Organize contacts with lists and dynamic segments
+- **Dynamic Templates**: Use Handlebars templates with dynamic data
+- **Email Analytics**: Track opens, clicks, bounces, and spam reports
+- **Webhook Events**: Real-time notifications for all email events
+- **Suppression Management**: Handle unsubscribes and bounce suppression
+- **Global Infrastructure**: 99.99% uptime with worldwide data centers
+
+## Quick Start
+
+```typescript
+import { SendGridClient } from '@dotdo/sdk.do/integrations/sendgrid'
+
+const sendgrid = new SendGridClient({
+  apiKey: process.env.SENDGRID_API_KEY,
+})
+
+// Send a simple email
+await sendgrid.sendEmail({
+  to: { email: 'recipient@example.com', name: 'John Doe' },
+  from: { email: 'sender@example.com', name: 'My App' },
+  subject: 'Hello from SendGrid',
+  text: 'This is a test email',
+  html: '<p>This is a test email</p>',
+})
+```
+
+## Authentication
+
+Set your SendGrid API key as an environment variable:
+
+```bash
+export SENDGRID_API_KEY=SG.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+Get your API key from the [SendGrid Dashboard](https://app.sendgrid.com/settings/api_keys). Create an API key with appropriate permissions for your use case:
+
+- **Full Access**: All SendGrid features (use for development)
+- **Restricted Access**: Limit to specific features (recommended for production)
+- **Billing Access**: View billing information only
+
+**Security Best Practices**:
+
+- Never commit API keys to version control
+- Use environment variables or secret management
+- Rotate API keys regularly
+- Create separate keys for development and production
+- Use restricted access keys with minimum required permissions
+
+## Resources
+
+### Email Operations
+
+Send emails with various configurations:
+
+```typescript
+// Simple email
+await sendgrid.sendEmail({
+  to: { email: 'user@example.com', name: 'Jane Doe' },
+  from: { email: 'noreply@example.com', name: 'My App' },
+  subject: 'Welcome!',
+  text: 'Thanks for signing up.',
+  html: '<p>Thanks for signing up.</p>',
+  reply_to: { email: 'support@example.com' },
+  categories: ['welcome', 'onboarding'],
+})
+
+// Email with attachments
+await sendgrid.sendEmail({
+  to: { email: 'user@example.com' },
+  from: { email: 'noreply@example.com' },
+  subject: 'Your Invoice',
+  html: '<p>Invoice attached</p>',
+  attachments: [
+    {
+      content: Buffer.from(pdfData).toString('base64'),
+      filename: 'invoice.pdf',
+      type: 'application/pdf',
+      disposition: 'attachment',
+    },
+  ],
+})
+
+// Bulk email with personalizations
+await sendgrid.sendBulkEmail({
+  from: { email: 'newsletter@example.com' },
+  subject: 'Monthly Update',
+  html: '<p>Hello {{name}}!</p>',
+  personalizations: [
+    {
+      to: [{ email: 'user1@example.com' }],
+      dynamic_template_data: { name: 'John' },
+    },
+    {
+      to: [{ email: 'user2@example.com' }],
+      dynamic_template_data: { name: 'Jane' },
+    },
+  ],
+})
+
+// Template email
+await sendgrid.sendTemplateEmail({
+  to: { email: 'user@example.com' },
+  from: { email: 'noreply@example.com' },
+  template_id: 'd-1234567890abcdef',
+  dynamic_template_data: {
+    name: 'John',
+    action_url: 'https://example.com/verify',
+    expiry_date: '2025-12-31',
+  },
+})
+```
+
+### Email Validation
+
+Validate email addresses before adding to your contact list:
+
+```typescript
+const validation = await sendgrid.validateEmail('user@example.com')
+
+console.log('Verdict:', validation.verdict) // 'Valid', 'Invalid', or 'Risky'
+console.log('Score:', validation.score) // 0.0 to 1.0
+
+if (validation.verdict === 'Valid') {
+  // Safe to send
+  await sendgrid.sendEmail({ ... })
+} else if (validation.verdict === 'Risky') {
+  // Consider additional verification
+  console.log('Suggestion:', validation.suggestion)
+} else {
+  // Do not send
+  console.log('Invalid email address')
+}
+
+// Check specific validation details
+if (validation.checks.domain.is_suspected_disposable_address) {
+  console.log('Disposable email detected')
+}
+
+if (validation.checks.additional.has_known_bounces) {
+  console.log('Email has bounced before')
+}
+```
+
+### Contact Management
+
+Manage your contact database:
+
+```typescript
+// Create contacts
+const result = await sendgrid.createContact({
+  contacts: [
+    {
+      email: 'user1@example.com',
+      first_name: 'John',
+      last_name: 'Doe',
+      custom_fields: {
+        plan: 'Pro',
+        signup_date: '2025-01-01',
+      },
+    },
+  ],
+})
+
+// Get contact by ID
+const contact = await sendgrid.getContact('contact-id')
+
+// Update contact
+await sendgrid.updateContact({
+  contacts: [
+    {
+      email: 'user1@example.com',
+      first_name: 'John',
+      last_name: 'Doe Updated',
+      custom_fields: { plan: 'Enterprise' },
+    },
+  ],
+})
+
+// List contacts with pagination
+const { result: contacts, _metadata } = await sendgrid.listContacts({
+  page_size: 100,
+})
+
+// Paginate to next page
+if (_metadata.next) {
+  const nextPage = await sendgrid.listContacts({
+    page_token: _metadata.next,
+  })
+}
+
+// Search contacts
+const { result: matches, contact_count } = await sendgrid.searchContacts({
+  query: "email LIKE '%@example.com%' AND first_name = 'John'",
+  page_size: 50,
+})
+
+// Delete contacts
+await sendgrid.deleteContact(['contact-id-1', 'contact-id-2'])
+```
+
+### List Management
+
+Organize contacts into lists:
+
+```typescript
+// Create list
+const list = await sendgrid.createList({
+  name: 'VIP Customers',
+})
+
+// Add contacts to list
+await sendgrid.addContactsToList(list.id, ['contact-id-1', 'contact-id-2'])
+
+// Get list details
+const details = await sendgrid.getList(list.id)
+console.log('Contact count:', details.contact_count)
+
+// Update list
+await sendgrid.updateList(list.id, {
+  name: 'Premium Customers',
+})
+
+// Remove contacts from list
+await sendgrid.removeContactsFromList(list.id, ['contact-id-1'])
+
+// List all lists
+const { result: lists } = await sendgrid.listLists()
+
+// Delete list
+await sendgrid.deleteList(list.id)
+```
+
+### Segment Management
+
+Create dynamic segments based on contact criteria:
+
+```typescript
+// Create segment
+const segment = await sendgrid.createSegment({
+  name: 'High Value Customers',
+  query_dsl: "plan = 'Enterprise' AND total_spent > 10000",
+  parent_list_ids: ['list-id'],
+})
+
+// Get segment
+const details = await sendgrid.getSegment(segment.id)
+console.log('Contact count:', details.contact_count)
+
+// Update segment
+await sendgrid.updateSegment(segment.id, {
+  name: 'Premium Enterprise Customers',
+  query_dsl: "plan = 'Enterprise' AND total_spent > 50000",
+})
+
+// List all segments
+const { results: segments } = await sendgrid.listSegments()
+
+// Delete segment
+await sendgrid.deleteSegment(segment.id)
+```
+
+### Template Management
+
+Create and manage email templates:
+
+```typescript
+// Create template
+const template = await sendgrid.createTemplate({
+  name: 'Welcome Email',
+  generation: 'dynamic',
+})
+
+// Get template
+const details = await sendgrid.getTemplate(template.id)
+
+// Update template
+await sendgrid.updateTemplate(template.id, {
+  name: 'Welcome Email v2',
+})
+
+// List templates
+const { result: templates } = await sendgrid.listTemplates()
+
+// Delete template
+await sendgrid.deleteTemplate(template.id)
+```
+
+### Campaign Management
+
+Create and send marketing campaigns:
+
+```typescript
+// Create campaign
+const campaign = await sendgrid.createCampaign({
+  title: 'Monthly Newsletter',
+  subject: 'Your Monthly Update',
+  sender_id: 123456,
+  list_ids: ['list-id-1', 'list-id-2'],
+  html_content: '<p>Newsletter content here</p>',
+  categories: ['newsletter', 'monthly'],
+})
+
+// Get campaign
+const details = await sendgrid.getCampaign(campaign.id)
+
+// Update campaign
+await sendgrid.updateCampaign(campaign.id, {
+  title: 'January Newsletter',
+  subject: 'Your January Update',
+})
+
+// Send campaign immediately
+await sendgrid.sendCampaign(campaign.id)
+
+// Schedule campaign
+const sendAt = Math.floor(Date.now() / 1000) + 3600 // Send in 1 hour
+await sendgrid.scheduleCampaign(campaign.id, {
+  send_at: sendAt,
+})
+
+// List campaigns
+const { result: campaigns } = await sendgrid.listCampaigns()
+
+// Delete campaign
+await sendgrid.deleteCampaign(campaign.id)
+```
+
+### Suppression Management
+
+Manage unsubscribe groups and suppressions:
+
+```typescript
+// Add emails to suppression group
+await sendgrid.addToSuppressionGroup(123, ['user1@example.com', 'user2@example.com'])
+
+// Remove emails from suppression group
+await sendgrid.removeFromSuppressionGroup(123, ['user1@example.com'])
+
+// List all suppression groups
+const groups = await sendgrid.listSuppressionGroups()
+for (const group of groups) {
+  console.log(group.name, ':', group.unsubscribes, 'unsubscribes')
+}
+```
+
+### Email Statistics
+
+Get detailed email statistics:
+
+```typescript
+// Get email stats
+const stats = await sendgrid.getStats({
+  start_date: '2025-01-01',
+  end_date: '2025-01-31',
+  aggregated_by: 'day',
+})
+
+for (const stat of stats) {
+  console.log('Date:', stat.date)
+  console.log('Delivered:', stat.stats[0].delivered)
+  console.log('Opens:', stat.stats[0].opens)
+  console.log('Clicks:', stat.stats[0].clicks)
+  console.log('Bounces:', stat.stats[0].bounces)
+}
+
+// Get global stats
+const globalStats = await sendgrid.getGlobalStats({
+  start_date: '2025-01-01',
+  end_date: '2025-01-31',
+  aggregated_by: 'month',
+})
+
+// Get category stats
+const categoryStats = await sendgrid.getCategoryStats({
+  start_date: '2025-01-01',
+  end_date: '2025-01-31',
+  categories: ['newsletter', 'transactional'],
+  aggregated_by: 'week',
+})
+```
+
+## Webhooks
+
+SendGrid sends webhooks for email events. Always verify webhook signatures using ECDSA:
+
+### Setup
+
+1. Go to [SendGrid Mail Settings > Event Webhook](https://app.sendgrid.com/settings/mail_settings)
+2. Enable "Signed Event Webhook"
+3. Copy the public key (PEM format)
+4. Store it as `SENDGRID_WEBHOOK_PUBLIC_KEY`
+
+### Verify Webhook
+
+```typescript
+import { SendGridWebhooks, EventRouter, EventTypes } from '@dotdo/sdk.do/integrations/sendgrid'
+
+// Verify signature
+const signature = request.headers['x-twilio-email-event-webhook-signature']
+const timestamp = request.headers['x-twilio-email-event-webhook-timestamp']
+const publicKey = process.env.SENDGRID_WEBHOOK_PUBLIC_KEY
+
+const isValid = SendGridWebhooks.verifySignature(requestBody, signature, timestamp, publicKey)
+
+if (!isValid) {
+  return { statusCode: 401, body: 'Invalid signature' }
+}
+
+// Parse and handle events
+const events = SendGridWebhooks.parseEvent(requestBody)
+```
+
+### Handle Events
+
+```typescript
+const router = new EventRouter()
+
+// Handle delivered events
+router.on(EventTypes.DELIVERED, async (event) => {
+  console.log('✓ Email delivered to:', event.email)
+  // Update database, trigger workflow, etc.
+})
+
+// Handle bounce events
+router.on(EventTypes.BOUNCE, async (event) => {
+  console.log('✗ Email bounced:', event.email)
+  console.log('  Reason:', event.reason)
+  // Mark email as invalid, remove from list, etc.
+})
+
+// Handle open events
+router.on(EventTypes.OPEN, async (event) => {
+  console.log('👁 Email opened by:', event.email)
+  // Track engagement, update analytics, etc.
+})
+
+// Handle click events
+router.on(EventTypes.CLICK, async (event) => {
+  console.log('👆 Link clicked by:', event.email)
+  console.log('  URL:', event.url)
+  // Track conversion, update user journey, etc.
+})
+
+// Handle spam reports
+router.on(EventTypes.SPAM_REPORT, async (event) => {
+  console.log('⚠️  Spam report from:', event.email)
+  // Immediately suppress this email
+})
+
+// Handle unsubscribes
+router.on(EventTypes.UNSUBSCRIBE, async (event) => {
+  console.log('👋 Unsubscribe from:', event.email)
+  // Update subscription preferences
+})
+
+// Process webhook
+await router.handle(events)
+```
+
+### Webhook Helpers
+
+```typescript
+import {
+  filterEventsByType,
+  filterEventsByEmail,
+  groupEventsByEmail,
+  wasDelivered,
+  wasBounced,
+  wasOpened,
+  wasClicked,
+  getBounceReason,
+  getClickedUrls,
+} from '@dotdo/sdk.do/integrations/sendgrid'
+
+// Filter events by type
+const deliveredEvents = filterEventsByType(events, 'delivered')
+
+// Group events by email
+const eventsByEmail = groupEventsByEmail(events)
+for (const [email, emailEvents] of eventsByEmail) {
+  if (wasDelivered(emailEvents)) {
+    console.log('✓ Delivered')
+  }
+  if (wasBounced(emailEvents)) {
+    console.log('✗ Bounced:', getBounceReason(emailEvents))
+  }
+  if (wasOpened(emailEvents)) {
+    console.log('👁 Opened')
+  }
+  if (wasClicked(emailEvents)) {
+    console.log('👆 Clicked:', getClickedUrls(emailEvents))
+  }
+}
+```
+
+## Error Handling
+
+All methods throw `SendGridIntegrationError` on failure:
+
+```typescript
+import { SendGridIntegrationError, ErrorCodes } from '@dotdo/sdk.do/integrations/sendgrid'
+
+try {
+  await sendgrid.sendEmail({ ... })
+} catch (error) {
+  if (error instanceof SendGridIntegrationError) {
+    console.error('SendGrid error:', error.code, error.message)
+    console.error('Status code:', error.statusCode)
+
+    // Check specific error types
+    if (error.code === ErrorCodes.AUTHENTICATION_FAILED) {
+      // Invalid API key
+    } else if (error.code === ErrorCodes.RATE_LIMIT_EXCEEDED) {
+      // Rate limit hit, retry later
+    } else if (error.code === ErrorCodes.INVALID_REQUEST) {
+      // Invalid parameters
+    }
+
+    // Check if error is retriable
+    if (error.isRetriable()) {
+      // Implement retry logic with exponential backoff
+    }
+  }
+}
+```
+
+## Rate Limits
+
+SendGrid enforces rate limits based on your plan:
+
+- **Free**: 100 emails/day
+- **Essentials**: 40,000-100,000 emails/month
+- **Pro**: 1.5M+ emails/month
+
+Implement exponential backoff for rate limit errors:
+
+```typescript
+async function sendWithRetry(email, maxRetries = 3) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await sendgrid.sendEmail(email)
+    } catch (error) {
+      if (error.code === ErrorCodes.RATE_LIMIT_EXCEEDED) {
+        const delay = Math.pow(2, i) * 1000 // Exponential backoff
+        await new Promise((resolve) => setTimeout(resolve, delay))
+        continue
+      }
+      throw error
+    }
+  }
+  throw new Error('Max retries exceeded')
+}
+```
+
+## Best Practices
+
+### Email Validation
+
+Always validate email addresses before adding to your contact list:
+
+```typescript
+const validation = await sendgrid.validateEmail(email)
+if (validation.verdict !== 'Valid') {
+  throw new Error('Invalid email address')
+}
+```
+
+### Unsubscribe Handling
+
+Always respect unsubscribe requests:
+
+```typescript
+router.on(EventTypes.UNSUBSCRIBE, async (event) => {
+  // Immediately mark user as unsubscribed
+  await db.users.update({
+    where: { email: event.email },
+    data: { unsubscribed: true },
+  })
+
+  // Remove from all marketing lists
+  await sendgrid.deleteContact([contactId])
+})
+```
+
+### Template Best Practices
+
+1. **Use dynamic templates** - More flexible and easier to maintain
+2. **Test before sending** - Always test templates with sample data
+3. **Include unsubscribe links** - Required by law in most countries
+4. **Use categories** - Tag emails for better tracking and analytics
+5. **Set reply-to** - Always provide a monitored reply-to address
+
+### Webhook Security
+
+1. **Always verify signatures** - Never trust webhook data without verification
+2. **Use HTTPS** - Webhook endpoints must use HTTPS
+3. **Implement idempotency** - Handle duplicate webhook deliveries
+4. **Store webhook public key securely** - Use environment variables
+
+### Contact Management
+
+1. **Use custom fields** - Store additional data for better segmentation
+2. **Clean your lists regularly** - Remove bounced and invalid emails
+3. **Respect bounce types** - Permanently remove hard bounces
+4. **Segment your audience** - Send targeted campaigns to specific segments
+
+## Type Safety
+
+All operations are fully typed for safety and autocompletion:
+
+```typescript
+import type { SendEmailOptions, TemplateEmail, Contact, ContactList, Campaign, SendGridEvent } from '@dotdo/sdk.do/integrations/sendgrid'
+
+// Type-safe email options
+const emailOptions: SendEmailOptions = {
+  to: { email: 'user@example.com' },
+  from: { email: 'noreply@example.com' },
+  subject: 'Test',
+  html: '<p>Test</p>',
+}
+
+// Type-safe webhook event handler
+function handleEvent(event: SendGridEvent) {
+  if (event.event === 'bounce') {
+    console.log('Bounce reason:', event.reason)
+  }
+}
+```
+
+## API Reference
+
+Full API documentation: https://docs.sendgrid.com/api-reference
+
+**Key Resources**:
+
+- Email API: https://docs.sendgrid.com/api-reference/mail-send
+- Contacts: https://docs.sendgrid.com/api-reference/contacts
+- Templates: https://docs.sendgrid.com/api-reference/templates
+- Campaigns: https://docs.sendgrid.com/api-reference/marketing-campaigns
+- Webhooks: https://docs.sendgrid.com/for-developers/tracking-events/event
+
+## Support
+
+- **Documentation**: https://docs.sendgrid.com
+- **API Reference**: https://docs.sendgrid.com/api-reference
+- **Support**: https://support.sendgrid.com
+- **Status**: https://status.sendgrid.com

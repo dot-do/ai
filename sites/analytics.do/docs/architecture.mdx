@@ -1,0 +1,771 @@
+---
+$id: https://analytics.do/docs/architecture
+$type: TechArticle
+title: analytics.do Architecture
+description: System design, components, and data flow of the analytics.do framework
+keywords: [architecture, system design, data pipeline, storage, querying, real-time analytics]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# analytics.do Architecture
+
+Understanding the system design and components of analytics.do.
+
+## Overview
+
+analytics.do is built on a scalable, real-time analytics architecture designed for high-throughput event tracking and low-latency querying. The system processes millions of events per second while providing sub-second query responses.
+
+## High-Level Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        Applications                         │
+│   (Agents, Workflows, Services, APIs)                      │
+└────────────┬────────────────────────────────────────────────┘
+             │ Track events & metrics
+             ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     Analytics SDK                           │
+│   - Event tracking API                                      │
+│   - Metric recording API                                    │
+│   - Query API                                               │
+│   - Dashboard API                                           │
+└────────────┬────────────────────────────────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   Ingestion Layer                           │
+│   - Event validation                                        │
+│   - Schema enforcement                                      │
+│   - Rate limiting                                           │
+│   - Batching & buffering                                    │
+└────────────┬────────────────────────────────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   Stream Processing                         │
+│   - Real-time aggregation                                   │
+│   - Enrichment                                              │
+│   - Filtering                                               │
+│   - Routing                                                 │
+└────────────┬────────────────────────────────────────────────┘
+             │
+    ┌────────┴────────┐
+    ▼                 ▼
+┌───────────┐   ┌─────────────┐
+│   Hot     │   │    Cold     │
+│  Storage  │   │   Storage   │
+│ (Real-    │   │  (Long-term │
+│  time)    │   │   archive)  │
+└─────┬─────┘   └──────┬──────┘
+      │                │
+      ▼                ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    Query Engine                             │
+│   - Query planning                                          │
+│   - Execution                                               │
+│   - Aggregation                                             │
+│   - Caching                                                 │
+└────────────┬────────────────────────────────────────────────┘
+             │
+             ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    Visualization                            │
+│   - Dashboards                                              │
+│   - Reports                                                 │
+│   - Alerts                                                  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Core Components
+
+### 1. Analytics SDK
+
+The client library for tracking and querying analytics:
+
+```typescript
+import $, { analytics } from 'sdk.do'
+
+// Event tracking
+await analytics.track($.Event, data)
+
+// Metric recording
+await analytics.metric($.Metric, { value, dimensions })
+
+// Querying
+const result = await analytics.query({ metric, timeframe })
+
+// Dashboards
+const dashboard = await analytics.dashboard(config)
+```
+
+**Features**:
+
+- Type-safe semantic patterns
+- Automatic batching
+- Retry logic
+- Offline buffering
+- Client-side validation
+
+### 2. Ingestion Layer
+
+Handles incoming events and metrics:
+
+**Event Validation**:
+
+```typescript
+interface EventValidator {
+  validateSchema(event: Event): boolean
+  validateTimestamp(event: Event): boolean
+  validateDimensions(event: Event): boolean
+  enrichEvent(event: Event): EnrichedEvent
+}
+```
+
+**Rate Limiting**:
+
+```typescript
+interface RateLimiter {
+  checkLimit(clientId: string): boolean
+  throttle(clientId: string): void
+  backpressure(load: number): void
+}
+```
+
+**Batching**:
+
+```typescript
+interface Batcher {
+  buffer: Event[]
+  maxSize: number
+  maxWaitTime: number
+  flush(): Promise<void>
+}
+```
+
+### 3. Stream Processing
+
+Real-time event processing pipeline:
+
+**Aggregation**:
+
+```typescript
+// Real-time aggregation windows
+interface Aggregator {
+  // Tumbling windows (fixed, non-overlapping)
+  tumblingWindow(duration: Duration): Window
+
+  // Sliding windows (overlapping)
+  slidingWindow(duration: Duration, slide: Duration): Window
+
+  // Session windows (activity-based)
+  sessionWindow(gap: Duration): Window
+
+  // Custom windows
+  customWindow(fn: WindowFunction): Window
+}
+```
+
+**Enrichment**:
+
+```typescript
+// Add context to events
+interface Enricher {
+  addGeoLocation(event: Event): Event
+  addUserSegment(event: Event): Event
+  addSessionData(event: Event): Event
+  lookupDimension(event: Event, dimension: string): Event
+}
+```
+
+**Filtering**:
+
+```typescript
+// Filter events based on criteria
+interface Filter {
+  byType(types: string[]): Filter
+  byDimension(dimension: string, values: any[]): Filter
+  byPredicate(fn: (event: Event) => boolean): Filter
+}
+```
+
+### 4. Storage Layer
+
+Dual storage strategy for hot and cold data:
+
+**Hot Storage** (Real-time queries):
+
+- Recent data (last 7-30 days)
+- In-memory + disk
+- Sub-second query latency
+- High write throughput
+
+```typescript
+interface HotStorage {
+  write(event: Event): Promise<void>
+  query(query: Query): Promise<Result>
+  aggregate(query: AggregateQuery): Promise<Result>
+  ttl: Duration // Data retention
+}
+```
+
+**Cold Storage** (Historical queries):
+
+- Historical data (>30 days)
+- Compressed columnar format
+- Cost-optimized
+- Batch queries
+
+```typescript
+interface ColdStorage {
+  archive(events: Event[]): Promise<void>
+  query(query: Query): Promise<Result>
+  compress(data: Data): CompressedData
+  format: 'parquet' | 'orc' // Columnar format
+}
+```
+
+**Time-Series Database**:
+
+```typescript
+interface TimeSeriesDB {
+  // Optimized for time-series data
+  writePoint(metric: Metric, value: number, timestamp: Date): Promise<void>
+
+  // Efficient time-based queries
+  queryRange(metric: Metric, start: Date, end: Date): Promise<Series>
+
+  // Automatic downsampling
+  downsample(interval: Duration): Series
+
+  // Retention policies
+  retentionPolicy: {
+    raw: Duration // Keep raw data
+    downsampled: {
+      '1m': Duration // 1-minute aggregates
+      '1h': Duration // 1-hour aggregates
+      '1d': Duration // 1-day aggregates
+    }
+  }
+}
+```
+
+### 5. Query Engine
+
+Efficient query processing and execution:
+
+**Query Planning**:
+
+```typescript
+interface QueryPlanner {
+  // Analyze query
+  analyze(query: Query): QueryPlan
+
+  // Optimize execution
+  optimize(plan: QueryPlan): OptimizedPlan
+
+  // Choose storage
+  selectStorage(plan: QueryPlan): Storage[]
+
+  // Parallel execution
+  parallelize(plan: QueryPlan): ParallelPlan
+}
+```
+
+**Query Execution**:
+
+```typescript
+interface QueryExecutor {
+  // Execute query
+  execute(plan: QueryPlan): Promise<Result>
+
+  // Aggregate data
+  aggregate(data: Data[], aggregation: Aggregation): Result
+
+  // Join data
+  join(left: Data[], right: Data[], on: string): Data[]
+
+  // Filter data
+  filter(data: Data[], predicate: Predicate): Data[]
+}
+```
+
+**Caching**:
+
+```typescript
+interface QueryCache {
+  // Cache query results
+  cache(query: Query, result: Result, ttl: Duration): void
+
+  // Retrieve cached results
+  get(query: Query): Result | null
+
+  // Invalidate cache
+  invalidate(pattern: string): void
+
+  // Smart caching strategies
+  strategy: 'lru' | 'lfu' | 'ttl' | 'adaptive'
+}
+```
+
+### 6. Visualization Layer
+
+Dashboards, reports, and alerts:
+
+**Dashboard Engine**:
+
+```typescript
+interface DashboardEngine {
+  // Create dashboard
+  create(config: DashboardConfig): Promise<Dashboard>
+
+  // Render widgets
+  renderWidget(widget: Widget, data: Data): RenderedWidget
+
+  // Auto-refresh
+  refresh(dashboard: Dashboard, interval: Duration): void
+
+  // Interactivity
+  handleInteraction(event: InteractionEvent): void
+}
+```
+
+**Report Generator**:
+
+```typescript
+interface ReportGenerator {
+  // Generate report
+  generate(template: ReportTemplate, data: Data): Promise<Report>
+
+  // Export formats
+  export(report: Report, format: 'pdf' | 'excel' | 'html'): Promise<File>
+
+  // Schedule reports
+  schedule(report: Report, schedule: Schedule): void
+
+  // Deliver reports
+  deliver(report: Report, channels: Channel[]): Promise<void>
+}
+```
+
+**Alert Engine**:
+
+```typescript
+interface AlertEngine {
+  // Define alert
+  createAlert(config: AlertConfig): Promise<Alert>
+
+  // Evaluate conditions
+  evaluate(alert: Alert, data: Data): boolean
+
+  // Trigger notifications
+  notify(alert: Alert, channels: Channel[]): Promise<void>
+
+  // Escalation
+  escalate(alert: Alert, severity: Severity): void
+}
+```
+
+## Data Flow
+
+### Event Ingestion Flow
+
+```typescript
+// 1. Client tracks event
+await analytics.track($.Order.created, {
+  orderId: 'order-123',
+  amount: 1299.99,
+  userId: 'user-456',
+})
+
+// 2. SDK batches event
+// Events are buffered and sent in batches
+
+// 3. Ingestion validates
+// - Schema validation
+// - Timestamp validation
+// - Dimension validation
+
+// 4. Enrichment
+// - Add geo location
+// - Add user segment
+// - Add session data
+
+// 5. Stream processing
+// - Real-time aggregation
+// - Update running metrics
+// - Check alert conditions
+
+// 6. Storage
+// - Write to hot storage (recent data)
+// - Archive to cold storage (historical data)
+
+// 7. Query availability
+// - Data available for querying in <1 second
+```
+
+### Query Execution Flow
+
+```typescript
+// 1. Client submits query
+const result = await analytics.query({
+  metric: $.Revenue,
+  timeframe: 'last_30_days',
+  groupBy: ['product'],
+  aggregation: 'sum',
+})
+
+// 2. Query planning
+// - Parse query
+// - Validate parameters
+// - Optimize execution plan
+
+// 3. Cache check
+// - Check if results are cached
+// - Return cached results if valid
+
+// 4. Storage selection
+// - Determine which storage to query
+// - Hot storage for recent data
+// - Cold storage for historical data
+
+// 5. Parallel execution
+// - Execute query in parallel across shards
+// - Aggregate partial results
+
+// 6. Post-processing
+// - Apply filters
+// - Group results
+// - Sort and limit
+
+// 7. Cache results
+// - Cache results for future queries
+
+// 8. Return results
+// - Format and return to client
+```
+
+## Scalability
+
+### Horizontal Scaling
+
+**Ingestion**:
+
+- Load balancing across ingestion nodes
+- Automatic sharding based on dimensions
+- Distributed buffering
+
+**Storage**:
+
+- Partitioning by time and dimensions
+- Replication for high availability
+- Automatic rebalancing
+
+**Query**:
+
+- Query parallelization
+- Result caching
+- Read replicas
+
+### Performance Optimization
+
+**Write Optimization**:
+
+```typescript
+// Batching
+const batcher = {
+  maxBatchSize: 1000,
+  maxWaitTime: 1000, // 1 second
+  compressionEnabled: true,
+}
+
+// Async writes
+const writeConfig = {
+  async: true,
+  ackMode: 'fire-and-forget' | 'leader' | 'all',
+}
+```
+
+**Read Optimization**:
+
+```typescript
+// Caching
+const cacheConfig = {
+  ttl: 60000, // 1 minute
+  maxSize: '1GB',
+  evictionPolicy: 'lru',
+}
+
+// Materialized views
+const viewConfig = {
+  refreshInterval: 'hourly',
+  incrementalUpdate: true,
+}
+
+// Query optimization
+const queryConfig = {
+  parallelism: 8,
+  pushdownFilters: true,
+  earlyAggregation: true,
+}
+```
+
+## Data Model
+
+### Event Schema
+
+```typescript
+interface Event {
+  // Identity
+  $id: string
+  $type: string // Semantic type (e.g., $.Order.created)
+
+  // Timestamp
+  timestamp: Date
+
+  // Payload
+  data: Record<string, any>
+
+  // Context
+  context: {
+    userId?: string
+    sessionId?: string
+    deviceId?: string
+    ip?: string
+    userAgent?: string
+    [key: string]: any
+  }
+
+  // Metadata
+  metadata: {
+    source: string
+    version: string
+    environment: string
+  }
+}
+```
+
+### Metric Schema
+
+```typescript
+interface Metric {
+  // Identity
+  name: string // Semantic name (e.g., $.Revenue)
+  type: 'counter' | 'gauge' | 'histogram' | 'summary'
+
+  // Value
+  value: number
+
+  // Dimensions
+  dimensions: Record<string, string>
+
+  // Timestamp
+  timestamp: Date
+
+  // Metadata
+  metadata: {
+    unit?: string
+    description?: string
+  }
+}
+```
+
+### Time-Series Data Point
+
+```typescript
+interface DataPoint {
+  metric: string
+  timestamp: Date
+  value: number
+  dimensions: Record<string, string>
+}
+
+interface Series {
+  metric: string
+  dimensions: Record<string, string>
+  points: DataPoint[]
+  aggregation?: Aggregation
+  interval?: Duration
+}
+```
+
+## Integration Points
+
+### Database Integration
+
+```typescript
+import $, { analytics, db } from 'sdk.do'
+
+// Track database operations
+db.on('create', async (record) => {
+  await analytics.track($.Database.record.created, {
+    collection: record.$type,
+    recordId: record.$id,
+  })
+})
+
+db.on('update', async (record) => {
+  await analytics.track($.Database.record.updated, {
+    collection: record.$type,
+    recordId: record.$id,
+  })
+})
+```
+
+### Event System Integration
+
+```typescript
+import $, { analytics, on } from 'sdk.do'
+
+// Track all events
+on('*', async (event) => {
+  await analytics.track(event.$type, event)
+})
+
+// Track specific events
+on($.Order.created, async (order) => {
+  await analytics.track($.Order.created, order)
+  await analytics.metric($.Revenue, {
+    value: order.total,
+    dimensions: { product: order.productId },
+  })
+})
+```
+
+### Agent Integration
+
+```typescript
+import $, { analytics, agent } from 'sdk.do'
+
+// Track agent activities
+const trackedAgent = await agent.create({
+  name: 'Sales Agent',
+  onTaskStart: async (task) => {
+    await analytics.track($.Agent.started.Task, {
+      agent: agent.name,
+      task: task.name,
+    })
+  },
+  onTaskComplete: async (task, result) => {
+    await analytics.track($.Agent.completed.Task, {
+      agent: agent.name,
+      task: task.name,
+      duration: result.duration,
+      success: result.success,
+    })
+
+    await analytics.metric($.Agent.TaskDuration, {
+      value: result.duration,
+      dimensions: {
+        agent: agent.name,
+        task: task.name,
+      },
+    })
+  },
+})
+```
+
+## Security
+
+### Authentication
+
+```typescript
+// API key authentication
+const analytics = createAnalytics({
+  apiKey: process.env.ANALYTICS_API_KEY,
+  endpoint: 'https://analytics.do/api',
+})
+
+// JWT authentication
+const analytics = createAnalytics({
+  jwt: getJWT(),
+  endpoint: 'https://analytics.do/api',
+})
+```
+
+### Authorization
+
+```typescript
+// Role-based access control
+interface Permissions {
+  trackEvents: boolean
+  recordMetrics: boolean
+  queryMetrics: boolean
+  createDashboards: boolean
+  createAlerts: boolean
+  viewReports: boolean
+}
+
+// Data access control
+interface DataPermissions {
+  allowedDimensions: string[]
+  filteredDimensions: Record<string, any>
+}
+```
+
+### Data Privacy
+
+```typescript
+// PII handling
+interface PrivacyConfig {
+  // Automatically hash PII fields
+  hashFields: ['email', 'phone', 'ssn']
+
+  // Remove PII fields
+  removeFields: ['creditCard', 'password']
+
+  // Anonymize user IDs
+  anonymizeUsers: boolean
+
+  // Data retention
+  retention: {
+    events: '90_days'
+    metrics: '2_years'
+  }
+}
+```
+
+## Monitoring and Observability
+
+### System Metrics
+
+```typescript
+// Track analytics system performance
+await analytics.metric($.Analytics.IngestionRate, { value: eventsPerSecond })
+await analytics.metric($.Analytics.QueryLatency, { value: latencyMs })
+await analytics.metric($.Analytics.StorageUsage, { value: bytesUsed })
+await analytics.metric($.Analytics.ErrorRate, { value: errorRate })
+```
+
+### Health Checks
+
+```typescript
+interface HealthCheck {
+  checkIngestion(): HealthStatus
+  checkStorage(): HealthStatus
+  checkQuery(): HealthStatus
+  checkAlerts(): HealthStatus
+}
+```
+
+## Best Practices
+
+1. **Use appropriate storage tiers**: Hot storage for recent data, cold storage for archives
+2. **Leverage caching**: Cache frequently accessed queries
+3. **Optimize queries**: Use filters and aggregations to reduce data volume
+4. **Monitor performance**: Track ingestion rate, query latency, and error rate
+5. **Set up alerts**: Proactively detect issues
+6. **Regular backups**: Back up dashboards, reports, and alert configurations
+
+## Related Documentation
+
+- [Getting Started](./getting-started.mdx) - Setup and basic usage
+- [Best Practices](./best-practices.mdx) - Recommended patterns
+- [API Reference](../api/reference.mdx) - Complete API docs
+- [Examples](../examples/) - Real-world implementations
+
+---
+
+Understanding the architecture helps you build scalable, high-performance analytics solutions. Next, learn [Best Practices](./best-practices.mdx) for production deployments.

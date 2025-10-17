@@ -1,0 +1,392 @@
+---
+$id: /docs/getting-started/installation
+$type: Documentation
+title: Installation Guide
+description: Install the .do SDK across different platforms and package managers
+keywords: [installation, setup, npm, pnpm, bun, deno]
+author: .do Team
+lastUpdated: 2025-10-11
+readingTime: 3 min
+---
+
+# Installation
+
+Install the `.do` SDK in your preferred JavaScript/TypeScript runtime.
+
+## Package Managers
+
+### npm
+
+```bash
+npm install @dotdo/sdk.do
+```
+
+### pnpm (Recommended)
+
+```bash
+pnpm add @dotdo/sdk.do
+```
+
+### Yarn
+
+```bash
+yarn add @dotdo/sdk.do
+```
+
+### Bun
+
+```bash
+bun add @dotdo/sdk.do
+```
+
+## Runtimes
+
+### Node.js
+
+**Requirements**: Node.js 18.0.0 or higher
+
+```bash
+# Check your Node version
+node --version
+
+# Install SDK
+pnpm add @dotdo/sdk.do
+
+# TypeScript support
+pnpm add -D typescript @types/node tsx
+```
+
+**Usage**:
+
+```typescript
+// index.ts
+import { $, db } from '@dotdo/sdk.do'
+
+const business = await db.create($.Business, {
+  name: 'My Business',
+})
+```
+
+**Run**:
+
+```bash
+npx tsx index.ts
+```
+
+### Bun (Fastest)
+
+**Requirements**: Bun 1.0.0 or higher
+
+```bash
+# Install Bun
+curl -fsSL https://bun.sh/install | bash
+
+# Install SDK
+bun add @dotdo/sdk.do
+```
+
+**Usage**:
+
+```typescript
+// index.ts
+import { $, db } from '@dotdo/sdk.do'
+
+const business = await db.create($.Business, {
+  name: 'My Business',
+})
+```
+
+**Run**:
+
+```bash
+bun run index.ts
+```
+
+### Deno
+
+```typescript
+// Import from npm:
+import { $, db } from 'npm:@dotdo/sdk.do'
+
+const business = await db.create($.Business, {
+  name: 'My Business',
+})
+```
+
+**Run**:
+
+```bash
+deno run --allow-net --allow-env index.ts
+```
+
+### Cloudflare Workers
+
+```bash
+# Install SDK and types
+pnpm add @dotdo/sdk.do
+pnpm add -D @cloudflare/workers-types
+```
+
+**Usage**:
+
+```typescript
+// src/index.ts
+import { $, db } from '@dotdo/sdk.do'
+
+export default {
+  async fetch(request: Request, env: Env) {
+    const business = await db.create($.Business, {
+      name: 'My Business',
+    })
+
+    return Response.json(business)
+  },
+}
+```
+
+**Deploy**:
+
+```bash
+wrangler deploy
+```
+
+## Environment Setup
+
+### API Key
+
+Get your API key from [platform.do/keys](https://platform.do/keys).
+
+**Environment Variable** (recommended):
+
+```bash
+# .env
+DO_API_KEY=sk_live_1234567890abcdef
+```
+
+**Or pass directly** (not recommended for production):
+
+```typescript
+import { configure } from '@dotdo/sdk.do'
+
+configure({
+  apiKey: 'sk_live_1234567890abcdef',
+})
+```
+
+### Configuration
+
+```typescript
+import { configure } from '@dotdo/sdk.do'
+
+configure({
+  // API key (required)
+  apiKey: process.env.DO_API_KEY,
+
+  // API endpoint (optional, defaults to https://api.platform.do)
+  endpoint: 'https://api.platform.do',
+
+  // Request timeout (optional, defaults to 30000ms)
+  timeout: 30000,
+
+  // Retry configuration (optional)
+  retry: {
+    attempts: 3,
+    backoff: 'exponential',
+  },
+
+  // Logging (optional)
+  logging: {
+    level: 'info', // 'debug' | 'info' | 'warn' | 'error'
+  },
+})
+```
+
+## TypeScript Configuration
+
+**tsconfig.json**:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "types": ["node"]
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules"]
+}
+```
+
+## Verification
+
+Test your installation:
+
+```typescript
+// test.ts
+import { $, db } from '@dotdo/sdk.do'
+
+console.log('SDK version:', require('@dotdo/sdk.do/package.json').version)
+console.log('Semantic proxy:', $.Business.name)
+
+// Try a simple API call
+const result = await db.list($.Business, { limit: 1 })
+console.log('API connection successful!')
+console.log('Businesses:', result.data.length)
+```
+
+**Run**:
+
+```bash
+npx tsx test.ts
+```
+
+**Expected output**:
+
+```
+SDK version: 1.0.0
+Semantic proxy: Business.name
+API connection successful!
+Businesses: 0
+```
+
+## Framework Integration
+
+### Next.js
+
+```bash
+# Create Next.js app
+npx create-next-app@latest my-app
+cd my-app
+
+# Install SDK
+pnpm add @dotdo/sdk.do
+```
+
+**Usage** (Server Components):
+
+```typescript
+// app/page.tsx
+import { $, db } from '@dotdo/sdk.do'
+
+export default async function HomePage() {
+  const businesses = await db.list($.Business)
+
+  return (
+    <div>
+      <h1>Businesses</h1>
+      <ul>
+        {businesses.data.map((business) => (
+          <li key={business.$id}>{business.name}</li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+```
+
+### Express
+
+```bash
+# Install Express and SDK
+pnpm add express @dotdo/sdk.do
+pnpm add -D @types/express
+```
+
+**Usage**:
+
+```typescript
+// server.ts
+import express from 'express'
+import { $, db } from '@dotdo/sdk.do'
+
+const app = express()
+
+app.get('/businesses', async (req, res) => {
+  const businesses = await db.list($.Business)
+  res.json(businesses)
+})
+
+app.listen(3000, () => {
+  console.log('Server running on http://localhost:3000')
+})
+```
+
+### Vite
+
+```bash
+# Create Vite app
+pnpm create vite my-app --template vanilla-ts
+cd my-app
+
+# Install SDK
+pnpm add @dotdo/sdk.do
+```
+
+**Usage**:
+
+```typescript
+// src/main.ts
+import { $, db } from '@dotdo/sdk.do'
+
+const businesses = await db.list($.Business)
+document.querySelector('#app')!.innerHTML = `
+  <h1>Businesses</h1>
+  <ul>
+    ${businesses.data.map((b) => `<li>${b.name}</li>`).join('')}
+  </ul>
+`
+```
+
+## Troubleshooting
+
+### "Cannot find module '@dotdo/sdk.do'"
+
+**Solution**: Install the SDK:
+
+```bash
+pnpm add @dotdo/sdk.do
+```
+
+### "Unauthorized" / "Invalid API key"
+
+**Solution**: Set your API key:
+
+```bash
+export DO_API_KEY=sk_live_your_key_here
+```
+
+### TypeScript errors
+
+**Solution**: Update TypeScript and install types:
+
+```bash
+pnpm add -D typescript@latest @types/node
+```
+
+### Module resolution errors
+
+**Solution**: Update tsconfig.json:
+
+```json
+{
+  "compilerOptions": {
+    "moduleResolution": "bundler"
+  }
+}
+```
+
+## Next Steps
+
+- [Make Your First API Call →](./03-first-api-call.mdx)
+- [Set Up Authentication →](./04-authentication.mdx)
+- [Try Hello World Examples →](./05-hello-world.mdx)
+
+---
+
+**Was this page helpful?** [Yes](.) | [No](.) | [Report Issue](https://github.com/dot-do/platform/issues/new?title=Installation+Issue)

@@ -1,0 +1,1039 @@
+---
+$id: https://context.do/docs/troubleshooting
+$type: https://schema.org/TechArticle
+name: Context Management Troubleshooting
+description: Common issues, solutions, and debugging techniques for context.do
+version: 1.0.0
+license: CC-BY-4.0
+author:
+  $type: https://schema.org/Organization
+  name: .do
+  url: https://do.inc
+keywords:
+  - troubleshooting
+  - debugging
+  - errors
+  - solutions
+  - performance issues
+---
+
+# Troubleshooting Guide
+
+This guide covers common issues, error messages, and solutions when using `context.do`.
+
+## Token Limit Errors
+
+### Error: Context Length Exceeded
+
+**Symptom:**
+
+```
+Error: This model's maximum context length is 128000 tokens.
+However, your messages resulted in 135234 tokens.
+```
+
+**Causes:**
+
+1. Context exceeds model's token limit
+2. Not leaving headroom for response generation
+3. Token counting inaccuracy
+
+**Solutions:**
+
+#### Solution 1: Compress Context
+
+```typescript
+import { $ } from 'sdk.do'
+
+try {
+  const response = await $.ai.generate({
+    model: 'gpt-5',
+    messages: messages,
+  })
+} catch (error) {
+  if (error.code === 'context_length_exceeded') {
+    // Compress and retry
+    const compressed = await $.Context.compress({
+      messages: messages,
+      targetTokens: 100000, // Leave 20% headroom
+      strategy: 'semantic',
+    })
+
+    const response = await $.ai.generate({
+      model: 'gpt-5',
+      messages: compressed.messages,
+    })
+
+    return response
+  }
+
+  throw error
+}
+```
+
+#### Solution 2: Set Token Budget
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Prevent overflow by setting limit upfront
+const context = await $.Context.create({
+  content: messages,
+  maxTokens: 100000, // 80% of GPT-5 limit
+  overflow: 'compress', // Auto-compress if exceeded
+})
+
+const response = await $.ai.generate({
+  model: 'gpt-5',
+  messages: context.content,
+})
+```
+
+#### Solution 3: Use Larger Model
+
+```typescript
+import { $ } from 'sdk.do'
+
+// GPT-5: 128K tokens
+// Claude Sonnet 4.5: 200K tokens
+
+// Switch to Claude for larger contexts
+const response = await $.ai.generate({
+  model: 'claude-sonnet-4.5', // 200K context window
+  messages: messages,
+})
+```
+
+### Error: Insufficient Token Budget
+
+**Symptom:**
+
+```
+Error: Context uses 125000 tokens, leaving only 3000 tokens for response.
+Minimum 5000 tokens required.
+```
+
+**Solution:**
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Calculate appropriate context budget
+const modelLimit = 128000 // GPT-5
+const responseTokens = 5000 // Expected response length
+const buffer = 1000 // Safety margin
+const contextBudget = modelLimit - responseTokens - buffer // 122000
+
+const context = await $.Context.create({
+  content: messages,
+  maxTokens: contextBudget,
+  overflow: 'compress',
+})
+```
+
+## Compression Issues
+
+### Error: Compression Failed
+
+**Symptom:**
+
+```
+Error: Failed to compress context. Semantic compression requires at least 3 messages.
+```
+
+**Causes:**
+
+1. Not enough messages to compress
+2. Target tokens too low
+3. Compression strategy not suitable
+
+**Solutions:**
+
+#### Solution 1: Check Message Count
+
+```typescript
+import { $ } from 'sdk.do'
+
+async function compressWithValidation(messages: Message[]): Promise<CompressedContext> {
+  if (messages.length < 3) {
+    console.warn('Not enough messages to compress, returning as-is')
+    return {
+      messages: messages,
+      tokens: await $.Context.countTokens({ messages, model: 'gpt-5' }),
+      strategy: 'none',
+    }
+  }
+
+  return $.Context.compress({
+    messages: messages,
+    strategy: 'semantic',
+    targetTokens: 4000,
+  })
+}
+```
+
+#### Solution 2: Adjust Target Tokens
+
+```typescript
+import { $ } from 'sdk.do'
+
+const originalTokens = await $.Context.countTokens({
+  messages: messages,
+  model: 'gpt-5',
+})
+
+// Ensure target is achievable (at least 20% reduction)
+const targetTokens = Math.max(originalTokens * 0.8, 1000)
+
+const compressed = await $.Context.compress({
+  messages: messages,
+  targetTokens: targetTokens,
+  strategy: 'semantic',
+})
+```
+
+#### Solution 3: Fallback Strategy
+
+```typescript
+import { $ } from 'sdk.do'
+
+async function compressWithFallback(messages: Message[], targetTokens: number): Promise<CompressedContext> {
+  try {
+    // Try semantic compression first
+    return await $.Context.compress({
+      messages: messages,
+      strategy: 'semantic',
+      targetTokens: targetTokens,
+    })
+  } catch (error) {
+    console.warn('Semantic compression failed, falling back to sliding window')
+
+    // Fallback to sliding window
+    return await $.Context.compress({
+      messages: messages,
+      strategy: 'sliding',
+      windowSize: 10,
+    })
+  }
+}
+```
+
+### Compression Quality Issues
+
+**Symptom:**
+Compressed context loses important information.
+
+**Solutions:**
+
+#### Solution 1: Preserve Critical Messages
+
+```typescript
+import { $ } from 'sdk.do'
+
+const compressed = await $.Context.compress({
+  messages: messages,
+  strategy: 'semantic',
+  targetTokens: 4000,
+  preserveFirst: 1, // System prompt
+  preserveRecent: 3, // Last 3 messages
+  compressMiddle: true, // Only compress middle messages
+})
+```
+
+#### Solution 2: Use Semantic Memory
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Extract and preserve key facts
+const compressed = await $.Context.compress({
+  messages: messages,
+  strategy: 'semantic',
+  extractFacts: true,
+  factTypes: ['$.Customer.Name', '$.Order.ID', '$.Issue.Type'],
+  targetTokens: 4000,
+})
+
+// Facts preserved even after aggressive compression
+console.log(compressed.facts)
+```
+
+#### Solution 3: Validate Compression
+
+```typescript
+import { $ } from 'sdk.do'
+
+async function compressWithValidation(messages: Message[], targetTokens: number): Promise<CompressedContext> {
+  const compressed = await $.Context.compress({
+    messages: messages,
+    strategy: 'semantic',
+    targetTokens: targetTokens,
+  })
+
+  // Validate semantic similarity
+  const originalEmbedding = await $.ai.embed({
+    text: messages.map((m) => m.content).join('\n'),
+  })
+
+  const compressedEmbedding = await $.ai.embed({
+    text: compressed.messages.map((m) => m.content).join('\n'),
+  })
+
+  const similarity = cosineSimilarity(originalEmbedding, compressedEmbedding)
+
+  if (similarity < 0.8) {
+    console.warn(`Low semantic similarity: ${similarity}`)
+    console.warn('Consider using less aggressive compression')
+  }
+
+  return compressed
+}
+```
+
+## Performance Issues
+
+### Slow Token Counting
+
+**Symptom:**
+Token counting takes several seconds for long texts.
+
+**Solutions:**
+
+#### Solution 1: Cache Token Counts
+
+```typescript
+import { $ } from 'sdk.do'
+
+class TokenCounterWithCache {
+  private cache = new Map<string, number>()
+
+  async count(text: string, model: string): Promise<number> {
+    const key = `${model}:${this.hash(text)}`
+
+    if (this.cache.has(key)) {
+      return this.cache.get(key)!
+    }
+
+    const tokens = await $.Context.countTokens({ text, model })
+    this.cache.set(key, tokens)
+
+    return tokens
+  }
+
+  private hash(text: string): string {
+    // Simple hash for cache key
+    return `${text.length}:${text.slice(0, 100)}`
+  }
+}
+```
+
+#### Solution 2: Batch Counting
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Bad: Count individually
+for (const message of messages) {
+  const tokens = await $.Context.countTokens({
+    text: message.content,
+    model: 'gpt-5',
+  })
+  totalTokens += tokens
+}
+
+// Good: Count in batch
+const tokens = await $.Context.countTokens({
+  messages: messages,
+  model: 'gpt-5',
+})
+```
+
+#### Solution 3: Estimate Tokens
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Quick estimation (not exact)
+function estimateTokens(text: string): number {
+  // Rough estimate: 1 token ≈ 4 characters
+  return Math.ceil(text.length / 4)
+}
+
+// Use for quick checks
+const estimated = estimateTokens(largeText)
+
+if (estimated > 100000) {
+  // Definitely needs compression
+  const compressed = await $.Context.compress({
+    messages: messages,
+    strategy: 'semantic',
+  })
+}
+```
+
+### Slow Compression
+
+**Symptom:**
+Compression takes 5-10 seconds.
+
+**Solutions:**
+
+#### Solution 1: Use Fast Strategies
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Slow: Semantic compression (requires AI call)
+const slow = await $.Context.compress({
+  messages: messages,
+  strategy: 'semantic', // 1-2 seconds
+})
+
+// Fast: Sliding window (in-memory)
+const fast = await $.Context.compress({
+  messages: messages,
+  strategy: 'sliding', // <10ms
+  windowSize: 10,
+})
+
+// Medium: Hierarchical (some AI calls)
+const medium = await $.Context.compress({
+  messages: messages,
+  strategy: 'hierarchical', // 100-500ms
+})
+```
+
+#### Solution 2: Lazy Compression
+
+```typescript
+import { $ } from 'sdk.do'
+
+class ConversationManager {
+  private compressionThreshold = 15
+  private messages: Message[] = []
+
+  async addMessage(message: Message): Promise<void> {
+    this.messages.push(message)
+
+    // Only compress when threshold exceeded
+    if (this.messages.length > this.compressionThreshold) {
+      this.messages = await this.compress(this.messages)
+    }
+  }
+
+  private async compress(messages: Message[]): Promise<Message[]> {
+    const compressed = await $.Context.compress({
+      messages: messages,
+      strategy: 'semantic',
+      preserveRecent: 5,
+    })
+
+    return compressed.messages
+  }
+}
+```
+
+#### Solution 3: Background Compression
+
+```typescript
+import { $ } from 'sdk.do'
+
+class AsyncCompressionManager {
+  private compressionQueue: Array<{ id: string; messages: Message[] }> = []
+  private isProcessing = false
+
+  async queueCompression(id: string, messages: Message[]): Promise<void> {
+    this.compressionQueue.push({ id, messages })
+
+    if (!this.isProcessing) {
+      this.processQueue()
+    }
+  }
+
+  private async processQueue(): Promise<void> {
+    this.isProcessing = true
+
+    while (this.compressionQueue.length > 0) {
+      const item = this.compressionQueue.shift()!
+
+      const compressed = await $.Context.compress({
+        messages: item.messages,
+        strategy: 'semantic',
+      })
+
+      await this.saveCompressed(item.id, compressed)
+    }
+
+    this.isProcessing = false
+  }
+
+  private async saveCompressed(id: string, compressed: CompressedContext): Promise<void> {
+    await $.db.update('Conversation', id, {
+      messages: compressed.messages,
+      compressed: true,
+    })
+  }
+}
+```
+
+### High Memory Usage
+
+**Symptom:**
+Application using excessive memory with large contexts.
+
+**Solutions:**
+
+#### Solution 1: Stream Processing
+
+```typescript
+import { $ } from 'sdk.do'
+
+async function* processLargeConversation(conversationId: string): AsyncGenerator<string> {
+  const messages = await getMessages(conversationId)
+
+  // Process in chunks
+  const chunkSize = 10
+  for (let i = 0; i < messages.length; i += chunkSize) {
+    const chunk = messages.slice(i, i + chunkSize)
+
+    const result = await $.ai.generate({
+      model: 'gpt-5',
+      messages: chunk,
+    })
+
+    yield result.content
+
+    // Free memory
+    chunk.length = 0
+  }
+}
+
+// Usage
+for await (const result of processLargeConversation(conversationId)) {
+  console.log(result)
+}
+```
+
+#### Solution 2: Limit Cache Size
+
+```typescript
+import { $ } from 'sdk.do'
+
+class LRUCache<K, V> {
+  private cache = new Map<K, V>()
+  private maxSize: number
+
+  constructor(maxSize: number) {
+    this.maxSize = maxSize
+  }
+
+  get(key: K): V | undefined {
+    const value = this.cache.get(key)
+    if (value !== undefined) {
+      // Move to end (most recently used)
+      this.cache.delete(key)
+      this.cache.set(key, value)
+    }
+    return value
+  }
+
+  set(key: K, value: V): void {
+    this.cache.delete(key)
+    this.cache.set(key, value)
+
+    // Evict oldest if over limit
+    if (this.cache.size > this.maxSize) {
+      const firstKey = this.cache.keys().next().value
+      this.cache.delete(firstKey)
+    }
+  }
+}
+
+// Use bounded cache
+const contextCache = new LRUCache<string, CompressedContext>(100)
+```
+
+## Token Counting Discrepancies
+
+### Issue: Token Count Mismatch
+
+**Symptom:**
+Local token count differs from API error message.
+
+**Causes:**
+
+1. Different tokenizers between local and API
+2. Message format overhead not accounted for
+3. Special tokens added by API
+
+**Solutions:**
+
+#### Solution 1: Add Message Overhead
+
+```typescript
+import { $ } from 'sdk.do'
+
+async function countMessagesAccurately(messages: Message[]): Promise<number> {
+  // Base token count
+  let tokens = 0
+
+  // Add overhead for each message
+  const messageOverhead = 4 // tokens per message
+
+  for (const message of messages) {
+    tokens += messageOverhead
+    tokens += await $.Context.countTokens({
+      text: message.role,
+      model: 'gpt-5',
+    })
+    tokens += await $.Context.countTokens({
+      text: message.content,
+      model: 'gpt-5',
+    })
+  }
+
+  // Add completion priming overhead
+  tokens += 3
+
+  return tokens
+}
+```
+
+#### Solution 2: Use Native Counting
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Use SDK's native message counting (includes overhead)
+const tokens = await $.Context.countTokens({
+  messages: messages,
+  model: 'gpt-5',
+})
+
+// Not just text counting
+const textTokens = await $.Context.countTokens({
+  text: messages.map((m) => m.content).join(''),
+  model: 'gpt-5',
+})
+
+// textTokens < tokens (missing message format overhead)
+```
+
+#### Solution 3: Add Safety Buffer
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Add 5% buffer for counting inaccuracies
+const tokens = await $.Context.countTokens({
+  messages: messages,
+  model: 'gpt-5',
+})
+
+const tokensWithBuffer = Math.ceil(tokens * 1.05)
+
+// Use buffered count for budget calculations
+const context = await $.Context.create({
+  content: messages,
+  maxTokens: 128000 - tokensWithBuffer,
+})
+```
+
+## Multi-Turn Conversation Issues
+
+### Issue: Context Loss Over Time
+
+**Symptom:**
+AI forgets earlier conversation context.
+
+**Solutions:**
+
+#### Solution 1: Extract and Preserve Facts
+
+```typescript
+import { $ } from 'sdk.do'
+
+class ConversationWithMemory {
+  private messages: Message[] = []
+  private facts: Record<string, any> = {}
+
+  async addTurn(role: 'user' | 'assistant', content: string): Promise<void> {
+    this.messages.push({ role, content })
+
+    // Extract facts from user messages
+    if (role === 'user') {
+      const newFacts = await this.extractFacts(content)
+      this.facts = { ...this.facts, ...newFacts }
+    }
+
+    // Compress when needed, preserving facts
+    if (this.messages.length > 15) {
+      await this.compressWithFacts()
+    }
+  }
+
+  private async compressWithFacts(): Promise<void> {
+    const recentMessages = this.messages.slice(-5)
+
+    const factsMessage: Message = {
+      role: 'system',
+      content: `Context: ${JSON.stringify(this.facts, null, 2)}`,
+    }
+
+    this.messages = [factsMessage, ...recentMessages]
+  }
+
+  private async extractFacts(content: string): Promise<Record<string, any>> {
+    // Extract structured facts
+    return {}
+  }
+}
+```
+
+#### Solution 2: Periodic Summarization
+
+```typescript
+import { $ } from 'sdk.do'
+
+class ConversationWithSummary {
+  private messages: Message[] = []
+  private summary: string | null = null
+
+  async addTurn(message: Message): Promise<void> {
+    this.messages.push(message)
+
+    // Summarize every 10 turns
+    if (this.messages.length % 10 === 0) {
+      await this.summarize()
+    }
+  }
+
+  private async summarize(): Promise<void> {
+    const toSummarize = this.messages.slice(0, -3)
+
+    const newSummary = await $.ai.generate({
+      model: 'gpt-5',
+      messages: [
+        {
+          role: 'system',
+          content: 'Summarize this conversation, preserving all key facts and context.',
+        },
+        {
+          role: 'user',
+          content: toSummarize.map((m) => `${m.role}: ${m.content}`).join('\n\n'),
+        },
+      ],
+    })
+
+    this.summary = newSummary.content
+    this.messages = this.messages.slice(-3)
+  }
+
+  async getContext(): Promise<Message[]> {
+    const context: Message[] = []
+
+    if (this.summary) {
+      context.push({
+        role: 'system',
+        content: `Previous conversation summary:\n${this.summary}`,
+      })
+    }
+
+    context.push(...this.messages)
+
+    return context
+  }
+}
+```
+
+### Issue: Inconsistent Responses
+
+**Symptom:**
+AI gives different answers to same question in conversation.
+
+**Solutions:**
+
+#### Solution 1: Include Full Context
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Bad: Only recent messages
+const response = await $.ai.generate({
+  model: 'gpt-5',
+  messages: messages.slice(-5),
+})
+
+// Good: Full context with compression
+const compressed = await $.Context.compress({
+  messages: messages,
+  strategy: 'semantic',
+  targetTokens: 50000,
+})
+
+const response = await $.ai.generate({
+  model: 'gpt-5',
+  messages: compressed.messages,
+})
+```
+
+#### Solution 2: Use Lower Temperature
+
+```typescript
+import { $ } from 'sdk.do'
+
+// More consistent responses
+const response = await $.ai.generate({
+  model: 'gpt-5',
+  messages: messages,
+  temperature: 0.3, // Lower = more consistent
+})
+```
+
+## Workflow Context Issues
+
+### Issue: Context Lost Between Agents
+
+**Symptom:**
+Context doesn't transfer properly between workflow steps.
+
+**Solutions:**
+
+#### Solution 1: Explicit Context Passing
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Agent 1: Create and compress context
+const context = await $.WorkflowContext.create({
+  $type: '$.Task.Context',
+  data: taskData,
+})
+
+const compressed = await context.compress({ targetTokens: 2000 })
+
+await $.send({
+  event: '$.Task.assigned',
+  context: compressed.toJSON(), // Serialize for transfer
+})
+
+// Agent 2: Receive and expand
+$.on('$.Task.assigned', async ({ context }) => {
+  const workflowContext = await $.WorkflowContext.fromJSON(context)
+  const expanded = await workflowContext.expand()
+
+  // Process with full context
+})
+```
+
+#### Solution 2: Use Database for Large Contexts
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Agent 1: Store context in database
+const contextId = generateId()
+
+await $.db.create('WorkflowContext', {
+  id: contextId,
+  data: largeContext,
+})
+
+await $.send({
+  event: '$.Task.assigned',
+  contextId: contextId, // Only send ID
+})
+
+// Agent 2: Load from database
+$.on('$.Task.assigned', async ({ contextId }) => {
+  const context = await $.db.get('WorkflowContext', contextId)
+
+  // Process with full context
+})
+```
+
+## API Rate Limiting
+
+### Error: Rate Limit Exceeded
+
+**Symptom:**
+
+```
+Error: Rate limit exceeded. Please retry after 20 seconds.
+```
+
+**Solutions:**
+
+#### Solution 1: Implement Retry with Backoff
+
+```typescript
+import { $ } from 'sdk.do'
+
+async function generateWithRetry(messages: Message[], maxRetries = 3): Promise<string> {
+  let attempt = 0
+
+  while (attempt < maxRetries) {
+    try {
+      const response = await $.ai.generate({
+        model: 'gpt-5',
+        messages: messages,
+      })
+
+      return response.content
+    } catch (error) {
+      if (error.code === 'rate_limit_exceeded') {
+        attempt++
+        const delay = Math.pow(2, attempt) * 1000 // Exponential backoff
+
+        console.log(`Rate limited, retrying in ${delay}ms...`)
+        await new Promise((resolve) => setTimeout(resolve, delay))
+      } else {
+        throw error
+      }
+    }
+  }
+
+  throw new Error('Max retries exceeded')
+}
+```
+
+#### Solution 2: Implement Rate Limiter
+
+```typescript
+import { $ } from 'sdk.do'
+
+class RateLimiter {
+  private queue: Array<() => Promise<any>> = []
+  private processing = 0
+  private maxConcurrent = 5
+  private minDelay = 200 // ms between requests
+
+  async execute<T>(fn: () => Promise<T>): Promise<T> {
+    return new Promise((resolve, reject) => {
+      this.queue.push(async () => {
+        try {
+          const result = await fn()
+          resolve(result)
+        } catch (error) {
+          reject(error)
+        }
+      })
+
+      this.process()
+    })
+  }
+
+  private async process(): Promise<void> {
+    if (this.processing >= this.maxConcurrent || this.queue.length === 0) {
+      return
+    }
+
+    this.processing++
+    const fn = this.queue.shift()!
+
+    await fn()
+
+    // Wait before next request
+    await new Promise((resolve) => setTimeout(resolve, this.minDelay))
+
+    this.processing--
+    this.process()
+  }
+}
+
+// Usage
+const limiter = new RateLimiter()
+
+const response = await limiter.execute(() =>
+  $.ai.generate({
+    model: 'gpt-5',
+    messages: messages,
+  })
+)
+```
+
+## Debugging Tips
+
+### Enable Debug Logging
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Enable debug mode
+const context = await $.Context.create({
+  content: messages,
+  debug: true,
+})
+
+// View debug information
+console.log(context.debug())
+```
+
+### Inspect Context State
+
+```typescript
+import { $ } from 'sdk.do'
+
+const context = await $.Context.create({
+  content: messages,
+})
+
+// Inspect token distribution
+const debug = context.debug()
+
+console.log('Token distribution:')
+console.log(`- System: ${debug.tokenDistribution.system}`)
+console.log(`- User: ${debug.tokenDistribution.user}`)
+console.log(`- Assistant: ${debug.tokenDistribution.assistant}`)
+
+console.log('\nTokens by message:')
+debug.tokensByMessage.forEach((m, i) => {
+  console.log(`${i}. ${m.role} (${m.tokens} tokens)`)
+})
+```
+
+### Validate Compression Results
+
+```typescript
+import { $ } from 'sdk.do'
+
+const original = messages
+const compressed = await $.Context.compress({
+  messages: original,
+  strategy: 'semantic',
+  targetTokens: 4000,
+})
+
+console.log('Compression validation:')
+console.log(`- Original: ${original.length} messages, ${compressed.originalTokens} tokens`)
+console.log(`- Compressed: ${compressed.messages.length} messages, ${compressed.tokens} tokens`)
+console.log(`- Reduction: ${((1 - compressed.tokens / compressed.originalTokens) * 100).toFixed(1)}%`)
+console.log(`- Strategy: ${compressed.strategy}`)
+```
+
+## Getting Help
+
+If you continue to experience issues:
+
+1. **Check Documentation**: Review [Getting Started](./getting-started.mdx) and [Best Practices](./best-practices.mdx)
+2. **Search Issues**: Check [GitHub Issues](https://github.com/dot-do/platform/issues)
+3. **Ask Community**: Join [Discord](https://discord.gg/dotdo)
+4. **Report Bug**: Open a [new issue](https://github.com/dot-do/platform/issues/new)
+
+When reporting issues, include:
+
+- Error message and stack trace
+- Code snippet reproducing the issue
+- Context size and model used
+- Expected vs actual behavior
+
+## Related Resources
+
+- [Getting Started](./getting-started.mdx) - Setup and basic usage
+- [Architecture](./architecture.mdx) - Technical implementation
+- [Best Practices](./best-practices.mdx) - Optimization techniques
+- [API Reference](../api/reference.mdx) - Complete API documentation
+
+---
+
+Built with [sdk.do](https://sdk.do) - The semantic SDK for Business-as-Code

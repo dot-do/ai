@@ -1,0 +1,678 @@
+---
+$id: https://graphdl.do/examples/graph-queries
+$type: HowTo
+title: Building and Querying Graphs
+description: Learn how to build semantic graphs and query relationships using graphdl
+keywords: [graphdl, graph-queries, semantic-graph, nodes, edges, relationships]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Building and Querying Graphs
+
+This example demonstrates how to build complex semantic graphs and query relationships using graphdl's graph builders and the sdk.do database integration.
+
+## Overview
+
+Graphs in graphdl consist of nodes (entities) and edges (relationships). You can build graphs using the builder pattern, export them as JSON-LD, and query them using semantic patterns.
+
+## Building a Simple Graph
+
+Create a basic graph with nodes and edges:
+
+```typescript
+import { graph, node, edge } from 'graphdl'
+
+// Build a simple organizational graph
+const orgGraph = graph()
+  .context('https://schema.org')
+  .node(
+    node('john', 'Person', {
+      name: 'John Doe',
+      email: 'john@example.com',
+      jobTitle: 'Software Engineer',
+    })
+  )
+  .node(
+    node('acme', 'Organization', {
+      name: 'Acme Corp',
+      industry: 'Technology',
+      foundingDate: '2020-01-01',
+    })
+  )
+  .edge(edge('john', 'worksFor', 'acme'))
+  .metadata({
+    created: new Date().toISOString(),
+    source: 'employee-database',
+  })
+  .build()
+
+console.log(orgGraph)
+// Output:
+// {
+//   $context: 'https://schema.org',
+//   nodes: [
+//     { id: 'john', type: 'Person', properties: { name: 'John Doe', ... } },
+//     { id: 'acme', type: 'Organization', properties: { name: 'Acme Corp', ... } }
+//   ],
+//   edges: [
+//     { source: 'john', target: 'acme', predicate: 'worksFor' }
+//   ],
+//   metadata: { created: '2025-10-10T...', source: 'employee-database' }
+// }
+```
+
+## Building Complex Graphs
+
+Create graphs with multiple relationships:
+
+```typescript
+import { graph, node, edge } from 'graphdl'
+
+const complexGraph = graph()
+  .context('https://schema.org')
+  // Add people
+  .node(
+    node('john', 'Person', {
+      name: 'John Doe',
+      jobTitle: 'Senior Engineer',
+    })
+  )
+  .node(
+    node('jane', 'Person', {
+      name: 'Jane Smith',
+      jobTitle: 'Engineering Manager',
+    })
+  )
+  .node(
+    node('bob', 'Person', {
+      name: 'Bob Johnson',
+      jobTitle: 'CTO',
+    })
+  )
+  // Add organization
+  .node(
+    node('acme', 'Organization', {
+      name: 'Acme Corp',
+      industry: 'Technology',
+    })
+  )
+  // Add skills
+  .node(node('typescript', 'Skill', { name: 'TypeScript' }))
+  .node(node('python', 'Skill', { name: 'Python' }))
+  // Employment relationships
+  .edge(edge('john', 'worksFor', 'acme'))
+  .edge(edge('jane', 'worksFor', 'acme'))
+  .edge(edge('bob', 'worksFor', 'acme'))
+  // Reporting structure
+  .edge(edge('john', 'reportsTo', 'jane'))
+  .edge(edge('jane', 'reportsTo', 'bob'))
+  // Skills
+  .edge(edge('john', 'hasSkill', 'typescript'))
+  .edge(edge('john', 'hasSkill', 'python'))
+  .edge(edge('jane', 'hasSkill', 'python'))
+  .build()
+
+console.log(`Graph has ${complexGraph.nodes.length} nodes`)
+// Output: "Graph has 6 nodes"
+
+console.log(`Graph has ${complexGraph.edges.length} edges`)
+// Output: "Graph has 7 edges"
+```
+
+## Exporting as JSON-LD
+
+Convert graphs to JSON-LD format:
+
+```typescript
+import { graph, node, edge } from 'graphdl'
+
+const g = graph()
+  .context('https://schema.org')
+  .node(
+    node('john', 'Person', {
+      name: 'John Doe',
+      email: 'john@example.com',
+    })
+  )
+  .node(
+    node('acme', 'Organization', {
+      name: 'Acme Corp',
+    })
+  )
+  .edge(edge('john', 'worksFor', 'acme'))
+
+// Export as JSON-LD
+const jsonld = g.toJSONLD()
+
+console.log(JSON.stringify(jsonld, null, 2))
+// Output:
+// {
+//   "$context": "https://schema.org",
+//   "$graph": [
+//     {
+//       "$id": "john",
+//       "$type": "Person",
+//       "name": "John Doe",
+//       "email": "john@example.com"
+//     },
+//     {
+//       "$id": "acme",
+//       "$type": "Organization",
+//       "name": "Acme Corp"
+//     }
+//   ]
+// }
+```
+
+## Supply Chain Graph
+
+Build a supply chain tracking graph:
+
+```typescript
+import { graph, node, edge } from 'graphdl'
+
+const supplyChain = graph()
+  .context({
+    $vocab: 'https://schema.org/',
+    gs1: 'https://gs1.org/voc/',
+  })
+  // Products
+  .node(
+    node('widget-001', 'Product', {
+      name: 'Widget',
+      sku: 'WDG-001',
+      status: 'in-transit',
+    })
+  )
+  // Locations
+  .node(
+    node('factory-cn', 'Factory', {
+      name: 'Manufacturing Plant',
+      location: 'Shenzhen, China',
+    })
+  )
+  .node(
+    node('warehouse-us', 'Warehouse', {
+      name: 'Distribution Center',
+      location: 'Los Angeles, USA',
+    })
+  )
+  .node(
+    node('store-sf', 'Store', {
+      name: 'Retail Store',
+      location: 'San Francisco, USA',
+    })
+  )
+  // Containers
+  .node(
+    node('container-123', 'Container', {
+      id: 'CONT-123',
+      type: 'shipping-container',
+    })
+  )
+  // Product journey
+  .edge(
+    edge('widget-001', 'manufacturedAt', 'factory-cn', {
+      date: '2025-09-01',
+    })
+  )
+  .edge(
+    edge('widget-001', 'containedIn', 'container-123', {
+      date: '2025-09-05',
+    })
+  )
+  .edge(
+    edge('container-123', 'shippedTo', 'warehouse-us', {
+      date: '2025-09-10',
+      expectedArrival: '2025-09-25',
+    })
+  )
+  .edge(
+    edge('widget-001', 'destinedFor', 'store-sf', {
+      expectedArrival: '2025-10-01',
+    })
+  )
+  .metadata({
+    created: new Date().toISOString(),
+    source: 'supply-chain-system',
+  })
+  .build()
+
+console.log('Supply chain graph created')
+console.log(`Tracking ${supplyChain.nodes.filter((n) => n.type === 'Product').length} products`)
+console.log(`Through ${supplyChain.nodes.filter((n) => ['Factory', 'Warehouse', 'Store'].includes(n.type as string)).length} locations`)
+```
+
+## Knowledge Graph
+
+Build a knowledge graph with occupations and skills:
+
+```typescript
+import { graph, node, edge } from 'graphdl'
+
+const knowledgeGraph = graph()
+  .context({
+    $vocab: 'https://schema.org/',
+    onet: 'https://www.onetonline.org/',
+  })
+  // People
+  .node(
+    node('john', 'Person', {
+      name: 'John Doe',
+      email: 'john@example.com',
+    })
+  )
+  .node(
+    node('jane', 'Person', {
+      name: 'Jane Smith',
+      email: 'jane@example.com',
+    })
+  )
+  // Occupations
+  .node(
+    node('15-1252.00', 'Occupation', {
+      onetCode: '15-1252.00',
+      title: 'Software Developers',
+      description: 'Develop software applications',
+    })
+  )
+  .node(
+    node('11-3021.00', 'Occupation', {
+      onetCode: '11-3021.00',
+      title: 'Computer and Information Systems Managers',
+      description: 'Plan, direct, or coordinate activities',
+    })
+  )
+  // Skills
+  .node(
+    node('typescript', 'Skill', {
+      name: 'TypeScript',
+      category: 'Programming',
+    })
+  )
+  .node(
+    node('leadership', 'Skill', {
+      name: 'Leadership',
+      category: 'Management',
+    })
+  )
+  .node(
+    node('architecture', 'Skill', {
+      name: 'Software Architecture',
+      category: 'Technical',
+    })
+  )
+  // People have occupations
+  .edge(edge('john', 'hasOccupation', '15-1252.00'))
+  .edge(edge('jane', 'hasOccupation', '11-3021.00'))
+  // Occupations require skills
+  .edge(edge('15-1252.00', 'requiresSkill', 'typescript'))
+  .edge(edge('15-1252.00', 'requiresSkill', 'architecture'))
+  .edge(edge('11-3021.00', 'requiresSkill', 'leadership'))
+  .edge(edge('11-3021.00', 'requiresSkill', 'architecture'))
+  // People have skills
+  .edge(edge('john', 'hasSkill', 'typescript'))
+  .edge(edge('john', 'hasSkill', 'architecture'))
+  .edge(edge('jane', 'hasSkill', 'leadership'))
+  .edge(edge('jane', 'hasSkill', 'architecture'))
+  .build()
+
+console.log('Knowledge graph created')
+console.log(`${knowledgeGraph.nodes.filter((n) => n.type === 'Person').length} people`)
+console.log(`${knowledgeGraph.nodes.filter((n) => n.type === 'Occupation').length} occupations`)
+console.log(`${knowledgeGraph.nodes.filter((n) => n.type === 'Skill').length} skills`)
+```
+
+## Querying with sdk.do
+
+Use semantic patterns to query graphs in the database:
+
+```typescript
+import $, { db } from 'sdk.do'
+
+// Create entities
+const john = await db.create($.Person, {
+  name: 'John Doe',
+  email: 'john@example.com',
+  jobTitle: 'Engineer',
+})
+
+const acme = await db.create($.Organization, {
+  name: 'Acme Corp',
+  industry: 'Technology',
+})
+
+// Create relationship
+await db.relate(john, $.worksFor, acme)
+
+// Query forward relationship
+const employers = await db.related(john, $.worksFor, $.Organization)
+console.log(`John works for: ${employers[0].name}`)
+// Output: "John works for: Acme Corp"
+
+// Query inverse relationship
+const employees = await db.related(acme, $.employs, $.Person)
+console.log(`Acme employs ${employees.length} people`)
+// Output: "Acme employs 1 people"
+```
+
+## Multi-hop Queries
+
+Traverse multiple relationships:
+
+```typescript
+import $, { db } from 'sdk.do'
+
+// Setup: John works for Acme, Acme owns Widget brand
+const john = await db.get($.Person, 'john-id')
+
+// Hop 1: Get John's employer
+const employers = await db.related(john, $.worksFor, $.Organization)
+const acme = employers[0]
+
+// Hop 2: Get brands owned by Acme
+const brands = await db.related(acme, $.owns, $.Brand)
+const widget = brands[0]
+
+// Hop 3: Get products under Widget brand
+const products = await db.related(widget, $.brand, $.Product)
+
+console.log(`John works for ${acme.name}`)
+console.log(`${acme.name} owns ${brands.length} brands`)
+console.log(`${widget.name} brand has ${products.length} products`)
+```
+
+## Filtering Relationships
+
+Query with filters:
+
+```typescript
+import $, { db } from 'sdk.do'
+
+const organization = await db.get($.Organization, 'acme-id')
+
+// Get all employees
+const allEmployees = await db.related(organization, $.employs, $.Person)
+
+// Get senior engineers only
+const seniorEngineers = await db.related(organization, $.employs, $.Person, {
+  where: { jobTitle: 'Senior Engineer' },
+})
+
+// Get employees in specific department
+const engineeringTeam = await db.related(organization, $.employs, $.Person, {
+  where: { department: 'Engineering' },
+})
+
+console.log(`Total employees: ${allEmployees.length}`)
+console.log(`Senior engineers: ${seniorEngineers.length}`)
+console.log(`Engineering team: ${engineeringTeam.length}`)
+```
+
+## Building from Triples
+
+Create graphs from triples:
+
+```typescript
+import { graph, createTriple } from 'graphdl'
+
+// Create triples
+const t1 = createTriple('Person:john', 'worksFor', 'Organization:acme', {
+  context: 'https://schema.org',
+  metadata: { startDate: '2023-01-01' },
+})
+
+const t2 = createTriple('Person:john', 'hasSkill', 'Skill:typescript', {
+  context: 'https://schema.org',
+  metadata: { level: 'expert' },
+})
+
+const t3 = createTriple('Organization:acme', 'owns', 'Brand:widget', {
+  context: 'https://schema.org',
+})
+
+// Build graph from triples
+const g = graph().context('https://schema.org').triple(t1).triple(t2).triple(t3).build()
+
+console.log(`Graph built from ${g.edges.length} triples`)
+console.log(`Contains ${g.nodes.length} unique nodes`)
+```
+
+## Graph with Multiple Contexts
+
+Use multiple vocabularies:
+
+```typescript
+import { graph, node, edge } from 'graphdl'
+
+const multiContextGraph = graph()
+  .context({
+    $vocab: 'https://schema.org/',
+    gs1: 'https://gs1.org/voc/',
+    onet: 'https://www.onetonline.org/',
+  })
+  // Schema.org entities
+  .node(node('john', 'Person', { name: 'John Doe' }))
+  .node(node('acme', 'Organization', { name: 'Acme Corp' }))
+  // GS1 entities
+  .node(node('widget', 'Product', { sku: 'WDG-001' }))
+  .node(node('warehouse', 'Warehouse', { location: 'SF' }))
+  // O*NET entities
+  .node(node('15-1252.00', 'Occupation', { title: 'Software Developer' }))
+  .node(node('typescript', 'Skill', { name: 'TypeScript' }))
+  // Relationships across vocabularies
+  .edge(edge('john', 'worksFor', 'acme')) // Schema.org
+  .edge(edge('widget', 'locatedAt', 'warehouse')) // GS1
+  .edge(edge('john', 'hasOccupation', '15-1252.00')) // O*NET
+  .edge(edge('15-1252.00', 'requiresSkill', 'typescript')) // O*NET
+  .build()
+
+console.log('Multi-vocabulary graph created')
+console.log('Combines Schema.org, GS1, and O*NET vocabularies')
+```
+
+## Querying Graph Structure
+
+Analyze graph structure:
+
+```typescript
+import { graph, node, edge } from 'graphdl'
+
+const g = graph()
+  .node(node('a', 'Person', { name: 'Alice' }))
+  .node(node('b', 'Person', { name: 'Bob' }))
+  .node(node('c', 'Person', { name: 'Charlie' }))
+  .edge(edge('a', 'knows', 'b'))
+  .edge(edge('b', 'knows', 'c'))
+  .edge(edge('a', 'knows', 'c'))
+  .build()
+
+// Analyze structure
+const nodeCount = g.nodes.length
+const edgeCount = g.edges.length
+
+// Find nodes by type
+const people = g.nodes.filter((n) => n.type === 'Person')
+
+// Find edges by predicate
+const knowsRelationships = g.edges.filter((e) => e.predicate === 'knows')
+
+// Find node's outgoing edges
+const aliceKnows = g.edges.filter((e) => e.source === 'a')
+
+// Find node's incoming edges
+const knownByBob = g.edges.filter((e) => e.target === 'b')
+
+console.log(`Graph has ${nodeCount} nodes and ${edgeCount} edges`)
+console.log(`${people.length} people in the graph`)
+console.log(`${knowsRelationships.length} "knows" relationships`)
+console.log(`Alice knows ${aliceKnows.length} people`)
+console.log(`${knownByBob.length} people know Bob`)
+```
+
+## Complete Example: Company Organization
+
+A comprehensive example showing a complete company structure:
+
+```typescript
+import { graph, node, edge } from 'graphdl'
+
+const companyGraph = graph()
+  .context('https://schema.org')
+  // Organization
+  .node(
+    node('acme', 'Organization', {
+      name: 'Acme Corp',
+      industry: 'Technology',
+      foundingDate: '2020-01-01',
+    })
+  )
+  // Executives
+  .node(
+    node('ceo', 'Person', {
+      name: 'Alice Johnson',
+      jobTitle: 'CEO',
+    })
+  )
+  .node(
+    node('cto', 'Person', {
+      name: 'Bob Smith',
+      jobTitle: 'CTO',
+    })
+  )
+  // Engineering team
+  .node(
+    node('eng-mgr', 'Person', {
+      name: 'Carol Davis',
+      jobTitle: 'Engineering Manager',
+    })
+  )
+  .node(
+    node('senior-eng', 'Person', {
+      name: 'David Lee',
+      jobTitle: 'Senior Engineer',
+    })
+  )
+  .node(
+    node('engineer', 'Person', {
+      name: 'Eve Martinez',
+      jobTitle: 'Engineer',
+    })
+  )
+  // Departments
+  .node(
+    node('engineering', 'Department', {
+      name: 'Engineering',
+      budget: 5000000,
+    })
+  )
+  // Products
+  .node(
+    node('widget', 'Product', {
+      name: 'Widget',
+      version: '2.0',
+    })
+  )
+  // Employment relationships
+  .edge(edge('ceo', 'worksFor', 'acme'))
+  .edge(edge('cto', 'worksFor', 'acme'))
+  .edge(edge('eng-mgr', 'worksFor', 'acme'))
+  .edge(edge('senior-eng', 'worksFor', 'acme'))
+  .edge(edge('engineer', 'worksFor', 'acme'))
+  // Reporting structure
+  .edge(edge('cto', 'reportsTo', 'ceo'))
+  .edge(edge('eng-mgr', 'reportsTo', 'cto'))
+  .edge(edge('senior-eng', 'reportsTo', 'eng-mgr'))
+  .edge(edge('engineer', 'reportsTo', 'eng-mgr'))
+  // Department relationships
+  .edge(edge('eng-mgr', 'memberOf', 'engineering'))
+  .edge(edge('senior-eng', 'memberOf', 'engineering'))
+  .edge(edge('engineer', 'memberOf', 'engineering'))
+  .edge(edge('engineering', 'partOf', 'acme'))
+  // Product ownership
+  .edge(edge('acme', 'owns', 'widget'))
+  .edge(edge('engineering', 'develops', 'widget'))
+  .metadata({
+    created: new Date().toISOString(),
+    description: 'Acme Corp organizational structure',
+  })
+  .build()
+
+console.log('Company graph created')
+console.log(`Employees: ${companyGraph.nodes.filter((n) => n.type === 'Person').length}`)
+console.log(`Departments: ${companyGraph.nodes.filter((n) => n.type === 'Department').length}`)
+console.log(`Products: ${companyGraph.nodes.filter((n) => n.type === 'Product').length}`)
+console.log(`Relationships: ${companyGraph.edges.length}`)
+
+// Export as JSON-LD
+const jsonld = graph().context('https://schema.org').nodes(companyGraph.nodes).edges(companyGraph.edges).toJSONLD()
+
+console.log('\nJSON-LD export:')
+console.log(JSON.stringify(jsonld, null, 2))
+```
+
+## Best Practices
+
+### 1. Use Meaningful Node IDs
+
+```typescript
+// Good - descriptive IDs
+node('john-doe', 'Person', { name: 'John Doe' })
+node('acme-corp', 'Organization', { name: 'Acme' })
+
+// Avoid - cryptic IDs
+node('p1', 'Person', { name: 'John Doe' })
+node('o1', 'Organization', { name: 'Acme' })
+```
+
+### 2. Add Rich Metadata
+
+```typescript
+// Good - rich context
+edge('john', 'worksFor', 'acme', {
+  startDate: '2023-01-01',
+  role: 'Engineer',
+  department: 'Engineering',
+})
+
+// Basic - minimal context
+edge('john', 'worksFor', 'acme')
+```
+
+### 3. Use Appropriate Contexts
+
+```typescript
+// Good - explicit context
+graph()
+  .context('https://schema.org')
+  .nodes([...])
+  .build()
+
+// Consider - multiple contexts when needed
+graph()
+  .context({
+    $vocab: 'https://schema.org/',
+    gs1: 'https://gs1.org/voc/'
+  })
+  .nodes([...])
+  .build()
+```
+
+## Next Steps
+
+- [Semantic Patterns](../docs/semantic-patterns) - Understanding patterns
+- [Relationships](../docs/relationships) - Working with relationships
+- [API Reference](../api/) - Complete API documentation
+- [Basic Semantics](./basic-semantics) - Using the $ proxy
+
+## See Also
+
+- [Getting Started](../docs/getting-started) - Installation and setup
+- [sdk.do](https://sdk.do) - Database integration
+- [schema.org.ai](https://schema.org.ai) - Schema.org vocabulary
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

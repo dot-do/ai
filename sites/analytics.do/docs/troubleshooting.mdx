@@ -1,0 +1,757 @@
+---
+$id: https://analytics.do/docs/troubleshooting
+$type: TechArticle
+title: analytics.do Troubleshooting
+description: Common issues and solutions for analytics.do
+keywords: [troubleshooting, debugging, common issues, solutions, error handling]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# analytics.do Troubleshooting
+
+Common issues and solutions for analytics.do implementations.
+
+## Events Not Being Tracked
+
+### Problem: Events not showing up in dashboards
+
+**Symptoms**:
+
+- `analytics.track()` succeeds but events don't appear
+- No errors in console
+- Dashboard shows no data
+
+**Possible Causes & Solutions**:
+
+#### 1. Incorrect Event Type
+
+```typescript
+// ✗ Wrong: Invalid event type
+await analytics.track('order-created', data)
+
+// ✓ Correct: Use semantic pattern
+await analytics.track($.Order.created, data)
+```
+
+#### 2. Missing Timestamp
+
+```typescript
+// ✗ Wrong: No timestamp
+await analytics.track($.Order.created, {
+  orderId: 'order-123',
+})
+
+// ✓ Correct: Include timestamp
+await analytics.track($.Order.created, {
+  orderId: 'order-123',
+  timestamp: new Date(),
+})
+```
+
+#### 3. Buffering Not Flushed
+
+```typescript
+// Force flush pending events
+await analytics.flush()
+
+// Configure auto-flush
+const analytics = createAnalytics({
+  apiKey: API_KEY,
+  flushInterval: 1000, // Flush every 1 second
+  flushSize: 100, // Flush after 100 events
+})
+```
+
+#### 4. Test Mode Enabled
+
+```typescript
+// Check if test mode is enabled
+const analytics = createAnalytics({
+  apiKey: API_KEY,
+  testMode: false, // Ensure test mode is off in production
+})
+```
+
+**Debugging**:
+
+```typescript
+// Enable debug logging
+const analytics = createAnalytics({
+  apiKey: API_KEY,
+  debug: true,
+})
+
+// Check pending events
+const pending = await analytics.getPendingEvents()
+console.log('Pending events:', pending.length)
+
+// Verify API connectivity
+try {
+  await analytics.track($.Test.event, { test: true })
+  console.log('✓ API connectivity OK')
+} catch (error) {
+  console.error('✗ API connectivity failed:', error)
+}
+```
+
+## Metrics Not Updating
+
+### Problem: Metrics show stale or incorrect data
+
+**Symptoms**:
+
+- Dashboard values don't change
+- Queries return old data
+- Metrics don't reflect recent activity
+
+**Possible Causes & Solutions**:
+
+#### 1. Cache Not Invalidated
+
+```typescript
+// Invalidate cache
+await analytics.invalidateCache({
+  metric: $.Revenue,
+  timeframe: 'last_24_hours',
+})
+
+// Disable caching for real-time queries
+const result = await analytics.query({
+  metric: $.Revenue,
+  timeframe: 'last_hour',
+  cache: false,
+})
+```
+
+#### 2. Aggregation Lag
+
+```typescript
+// Wait for aggregation to complete
+await analytics.waitForAggregation({
+  metric: $.Revenue,
+  timeout: 5000, // Wait up to 5 seconds
+})
+
+// Query raw data instead of aggregated
+const result = await analytics.query({
+  metric: $.Revenue,
+  aggregation: 'none', // Query raw data points
+  timeframe: 'last_hour',
+})
+```
+
+#### 3. Wrong Time Zone
+
+```typescript
+// Specify time zone explicitly
+const result = await analytics.query({
+  metric: $.Revenue,
+  timeframe: 'today',
+  timezone: 'America/Los_Angeles',
+})
+
+// Use UTC for consistency
+const result = await analytics.query({
+  metric: $.Revenue,
+  timeframe: {
+    start: '2025-10-10T00:00:00Z',
+    end: '2025-10-10T23:59:59Z',
+  },
+})
+```
+
+#### 4. Dimension Mismatch
+
+```typescript
+// Verify dimension values
+await analytics.metric($.Revenue, {
+  value: 1299.99,
+  dimensions: {
+    product: 'enterprise', // Must match exactly in queries
+  },
+})
+
+// Query with same dimension value
+const result = await analytics.query({
+  metric: $.Revenue,
+  where: {
+    product: 'enterprise', // Must match exactly
+  },
+})
+```
+
+**Debugging**:
+
+```typescript
+// Check metric metadata
+const metadata = await analytics.getMetricMetadata($.Revenue)
+console.log('Metric dimensions:', metadata.dimensions)
+console.log('Last updated:', metadata.lastUpdated)
+
+// Verify recent data points
+const recent = await analytics.query({
+  metric: $.Revenue,
+  timeframe: 'last_15_minutes',
+  aggregation: 'none',
+  limit: 10,
+})
+console.log('Recent data points:', recent.data)
+```
+
+## Query Performance Issues
+
+### Problem: Queries are slow or time out
+
+**Symptoms**:
+
+- Queries take >5 seconds
+- Timeout errors
+- High server load
+
+**Possible Causes & Solutions**:
+
+#### 1. Large Time Range
+
+```typescript
+// ✗ Avoid: Querying too much data
+const result = await analytics.query({
+  metric: $.Revenue,
+  timeframe: 'all_time', // Could be years of data
+})
+
+// ✓ Better: Use bounded time ranges
+const result = await analytics.query({
+  metric: $.Revenue,
+  timeframe: 'last_30_days',
+})
+```
+
+#### 2. Missing Filters
+
+```typescript
+// ✗ Avoid: No filters
+const result = await analytics.query({
+  metric: $.Revenue,
+  timeframe: 'last_30_days',
+  groupBy: ['product', 'region', 'channel'], // Could be millions of groups
+})
+
+// ✓ Better: Filter first
+const result = await analytics.query({
+  metric: $.Revenue,
+  timeframe: 'last_30_days',
+  where: {
+    product: 'enterprise',
+    region: 'us-west',
+  },
+  groupBy: ['channel'],
+})
+```
+
+#### 3. High-Cardinality Grouping
+
+```typescript
+// ✗ Avoid: Grouping by high-cardinality dimensions
+const result = await analytics.query({
+  metric: $.Revenue,
+  groupBy: ['userId'], // Could be millions of users
+})
+
+// ✓ Better: Group by low-cardinality dimensions
+const result = await analytics.query({
+  metric: $.Revenue,
+  groupBy: ['customerSegment'], // Limited values: enterprise/smb/startup
+})
+```
+
+#### 4. Complex Aggregations
+
+```typescript
+// ✗ Avoid: Multiple complex aggregations
+const result = await analytics.query({
+  metric: $.Revenue,
+  aggregations: ['min', 'max', 'avg', 'p50', 'p90', 'p95', 'p99', 'p99.9'],
+})
+
+// ✓ Better: Request only needed aggregations
+const result = await analytics.query({
+  metric: $.Revenue,
+  aggregations: ['sum', 'count'],
+})
+```
+
+**Optimization**:
+
+```typescript
+// Use pagination
+const getRevenue = async (page = 0, pageSize = 100) => {
+  return await analytics.query({
+    metric: $.Revenue,
+    groupBy: ['product'],
+    limit: pageSize,
+    offset: page * pageSize,
+  })
+}
+
+// Use materialized views
+await analytics.createMaterializedView({
+  name: 'revenue_by_product_daily',
+  query: {
+    metric: $.Revenue,
+    groupBy: ['product'],
+    interval: 'day',
+  },
+  refreshInterval: 'hourly',
+})
+
+// Query the view instead
+const result = await analytics.queryView('revenue_by_product_daily', {
+  timeframe: 'last_30_days',
+})
+```
+
+**Debugging**:
+
+```typescript
+// Explain query plan
+const plan = await analytics.explainQuery({
+  metric: $.Revenue,
+  timeframe: 'last_30_days',
+  groupBy: ['product'],
+})
+console.log('Query plan:', plan)
+console.log('Estimated rows:', plan.estimatedRows)
+console.log('Estimated duration:', plan.estimatedDuration)
+
+// Monitor query performance
+await analytics.metric($.Analytics.QueryDuration, {
+  value: queryDuration,
+  dimensions: {
+    metric: '$.Revenue',
+    timeframe: 'last_30_days',
+  },
+})
+```
+
+## Dashboard Issues
+
+### Problem: Dashboard not loading or showing errors
+
+**Symptoms**:
+
+- Dashboard shows "Loading..." indefinitely
+- Widget errors
+- Missing data
+
+**Possible Causes & Solutions**:
+
+#### 1. Invalid Widget Configuration
+
+```typescript
+// ✗ Wrong: Invalid widget config
+{
+  type: 'timeseries',
+  metric: $.Revenue
+  // Missing timeframe and interval
+}
+
+// ✓ Correct: Complete widget config
+{
+  type: 'timeseries',
+  metric: $.Revenue,
+  timeframe: 'last_30_days',
+  interval: 'day',
+  aggregation: 'sum'
+}
+```
+
+#### 2. Missing Permissions
+
+```typescript
+// Check dashboard permissions
+const dashboard = await analytics.getDashboard(dashboardId)
+console.log('Permissions:', dashboard.permissions)
+
+// Request access
+await analytics.requestDashboardAccess(dashboardId)
+```
+
+#### 3. Refresh Rate Too Aggressive
+
+```typescript
+// ✗ Avoid: Too frequent refresh
+const dashboard = await analytics.dashboard({
+  refresh_interval: 1000, // 1 second - too aggressive
+})
+
+// ✓ Better: Reasonable refresh rate
+const dashboard = await analytics.dashboard({
+  refresh_interval: 30000, // 30 seconds
+})
+```
+
+#### 4. Widget Dependencies
+
+```typescript
+// Ensure widgets load in order
+const dashboard = await analytics.dashboard({
+  widgets: [
+    {
+      id: 'overview',
+      type: 'counter',
+      metric: $.Revenue,
+    },
+    {
+      id: 'details',
+      type: 'table',
+      dependsOn: ['overview'], // Wait for overview to load
+      metric: $.Revenue,
+      groupBy: ['product'],
+    },
+  ],
+})
+```
+
+**Debugging**:
+
+```typescript
+// Test individual widgets
+const widget = await analytics.renderWidget({
+  type: 'timeseries',
+  metric: $.Revenue,
+  timeframe: 'last_30_days',
+})
+console.log('Widget data:', widget.data)
+
+// Check widget errors
+const dashboard = await analytics.getDashboard(dashboardId)
+dashboard.widgets.forEach((widget) => {
+  if (widget.error) {
+    console.error(`Widget ${widget.id} error:`, widget.error)
+  }
+})
+```
+
+## Alert Issues
+
+### Problem: Alerts not firing or firing too often
+
+**Symptoms**:
+
+- Expected alerts don't trigger
+- Too many alert notifications
+- False positives
+
+**Possible Causes & Solutions**:
+
+#### 1. Incorrect Threshold
+
+```typescript
+// Review threshold values
+const alert = await analytics.getAlert(alertId)
+console.log('Threshold:', alert.condition)
+
+// Test alert with sample data
+const result = await analytics.testAlert(alertId, {
+  metric: $.Revenue,
+  value: 5000,
+})
+console.log('Would trigger:', result.triggered)
+```
+
+#### 2. Wrong Evaluation Window
+
+```typescript
+// ✗ Wrong: Window too small
+await analytics.alert({
+  name: 'Revenue Drop',
+  metric: $.Revenue,
+  timeframe: 'last_1_minute', // Too small, noisy
+  condition: { decrease: 0.2 },
+})
+
+// ✓ Better: Appropriate window
+await analytics.alert({
+  name: 'Revenue Drop',
+  metric: $.Revenue,
+  timeframe: 'last_hour', // More stable
+  condition: { decrease: 0.2 },
+})
+```
+
+#### 3. Missing Dimensions
+
+```typescript
+// ✗ Wrong: Alert on all data
+await analytics.alert({
+  name: 'High Error Rate',
+  metric: $.ErrorRate,
+  condition: { gt: 0.05 },
+})
+
+// ✓ Better: Alert on specific dimensions
+await analytics.alert({
+  name: 'High Error Rate - Production',
+  metric: $.ErrorRate,
+  where: {
+    environment: 'production',
+    service: 'api',
+  },
+  condition: { gt: 0.05 },
+})
+```
+
+#### 4. Alert Fatigue
+
+```typescript
+// Add cooldown period
+await analytics.alert({
+  name: 'High Error Rate',
+  metric: $.ErrorRate,
+  condition: { gt: 0.05 },
+  cooldown: 3600000, // 1 hour cooldown between alerts
+})
+
+// Require multiple breaches
+await analytics.alert({
+  name: 'High Error Rate',
+  metric: $.ErrorRate,
+  condition: { gt: 0.05 },
+  consecutive_breaches: 3, // Trigger after 3 consecutive breaches
+})
+```
+
+**Debugging**:
+
+```typescript
+// Check alert history
+const history = await analytics.getAlertHistory(alertId, {
+  timeframe: 'last_7_days',
+})
+console.log('Alert triggered:', history.length, 'times')
+console.log('Last triggered:', history[0]?.timestamp)
+
+// Verify alert is enabled
+const alert = await analytics.getAlert(alertId)
+console.log('Alert enabled:', alert.enabled)
+console.log('Alert status:', alert.status)
+```
+
+## API Errors
+
+### Problem: API requests failing
+
+**Symptoms**:
+
+- 400 Bad Request errors
+- 401 Unauthorized errors
+- 429 Rate Limit errors
+- 500 Internal Server errors
+
+**Solutions**:
+
+#### 400 Bad Request
+
+```typescript
+// Validate request before sending
+try {
+  await analytics.track($.Order.created, data)
+} catch (error) {
+  if (error.status === 400) {
+    console.error('Invalid request:', error.message)
+    console.error('Validation errors:', error.errors)
+  }
+}
+```
+
+#### 401 Unauthorized
+
+```typescript
+// Check API key
+console.log('API Key:', process.env.ANALYTICS_API_KEY?.slice(0, 10) + '...')
+
+// Verify key is valid
+try {
+  await analytics.ping()
+  console.log('✓ API key valid')
+} catch (error) {
+  console.error('✗ API key invalid:', error)
+}
+```
+
+#### 429 Rate Limit
+
+```typescript
+// Implement exponential backoff
+const trackWithRetry = async (event, data, maxRetries = 3) => {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await analytics.track(event, data)
+    } catch (error) {
+      if (error.status === 429) {
+        const delay = Math.pow(2, i) * 1000 // Exponential backoff
+        await new Promise((resolve) => setTimeout(resolve, delay))
+      } else {
+        throw error
+      }
+    }
+  }
+  throw new Error('Max retries exceeded')
+}
+
+// Use batching to reduce requests
+await analytics.trackBatch(events)
+```
+
+#### 500 Internal Server Error
+
+```typescript
+// Retry with exponential backoff
+const retryConfig = {
+  retries: 3,
+  backoff: 'exponential',
+  minDelay: 1000,
+  maxDelay: 30000,
+}
+
+const analytics = createAnalytics({
+  apiKey: API_KEY,
+  retry: retryConfig,
+})
+```
+
+## Data Quality Issues
+
+### Problem: Incorrect or inconsistent data
+
+**Symptoms**:
+
+- Metrics show unexpected values
+- Data doesn't match other sources
+- Missing data points
+
+**Solutions**:
+
+#### 1. Validate Input Data
+
+```typescript
+// Validate before tracking
+const trackOrder = async (order: Order) => {
+  // Validation
+  if (!order.id) {
+    console.error('Missing order ID')
+    return
+  }
+  if (typeof order.amount !== 'number' || order.amount <= 0) {
+    console.error('Invalid order amount:', order.amount)
+    return
+  }
+  if (!order.timestamp || !(order.timestamp instanceof Date)) {
+    console.error('Invalid timestamp')
+    return
+  }
+
+  // Track validated data
+  await analytics.track($.Order.created, order)
+}
+```
+
+#### 2. Use Consistent Data Types
+
+```typescript
+// ✗ Wrong: Inconsistent types
+await analytics.metric($.Revenue, { value: '1299.99' }) // String
+await analytics.metric($.Revenue, { value: 1299.99 }) // Number
+
+// ✓ Correct: Consistent types
+await analytics.metric($.Revenue, { value: Number(amount) })
+```
+
+#### 3. Standardize Dimension Values
+
+```typescript
+// ✗ Wrong: Inconsistent dimension values
+await analytics.metric($.Revenue, {
+  dimensions: { region: 'US-WEST' },
+})
+await analytics.metric($.Revenue, {
+  dimensions: { region: 'us-west' },
+})
+
+// ✓ Correct: Standardized values
+const standardizeRegion = (region: string) => {
+  return region.toLowerCase().replace(/[^a-z0-9-]/g, '-')
+}
+
+await analytics.metric($.Revenue, {
+  dimensions: { region: standardizeRegion('US-WEST') }, // 'us-west'
+})
+```
+
+#### 4. Handle Time Zones
+
+```typescript
+// Always use UTC for timestamps
+const timestamp = new Date().toISOString()
+
+await analytics.track($.Order.created, {
+  orderId: 'order-123',
+  timestamp: timestamp, // ISO 8601 UTC
+})
+```
+
+## Getting Help
+
+If you're still experiencing issues:
+
+### 1. Enable Debug Mode
+
+```typescript
+const analytics = createAnalytics({
+  apiKey: API_KEY,
+  debug: true,
+  logLevel: 'debug',
+})
+```
+
+### 2. Check System Status
+
+```bash
+curl https://status.analytics.do
+```
+
+### 3. Review Documentation
+
+- [Getting Started](./getting-started.mdx)
+- [API Reference](../api/reference.mdx)
+- [Examples](../examples/)
+
+### 4. Contact Support
+
+- GitHub Issues: [github.com/dot-do/platform/issues](https://github.com/dot-do/platform/issues)
+- Community Discord: [discord.gg/dotdo](https://discord.gg/dotdo)
+- Email: support@analytics.do
+
+### 5. Provide Diagnostic Information
+
+When reporting issues, include:
+
+```typescript
+// Collect diagnostic information
+const diagnostics = {
+  version: analytics.version,
+  apiKeyPrefix: API_KEY.slice(0, 10),
+  environment: process.env.NODE_ENV,
+  pendingEvents: await analytics.getPendingEvents(),
+  lastError: analytics.getLastError(),
+  config: analytics.getConfig(),
+}
+
+console.log('Diagnostics:', diagnostics)
+```
+
+---
+
+For more information, see the [API Reference](../api/reference.mdx) or visit our [GitHub repository](https://github.com/dot-do/platform).

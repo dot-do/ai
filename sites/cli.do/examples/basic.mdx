@@ -1,0 +1,667 @@
+---
+$id: https://cli.do/examples/basic
+$type: HowTo
+title: Basic CLI Examples - cli.do
+description: Essential cli.do command examples for everyday tasks
+keywords: [examples, tutorial, basic, getting-started, cli]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Basic CLI Examples
+
+Essential cli.do commands for everyday tasks.
+
+## Quick Start Examples
+
+### Hello World
+
+Test your CLI installation:
+
+```bash
+# Check version
+do --version
+
+# Show help
+do --help
+
+# Test connection
+do user current
+```
+
+### List Data
+
+List entities from your database:
+
+```bash
+# List all businesses
+do db list Business
+
+# List all people
+do db list Person
+
+# List all products
+do db list Product
+```
+
+Expected output:
+
+```json
+[
+  {
+    "$id": "acme-corp",
+    "$type": "Business",
+    "name": "Acme Corporation",
+    "industry": "Technology"
+  },
+  {
+    "$id": "globex",
+    "$type": "Business",
+    "name": "Globex Corporation",
+    "industry": "Manufacturing"
+  }
+]
+```
+
+### Get Single Entity
+
+Retrieve a specific entity:
+
+```bash
+# Get business by ID
+do db get Business acme-corp
+
+# Get person by ID
+do db get Person john-doe
+
+# Get product by ID
+do db get Product widget-123
+```
+
+Expected output:
+
+```json
+{
+  "$id": "acme-corp",
+  "$type": "Business",
+  "name": "Acme Corporation",
+  "industry": "Technology",
+  "foundingDate": "2020-01-01",
+  "numberOfEmployees": 150,
+  "address": {
+    "$type": "PostalAddress",
+    "streetAddress": "123 Main St",
+    "addressLocality": "San Francisco",
+    "postalCode": "94102"
+  }
+}
+```
+
+## Creating Data
+
+### Create Entity
+
+Create new entities in the database:
+
+```bash
+# Create a person
+do db create Person '{
+  "$id": "jane-smith",
+  "$type": "Person",
+  "name": "Jane Smith",
+  "email": "jane@example.com",
+  "jobTitle": "Software Engineer"
+}'
+
+# Create a business
+do db create Business '{
+  "$id": "startup-co",
+  "$type": "Business",
+  "name": "Startup Co",
+  "industry": "Technology",
+  "foundingDate": "2025-01-01"
+}'
+
+# Create a product
+do db create Product '{
+  "$id": "widget-pro",
+  "$type": "Product",
+  "name": "Widget Pro",
+  "price": 99.99,
+  "currency": "USD"
+}'
+```
+
+### Create from File
+
+Create entities from JSON files:
+
+```bash
+# Create person.json
+cat > person.json << 'EOF'
+{
+  "$id": "john-doe",
+  "$type": "Person",
+  "name": "John Doe",
+  "email": "john@example.com",
+  "jobTitle": "Product Manager"
+}
+EOF
+
+# Create entity from file
+do db create Person @person.json
+```
+
+### Batch Create
+
+Create multiple entities at once:
+
+```bash
+# Create people.json
+cat > people.json << 'EOF'
+[
+  {
+    "$id": "alice",
+    "$type": "Person",
+    "name": "Alice Johnson",
+    "jobTitle": "Designer"
+  },
+  {
+    "$id": "bob",
+    "$type": "Person",
+    "name": "Bob Wilson",
+    "jobTitle": "Developer"
+  }
+]
+EOF
+
+# Batch create
+do db create Person @people.json --batch
+```
+
+## Updating Data
+
+### Update Entity
+
+Update existing entities:
+
+```bash
+# Update job title
+do db update Person john-doe '{
+  "jobTitle": "Senior Product Manager"
+}'
+
+# Update business info
+do db update Business acme-corp '{
+  "numberOfEmployees": 200,
+  "description": "Leading technology company"
+}'
+
+# Update product price
+do db update Product widget-pro '{
+  "price": 89.99
+}'
+```
+
+### Merge Update
+
+Merge updates with existing data:
+
+```bash
+# Add email without replacing other fields
+do db update Person john-doe '{
+  "email": "john.doe@example.com"
+}' --merge
+
+# Add phone number
+do db update Person john-doe '{
+  "telephone": "+1-555-0123"
+}' --merge
+```
+
+## Querying Data
+
+### Filter Results
+
+Query with conditions:
+
+```bash
+# Find engineers
+do db list Person --where '{
+  "jobTitle": "Software Engineer"
+}'
+
+# Find tech companies
+do db list Business --where '{
+  "industry": "Technology"
+}'
+
+# Find products under $50
+do db list Product --where '{
+  "price": {"$lt": 50}
+}'
+```
+
+### Pagination
+
+Handle large datasets:
+
+```bash
+# Get first 10 results
+do db list Business --limit 10
+
+# Get next 10 results
+do db list Business --limit 10 --offset 10
+
+# Get results 20-30
+do db list Business --limit 10 --offset 20
+```
+
+### Sorting
+
+Sort results:
+
+```bash
+# Sort by name ascending
+do db list Business --sort "name:asc"
+
+# Sort by date descending
+do db list Business --sort "foundingDate:desc"
+
+# Sort by price ascending
+do db list Product --sort "price:asc"
+```
+
+### Select Fields
+
+Return specific fields only:
+
+```bash
+# Get names only
+do db list Person --fields "name"
+
+# Get name and email
+do db list Person --fields "name,email"
+
+# Get business names and industries
+do db list Business --fields "name,industry"
+```
+
+## Output Formats
+
+### JSON Output
+
+Default format, machine-readable:
+
+```bash
+do db list Business --format json
+```
+
+```json
+[
+  {
+    "$id": "acme-corp",
+    "$type": "Business",
+    "name": "Acme Corp"
+  }
+]
+```
+
+### YAML Output
+
+Human-readable format:
+
+```bash
+do db list Business --format yaml
+```
+
+```yaml
+- $id: acme-corp
+  $type: Business
+  name: Acme Corp
+```
+
+### Table Output
+
+Tabular display:
+
+```bash
+do db list Business --format table
+```
+
+```
+┌────────────┬──────────┬────────────┬────────────┐
+│ $id        │ $type    │ name       │ industry   │
+├────────────┼──────────┼────────────┼────────────┤
+│ acme-corp  │ Business │ Acme Corp  │ Technology │
+│ globex     │ Business │ Globex     │ Mfg        │
+└────────────┴──────────┴────────────┴────────────┘
+```
+
+### Pretty Output
+
+Colorized, indented display:
+
+```bash
+do db list Business --format pretty
+```
+
+```
+Business: acme-corp
+  name: Acme Corporation
+  industry: Technology
+  employees: 150
+
+Business: globex
+  name: Globex Corporation
+  industry: Manufacturing
+  employees: 500
+```
+
+## Working with Relationships
+
+### Query Relationships
+
+Find related entities:
+
+```bash
+# Find brands owned by business
+do db related Business:acme owns Brand
+
+# Find employees of organization
+do db related Organization:acme employs Person
+
+# Find products by manufacturer
+do db related Organization:acme manufacturer Product
+```
+
+### Create Relationships
+
+Link entities together:
+
+```bash
+# Business owns brand
+do db relate Business:acme owns Brand:acme-brand
+
+# Person works for organization
+do db relate Person:john worksFor Organization:acme
+
+# Product manufactured by organization
+do db relate Product:widget manufacturer Organization:acme
+```
+
+## AI Generation
+
+### Simple Text Generation
+
+Generate content with AI:
+
+```bash
+# Generate a haiku
+do ai generate "Write a haiku about programming"
+
+# Explain a concept
+do ai generate "Explain quantum computing in simple terms"
+
+# Create a story
+do ai generate "Write a short story about a robot"
+```
+
+### Generate with Model Selection
+
+Choose specific AI models:
+
+```bash
+# Use Claude Sonnet 4.5
+do ai generate "Write a poem" --model claude-sonnet-4.5
+
+# Use GPT-5
+do ai generate "Explain AI" --model gpt-5
+```
+
+### Generate Structured Data
+
+Generate with schemas:
+
+```bash
+# Generate a blog post
+do ai generate "Write about AI" --schema BlogPosting
+
+# Generate a product
+do ai generate "Create a laptop product" --schema Product
+
+# Generate a person
+do ai generate "Create employee profile" --schema Person
+```
+
+## Publishing Events
+
+### Send Events
+
+Publish semantic events:
+
+```bash
+# Order created event
+do send Order.created '{
+  "$type": "Order",
+  "$id": "order-123",
+  "customer": "john-doe",
+  "total": 99.99,
+  "status": "pending"
+}'
+
+# Invoice paid event
+do send Invoice.paid '{
+  "$type": "Invoice",
+  "$id": "invoice-456",
+  "orderId": "order-123",
+  "amount": 99.99,
+  "paidDate": "2025-10-10"
+}'
+
+# User registered event
+do send User.registered '{
+  "$type": "Person",
+  "$id": "new-user",
+  "email": "user@example.com",
+  "registrationDate": "2025-10-10"
+}'
+```
+
+### Send from File
+
+Publish events from files:
+
+```bash
+# Create event.json
+cat > order-event.json << 'EOF'
+{
+  "$type": "Order",
+  "$id": "order-789",
+  "customer": "jane-smith",
+  "total": 149.99
+}
+EOF
+
+# Send event from file
+do send Order.created @order-event.json
+```
+
+## Scheduling Tasks
+
+### Schedule Recurring Tasks
+
+Set up scheduled workflows:
+
+```bash
+# Daily backup
+do every Daily "backup database"
+
+# Hourly metrics collection
+do every Hourly "collect metrics"
+
+# Weekly report
+do every Weekly "generate weekly report"
+
+# Custom cron schedule (daily at midnight)
+do every "0 0 * * *" "cleanup old data"
+```
+
+### Manage Scheduled Tasks
+
+View and control scheduled tasks:
+
+```bash
+# List all scheduled tasks
+do every list
+
+# List with table format
+do every list --format table
+
+# Remove a task
+do every remove daily-backup
+
+# Disable a task
+do every disable hourly-metrics
+
+# Enable a task
+do every enable hourly-metrics
+```
+
+## Configuration
+
+### View Configuration
+
+```bash
+# Show all configuration
+do config get
+
+# Show specific value
+do config get api.endpoint
+do config get output.format
+```
+
+### Set Configuration
+
+```bash
+# Set API key
+do config set api.key your-api-key-here
+
+# Set default format
+do config set output.format table
+
+# Set log level
+do config set log.level debug
+```
+
+### Edit Configuration
+
+```bash
+# Open config in editor
+do config edit
+
+# Edit specific environment
+do config edit --env production
+```
+
+## User & Permissions
+
+### Get User Info
+
+```bash
+# Get current user
+do user current
+
+# Get session info
+do user session
+```
+
+### Check Permissions
+
+```bash
+# Check if can edit blogs
+do user can edit Blog
+
+# Check if can delete specific blog
+do user can delete Blog engineering-blog
+
+# Check if can create products
+do user can create Product
+```
+
+## Piping and Scripting
+
+### Pipe Output
+
+Combine with other tools:
+
+```bash
+# Count results
+do db list Business | jq length
+
+# Extract specific fields
+do db list Person | jq '.[].name'
+
+# Filter results
+do db list Product | jq '.[] | select(.price < 50)'
+
+# Save to file
+do db list Business > businesses.json
+```
+
+### Read from Stdin
+
+Use output from other commands:
+
+```bash
+# Create from stdin
+echo '{"name": "Test"}' | do db create Person
+
+# Generate from piped prompt
+echo "Write a poem" | do ai generate
+
+# Send event from stdin
+cat event.json | do send Order.created
+```
+
+### Shell Scripting
+
+Automate tasks with shell scripts:
+
+```bash
+#!/bin/bash
+# backup.sh
+
+# Get all businesses
+BUSINESSES=$(do db list Business)
+
+# Generate summary
+SUMMARY=$(do ai generate "Summarize: $BUSINESSES")
+
+# Send completion event
+do send Backup.completed '{
+  "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%SZ)'",
+  "summary": "'"$SUMMARY"'"
+}'
+```
+
+Make executable and run:
+
+```bash
+chmod +x backup.sh
+./backup.sh
+```
+
+## Next Steps
+
+Explore more advanced examples:
+
+- [Database Commands](./database-commands) - Advanced database operations
+- [AI Commands](./ai-commands) - AI generation and processing
+- [Event Commands](./event-commands) - Event-driven patterns
+- [Commands Reference](../docs/commands) - Complete command documentation
+
+---
+
+Part of the [cli.do](https://cli.do) documentation.

@@ -1,0 +1,610 @@
+---
+$id: https://send.do
+$type: WebSite
+name: send.do
+description: Event publishing with the send SDK function for Business-as-Code
+license: CC-BY-4.0
+keywords: [send, event-publishing, publish, emit, dispatch, events, workflows, business-as-code]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# send.do
+
+**Event publishing with the `send` SDK function for Business-as-Code**
+
+send.do provides the event publishing functionality in the `.do` platform's Business-as-Code SDK. It enables you to publish business events using semantic `Object.Action` naming patterns that trigger workflows, notify subscribers, and create autonomous business processes.
+
+## Quick Start
+
+```bash
+pnpm add sdk.do
+```
+
+```typescript
+import { send } from 'sdk.do'
+
+// Publish a business event
+await send('Order.created', {
+  id: '12345',
+  customer: 'acme-corp',
+  total: 1500.0,
+  items: [{ product: 'widget-pro', quantity: 10, price: 99.99 }],
+})
+
+// Publish with metadata
+await send(
+  'Order.shipped',
+  {
+    orderId: '12345',
+    trackingNumber: 'TRACK123',
+    carrier: 'FedEx',
+  },
+  {
+    timestamp: new Date(),
+    source: 'warehouse-system',
+    correlationId: 'batch-456',
+  }
+)
+
+// Fire and forget (non-blocking)
+send('Metrics.updated', metricsData)
+```
+
+## Overview
+
+send.do provides the `send` function for publishing events throughout your Business-as-Code application. Events follow the `Object.Action` naming convention, making them both human-readable and AI-understandable.
+
+### Key Features
+
+- **Semantic Event Names**: Use `Object.Action` patterns (e.g., `Order.created`, `Payment.completed`)
+- **Type-Safe Publishing**: Full TypeScript support with type inference
+- **Event Metadata**: Attach timestamps, correlation IDs, source info, and custom metadata
+- **Async Publishing**: Non-blocking event publishing for high performance
+- **Batch Publishing**: Efficiently publish multiple events at once
+- **Event Chains**: Events can trigger other events for workflow orchestration
+- **Integration Ready**: Works seamlessly with `on`, `db`, `ai`, and other SDK functions
+
+## Core Concepts
+
+### Event Publishing
+
+The `send` function publishes events to notify all subscribers. Events are delivered to listeners registered with the `on` function.
+
+```typescript
+import { send } from 'sdk.do'
+
+// Simple event publishing
+await send('User.registered', {
+  id: 'user-123',
+  email: 'user@example.com',
+  name: 'John Doe',
+})
+```
+
+### Object.Action Naming
+
+Events follow a semantic naming pattern:
+
+- **Object**: The business entity (Order, Payment, User, Product, etc.)
+- **Action**: Past tense verb describing what happened (created, updated, deleted, shipped, etc.)
+
+```typescript
+// Lifecycle events
+await send('Order.created', orderData)
+await send('Order.updated', orderData)
+await send('Order.deleted', { id: orderId })
+
+// State change events
+await send('Order.validated', orderData)
+await send('Order.shipped', orderData)
+await send('Order.delivered', orderData)
+
+// Business action events
+await send('Payment.requested', paymentData)
+await send('Payment.completed', paymentData)
+await send('Inventory.reserved', reservationData)
+```
+
+### Event Data
+
+Event data should contain all necessary context for handlers:
+
+```typescript
+await send('Order.created', {
+  id: 'order-12345',
+  customer: {
+    id: 'cust-456',
+    name: 'Acme Corporation',
+    email: 'orders@acme.com',
+  },
+  items: [
+    { product: 'widget-pro', quantity: 10, price: 99.99, total: 999.9 },
+    { product: 'gadget-ultra', quantity: 5, price: 199.99, total: 999.95 },
+  ],
+  subtotal: 1999.85,
+  tax: 199.99,
+  total: 2199.84,
+  currency: 'USD',
+  createdAt: new Date(),
+})
+```
+
+### Event Metadata
+
+Attach metadata for tracing, debugging, and correlation:
+
+```typescript
+await send('Order.created', orderData, {
+  timestamp: new Date(),
+  source: 'checkout-service',
+  correlationId: sessionId,
+  causationId: previousEventId,
+  userId: currentUser.id,
+  version: 2,
+})
+```
+
+## Publishing Patterns
+
+### Simple Publishing
+
+Publish an event and wait for confirmation:
+
+```typescript
+import { send } from 'sdk.do'
+
+await send('Order.created', {
+  id: '12345',
+  customer: 'acme-corp',
+  total: 1500.0,
+})
+```
+
+### Fire and Forget
+
+Publish without waiting (non-blocking):
+
+```typescript
+// Publish and continue immediately
+send('Metrics.updated', metricsData)
+
+// Continue with other work
+return response
+```
+
+### Batch Publishing
+
+Publish multiple events efficiently:
+
+```typescript
+import { sendBatch } from 'sdk.do'
+
+await sendBatch([
+  { type: 'Order.created', data: order1 },
+  { type: 'Order.created', data: order2 },
+  { type: 'Order.created', data: order3 },
+])
+```
+
+### Event Chains
+
+Events can trigger other events for workflow orchestration:
+
+```typescript
+import { on, send } from 'sdk.do'
+
+// Order created triggers validation
+on('Order.created', async (event) => {
+  const available = await checkInventory(event.data.items)
+
+  if (available) {
+    await send('Order.validated', event.data)
+  } else {
+    await send('Order.rejected', {
+      ...event.data,
+      reason: 'insufficient-inventory',
+    })
+  }
+})
+
+// Order validated triggers payment
+on('Order.validated', async (event) => {
+  await send('Payment.requested', {
+    orderId: event.data.id,
+    amount: event.data.total,
+  })
+})
+
+// Payment completed triggers shipment
+on('Payment.completed', async (event) => {
+  await send('Order.shipped', {
+    orderId: event.data.orderId,
+    trackingNumber: await generateTracking(),
+  })
+})
+```
+
+### Conditional Publishing
+
+Only publish when conditions are met:
+
+```typescript
+async function updateOrder(orderId: string, updates: any) {
+  const order = await db.get($.Order, orderId)
+  const updated = await db.update($.Order, orderId, updates)
+
+  // Only publish if status actually changed
+  if (order.status !== updated.status) {
+    await send('Order.statusChanged', {
+      orderId,
+      oldStatus: order.status,
+      newStatus: updated.status,
+      changedAt: new Date(),
+    })
+  }
+
+  return updated
+}
+```
+
+## Integration with `.do` Platform
+
+send.do integrates seamlessly with other `.do` platform services:
+
+### With Database Operations
+
+```typescript
+import { db, send } from 'sdk.do'
+
+// Publish events on database changes
+db.on('create', async (entity) => {
+  await send(`${entity.$type}.created`, entity)
+})
+
+db.on('update', async (entity, changes) => {
+  await send(`${entity.$type}.updated`, {
+    ...entity,
+    changes,
+  })
+})
+```
+
+### With Event Listeners
+
+```typescript
+import { on, send } from 'sdk.do'
+
+// React to events and publish new events
+on('Order.created', async (event) => {
+  await processOrder(event.data)
+  await send('Order.processed', event.data)
+})
+```
+
+### With AI Services
+
+```typescript
+import { ai, on, send } from 'sdk.do'
+
+// AI-powered event processing
+on('CustomerFeedback.received', async (event) => {
+  const sentiment = await ai.generate({
+    prompt: `Analyze sentiment: ${event.data.feedback}`,
+    schema: $.SentimentAnalysis,
+  })
+
+  if (sentiment.score < 0.3) {
+    await send('CustomerIssue.detected', {
+      feedbackId: event.data.id,
+      sentiment,
+      priority: 'high',
+    })
+  }
+})
+```
+
+### With Scheduled Workflows
+
+```typescript
+import { every, send } from 'sdk.do'
+
+// Periodic event generation
+every($.Daily, async () => {
+  const report = await generateDailyReport()
+  await send('Report.generated', report)
+})
+```
+
+## Semantic Patterns
+
+send.do uses `$.Subject.predicate.Object` patterns for semantic operations:
+
+```typescript
+import $, { send } from 'sdk.do'
+
+// Semantic event publishing
+await send($.Order.created, orderData)
+await send($.Payment.completed, paymentData)
+await send($.User.registered, userData)
+
+// With semantic context
+await send($.Order.created, {
+  $type: 'Order',
+  $id: 'order-12345',
+  customer: { $type: 'Organization', name: 'Acme Corp' },
+  orderedItem: [{ $type: 'Product', name: 'Widget Pro', sku: 'WID-PRO-001' }],
+  totalPaymentDue: { $type: 'PriceSpecification', price: 1500.0 },
+})
+```
+
+## Documentation
+
+- [Getting Started](./docs/getting-started) - Installation and basic setup
+- [Publishing Patterns](./docs/patterns) - Event publishing patterns and best practices
+- [Event Naming](./docs/event-naming) - Object.Action naming conventions
+- [API Reference](./api/) - Complete API documentation
+
+## Examples
+
+- [Basic Publishing](./examples/basic-publishing) - Simple event publishing examples
+- [Workflow Events](./examples/workflow-events) - Event-driven workflow patterns
+
+## Function Signature
+
+```typescript
+function send<T = any>(eventType: string, data: T, metadata?: EventMetadata): Promise<void>
+
+interface EventMetadata {
+  timestamp?: Date
+  source?: string
+  correlationId?: string
+  causationId?: string
+  userId?: string
+  version?: number
+  [key: string]: any
+}
+```
+
+## Common Event Patterns
+
+### Lifecycle Events
+
+```typescript
+// Entity creation
+await send('Order.created', orderData)
+await send('User.created', userData)
+await send('Product.created', productData)
+
+// Entity updates
+await send('Order.updated', orderData)
+await send('User.updated', userData)
+
+// Entity deletion
+await send('Order.deleted', { id: orderId })
+```
+
+### State Changes
+
+```typescript
+// Order lifecycle
+await send('Order.submitted', orderData)
+await send('Order.validated', orderData)
+await send('Order.fulfilled', orderData)
+await send('Order.shipped', orderData)
+await send('Order.delivered', orderData)
+await send('Order.completed', orderData)
+
+// Payment states
+await send('Payment.requested', paymentData)
+await send('Payment.authorized', paymentData)
+await send('Payment.captured', paymentData)
+await send('Payment.completed', paymentData)
+```
+
+### Business Actions
+
+```typescript
+// Customer actions
+await send('Customer.contacted', contactData)
+await send('Customer.onboarded', onboardingData)
+await send('Customer.upgraded', upgradeData)
+
+// Inventory actions
+await send('Inventory.reserved', reservationData)
+await send('Inventory.released', releaseData)
+await send('Inventory.restocked', restockData)
+
+// Notification actions
+await send('Notification.sent', notificationData)
+await send('Notification.delivered', deliveryData)
+```
+
+## Best Practices
+
+### 1. Use Semantic Naming
+
+Follow the `Object.Action` pattern consistently:
+
+```typescript
+// Good
+await send('Order.created', orderData)
+await send('Payment.completed', paymentData)
+
+// Bad
+await send('order_create', orderData)
+await send('payment-done', paymentData)
+```
+
+### 2. Include Complete Context
+
+Event data should be self-contained:
+
+```typescript
+// Good - Complete context
+await send('Order.created', {
+  id: '12345',
+  customer: { id: 'cust-1', name: 'Acme Corp' },
+  items: [{ product: 'widget', quantity: 10, price: 99.99 }],
+  total: 999.9,
+  currency: 'USD',
+  createdAt: new Date(),
+})
+
+// Bad - Missing context
+await send('Order.created', { id: '12345' })
+```
+
+### 3. Add Metadata
+
+Include metadata for tracing and debugging:
+
+```typescript
+await send('Order.created', orderData, {
+  timestamp: new Date(),
+  source: 'checkout-service',
+  correlationId: sessionId,
+  userId: currentUser.id,
+})
+```
+
+### 4. Type Your Events
+
+Use TypeScript for type safety:
+
+```typescript
+interface OrderCreatedData {
+  id: string
+  customer: { id: string; name: string }
+  items: Array<{ product: string; quantity: number; price: number }>
+  total: number
+}
+
+await send<OrderCreatedData>('Order.created', {
+  id: '12345',
+  customer: { id: 'cust-1', name: 'Acme Corp' },
+  items: [{ product: 'widget', quantity: 10, price: 99.99 }],
+  total: 999.9,
+})
+```
+
+### 5. Handle Errors
+
+Don't let failed publishes break your application:
+
+```typescript
+try {
+  await send('Order.created', orderData)
+} catch (error) {
+  console.error('Failed to publish event:', error)
+
+  // Store for retry
+  await storeFailedEvent({
+    type: 'Order.created',
+    data: orderData,
+    error: error.message,
+  })
+}
+```
+
+## Performance Considerations
+
+### Non-Blocking Publishing
+
+Use fire-and-forget for non-critical events:
+
+```typescript
+// Good - non-blocking
+send('Metrics.updated', metricsData)
+return response
+
+// Bad - blocks response
+await send('Metrics.updated', metricsData)
+return response
+```
+
+### Batch Publishing
+
+Publish multiple events efficiently:
+
+```typescript
+// Good - batch
+await sendBatch([
+  { type: 'Order.created', data: order1 },
+  { type: 'Order.created', data: order2 },
+])
+
+// Bad - sequential
+await send('Order.created', order1)
+await send('Order.created', order2)
+```
+
+### Keep Payloads Small
+
+Only include necessary data:
+
+```typescript
+// Good - essential data
+await send('Order.created', {
+  id: order.id,
+  customerId: order.customerId,
+  total: order.total,
+})
+
+// Bad - huge payload
+await send('Order.created', {
+  ...order,
+  ...customer,
+  ...allProducts,
+})
+```
+
+## Related Domains
+
+- **[on.do](https://on.do)** - Event listeners for subscribing to events
+- **[events.do](https://events.do)** - Complete event system documentation
+- **[workflows.do](https://workflows.do)** - Workflow orchestration
+- **[sdk.do](https://sdk.do)** - Core SDK documentation
+
+## Integration with Related Systems
+
+- **[triggers.org.ai](https://triggers.org.ai)** - Complex trigger patterns
+- **[actions.org.ai](https://actions.org.ai)** - Actions ontology
+- **[agents.org.ai](https://agents.org.ai)** - AI agents that react to events
+
+## License
+
+send.do is released under the [Creative Commons Attribution 4.0 International License (CC-BY-4.0)](https://creativecommons.org/licenses/by/4.0/).
+
+This means you are free to:
+
+- **Share**: Copy and redistribute the material in any medium or format
+- **Adapt**: Remix, transform, and build upon the material for any purpose, even commercially
+
+Under the following terms:
+
+- **Attribution**: You must give appropriate credit, provide a link to the license, and indicate if changes were made
+
+## Resources
+
+- [events.do](https://events.do) - Event system documentation
+- [on.do](https://on.do) - Event listener documentation
+- [sdk.do](https://sdk.do) - Core SDK documentation
+- [workflows.do](https://workflows.do) - Workflow orchestration
+- [database.do](https://database.do) - Database operations
+
+## Contributing
+
+send.do is part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem. Contributions are welcome!
+
+To contribute:
+
+1. Share real-world event publishing patterns
+2. Contribute examples for common business scenarios
+3. Improve documentation and examples
+4. Submit TypeScript type definitions for domain events
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

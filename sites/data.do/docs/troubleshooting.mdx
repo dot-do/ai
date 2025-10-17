@@ -1,0 +1,804 @@
+---
+$id: https://data.do/docs/troubleshooting
+$type: https://schema.org/TechArticle
+name: data.do Troubleshooting
+description: Common errors, solutions, and debugging strategies for data.do
+author:
+  $type: https://schema.org/Organization
+  name: .do
+  url: https://do.inc
+license:
+  documentation: CC-BY-4.0
+  code: MIT
+---
+
+# Troubleshooting data.do
+
+This guide covers common errors, solutions, and debugging strategies for data.do.
+
+## Validation Errors
+
+### Error: VALIDATION_ERROR
+
+**Symptom**: Data validation fails when creating or updating records.
+
+```typescript
+DataError: Validation failed
+  code: 'VALIDATION_ERROR'
+  details: [
+    { path: 'email', message: 'Invalid email format' },
+    { path: 'age', message: 'Must be at least 18' }
+  ]
+```
+
+**Causes**:
+
+1. Invalid data format
+2. Missing required fields
+3. Constraint violations
+4. Type mismatches
+
+**Solutions**:
+
+```typescript
+// 1. Validate before creating
+import { validate } from 'sdk.do/data'
+
+const result = await validate(userData, $.User, { detailed: true })
+
+if (!result.valid) {
+  console.log('Validation errors:')
+  result.errors.forEach((error) => {
+    console.log(`- ${error.path}: ${error.message}`)
+  })
+  return
+}
+
+// 2. Use try-catch for detailed error handling
+try {
+  await data.create($.User, userData, { validate: true })
+} catch (error) {
+  if (error.code === 'VALIDATION_ERROR') {
+    error.details.forEach((detail) => {
+      console.log(`Field ${detail.path}: ${detail.message}`)
+    })
+  }
+}
+
+// 3. Provide default values
+const userData = {
+  name: input.name || 'Unknown',
+  email: input.email,
+  age: input.age || 0,
+  status: input.status || 'active',
+}
+```
+
+### Error: MISSING_REQUIRED_FIELD
+
+**Symptom**: Required field is missing from data.
+
+```typescript
+DataError: Required field 'email' is missing
+  code: 'MISSING_REQUIRED_FIELD'
+  field: 'email'
+```
+
+**Solution**:
+
+```typescript
+// Define schema with required fields
+const UserSchema = {
+  $type: $.User,
+  required: ['name', 'email'],
+  rules: {
+    name: { type: 'string', minLength: 2 },
+    email: { type: 'string', format: 'email' },
+  },
+}
+
+// Ensure all required fields are provided
+const userData = {
+  name: 'Alice Johnson',
+  email: 'alice@example.com', // Required field
+}
+
+await data.create($.User, userData, {
+  validate: true,
+  schema: UserSchema,
+})
+```
+
+### Error: INVALID_TYPE
+
+**Symptom**: Field has wrong type.
+
+```typescript
+DataError: Field 'age' expected type 'number', got 'string'
+  code: 'INVALID_TYPE'
+  field: 'age'
+  expected: 'number'
+  received: 'string'
+```
+
+**Solution**:
+
+```typescript
+// Convert types before creating
+const userData = {
+  name: input.name,
+  email: input.email,
+  age: parseInt(input.age, 10), // Convert to number
+  active: input.active === 'true', // Convert to boolean
+  createdAt: new Date(input.createdAt), // Convert to Date
+}
+
+// Or use transform to normalize types
+import { transform } from 'sdk.do/data'
+
+const normalized = await transform(rawData, $.User.normalize, {
+  convert: {
+    age: 'number',
+    active: 'boolean',
+    createdAt: 'date',
+  },
+})
+```
+
+## Database Errors
+
+### Error: DUPLICATE_KEY
+
+**Symptom**: Attempting to create record with duplicate unique field.
+
+```typescript
+DataError: Duplicate key error for field 'email'
+  code: 'DUPLICATE_KEY'
+  field: 'email'
+  value: 'alice@example.com'
+```
+
+**Solutions**:
+
+```typescript
+// 1. Use upsert instead of create
+await data.upsert(
+  $.User,
+  {
+    email: 'alice@example.com',
+    name: 'Alice Johnson',
+  },
+  {
+    key: 'email', // Match on email field
+  }
+)
+
+// 2. Check for existence first
+const existing = await data.list($.User, {
+  where: { email: 'alice@example.com' },
+})
+
+if (existing.length === 0) {
+  await data.create($.User, userData)
+} else {
+  await data.update(existing[0].$id, userData)
+}
+
+// 3. Handle error gracefully
+try {
+  await data.create($.User, userData)
+} catch (error) {
+  if (error.code === 'DUPLICATE_KEY') {
+    console.log('User with this email already exists')
+    // Update existing user or return error to user
+  }
+}
+```
+
+### Error: NOT_FOUND
+
+**Symptom**: Record not found by ID.
+
+```typescript
+DataError: Record not found with id 'user-123'
+  code: 'NOT_FOUND'
+  id: 'user-123'
+```
+
+**Solutions**:
+
+```typescript
+// 1. Check if record exists before operations
+const user = await data.get($.User, userId)
+
+if (!user) {
+  throw new Error('User not found')
+}
+
+// 2. Use try-catch
+try {
+  const user = await data.get($.User, userId)
+} catch (error) {
+  if (error.code === 'NOT_FOUND') {
+    console.log('User does not exist')
+    return null
+  }
+  throw error
+}
+
+// 3. Use list with filter instead
+const users = await data.list($.User, {
+  where: { $id: userId },
+})
+
+if (users.length === 0) {
+  console.log('User not found')
+}
+```
+
+### Error: CONNECTION_ERROR
+
+**Symptom**: Cannot connect to database.
+
+```typescript
+DataError: Failed to connect to database
+  code: 'CONNECTION_ERROR'
+  message: 'Connection timeout'
+```
+
+**Solutions**:
+
+```typescript
+// 1. Check connection settings
+import { configure } from 'sdk.do/data'
+
+configure({
+  connection: {
+    host: process.env.DB_HOST,
+    port: parseInt(process.env.DB_PORT),
+    database: process.env.DB_NAME,
+    username: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    timeout: 30000, // Increase timeout
+  },
+})
+
+// 2. Implement retry logic
+async function connectWithRetry(maxRetries = 3) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      await data.connect()
+      return
+    } catch (error) {
+      if (i === maxRetries - 1) throw error
+      await sleep(Math.pow(2, i) * 1000) // Exponential backoff
+    }
+  }
+}
+
+// 3. Use connection pooling
+configure({
+  connection: {
+    pool: {
+      min: 2,
+      max: 10,
+      idleTimeout: 30000,
+      acquireTimeout: 30000,
+    },
+  },
+})
+```
+
+## Query Errors
+
+### Error: INVALID_QUERY
+
+**Symptom**: Query syntax is invalid.
+
+```typescript
+DataError: Invalid query syntax
+  code: 'INVALID_QUERY'
+  message: 'Unknown operator: $invalid'
+```
+
+**Solutions**:
+
+```typescript
+// Use valid query operators
+const orders = await query($.Order)
+  .where({
+    status: 'pending',
+    total: { $gte: 100 }, // ✓ Valid operator
+    createdAt: { $gte: '2025-01-01' },
+  })
+  .execute()
+
+// Common valid operators:
+// $eq, $ne, $gt, $gte, $lt, $lte
+// $in, $nin, $like, $regex
+// $and, $or, $not
+```
+
+### Error: QUERY_TIMEOUT
+
+**Symptom**: Query takes too long to execute.
+
+```typescript
+DataError: Query timeout exceeded
+  code: 'QUERY_TIMEOUT'
+  duration: 30000
+```
+
+**Solutions**:
+
+```typescript
+// 1. Add indexes for frequently queried fields
+import { index } from 'sdk.do/data'
+
+await index.create($.Order, ['status', 'customerId', 'createdAt'])
+
+// 2. Optimize query with filters
+const orders = await query($.Order)
+  .where({
+    status: 'pending', // Indexed field first
+    customerId: currentUser.$id, // Indexed field
+  })
+  .limit(100) // Limit results
+  .execute()
+
+// 3. Use pagination
+async function getOrdersPage(page = 1, pageSize = 20) {
+  return await query($.Order)
+    .where({ status: 'pending' })
+    .limit(pageSize)
+    .offset((page - 1) * pageSize)
+    .execute()
+}
+
+// 4. Increase timeout for complex queries
+const results = await query($.Order)
+  .where(complexConditions)
+  .timeout(60000) // 60 second timeout
+  .execute()
+```
+
+### Error: TOO_MANY_RESULTS
+
+**Symptom**: Query returns too many results.
+
+```typescript
+DataError: Query returned too many results (10000+)
+  code: 'TOO_MANY_RESULTS'
+  count: 10000
+```
+
+**Solutions**:
+
+```typescript
+// 1. Use pagination
+const results = await query($.Order).where({ status: 'pending' }).limit(100).offset(0).execute()
+
+// 2. Use streaming for large datasets
+import { stream } from 'sdk.do/data'
+
+const orderStream = await stream($.Order, {
+  where: { status: 'pending' },
+})
+
+orderStream.on('data', (order) => {
+  processOrder(order)
+})
+
+// 3. Use aggregation instead
+const stats = await query($.Order)
+  .where({ status: 'pending' })
+  .aggregate({
+    total: { $sum: 'amount' },
+    count: { $count: '*' },
+    average: { $avg: 'amount' },
+  })
+  .execute()
+```
+
+## Performance Issues
+
+### Slow Queries
+
+**Symptom**: Queries take a long time to execute.
+
+**Diagnosis**:
+
+```typescript
+// Enable query logging
+import { configure } from 'sdk.do/data'
+
+configure({
+  logging: {
+    queries: true,
+    performance: true,
+  },
+})
+
+// Analyze query plan
+const plan = await query($.Order).where({ status: 'pending' }).explain()
+
+console.log(plan)
+// {
+//   indexUsed: 'idx_order_status',
+//   estimatedRows: 1000,
+//   scanType: 'index_scan'
+// }
+```
+
+**Solutions**:
+
+```typescript
+// 1. Create indexes
+await index.create($.Order, ['status', 'customerId'])
+await index.create($.Order, ['createdAt'])
+
+// 2. Use select to limit fields
+const orders = await query($.Order)
+  .select(['id', 'status', 'total']) // Only needed fields
+  .where({ status: 'pending' })
+  .execute()
+
+// 3. Avoid N+1 queries
+// ✗ Bad: N+1 queries
+const orders = await data.list($.Order)
+for (const order of orders) {
+  const customer = await data.get($.Customer, order.customerId)
+}
+
+// ✓ Good: Use includes
+const orders = await query($.Order).include({ customer: true }).execute()
+
+// 4. Use caching
+const results = await query($.Order).where({ status: 'pending' }).cache({ ttl: '5m' }).execute()
+```
+
+### Memory Issues
+
+**Symptom**: High memory usage when processing large datasets.
+
+**Solutions**:
+
+```typescript
+// 1. Use streaming instead of loading all at once
+import { stream } from 'sdk.do/data'
+
+const orderStream = await stream($.Order, {
+  where: { status: 'pending' },
+})
+
+orderStream.on('data', (order) => {
+  processOrder(order)
+})
+
+// 2. Use batch processing with smaller batches
+await batch.transform(records, processor, {
+  batchSize: 100, // Smaller batches
+  concurrency: 2, // Fewer parallel workers
+})
+
+// 3. Process in chunks
+async function processOrdersInChunks() {
+  let offset = 0
+  const chunkSize = 100
+
+  while (true) {
+    const orders = await query($.Order).limit(chunkSize).offset(offset).execute()
+
+    if (orders.length === 0) break
+
+    await processOrders(orders)
+
+    offset += chunkSize
+
+    // Clear memory between chunks
+    if (global.gc) global.gc()
+  }
+}
+```
+
+### Connection Pool Exhaustion
+
+**Symptom**: All connections in pool are in use.
+
+```typescript
+DataError: Connection pool exhausted
+  code: 'POOL_EXHAUSTED'
+  maxConnections: 10
+```
+
+**Solutions**:
+
+```typescript
+// 1. Increase pool size
+configure({
+  connection: {
+    pool: {
+      min: 5,
+      max: 20, // Increase from 10
+    },
+  },
+})
+
+// 2. Ensure connections are released
+async function processOrder(orderId: string) {
+  const connection = await pool.acquire()
+
+  try {
+    // Use connection
+    await connection.execute(query)
+  } finally {
+    // Always release connection
+    await pool.release(connection)
+  }
+}
+
+// 3. Use connection timeouts
+configure({
+  connection: {
+    pool: {
+      acquireTimeout: 30000, // Wait up to 30s for connection
+      idleTimeout: 60000, // Release idle connections after 60s
+    },
+  },
+})
+```
+
+## Migration Issues
+
+### Error: MIGRATION_FAILED
+
+**Symptom**: Migration fails during execution.
+
+```typescript
+DataError: Migration failed: add-customer-tier
+  code: 'MIGRATION_FAILED'
+  migration: 'add-customer-tier'
+  error: 'Column already exists'
+```
+
+**Solutions**:
+
+```typescript
+// 1. Check migration status
+import { migration } from 'sdk.do/data'
+
+const status = await migration.status()
+console.log(status)
+
+// 2. Rollback failed migration
+await migration.down()
+
+// 3. Fix migration and retry
+await migration.create('add-customer-tier-v2', {
+  up: async (data) => {
+    // Check if column exists first
+    const hasColumn = await data.hasColumn($.Customer, 'tier')
+    if (!hasColumn) {
+      await data.addColumn($.Customer, 'tier', {
+        type: 'string',
+        default: 'standard',
+      })
+    }
+  },
+  down: async (data) => {
+    await data.removeColumn($.Customer, 'tier')
+  },
+})
+
+await migration.up('add-customer-tier-v2')
+```
+
+### Error: INCOMPATIBLE_SCHEMA
+
+**Symptom**: Schema version mismatch.
+
+```typescript
+DataError: Incompatible schema version
+  code: 'INCOMPATIBLE_SCHEMA'
+  expected: 2
+  found: 1
+```
+
+**Solutions**:
+
+```typescript
+// 1. Run pending migrations
+await migration.up()
+
+// 2. Check schema version
+const version = await data.getSchemaVersion($.Customer)
+console.log('Current version:', version)
+
+// 3. Create migration to update schema
+await migration.create('update-customer-schema', {
+  up: async (data) => {
+    await data.updateSchema($.Customer, {
+      version: 2,
+      changes: {
+        addFields: ['tier', 'preferences'],
+        removeFields: ['legacyField'],
+      },
+    })
+  },
+  down: async (data) => {
+    await data.updateSchema($.Customer, {
+      version: 1,
+    })
+  },
+})
+```
+
+## Transform Errors
+
+### Error: TRANSFORM_FAILED
+
+**Symptom**: Data transformation fails.
+
+```typescript
+DataError: Transform failed: normalize
+  code: 'TRANSFORM_FAILED'
+  transform: 'normalize'
+  error: 'Cannot read property of undefined'
+```
+
+**Solutions**:
+
+```typescript
+// 1. Handle missing fields
+import { transform } from 'sdk.do/data'
+
+const normalized = await transform(rawData, (data) => ({
+  name: data.name?.trim() || 'Unknown',
+  email: data.email?.toLowerCase() || '',
+  phone: data.phone ? formatPhone(data.phone) : null,
+}))
+
+// 2. Validate before transforming
+const result = await validate(rawData, $.Customer)
+if (result.valid) {
+  const normalized = await transform(rawData, $.Customer.normalize)
+}
+
+// 3. Use try-catch for individual transforms
+const transformed = await transform(records, async (record) => {
+  try {
+    return await normalizeRecord(record)
+  } catch (error) {
+    console.error('Failed to transform record:', record, error)
+    return null // Skip failed records
+  }
+})
+
+const validTransforms = transformed.filter((r) => r !== null)
+```
+
+## Batch Operation Errors
+
+### Error: BATCH_PARTIAL_FAILURE
+
+**Symptom**: Some records in batch operation fail.
+
+```typescript
+DataError: Batch operation partially failed
+  code: 'BATCH_PARTIAL_FAILURE'
+  successful: 950
+  failed: 50
+  errors: [...]
+```
+
+**Solutions**:
+
+```typescript
+// 1. Use error handling in batch operations
+await batch.create($.User, users, {
+  batchSize: 100,
+  errorHandling: 'continue', // Continue on errors
+  onError: (error, record, index) => {
+    console.error(`Failed to create user ${index}:`, error.message)
+    // Log failed records for retry
+    failedRecords.push(record)
+  },
+})
+
+// 2. Retry failed records
+if (failedRecords.length > 0) {
+  console.log(`Retrying ${failedRecords.length} failed records`)
+  await batch.create($.User, failedRecords, {
+    batchSize: 10, // Smaller batches for retry
+  })
+}
+
+// 3. Use transaction for atomic operations
+try {
+  await transaction(async (tx) => {
+    for (const user of users) {
+      await tx.create($.User, user)
+    }
+  })
+} catch (error) {
+  // All or nothing - rolled back on any error
+  console.error('Batch failed, all changes rolled back')
+}
+```
+
+## Debugging Tips
+
+### Enable Debug Logging
+
+```typescript
+import { configure } from 'sdk.do/data'
+
+configure({
+  logging: {
+    enabled: true,
+    level: 'debug',
+    queries: true,
+    performance: true,
+  },
+})
+```
+
+### Use Explain for Query Optimization
+
+```typescript
+// Get query execution plan
+const plan = await query($.Order).where({ status: 'pending' }).explain()
+
+console.log('Query plan:', plan)
+// {
+//   indexUsed: 'idx_order_status',
+//   estimatedRows: 1000,
+//   scanType: 'index_scan',
+//   cost: 10.5
+// }
+```
+
+### Monitor Performance Metrics
+
+```typescript
+import { metrics } from 'sdk.do/data'
+
+// Get performance metrics
+const stats = await metrics.getAll()
+console.log('Performance stats:', {
+  queriesPerSecond: stats.queries.perSecond,
+  avgQueryTime: stats.queries.avgDuration,
+  cacheHitRate: stats.cache.hitRate,
+  connectionPoolUsage: stats.connection.poolUsage,
+})
+```
+
+### Use Validation in Development
+
+```typescript
+// Enable strict validation in development
+if (process.env.NODE_ENV === 'development') {
+  configure({
+    validation: {
+      strict: true,
+      throwOnError: true,
+      logWarnings: true,
+    },
+  })
+}
+```
+
+## Getting Help
+
+If you're still experiencing issues:
+
+1. Check the [API Reference](../api/reference.mdx) for detailed documentation
+2. Review [Best Practices](./best-practices.mdx) for recommended patterns
+3. Search existing [GitHub Issues](https://github.com/dot-do/platform/issues)
+4. Join the [Discord Community](https://discord.gg/dotdo)
+5. Contact [Support](mailto:support@do.inc)
+
+## License
+
+- Documentation: [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/)
+- Code Examples: [MIT](https://opensource.org/licenses/MIT)

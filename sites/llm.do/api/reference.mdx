@@ -1,0 +1,399 @@
+---
+$id: https://llm.do/api/reference
+$type: APIReference
+title: LLM Gateway API Reference
+description: Complete API reference for llm.do
+keywords: [llm, api, reference, documentation, types, functions]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# API Reference
+
+Complete API reference for llm.do.
+
+## llm.generate()
+
+Generate text with LLM.
+
+```typescript
+function generate(prompt: string, options?: GenerateOptions): Promise<string | object>
+```
+
+### Parameters
+
+- **prompt** `string` - The prompt to generate from
+- **options** `GenerateOptions` - Generation options
+
+### GenerateOptions
+
+```typescript
+interface GenerateOptions {
+  // Provider and model
+  provider?: 'openai' | 'anthropic'
+  model?: string
+
+  // Output format
+  schema?: SchemaType
+  structured?: boolean
+  responseFormat?: { type: 'json_object' | 'text' }
+
+  // Generation parameters
+  temperature?: number // 0-2, default: 0.7
+  maxTokens?: number // default: 2048
+  topP?: number // 0-1, default: 1
+  frequencyPenalty?: number // 0-2, default: 0
+  presencePenalty?: number // 0-2, default: 0
+
+  // Context
+  context?: any
+  systemPrompt?: string
+  messages?: Message[]
+
+  // Routing
+  routing?: RoutingOptions
+
+  // Caching
+  cache?: CacheOptions
+
+  // Advanced
+  timeout?: number
+  returnMetadata?: boolean
+}
+```
+
+### Examples
+
+```typescript
+// Basic generation
+const response = await llm.generate('Write a haiku')
+
+// Structured output
+const product = await llm.generate('Create product', {
+  schema: $.Product,
+  structured: true,
+})
+
+// With context
+const response = await llm.generate('Generate description', {
+  context: { product },
+  temperature: 0.8,
+})
+```
+
+## llm.stream()
+
+Stream text generation.
+
+```typescript
+function stream(prompt: string, options?: StreamOptions): AsyncIterableIterator<string>
+```
+
+### StreamOptions
+
+```typescript
+interface StreamOptions extends GenerateOptions {
+  onStart?: () => void
+  onChunk?: (chunk: string) => void
+  onComplete?: () => void
+  onError?: (error: Error) => void
+}
+```
+
+### Examples
+
+```typescript
+// Basic streaming
+const stream = llm.stream('Write article')
+for await (const chunk of stream) {
+  process.stdout.write(chunk)
+}
+
+// With events
+const stream = llm.stream('Generate content', {
+  onChunk: (chunk) => console.log(chunk),
+  onComplete: () => console.log('Done!'),
+})
+```
+
+## llm.embed()
+
+Generate vector embeddings.
+
+```typescript
+function embed(text: string | string[], options?: EmbedOptions): Promise<number[] | number[][]>
+```
+
+### EmbedOptions
+
+```typescript
+interface EmbedOptions {
+  provider?: 'openai' | 'anthropic'
+  model?: string
+  cache?: CacheOptions
+}
+```
+
+### Examples
+
+```typescript
+// Single embedding
+const embedding = await llm.embed('search query')
+
+// Batch embeddings
+const embeddings = await llm.embed(['query 1', 'query 2', 'query 3'])
+```
+
+## llm.batch
+
+Batch processing API.
+
+### llm.batch.create()
+
+Create a batch job.
+
+```typescript
+function create(requests: BatchRequest[], options?: BatchOptions): Promise<Batch>
+```
+
+### BatchRequest
+
+```typescript
+interface BatchRequest {
+  custom_id?: string
+  prompt: string
+  schema?: SchemaType
+  context?: any
+  maxTokens?: number
+}
+```
+
+### BatchOptions
+
+```typescript
+interface BatchOptions {
+  provider?: 'openai'
+  model?: string
+  priority?: 'low' | 'normal' | 'high'
+  completionWindow?: string // e.g., '24h'
+}
+```
+
+### Examples
+
+```typescript
+const batch = await llm.batch.create(
+  [
+    { custom_id: '1', prompt: 'Generate 1' },
+    { custom_id: '2', prompt: 'Generate 2' },
+  ],
+  {
+    model: 'gpt-5-mini',
+  }
+)
+```
+
+### llm.batch.status()
+
+Get batch status.
+
+```typescript
+function status(batchId: string): Promise<BatchStatus>
+```
+
+### BatchStatus
+
+```typescript
+interface BatchStatus {
+  id: string
+  status: 'validating' | 'in_progress' | 'completed' | 'failed'
+  total: number
+  completed: number
+  failed: number
+  createdAt: Date
+  completedAt?: Date
+  error?: string
+}
+```
+
+### llm.batch.results()
+
+Get batch results.
+
+```typescript
+function results(batchId: string): Promise<BatchResult[]>
+```
+
+### BatchResult
+
+```typescript
+interface BatchResult {
+  custom_id: string
+  response: any
+  error?: string
+}
+```
+
+## llm.config()
+
+Configure gateway.
+
+```typescript
+function config(options: ConfigOptions): void
+```
+
+### ConfigOptions
+
+```typescript
+interface ConfigOptions {
+  defaultProvider?: 'openai' | 'anthropic'
+  defaultModel?: string
+
+  routing?: RoutingOptions
+
+  caching?: {
+    enabled: boolean
+    ttl: number
+    strategy?: 'lru' | 'lfu' | 'ttl'
+  }
+
+  rateLimit?: {
+    requestsPerMinute: number
+    tokensPerMinute?: number
+  }
+
+  costLimit?: {
+    daily?: number
+    monthly?: number
+    action?: 'block' | 'downgrade' | 'alert'
+  }
+
+  circuitBreaker?: {
+    enabled: boolean
+    threshold: number
+    timeout: number
+  }
+}
+```
+
+## llm.analytics
+
+Usage analytics API.
+
+### llm.analytics.usage()
+
+Get usage statistics.
+
+```typescript
+function usage(options?: UsageOptions): Promise<UsageStats>
+```
+
+### UsageOptions
+
+```typescript
+interface UsageOptions {
+  period?: 'today' | 'last_7_days' | 'last_30_days' | 'this_month'
+  startDate?: Date
+  endDate?: Date
+  groupBy?: ('provider' | 'model' | 'operation')[]
+}
+```
+
+### UsageStats
+
+```typescript
+interface UsageStats {
+  totalRequests: number
+  totalCost: number
+  totalTokens: number
+  averageLatency: number
+  cacheHitRate: number
+
+  byProvider: Record<string, ProviderStats>
+  byModel: Record<string, ModelStats>
+  byOperation: Record<string, OperationStats>
+}
+```
+
+### llm.analytics.costs()
+
+Get cost breakdown.
+
+```typescript
+function costs(options?: CostOptions): Promise<CostStats>
+```
+
+### llm.analytics.providerHealth()
+
+Get provider health status.
+
+```typescript
+function providerHealth(): Promise<ProviderHealth>
+```
+
+### ProviderHealth
+
+```typescript
+interface ProviderHealth {
+  [provider: string]: {
+    available: boolean
+    latency: number
+    errorRate: number
+    lastError?: string
+  }
+}
+```
+
+## Types
+
+### RoutingOptions
+
+```typescript
+interface RoutingOptions {
+  strategy?: 'auto' | 'cost' | 'quality' | 'speed'
+  optimize?: 'cost' | 'quality' | 'speed'
+  fallback?: string
+  retries?: number
+  loadBalance?: boolean
+  providers?: string[]
+  capability?: 'code' | 'creative' | 'analytical'
+}
+```
+
+### CacheOptions
+
+```typescript
+interface CacheOptions {
+  enabled: boolean
+  ttl?: number
+  strategy?: 'lru' | 'lfu' | 'ttl'
+}
+```
+
+### Message
+
+```typescript
+interface Message {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+}
+```
+
+## Error Codes
+
+| Code                      | Description              |
+| ------------------------- | ------------------------ |
+| `INVALID_API_KEY`         | API key is invalid       |
+| `RATE_LIMIT_EXCEEDED`     | Rate limit exceeded      |
+| `INSUFFICIENT_QUOTA`      | Insufficient credits     |
+| `PROVIDER_UNAVAILABLE`    | Provider is unavailable  |
+| `TIMEOUT`                 | Request timed out        |
+| `INVALID_MODEL`           | Model name is invalid    |
+| `INVALID_SCHEMA`          | Schema validation failed |
+| `CONTEXT_LENGTH_EXCEEDED` | Prompt too long          |
+| `CONTENT_FILTERED`        | Content was filtered     |
+
+## License
+
+MIT (Open Source)

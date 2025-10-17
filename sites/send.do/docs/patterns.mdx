@@ -1,0 +1,845 @@
+---
+$id: https://send.do/docs/patterns
+$type: TechArticle
+title: Event Publishing Patterns
+description: Advanced patterns and best practices for publishing business events
+keywords: [patterns, best-practices, event-publishing, workflows, chains]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Event Publishing Patterns
+
+Advanced patterns and best practices for publishing business events with the `send` function.
+
+## Publishing Modes
+
+### Synchronous Publishing (Wait for Acknowledgment)
+
+Wait for the event to be published before continuing:
+
+```typescript
+import { send } from 'sdk.do'
+
+async function createOrder(orderData: any) {
+  // Save order to database
+  const order = await db.create($.Order, orderData)
+
+  // Wait for event to be published
+  await send('Order.created', order)
+
+  // Now safe to return - event is published
+  return { success: true, orderId: order.id }
+}
+```
+
+**Use When**:
+
+- You need confirmation the event was published
+- Event publishing is critical to business logic
+- You're in a transaction and need atomicity
+
+### Asynchronous Publishing (Fire and Forget)
+
+Publish without waiting for confirmation:
+
+```typescript
+import { send } from 'sdk.do'
+
+async function createOrder(orderData: any) {
+  const order = await db.create($.Order, orderData)
+
+  // Publish asynchronously (don't await)
+  send('Order.created', order).catch(console.error)
+
+  // Return immediately
+  return { success: true, orderId: order.id }
+}
+```
+
+**Use When**:
+
+- Performance is critical
+- Event is for analytics or logging
+- Failure to publish shouldn't block the flow
+
+### Batch Publishing
+
+Publish multiple events efficiently in a single operation:
+
+```typescript
+import { sendBatch } from 'sdk.do'
+
+async function processOrders(orders: Order[]) {
+  // Process all orders
+  const processed = await Promise.all(orders.map((order) => processOrder(order)))
+
+  // Publish all events at once
+  await sendBatch([
+    { type: 'Order.processed', data: processed[0] },
+    { type: 'Order.processed', data: processed[1] },
+    { type: 'Order.processed', data: processed[2] },
+  ])
+}
+```
+
+**Use When**:
+
+- Publishing many events at once
+- You want to optimize network calls
+- Events are related and should be atomic
+
+## Event Chain Patterns
+
+### Sequential Event Chain
+
+Events trigger other events in sequence:
+
+```typescript
+import { on, send } from 'sdk.do'
+
+// Step 1: Order created
+on('Order.created', async (event) => {
+  // Validate inventory
+  const available = await checkInventory(event.data.items)
+
+  if (available) {
+    await send('Order.validated', event.data)
+  } else {
+    await send('Order.rejected', {
+      ...event.data,
+      reason: 'insufficient-inventory',
+    })
+  }
+})
+
+// Step 2: Order validated
+on('Order.validated', async (event) => {
+  // Request payment
+  await send('Payment.requested', {
+    orderId: event.data.id,
+    amount: event.data.total,
+  })
+})
+
+// Step 3: Payment completed
+on('Payment.completed', async (event) => {
+  // Ship order
+  await send('Order.shipped', {
+    orderId: event.data.orderId,
+    trackingNumber: await generateTracking(),
+  })
+})
+
+// Step 4: Order shipped
+on('Order.shipped', async (event) => {
+  // Notify customer
+  await send('Customer.notified', {
+    customerId: event.data.customerId,
+    type: 'order-shipped',
+    orderId: event.data.orderId,
+  })
+})
+```
+
+### Parallel Event Fan-Out
+
+One event triggers multiple independent events:
+
+```typescript
+import { on, send } from 'sdk.do'
+
+on('Order.created', async (event) => {
+  // Trigger multiple independent events in parallel
+  await Promise.all([
+    // Validate inventory
+    send('Inventory.reservationRequested', {
+      orderId: event.data.id,
+      items: event.data.items,
+    }),
+
+    // Request payment
+    send('Payment.requested', {
+      orderId: event.data.id,
+      amount: event.data.total,
+    }),
+
+    // Notify customer
+    send('Customer.notified', {
+      customerId: event.data.customerId,
+      type: 'order-created',
+      orderId: event.data.id,
+    }),
+
+    // Update analytics
+    send('Analytics.orderCreated', {
+      orderId: event.data.id,
+      value: event.data.total,
+      timestamp: new Date(),
+    }),
+  ])
+})
+```
+
+### Event Aggregation (Fan-In)
+
+Multiple events combine to trigger a single event:
+
+```typescript
+import { on, send } from 'sdk.do'
+
+const orderStates = new Map()
+
+on('Payment.completed', async (event) => {
+  updateOrderState(event.data.orderId, 'payment', true)
+})
+
+on('Inventory.reserved', async (event) => {
+  updateOrderState(event.data.orderId, 'inventory', true)
+})
+
+on('Shipping.scheduled', async (event) => {
+  updateOrderState(event.data.orderId, 'shipping', true)
+})
+
+function updateOrderState(orderId: string, step: string, completed: boolean) {
+  const state = orderStates.get(orderId) || {}
+  state[step] = completed
+  orderStates.set(orderId, state)
+
+  // Check if all steps completed
+  if (state.payment && state.inventory && state.shipping) {
+    send('Order.readyToShip', {
+      orderId,
+      completedAt: new Date(),
+    })
+    orderStates.delete(orderId)
+  }
+}
+```
+
+## Conditional Publishing
+
+### Based on Business Rules
+
+Only publish when conditions are met:
+
+```typescript
+import { send } from 'sdk.do'
+
+async function updateOrder(orderId: string, updates: any) {
+  const order = await db.get($.Order, orderId)
+  const updated = await db.update($.Order, orderId, updates)
+
+  // Only publish if status actually changed
+  if (order.status !== updated.status) {
+    await send('Order.statusChanged', {
+      orderId,
+      oldStatus: order.status,
+      newStatus: updated.status,
+      changedAt: new Date(),
+    })
+  }
+
+  // Publish special event for high-value orders
+  if (updated.total >= 10000 && order.total < 10000) {
+    await send('Order.becameHighValue', {
+      orderId,
+      total: updated.total,
+    })
+  }
+
+  return updated
+}
+```
+
+### Based on User Roles
+
+Publish different events based on who performed the action:
+
+```typescript
+import { send, user } from 'sdk.do'
+
+async function updateProduct(productId: string, updates: any) {
+  const currentUser = await user.current()
+  const product = await db.update($.Product, productId, updates)
+
+  if (currentUser.role === 'admin') {
+    await send('Product.updatedByAdmin', {
+      productId,
+      adminId: currentUser.id,
+      changes: updates,
+    })
+  } else if (currentUser.role === 'vendor') {
+    await send('Product.updatedByVendor', {
+      productId,
+      vendorId: currentUser.id,
+      changes: updates,
+    })
+  }
+}
+```
+
+### Based on Time
+
+Publish time-sensitive events:
+
+```typescript
+import { send } from 'sdk.do'
+
+async function updateOrder(orderId: string, updates: any) {
+  const order = await db.update($.Order, orderId, updates)
+  const hoursSinceCreated = (Date.now() - order.createdAt.getTime()) / 3600000
+
+  // Publish urgency events based on time
+  if (order.status === 'pending' && hoursSinceCreated > 24) {
+    await send('Order.requiresAttention', {
+      orderId,
+      hoursPending: hoursSinceCreated,
+      priority: 'high',
+    })
+  }
+
+  if (order.status === 'pending' && hoursSinceCreated > 72) {
+    await send('Order.abandoned', {
+      orderId,
+      hoursPending: hoursSinceCreated,
+    })
+  }
+}
+```
+
+## Transactional Publishing
+
+### Database Transaction with Events
+
+Publish events within database transactions:
+
+```typescript
+import { db, send } from 'sdk.do'
+
+async function transferFunds(fromAccount: string, toAccount: string, amount: number) {
+  await db.transaction(async (tx) => {
+    // Debit from account
+    await tx.update($.Account, fromAccount, {
+      balance: db.decrement(amount),
+    })
+
+    // Credit to account
+    await tx.update($.Account, toAccount, {
+      balance: db.increment(amount),
+    })
+
+    // Publish event (will rollback if transaction fails)
+    await send('Transfer.completed', {
+      fromAccount,
+      toAccount,
+      amount,
+      completedAt: new Date(),
+    })
+  })
+}
+```
+
+### Two-Phase Commit
+
+Ensure events are only published if operations succeed:
+
+```typescript
+import { send } from 'sdk.do'
+
+async function processPayment(paymentData: any) {
+  let paymentId: string
+  let succeeded = false
+
+  try {
+    // Phase 1: Process payment with external provider
+    const result = await stripeAPI.charge(paymentData)
+    paymentId = result.id
+    succeeded = true
+
+    // Phase 2: Save to database
+    await db.create($.Payment, {
+      id: paymentId,
+      ...paymentData,
+      status: 'completed',
+    })
+
+    // Only publish if both phases succeeded
+    await send('Payment.completed', {
+      id: paymentId,
+      ...paymentData,
+    })
+
+    return result
+  } catch (error) {
+    // Rollback if needed
+    if (paymentId && succeeded) {
+      await stripeAPI.refund(paymentId)
+    }
+
+    await send('Payment.failed', {
+      ...paymentData,
+      error: error.message,
+    })
+
+    throw error
+  }
+}
+```
+
+## Deferred Publishing
+
+### Accumulate and Publish Later
+
+Collect events and publish them in batch:
+
+```typescript
+import { sendBatch } from 'sdk.do'
+
+class EventAccumulator {
+  private events: Array<{ type: string; data: any }> = []
+
+  add(type: string, data: any) {
+    this.events.push({ type, data })
+  }
+
+  async flush() {
+    if (this.events.length === 0) return
+
+    await sendBatch(this.events)
+    this.events = []
+  }
+}
+
+// Usage
+const accumulator = new EventAccumulator()
+
+async function processOrders(orders: Order[]) {
+  for (const order of orders) {
+    await processOrder(order)
+
+    // Accumulate event instead of publishing
+    accumulator.add('Order.processed', order)
+  }
+
+  // Publish all events at once
+  await accumulator.flush()
+}
+```
+
+### Scheduled Publishing
+
+Publish events on a schedule:
+
+```typescript
+import { every, send } from 'sdk.do'
+
+// Collect metrics throughout the day
+const metrics = {
+  ordersCreated: 0,
+  revenue: 0,
+  activeUsers: 0,
+}
+
+on('Order.created', (event) => {
+  metrics.ordersCreated++
+  metrics.revenue += event.data.total
+})
+
+on('User.loggedIn', () => {
+  metrics.activeUsers++
+})
+
+// Publish aggregated metrics daily
+every($.Daily, async () => {
+  await send('Metrics.daily', {
+    date: new Date().toISOString().split('T')[0],
+    ordersCreated: metrics.ordersCreated,
+    revenue: metrics.revenue,
+    activeUsers: metrics.activeUsers,
+  })
+
+  // Reset metrics
+  metrics.ordersCreated = 0
+  metrics.revenue = 0
+  metrics.activeUsers = 0
+})
+```
+
+## Error Handling Patterns
+
+### Retry with Exponential Backoff
+
+Automatically retry failed publishes:
+
+```typescript
+import { send } from 'sdk.do'
+
+async function sendWithRetry(type: string, data: any, maxRetries = 3): Promise<void> {
+  let lastError
+
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      await send(type, data)
+      return // Success!
+    } catch (error) {
+      lastError = error
+      const delay = Math.pow(2, i) * 1000 // 1s, 2s, 4s
+      await new Promise((resolve) => setTimeout(resolve, delay))
+    }
+  }
+
+  throw new Error(`Failed after ${maxRetries} retries: ${lastError.message}`)
+}
+
+// Usage
+await sendWithRetry('Order.created', orderData)
+```
+
+### Dead Letter Queue
+
+Store events that fail repeatedly:
+
+```typescript
+import { send, db } from 'sdk.do'
+
+async function sendWithDLQ(type: string, data: any): Promise<void> {
+  try {
+    await sendWithRetry(type, data, 3)
+  } catch (error) {
+    // Store in dead letter queue
+    await db.create($.DeadLetterQueue, {
+      eventType: type,
+      eventData: data,
+      error: error.message,
+      timestamp: new Date(),
+      retries: 3,
+    })
+
+    // Notify administrators
+    await send('Event.deadLettered', {
+      type,
+      error: error.message,
+    })
+
+    console.error(`Event ${type} moved to dead letter queue:`, error)
+  }
+}
+```
+
+### Graceful Degradation
+
+Don't let event publishing failures break your flow:
+
+```typescript
+import { send } from 'sdk.do'
+
+async function createOrder(orderData: any) {
+  // Critical: Create the order
+  const order = await db.create($.Order, orderData)
+
+  // Non-critical: Publish event
+  try {
+    await send('Order.created', order)
+  } catch (error) {
+    // Log but don't fail
+    console.error('Failed to publish Order.created event:', error)
+
+    // Optionally store for retry
+    await storeFailedEvent('Order.created', order, error)
+  }
+
+  // Order was still created successfully
+  return order
+}
+```
+
+## Integration Patterns
+
+### Database Integration
+
+Automatically publish events on database changes:
+
+```typescript
+import { db, send } from 'sdk.do'
+
+// Configure database hooks
+db.on('create', async (entity) => {
+  await send(`${entity.$type}.created`, entity, {
+    source: 'database',
+    timestamp: new Date(),
+  })
+})
+
+db.on('update', async (entity, changes) => {
+  await send(
+    `${entity.$type}.updated`,
+    {
+      ...entity,
+      changes,
+    },
+    {
+      source: 'database',
+      timestamp: new Date(),
+    }
+  )
+})
+
+db.on('delete', async (entity) => {
+  await send(
+    `${entity.$type}.deleted`,
+    {
+      id: entity.id,
+      deletedAt: new Date(),
+    },
+    {
+      source: 'database',
+      timestamp: new Date(),
+    }
+  )
+})
+```
+
+### API Integration
+
+Publish events from API endpoints:
+
+```typescript
+import { send } from 'sdk.do'
+import express from 'express'
+
+const app = express()
+
+app.post('/orders', async (req, res) => {
+  try {
+    // Create order
+    const order = await createOrder(req.body)
+
+    // Publish event
+    await send('Order.created', order, {
+      source: 'orders-api',
+      userId: req.user.id,
+      correlationId: req.id,
+    })
+
+    res.json({ success: true, order })
+  } catch (error) {
+    // Publish error event
+    await send(
+      'Order.creationFailed',
+      {
+        data: req.body,
+        error: error.message,
+      },
+      {
+        source: 'orders-api',
+        userId: req.user.id,
+      }
+    )
+
+    res.status(500).json({ error: error.message })
+  }
+})
+```
+
+### Webhook Integration
+
+Publish events from incoming webhooks:
+
+```typescript
+import { send } from 'sdk.do'
+
+app.post('/webhooks/stripe', async (req, res) => {
+  const event = req.body
+
+  // Publish Stripe webhook as internal event
+  await send(`Stripe.${event.type}`, event.data, {
+    source: 'stripe-webhook',
+    webhookId: event.id,
+    timestamp: new Date(event.created * 1000),
+  })
+
+  res.json({ received: true })
+})
+
+// Handle Stripe events internally
+on('Stripe.payment_intent.succeeded', async (event) => {
+  await send('Payment.completed', {
+    id: event.data.id,
+    amount: event.data.amount / 100,
+    currency: event.data.currency,
+  })
+})
+```
+
+### Queue Integration
+
+Publish events from message queues:
+
+```typescript
+import { send } from 'sdk.do'
+
+async function processQueueMessage(message: any) {
+  const order = message.data
+
+  // Process order
+  await processOrder(order)
+
+  // Publish completion event
+  await send('Order.processed', order, {
+    source: 'order-processor',
+    queueMessageId: message.id,
+    timestamp: new Date(),
+  })
+}
+```
+
+## Performance Patterns
+
+### Non-Blocking Publishing
+
+Optimize response time by not waiting for events:
+
+```typescript
+import { send } from 'sdk.do'
+
+// Good - Non-blocking
+app.post('/orders', async (req, res) => {
+  const order = await createOrder(req.body)
+
+  // Publish asynchronously
+  send('Order.created', order).catch(console.error)
+
+  // Return immediately
+  res.json({ success: true, order })
+})
+
+// Bad - Blocking
+app.post('/orders', async (req, res) => {
+  const order = await createOrder(req.body)
+
+  // Wait for publish
+  await send('Order.created', order)
+
+  // Delayed response
+  res.json({ success: true, order })
+})
+```
+
+### Batch Publishing
+
+Reduce overhead by publishing in batches:
+
+```typescript
+import { sendBatch } from 'sdk.do'
+
+// Good - Batch publish
+const events = orders.map((order) => ({
+  type: 'Order.created',
+  data: order,
+}))
+await sendBatch(events)
+
+// Bad - Individual publishes
+for (const order of orders) {
+  await send('Order.created', order)
+}
+```
+
+### Event Payload Optimization
+
+Keep event payloads small and focused:
+
+```typescript
+// Good - Essential data only
+await send('Order.created', {
+  id: order.id,
+  customerId: order.customerId,
+  total: order.total,
+  itemCount: order.items.length,
+  createdAt: new Date(),
+})
+
+// Bad - Huge payload
+await send('Order.created', {
+  ...order,
+  customer: { ...fullCustomerData },
+  items: order.items.map((item) => ({
+    ...item,
+    product: { ...fullProductData },
+  })),
+  analytics: { ...massiveAnalyticsData },
+})
+```
+
+## Testing Patterns
+
+### Mock Events in Tests
+
+```typescript
+import { send } from 'sdk.do'
+import { vi } from 'vitest'
+
+// Mock send function
+vi.mock('sdk.do', () => ({
+  send: vi.fn(),
+}))
+
+test('publishes order created event', async () => {
+  await createOrder({ id: '12345' })
+
+  expect(send).toHaveBeenCalledWith(
+    'Order.created',
+    expect.objectContaining({
+      id: '12345',
+    })
+  )
+})
+```
+
+### Capture Events in Tests
+
+```typescript
+import { on, send } from 'sdk.do'
+
+test('event flow', async () => {
+  const events = []
+
+  on('Order.*', async (event) => {
+    events.push(event.type)
+  })
+
+  await send('Order.created', { id: '12345' })
+  await send('Order.validated', { id: '12345' })
+  await send('Order.shipped', { id: '12345' })
+
+  await delay(100) // Wait for handlers
+
+  expect(events).toEqual(['Order.created', 'Order.validated', 'Order.shipped'])
+})
+```
+
+## Best Practices Summary
+
+1. **Use Semantic Naming**: Follow `Object.Action` pattern consistently
+2. **Include Complete Context**: Event data should be self-contained
+3. **Add Metadata**: Include timestamp, source, correlation ID, user context
+4. **Type Your Events**: Use TypeScript interfaces for type safety
+5. **Handle Errors Gracefully**: Don't let publishing failures break your flow
+6. **Keep Payloads Small**: Only include necessary data
+7. **Use Async Publishing**: Fire-and-forget for non-critical events
+8. **Batch When Possible**: Publish multiple events efficiently
+9. **Document Events**: Document event structure and purpose
+10. **Test Event Flows**: Write tests for event publishing
+
+## See Also
+
+- [Getting Started](./getting-started) - Basic setup and usage
+- [Event Naming](./event-naming) - Naming conventions
+- [API Reference](../api/) - Complete API documentation
+- [Basic Publishing Example](../examples/basic-publishing) - Simple examples
+- [Workflow Events Example](../examples/workflow-events) - Event chains
+- [on.do](https://on.do) - Event listeners
+- [events.do](https://events.do) - Complete event system

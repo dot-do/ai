@@ -1,0 +1,391 @@
+---
+$id: https://llm.do/examples/basic-usage
+$type: HowTo
+title: Basic LLM Gateway Usage Examples
+description: Simple examples for text generation, embeddings, and multi-provider access
+keywords: [llm, examples, basic, generation, embeddings, providers]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Basic Usage Examples
+
+Simple examples to get started with llm.do.
+
+## Example 1: Simple Text Generation
+
+Generate text with a simple prompt:
+
+```typescript
+import { llm } from 'sdk.do'
+
+// Basic text generation
+const response = await llm.generate('Write a haiku about artificial intelligence')
+
+console.log(response)
+// Output:
+// "Silicon minds think
+// Learning patterns, teaching self
+// Future unfolds now"
+```
+
+## Example 2: Multi-Provider Access
+
+Access different AI providers through the same interface:
+
+```typescript
+import { llm } from 'sdk.do'
+
+// Use OpenAI GPT-5
+const gptResponse = await llm.generate('Explain quantum computing in simple terms', {
+  provider: 'openai',
+  model: 'gpt-5',
+})
+
+console.log('GPT-5:', gptResponse)
+
+// Use Anthropic Claude
+const claudeResponse = await llm.generate('Explain quantum computing in simple terms', {
+  provider: 'anthropic',
+  model: 'claude-sonnet-4.5',
+})
+
+console.log('Claude:', claudeResponse)
+
+// Let gateway choose best provider
+const autoResponse = await llm.generate('Explain quantum computing in simple terms', {
+  routing: { optimize: 'quality' },
+})
+
+console.log('Auto-selected:', autoResponse)
+```
+
+## Example 3: Structured Output
+
+Generate structured data with Schema.org types:
+
+```typescript
+import { $, llm } from 'sdk.do'
+
+// Generate Product
+const product = await llm.generate('Create a laptop product listing for professionals', {
+  schema: $.Product,
+  structured: true,
+})
+
+console.log(product)
+// {
+//   $type: "Product",
+//   name: "ProBook Elite X1",
+//   description: "High-performance laptop for professionals...",
+//   brand: { $type: "Brand", name: "TechCorp" },
+//   offers: {
+//     $type: "Offer",
+//     price: 1499.99,
+//     priceCurrency: "USD"
+//   }
+// }
+
+// Generate Organization
+const org = await llm.generate('Create a tech startup profile', {
+  schema: $.Organization,
+  structured: true,
+})
+
+console.log(org)
+// {
+//   $type: "Organization",
+//   name: "AI Innovations Inc.",
+//   description: "Leading AI research and development company",
+//   foundingDate: "2020-01-15",
+//   numberOfEmployees: 50
+// }
+```
+
+## Example 4: Vector Embeddings
+
+Generate embeddings for semantic search:
+
+```typescript
+import { llm } from 'sdk.do'
+
+// Single embedding
+const embedding = await llm.embed('machine learning and artificial intelligence')
+
+console.log(`Embedding dimensions: ${embedding.length}`) // 1536 for OpenAI
+console.log(`First 5 values: ${embedding.slice(0, 5)}`)
+
+// Batch embeddings
+const queries = ['affordable laptop for students', 'high-performance gaming computer', 'portable tablet for travel']
+
+const embeddings = await llm.embed(queries, {
+  provider: 'openai',
+  model: 'text-embedding-3-large',
+})
+
+console.log(`Generated ${embeddings.length} embeddings`)
+
+// Calculate similarity with validation
+function cosineSimilarity(a: number[], b: number[]): number {
+  if (!a || !b || a.length === 0 || b.length === 0) {
+    throw new Error('Vectors cannot be empty')
+  }
+  if (a.length !== b.length) {
+    throw new Error(`Vector dimensions must match: ${a.length} !== ${b.length}`)
+  }
+
+  const dotProduct = a.reduce((sum, val, i) => sum + val * b[i], 0)
+  const magnitudeA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0))
+  const magnitudeB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0))
+
+  if (magnitudeA === 0 || magnitudeB === 0) {
+    throw new Error('Vector magnitudes cannot be zero')
+  }
+
+  return dotProduct / (magnitudeA * magnitudeB)
+}
+
+const similarity = cosineSimilarity(embeddings[0], embeddings[1])
+console.log(`Similarity: ${similarity}`)
+```
+
+## Example 5: Streaming Responses
+
+Stream responses for real-time output:
+
+```typescript
+import { llm } from 'sdk.do'
+
+// Basic streaming
+console.log('Streaming response:')
+const stream = llm.stream('Write a comprehensive guide to TypeScript')
+
+for await (const chunk of stream) {
+  process.stdout.write(chunk)
+}
+
+console.log('\n\nDone!')
+
+// Streaming with events
+const stream2 = llm.stream('Explain machine learning', {
+  onStart: () => console.log('Generation started...'),
+  onChunk: (chunk) => process.stdout.write(chunk),
+  onComplete: () => console.log('\nGeneration complete!'),
+  onError: (error) => console.error('Error:', error),
+})
+
+await stream2.complete()
+```
+
+## Example 6: Cost Optimization
+
+Use intelligent routing for cost savings:
+
+```typescript
+import { llm } from 'sdk.do'
+
+// Simple task - use cheapest model
+const category = await llm.generate('Extract category from: Electronics > Laptops > Gaming', {
+  routing: { optimize: 'cost' },
+  maxTokens: 10,
+})
+
+console.log(`Category: ${category}`) // Uses gpt-5-nano ($0.0001/1k tokens)
+
+// Standard task - balanced cost/quality
+const summary = await llm.generate('Summarize this article in 3 bullet points', {
+  context: { article },
+  routing: { optimize: 'cost' },
+  maxTokens: 150,
+})
+
+console.log(summary) // Uses gpt-5-mini ($0.0005/1k tokens)
+
+// Complex task - quality over cost
+const analysis = await llm.generate('Provide detailed market analysis', {
+  routing: { optimize: 'quality' },
+  maxTokens: 1000,
+})
+
+console.log(analysis) // Uses gpt-5 or claude-sonnet-4.5
+```
+
+## Example 7: Error Handling
+
+Handle errors gracefully:
+
+```typescript
+import { llm } from 'sdk.do'
+
+try {
+  const response = await llm.generate('Generate content', {
+    provider: 'openai',
+    model: 'gpt-5',
+  })
+
+  console.log(response)
+} catch (error) {
+  if (error.code === 'RATE_LIMIT_EXCEEDED') {
+    console.error('Rate limit exceeded, retrying...')
+    // Wait and retry
+    await new Promise((resolve) => setTimeout(resolve, 5000))
+    const response = await llm.generate('Generate content')
+    console.log(response)
+  } else if (error.code === 'PROVIDER_UNAVAILABLE') {
+    console.error('Provider unavailable, using fallback...')
+    // Use alternative provider
+    const response = await llm.generate('Generate content', {
+      provider: 'anthropic',
+    })
+    console.log(response)
+  } else {
+    console.error('Generation failed:', error.message)
+    throw error
+  }
+}
+```
+
+## Example 8: Configuration
+
+Configure the gateway for your needs:
+
+```typescript
+import { llm } from 'sdk.do'
+
+// Set default configuration
+llm.config({
+  // Default provider and model
+  defaultProvider: 'openai',
+  defaultModel: 'gpt-5',
+
+  // Routing
+  routing: {
+    strategy: 'auto',
+    fallback: 'claude-sonnet-4.5',
+  },
+
+  // Caching
+  caching: {
+    enabled: true,
+    ttl: 3600,
+  },
+
+  // Rate limiting
+  rateLimit: {
+    requestsPerMinute: 60,
+  },
+})
+
+// Use configured defaults
+const response = await llm.generate('Generate content')
+// Uses openai/gpt-5 with caching enabled
+```
+
+## Example 9: Batch Processing
+
+Process multiple requests efficiently:
+
+```typescript
+import { $, llm } from 'sdk.do'
+
+// Prepare batch requests
+const products = [
+  { id: '1', name: 'Laptop Pro' },
+  { id: '2', name: 'Tablet Ultra' },
+  { id: '3', name: 'Phone Max' },
+]
+
+const requests = products.map((product) => ({
+  custom_id: product.id,
+  prompt: `Generate detailed description for ${product.name}`,
+  schema: $.Product,
+  context: product,
+}))
+
+// Create batch
+const batch = await llm.batch.create(requests, {
+  model: 'gpt-5-mini',
+})
+
+console.log(`Batch created: ${batch.id}`)
+
+// Poll for completion with timeout
+const MAX_WAIT_TIME = 3600000 // 1 hour
+const POLL_INTERVAL = 60000 // 1 minute
+const startTime = Date.now()
+
+while (Date.now() - startTime < MAX_WAIT_TIME) {
+  const status = await llm.batch.status(batch.id)
+
+  console.log(`Status: ${status.status}`)
+  console.log(`Progress: ${status.completed}/${status.total}`)
+
+  if (status.status === 'completed') {
+    const results = await llm.batch.results(batch.id)
+
+    results.forEach((result) => {
+      console.log(`Product ${result.custom_id}:`, result.response)
+    })
+
+    break
+  }
+
+  if (status.status === 'failed') {
+    throw new Error(`Batch processing failed: ${status.error || 'Unknown error'}`)
+  }
+
+  // Wait before checking again
+  await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL))
+}
+
+// Check if we timed out
+if (Date.now() - startTime >= MAX_WAIT_TIME) {
+  throw new Error('Batch processing timeout exceeded')
+}
+```
+
+## Example 10: Usage Analytics
+
+Track usage and costs:
+
+```typescript
+import { llm } from 'sdk.do'
+
+// Get usage statistics
+const stats = await llm.analytics.usage({
+  period: 'last_7_days',
+})
+
+console.log(`Total requests: ${stats.totalRequests}`)
+console.log(`Total cost: $${stats.totalCost}`)
+console.log(`Average latency: ${stats.averageLatency}ms`)
+
+// Breakdown by provider
+Object.entries(stats.byProvider).forEach(([provider, data]) => {
+  console.log(`\n${provider}:`)
+  console.log(`  Requests: ${data.requests}`)
+  console.log(`  Cost: $${data.cost}`)
+  console.log(`  Avg latency: ${data.latency}ms`)
+})
+
+// Breakdown by model
+Object.entries(stats.byModel).forEach(([model, data]) => {
+  console.log(`\n${model}:`)
+  console.log(`  Requests: ${data.requests}`)
+  console.log(`  Cost: $${data.cost}`)
+})
+```
+
+## Next Steps
+
+Explore more advanced patterns:
+
+- [Advanced Patterns](./advanced-patterns) - Routing, optimization, and complex workflows
+- [Integration](./integration) - Integration with other `.do` services
+- [Real-World Use Case](./real-world-use-case) - Production-ready implementation
+- [API Reference](../api/reference) - Complete API documentation
+
+## License
+
+MIT (Open Source)

@@ -1,0 +1,125 @@
+---
+$id: https://docs.do/examples/advanced-patterns
+$type: HowTo
+title: Advanced Patterns - docs.do
+description: Advanced documentation patterns including semantic search, AI generation, and analytics
+keywords: [advanced, patterns, semantic-search, ai, analytics]
+---
+
+# Advanced Patterns
+
+Advanced documentation management patterns with semantic search, AI generation, and analytics.
+
+## Semantic Search with Embeddings
+
+```typescript
+import { docs, ai } from 'docs.do'
+
+// Generate embedding for query
+const queryEmbedding = await ai.embed('how to create database relationships')
+
+// Find similar documents
+const similar = await docs.findSimilar(queryEmbedding, {
+  threshold: 0.8,
+  limit: 10,
+  domains: ['database.do', 'sdk.do'],
+})
+
+// Hybrid search (keyword + semantic)
+const results = await docs.search('database relationships', {
+  semantic: true,
+  hybridWeight: 0.6, // 60% semantic, 40% keyword
+  minScore: 0.7,
+})
+```
+
+## AI-Powered Documentation Generation
+
+```typescript
+import { docs, ai } from 'docs.do'
+
+// Generate documentation from code
+const generated = await ai.generate('Write comprehensive documentation for this API', {
+  context: apiCode,
+  schema: $.APIReference,
+  includeExamples: true,
+})
+
+await docs.create($.APIReference, generated)
+
+// Batch generate multiple docs
+const topics = ['authentication', 'database', 'events']
+const generatedDocs = await ai.batch(
+  topics.map((topic) => ({
+    prompt: `Write a guide about ${topic}`,
+    schema: $.TechArticle,
+  }))
+)
+```
+
+## Documentation Analytics
+
+```typescript
+// Track usage
+await docs.track('page_view', {
+  documentId: doc.$id,
+  userId: user.$id,
+  referrer: req.headers.referer,
+})
+
+// Get analytics
+const analytics = await docs.analytics(doc.$id, {
+  from: '2025-01-01',
+  to: '2025-01-31',
+  metrics: ['views', 'searches', 'time_on_page'],
+})
+
+// Find popular docs
+const popular = await docs.popular({
+  period: '30d',
+  limit: 20,
+  metric: 'views',
+})
+
+// Analyze search patterns
+const searchAnalytics = await docs.searchAnalytics({
+  period: '30d',
+  groupBy: 'query',
+})
+```
+
+## Multi-Domain Documentation Hub
+
+```typescript
+// Index multiple domains
+const domains = ['sdk.do', 'database.do', 'events.do', 'workflows.do']
+
+for (const domain of domains) {
+  await docs.indexDomain(domain, {
+    includeAPI: true,
+    includeExamples: true,
+    includeGuides: true,
+  })
+}
+
+// Unified search across domains
+const results = await docs.search('event handling', {
+  domains,
+  groupByDomain: true,
+  limit: 50,
+})
+
+// Results organized by domain
+results.forEach((group) => {
+  console.log(`\n${group.domain}:`)
+  group.results.forEach((doc) => {
+    console.log(`  - ${doc.title} (score: ${doc.score})`)
+  })
+})
+```
+
+## See Also
+
+- [Basic Usage](./basic-usage)
+- [Integration](./integration)
+- [API Reference](../api/reference)

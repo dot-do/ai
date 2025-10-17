@@ -1,0 +1,946 @@
+---
+$id: https://workflows.do/examples/approval-workflow
+$type: HowTo
+title: Approval Workflow Example
+description: Human-in-the-loop approval workflow with multi-level approvals, timeouts, and escalation
+keywords: [workflow, approval, human-in-the-loop, escalation, timeout]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Approval Workflow Example
+
+This example demonstrates a human-in-the-loop approval workflow with multi-level approvals, automatic escalation, and timeout handling.
+
+## Overview
+
+We'll build a purchase request approval workflow with:
+
+1. Automatic validation
+2. Dynamic approval routing based on amount
+3. Multi-level approvals (Manager → Director → CFO)
+4. Automatic escalation on timeout
+5. Parallel approval for committee decisions
+6. Notification system
+7. Audit trail
+
+## Complete Example
+
+```typescript
+import { $, workflow, db, send, user } from 'sdk.do'
+
+const purchaseApprovalWorkflow = workflow({
+  name: 'PurchaseApproval',
+  description: 'Multi-level purchase request approval workflow',
+  version: '1.0.0',
+  steps: [
+    {
+      name: 'ValidateRequest',
+      action: async (request) => {
+        console.log(`Validating purchase request ${request.id}...`)
+
+        // Validate required fields
+        if (!request.description || !request.amount || !request.requesterId) {
+          throw new Error('Missing required fields')
+        }
+
+        // Validate amount
+        if (request.amount <= 0) {
+          throw new Error('Amount must be greater than zero')
+        }
+
+        // Get requester info
+        const requester = await db.get($.Employee, {
+          where: { id: request.requesterId },
+        })
+
+        // Determine approval levels needed
+        let approvalLevels = ['manager']
+
+        if (request.amount > 10000) {
+          approvalLevels.push('director')
+        }
+
+        if (request.amount > 50000) {
+          approvalLevels.push('cfo')
+        }
+
+        console.log(`✓ Request validated: $${request.amount.toFixed(2)}`)
+        console.log(`  Approval levels required: ${approvalLevels.join(' → ')}`)
+
+        return {
+          ...request,
+          requester,
+          approvalLevels,
+          approvalHistory: [],
+          validated: true,
+        }
+      },
+      timeout: 5000,
+      onSuccess: 'ManagerApproval',
+    },
+    {
+      $type: 'ApprovalStep',
+      name: 'ManagerApproval',
+      description: 'Manager reviews and approves/rejects request',
+      approver: async (request) => {
+        // Get requester's manager
+        return request.requester.managerId
+      },
+      timeout: '24h', // 24 hours to approve
+      action: async (request) => {
+        console.log('Requesting manager approval...')
+
+        // Create approval request
+        const approvalRequest = await db.create($.ApprovalRequest, {
+          requestId: request.id,
+          approverId: request.requester.managerId,
+          level: 'manager',
+          status: 'pending',
+          createdAt: new Date(),
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        })
+
+        // Send notification to manager
+        const manager = await db.get($.Employee, {
+          where: { id: request.requester.managerId },
+        })
+
+        await send($.Email.send, {
+          to: manager.email,
+          subject: `Approval Required: Purchase Request #${request.id}`,
+          template: 'approval-request',
+          data: {
+            approverName: manager.name,
+            requesterName: request.requester.name,
+            amount: request.amount,
+            description: request.description,
+            approvalLink: `https://app.company.com/approvals/${approvalRequest.id}`,
+          },
+        })
+
+        console.log(`✓ Approval request sent to ${manager.name}`)
+
+        // Wait for approval decision
+        const decision = await waitForApproval(approvalRequest.id, 24 * 60 * 60 * 1000)
+
+        // Record decision
+        await db.update($.ApprovalRequest, {
+          where: { id: approvalRequest.id },
+          data: {
+            status: decision.approved ? 'approved' : 'rejected',
+            decidedAt: new Date(),
+            comments: decision.comments,
+          },
+        })
+
+        // Add to approval history
+        const approvalHistory = [
+          ...request.approvalHistory,
+          {
+            level: 'manager',
+            approverId: manager.id,
+            approverName: manager.name,
+            decision: decision.approved ? 'approved' : 'rejected',
+            comments: decision.comments,
+            timestamp: new Date(),
+          },
+        ]
+
+        if (!decision.approved) {
+          console.log(`✗ Manager rejected request: ${decision.comments}`)
+          return {
+            ...request,
+            approvalHistory,
+            status: 'rejected',
+            rejectedBy: 'manager',
+          }
+        }
+
+        console.log(`✓ Manager approved request`)
+        return {
+          ...request,
+          approvalHistory,
+          managerApproved: true,
+        }
+      },
+      onApprove: (request) => {
+        // Route to next approval level if needed
+        if (request.approvalLevels.includes('director')) {
+          return 'DirectorApproval'
+        }
+        return 'ExecuteRequest'
+      },
+      onReject: 'NotifyRejection',
+      onTimeout: 'EscalateToDirector',
+      escalationPolicy: {
+        timeoutMinutes: 1440, // 24 hours
+        escalateTo: (request) => request.requester.managerId, // Manager's manager
+        notificationTemplate: 'approval-escalation',
+      },
+    },
+    {
+      $type: 'ApprovalStep',
+      name: 'DirectorApproval',
+      description: 'Director approval for amounts > $10,000',
+      condition: (request) => request.approvalLevels.includes('director'),
+      approver: async (request) => {
+        // Get manager's manager (director)
+        const manager = await db.get($.Employee, {
+          where: { id: request.requester.managerId },
+        })
+        return manager.managerId
+      },
+      timeout: '48h',
+      action: async (request) => {
+        console.log('Requesting director approval...')
+
+        const manager = await db.get($.Employee, {
+          where: { id: request.requester.managerId },
+        })
+
+        const director = await db.get($.Employee, {
+          where: { id: manager.managerId },
+        })
+
+        const approvalRequest = await db.create($.ApprovalRequest, {
+          requestId: request.id,
+          approverId: director.id,
+          level: 'director',
+          status: 'pending',
+          createdAt: new Date(),
+        })
+
+        await send($.Email.send, {
+          to: director.email,
+          subject: `Director Approval Required: Purchase Request #${request.id}`,
+          template: 'approval-request',
+          data: {
+            approverName: director.name,
+            requesterName: request.requester.name,
+            amount: request.amount,
+            description: request.description,
+            previousApprovals: request.approvalHistory,
+            approvalLink: `https://app.company.com/approvals/${approvalRequest.id}`,
+          },
+        })
+
+        const decision = await waitForApproval(approvalRequest.id, 48 * 60 * 60 * 1000)
+
+        const approvalHistory = [
+          ...request.approvalHistory,
+          {
+            level: 'director',
+            approverId: director.id,
+            approverName: director.name,
+            decision: decision.approved ? 'approved' : 'rejected',
+            comments: decision.comments,
+            timestamp: new Date(),
+          },
+        ]
+
+        if (!decision.approved) {
+          console.log(`✗ Director rejected request: ${decision.comments}`)
+          return {
+            ...request,
+            approvalHistory,
+            status: 'rejected',
+            rejectedBy: 'director',
+          }
+        }
+
+        console.log(`✓ Director approved request`)
+        return {
+          ...request,
+          approvalHistory,
+          directorApproved: true,
+        }
+      },
+      onApprove: (request) => {
+        if (request.approvalLevels.includes('cfo')) {
+          return 'CFOApproval'
+        }
+        return 'ExecuteRequest'
+      },
+      onReject: 'NotifyRejection',
+      onTimeout: 'EscalateToCFO',
+    },
+    {
+      $type: 'ApprovalStep',
+      name: 'CFOApproval',
+      description: 'CFO approval for amounts > $50,000',
+      condition: (request) => request.approvalLevels.includes('cfo'),
+      approver: async () => {
+        // Get CFO
+        const cfo = await db.get($.Employee, {
+          where: { role: 'CFO' },
+        })
+        return cfo.id
+      },
+      timeout: '72h',
+      action: async (request) => {
+        console.log('Requesting CFO approval...')
+
+        const cfo = await db.get($.Employee, {
+          where: { role: 'CFO' },
+        })
+
+        const approvalRequest = await db.create($.ApprovalRequest, {
+          requestId: request.id,
+          approverId: cfo.id,
+          level: 'cfo',
+          status: 'pending',
+          createdAt: new Date(),
+        })
+
+        await send($.Email.send, {
+          to: cfo.email,
+          subject: `CFO Approval Required: Purchase Request #${request.id} - $${request.amount.toFixed(2)}`,
+          template: 'approval-request',
+          data: {
+            approverName: cfo.name,
+            requesterName: request.requester.name,
+            amount: request.amount,
+            description: request.description,
+            previousApprovals: request.approvalHistory,
+            approvalLink: `https://app.company.com/approvals/${approvalRequest.id}`,
+          },
+        })
+
+        const decision = await waitForApproval(approvalRequest.id, 72 * 60 * 60 * 1000)
+
+        const approvalHistory = [
+          ...request.approvalHistory,
+          {
+            level: 'cfo',
+            approverId: cfo.id,
+            approverName: cfo.name,
+            decision: decision.approved ? 'approved' : 'rejected',
+            comments: decision.comments,
+            timestamp: new Date(),
+          },
+        ]
+
+        if (!decision.approved) {
+          console.log(`✗ CFO rejected request: ${decision.comments}`)
+          return {
+            ...request,
+            approvalHistory,
+            status: 'rejected',
+            rejectedBy: 'cfo',
+          }
+        }
+
+        console.log(`✓ CFO approved request`)
+        return {
+          ...request,
+          approvalHistory,
+          cfoApproved: true,
+        }
+      },
+      onApprove: 'ExecuteRequest',
+      onReject: 'NotifyRejection',
+      onTimeout: 'RequireCommitteeApproval',
+    },
+    {
+      $type: 'ParallelApprovalStep',
+      name: 'CommitteeApproval',
+      description: 'Approval by executive committee',
+      approvers: async () => {
+        // Get executive committee members
+        const executives = await db.list($.Employee, {
+          where: { role: { in: ['CEO', 'CFO', 'COO', 'CTO'] } },
+        })
+        return executives.map((e) => e.id)
+      },
+      strategy: 'majority', // 'unanimous', 'majority', or 'any'
+      timeout: '96h',
+      action: async (request) => {
+        console.log('Requesting committee approval...')
+
+        const executives = await db.list($.Employee, {
+          where: { role: { in: ['CEO', 'CFO', 'COO', 'CTO'] } },
+        })
+
+        // Create approval requests for all committee members
+        const approvalRequests = await Promise.all(
+          executives.map((exec) =>
+            db.create($.ApprovalRequest, {
+              requestId: request.id,
+              approverId: exec.id,
+              level: 'committee',
+              status: 'pending',
+              createdAt: new Date(),
+            })
+          )
+        )
+
+        // Send notifications to all committee members
+        await Promise.all(
+          executives.map((exec) =>
+            send($.Email.send, {
+              to: exec.email,
+              subject: `Committee Vote Required: Purchase Request #${request.id}`,
+              template: 'committee-approval',
+              data: {
+                approverName: exec.name,
+                amount: request.amount,
+                description: request.description,
+                requesterName: request.requester.name,
+              },
+            })
+          )
+        )
+
+        // Wait for majority approval
+        const decisions = await waitForMajorityApproval(
+          approvalRequests.map((r) => r.id),
+          96 * 60 * 60 * 1000
+        )
+
+        const approved = decisions.filter((d) => d.approved).length
+        const rejected = decisions.filter((d) => !d.approved).length
+        const majorityApproved = approved > rejected
+
+        console.log(`Committee vote: ${approved} approved, ${rejected} rejected`)
+
+        return {
+          ...request,
+          committeeApproved: majorityApproved,
+          committeeVote: {
+            approved,
+            rejected,
+            decisions,
+          },
+        }
+      },
+      onApprove: 'ExecuteRequest',
+      onReject: 'NotifyRejection',
+    },
+    {
+      name: 'ExecuteRequest',
+      action: async (request) => {
+        console.log('Executing approved request...')
+
+        // Create purchase order
+        const purchaseOrder = await db.create($.PurchaseOrder, {
+          requestId: request.id,
+          amount: request.amount,
+          description: request.description,
+          requesterId: request.requesterId,
+          status: 'approved',
+          approvalHistory: request.approvalHistory,
+          approvedAt: new Date(),
+        })
+
+        // Notify procurement team
+        await send($.Event.publish, {
+          type: 'purchase.approved',
+          data: {
+            purchaseOrderId: purchaseOrder.id,
+            amount: request.amount,
+            description: request.description,
+          },
+        })
+
+        // Notify requester
+        await send($.Email.send, {
+          to: request.requester.email,
+          subject: `Purchase Request Approved - #${request.id}`,
+          template: 'request-approved',
+          data: {
+            requesterName: request.requester.name,
+            amount: request.amount,
+            description: request.description,
+            purchaseOrderId: purchaseOrder.id,
+          },
+        })
+
+        console.log(`✓ Request approved and purchase order created: ${purchaseOrder.id}`)
+
+        return {
+          success: true,
+          requestId: request.id,
+          purchaseOrderId: purchaseOrder.id,
+          status: 'approved',
+          approvalHistory: request.approvalHistory,
+        }
+      },
+    },
+    {
+      name: 'NotifyRejection',
+      action: async (request) => {
+        console.log('Notifying requester of rejection...')
+
+        // Update request status
+        await db.update($.PurchaseRequest, {
+          where: { id: request.id },
+          data: {
+            status: 'rejected',
+            rejectedAt: new Date(),
+            rejectedBy: request.rejectedBy,
+          },
+        })
+
+        // Notify requester
+        await send($.Email.send, {
+          to: request.requester.email,
+          subject: `Purchase Request Rejected - #${request.id}`,
+          template: 'request-rejected',
+          data: {
+            requesterName: request.requester.name,
+            amount: request.amount,
+            description: request.description,
+            rejectedBy: request.rejectedBy,
+            approvalHistory: request.approvalHistory,
+          },
+        })
+
+        console.log(`✓ Rejection notification sent`)
+
+        return {
+          success: false,
+          requestId: request.id,
+          status: 'rejected',
+          rejectedBy: request.rejectedBy,
+          approvalHistory: request.approvalHistory,
+        }
+      },
+    },
+    {
+      name: 'EscalateToDirector',
+      action: async (request) => {
+        console.log('Escalating to director due to manager timeout...')
+
+        // Log escalation
+        await db.create($.Event, {
+          type: 'approval.escalated',
+          requestId: request.id,
+          from: 'manager',
+          to: 'director',
+          reason: 'timeout',
+          timestamp: new Date(),
+        })
+
+        // Continue to director approval
+        return { ...request, escalated: true }
+      },
+      onSuccess: 'DirectorApproval',
+    },
+    {
+      name: 'EscalateToCFO',
+      action: async (request) => {
+        console.log('Escalating to CFO due to director timeout...')
+
+        await db.create($.Event, {
+          type: 'approval.escalated',
+          requestId: request.id,
+          from: 'director',
+          to: 'cfo',
+          reason: 'timeout',
+          timestamp: new Date(),
+        })
+
+        return { ...request, escalated: true }
+      },
+      onSuccess: 'CFOApproval',
+    },
+    {
+      name: 'RequireCommitteeApproval',
+      action: async (request) => {
+        console.log('Requiring committee approval due to CFO timeout...')
+
+        await db.create($.Event, {
+          type: 'approval.escalated',
+          requestId: request.id,
+          from: 'cfo',
+          to: 'committee',
+          reason: 'timeout',
+          timestamp: new Date(),
+        })
+
+        return { ...request, escalated: true }
+      },
+      onSuccess: 'CommitteeApproval',
+    },
+  ],
+})
+
+// Helper function to wait for approval decision
+async function waitForApproval(approvalRequestId, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error('Approval timeout'))
+    }, timeoutMs)
+
+    // Poll for decision (in production, use webhooks or events)
+    const interval = setInterval(async () => {
+      const approval = await db.get($.ApprovalRequest, {
+        where: { id: approvalRequestId },
+      })
+
+      if (approval.status !== 'pending') {
+        clearInterval(interval)
+        clearTimeout(timeout)
+        resolve({
+          approved: approval.status === 'approved',
+          comments: approval.comments,
+        })
+      }
+    }, 5000) // Check every 5 seconds
+  })
+}
+
+// Helper function to wait for majority approval
+async function waitForMajorityApproval(approvalRequestIds, timeoutMs) {
+  const decisions = []
+  const required = Math.ceil(approvalRequestIds.length / 2)
+
+  return new Promise((resolve) => {
+    const checkInterval = setInterval(async () => {
+      const approvals = await db.list($.ApprovalRequest, {
+        where: { id: { in: approvalRequestIds } },
+      })
+
+      const completed = approvals.filter((a) => a.status !== 'pending')
+
+      if (completed.length >= required) {
+        clearInterval(checkInterval)
+        resolve(
+          completed.map((a) => ({
+            approved: a.status === 'approved',
+            approverId: a.approverId,
+            comments: a.comments,
+          }))
+        )
+      }
+    }, 5000)
+
+    setTimeout(() => {
+      clearInterval(checkInterval)
+      resolve([]) // Timeout - return empty decisions
+    }, timeoutMs)
+  })
+}
+
+// Execute workflow
+const result = await purchaseApprovalWorkflow.execute({
+  id: 'req_12345',
+  requesterId: 'emp_789',
+  amount: 25000,
+  description: 'New development servers',
+  category: 'IT Equipment',
+})
+
+console.log('Approval result:', result)
+```
+
+## Explanation
+
+### Dynamic Approval Routing
+
+Automatically determines approval levels based on amount:
+
+```typescript
+let approvalLevels = ['manager']
+
+if (request.amount > 10000) {
+  approvalLevels.push('director')
+}
+
+if (request.amount > 50000) {
+  approvalLevels.push('cfo')
+}
+```
+
+**Routing:**
+
+- < $10,000: Manager only
+- $10,000 - $50,000: Manager → Director
+- > $50,000: Manager → Director → CFO
+
+### Approval Step Pattern
+
+```typescript
+{
+  $type: 'ApprovalStep',
+  name: 'ManagerApproval',
+  approver: async (request) => request.requester.managerId,
+  timeout: '24h',
+  onApprove: 'NextStep',
+  onReject: 'NotifyRejection',
+  onTimeout: 'EscalateToDirector'
+}
+```
+
+**Features:**
+
+- Dynamic approver lookup
+- Timeout with escalation
+- Conditional routing
+- Notification system
+
+### Parallel Committee Approval
+
+Multiple approvers vote simultaneously:
+
+```typescript
+{
+  $type: 'ParallelApprovalStep',
+  name: 'CommitteeApproval',
+  approvers: ['CEO', 'CFO', 'COO', 'CTO'],
+  strategy: 'majority', // 3 of 4 must approve
+  timeout: '96h'
+}
+```
+
+### Escalation on Timeout
+
+Automatically escalates if no decision:
+
+```typescript
+{
+  onTimeout: 'EscalateToDirector',
+  escalationPolicy: {
+    timeoutMinutes: 1440, // 24 hours
+    escalateTo: (request) => request.requester.managerId,
+    notificationTemplate: 'approval-escalation'
+  }
+}
+```
+
+## Usage Examples
+
+### Low Amount Request (Manager Only)
+
+```typescript
+await purchaseApprovalWorkflow.execute({
+  requesterId: 'emp_123',
+  amount: 500,
+  description: 'Office supplies',
+})
+// Only requires manager approval
+```
+
+### High Amount Request (All Levels)
+
+```typescript
+await purchaseApprovalWorkflow.execute({
+  requesterId: 'emp_123',
+  amount: 75000,
+  description: 'New data center equipment',
+})
+// Requires: Manager → Director → CFO → (possibly Committee)
+```
+
+### Event-Driven Execution
+
+```typescript
+import { on } from 'sdk.do'
+
+on($.PurchaseRequest.submitted, async (request) => {
+  await purchaseApprovalWorkflow.execute(request)
+})
+```
+
+## Testing
+
+### Test Approval Flow
+
+```typescript
+test('approves request with all levels', async () => {
+  // Mock approvals
+  mock(waitForApproval, async () => ({ approved: true }))
+
+  const result = await purchaseApprovalWorkflow.execute({
+    requesterId: 'test_emp',
+    amount: 75000,
+    description: 'Test request',
+  })
+
+  expect(result.success).toBe(true)
+  expect(result.approvalHistory).toHaveLength(3) // Manager, Director, CFO
+})
+```
+
+### Test Rejection
+
+```typescript
+test('rejects at director level', async () => {
+  let callCount = 0
+
+  mock(waitForApproval, async () => {
+    callCount++
+    if (callCount === 2) {
+      // Director rejects
+      return { approved: false, comments: 'Budget constraints' }
+    }
+    return { approved: true }
+  })
+
+  const result = await purchaseApprovalWorkflow.execute({
+    requesterId: 'test_emp',
+    amount: 25000,
+    description: 'Test request',
+  })
+
+  expect(result.success).toBe(false)
+  expect(result.rejectedBy).toBe('director')
+})
+```
+
+### Test Escalation
+
+```typescript
+test('escalates on timeout', async () => {
+  mock(waitForApproval, async () => {
+    throw new Error('Approval timeout')
+  })
+
+  const result = await purchaseApprovalWorkflow.execute({
+    requesterId: 'test_emp',
+    amount: 5000,
+    description: 'Test request',
+  })
+
+  expect(result.escalated).toBe(true)
+})
+```
+
+## UI Integration
+
+### Approval Dashboard
+
+```typescript
+// Get pending approvals for user
+const pendingApprovals = await db.list($.ApprovalRequest, {
+  where: {
+    approverId: user.id,
+    status: 'pending',
+  },
+  include: {
+    request: true,
+    requester: true,
+  },
+})
+
+// Display in dashboard
+```
+
+### Approve/Reject Action
+
+```typescript
+// Approve request
+await db.update($.ApprovalRequest, {
+  where: { id: approvalId },
+  data: {
+    status: 'approved',
+    comments: 'Approved - within budget',
+    decidedAt: new Date(),
+  },
+})
+
+// Reject request
+await db.update($.ApprovalRequest, {
+  where: { id: approvalId },
+  data: {
+    status: 'rejected',
+    comments: 'Rejected - exceeds budget',
+    decidedAt: new Date(),
+  },
+})
+```
+
+## Best Practices
+
+1. **Set appropriate timeouts**: Balance urgency with reasonable response time
+2. **Implement escalation**: Don't let requests hang indefinitely
+3. **Provide context**: Include all relevant information in approval requests
+4. **Audit everything**: Log all approval decisions and escalations
+5. **Notify appropriately**: Email, SMS, in-app notifications
+6. **Allow comments**: Capture reasoning for approvals/rejections
+7. **Support delegation**: Allow approvers to delegate to others
+8. **Track metrics**: Monitor approval times and patterns
+
+## Variations
+
+### With Delegation
+
+```typescript
+{
+  $type: 'ApprovalStep',
+  name: 'ManagerApproval',
+  approver: async (request) => {
+    const manager = await db.get($.Employee, {
+      where: { id: request.requester.managerId }
+    })
+
+    // Check if manager has delegated
+    if (manager.delegateTo) {
+      return manager.delegateTo
+    }
+
+    return manager.id
+  }
+}
+```
+
+### With Auto-Approval
+
+```typescript
+{
+  name: 'ValidateRequest',
+  action: async (request) => {
+    // Auto-approve small amounts
+    if (request.amount < 100) {
+      return {
+        ...request,
+        autoApproved: true,
+        skipApprovals: true
+      }
+    }
+    return request
+  },
+  onSuccess: (request) => {
+    if (request.autoApproved) {
+      return 'ExecuteRequest'
+    }
+    return 'ManagerApproval'
+  }
+}
+```
+
+### With Budget Checking
+
+```typescript
+{
+  name: 'CheckBudget',
+  action: async (request) => {
+    const budget = await db.get($.Budget, {
+      where: {
+        departmentId: request.requester.departmentId,
+        year: new Date().getFullYear()
+      }
+    })
+
+    if (budget.remaining < request.amount) {
+      throw new Error('Insufficient budget')
+    }
+
+    return request
+  }
+}
+```
+
+## Next Steps
+
+- [Workflow Patterns](../docs/workflow-patterns.mdx) - More approval patterns
+- [Orchestration](../docs/orchestration.mdx) - Advanced strategies
+- [API Reference](../api/index.mdx) - Complete API
+
+## Resources
+
+- [workflows.do](https://workflows.do)
+- [Human-in-the-Loop Patterns](https://martinfowler.com/articles/human-in-loop.html)
+- [Approval Workflows Best Practices](https://www.process.st/approval-workflow/)

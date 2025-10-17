@@ -1,0 +1,541 @@
+---
+$id: /docs/core-concepts/ai-services
+$type: Documentation
+title: AI Services - Intelligence as a First-Class Primitive
+description: Learn how to use AI generation, embeddings, and batch processing in your applications
+keywords: [ai, gpt, claude, embeddings, generation, batch processing]
+author: .do Team
+lastUpdated: 2025-10-13
+readingTime: 12 min
+---
+
+# AI Services
+
+The `.do` platform treats AI as a **first-class primitive**, making it as easy to call AI models as it is to query a database. Generate content, create embeddings, process batches, and build intelligent workflows with simple, semantic APIs.
+
+## Content Generation
+
+Generate text, structured data, or code:
+
+```typescript
+import { ai, $ } from 'sdk.do'
+
+// Simple text generation
+const email = await ai.generate({
+  model: 'gpt-5',
+  prompt: 'Write a professional thank you email for a product purchase',
+})
+
+// Generation with context
+const response = await ai.generate({
+  model: 'claude-sonnet-4.5',
+  prompt: 'Summarize this customer feedback',
+  context: {
+    feedback: customerFeedback,
+    product: productDetails,
+  },
+})
+
+// Structured output with schema
+const campaign = await ai.generate({
+  model: 'gpt-5',
+  schema: $.MarketingCampaign,
+  prompt: 'Create a product launch campaign for a new SaaS tool',
+})
+
+console.log(campaign)
+// {
+//   $type: '$.MarketingCampaign',
+//   name: 'SaaS Launch Campaign',
+//   channels: ['email', 'social', 'content'],
+//   timeline: {...},
+//   messaging: {...}
+// }
+```
+
+## Supported Models
+
+Access 20+ AI providers:
+
+```typescript
+// OpenAI GPT-5 (recommended)
+await ai.generate({ model: 'gpt-5', prompt: '...' })
+await ai.generate({ model: 'gpt-5-mini', prompt: '...' }) // Cost-effective
+await ai.generate({ model: 'gpt-5-codex', prompt: '...' }) // Code-optimized
+
+// Anthropic Claude
+await ai.generate({ model: 'claude-sonnet-4.5', prompt: '...' })
+
+// Meta Llama
+await ai.generate({ model: 'llama-4', prompt: '...' })
+
+// xAI Grok
+await ai.generate({ model: 'grok-4', prompt: '...' })
+
+// Google Gemini
+await ai.generate({ model: 'gemini-2.5-pro', prompt: '...' })
+```
+
+## Schema-Guided Generation
+
+Ensure AI outputs match your data model:
+
+```typescript
+// Define schema
+const ProductReview = {
+  $type: '$.Review',
+  rating: 'number', // 1-5
+  sentiment: 'string', // positive/negative/neutral
+  summary: 'string',
+  highlights: 'string[]',
+  concerns: 'string[]',
+}
+
+// Generate structured output
+const review = await ai.generate({
+  model: 'gpt-5',
+  schema: ProductReview,
+  prompt: `Analyze this review: "${customerReview}"`,
+})
+
+// Guaranteed to match schema
+console.log(review.rating) // 4
+console.log(review.sentiment) // 'positive'
+console.log(review.highlights) // ['Great quality', 'Fast shipping']
+```
+
+## Batch Processing
+
+Process large datasets with 50% cost savings:
+
+```typescript
+// Batch process 1000 documents
+const summaries = await ai.batch({
+  model: 'gpt-5-mini',
+  items: documents, // Array of 1000 documents
+  task: (doc) => `Summarize this in 2 sentences: ${doc.content}`,
+})
+
+// Parallel processing with progress
+const results = await ai.batch({
+  model: 'gpt-5',
+  items: customerFeedback,
+  task: async (feedback) => {
+    return await ai.generate({
+      model: 'gpt-5',
+      schema: $.SentimentAnalysis,
+      prompt: `Analyze sentiment: ${feedback.text}`,
+    })
+  },
+  onProgress: (completed, total) => {
+    console.log(`Progress: ${completed}/${total}`)
+  },
+  concurrency: 10, // Process 10 at a time
+})
+```
+
+## Vector Embeddings
+
+Create semantic search and similarity matching:
+
+```typescript
+// Generate embeddings
+const embedding = await ai.embed({
+  model: 'text-embedding-3-large',
+  text: 'How do I integrate payment processing?',
+})
+
+console.log(embedding) // [0.023, -0.891, 0.445, ...]
+
+// Store with vector database
+await db.create('Document', {
+  content: 'Payment integration guide...',
+  embedding: embedding,
+  metadata: { category: 'docs' },
+})
+
+// Semantic search
+const query = 'payment setup'
+const queryEmbedding = await ai.embed({ text: query })
+
+const results = await $.Document.search({
+  embedding: queryEmbedding,
+  limit: 10,
+  threshold: 0.7, // Similarity threshold
+})
+```
+
+## Streaming Responses
+
+Stream AI responses in real-time:
+
+```typescript
+// Stream text generation
+const stream = await ai.generateStream({
+  model: 'gpt-5',
+  prompt: 'Write a long blog post about AI',
+})
+
+for await (const chunk of stream) {
+  process.stdout.write(chunk) // Stream to user in real-time
+}
+
+// With WebSocket
+on($.Chat.message, async (event) => {
+  const stream = await ai.generateStream({
+    model: 'claude-sonnet-4.5',
+    prompt: event.data.message,
+    context: event.data.history,
+  })
+
+  for await (const chunk of stream) {
+    // Send to user via WebSocket
+    await $.WebSocket.send(event.data.connectionId, {
+      type: 'chunk',
+      content: chunk,
+    })
+  }
+})
+```
+
+## Conversation Management
+
+Build chatbots and assistants:
+
+```typescript
+// Maintain conversation context
+const conversation = []
+
+async function chat(userMessage: string) {
+  // Add user message
+  conversation.push({
+    role: 'user',
+    content: userMessage,
+  })
+
+  // Generate response
+  const response = await ai.generate({
+    model: 'gpt-5',
+    messages: conversation,
+  })
+
+  // Add assistant response
+  conversation.push({
+    role: 'assistant',
+    content: response,
+  })
+
+  return response
+}
+
+// Usage
+await chat('Hello, how are you?')
+await chat('What can you help me with?')
+await chat('Tell me about your pricing')
+```
+
+## Function Calling
+
+Let AI call your functions:
+
+```typescript
+const tools = [
+  {
+    name: 'getWeather',
+    description: 'Get current weather for a city',
+    parameters: {
+      city: 'string',
+      units: 'string',  // celsius or fahrenheit
+    },
+    handler: async (params) => {
+      const weather = await api.get(`/weather?city=${params.city}`)
+      return weather
+    },
+  },
+  {
+    name: 'createOrder',
+    description: 'Create a new order',
+    parameters: {
+      productId: 'string',
+      quantity: 'number',
+    },
+    handler: async (params) => {
+      return await db.create('Order', params)
+    },
+  },
+]
+
+// AI decides which functions to call
+const response = await ai.generate({
+  model: 'gpt-5',
+  prompt: 'What's the weather in SF and create an order for 2 widgets',
+  tools: tools,
+  autoExecute: true,  // Automatically execute function calls
+})
+```
+
+## Image Generation
+
+Create images with AI:
+
+```typescript
+// Generate image
+const image = await ai.generateImage({
+  model: 'dall-e-3',
+  prompt: 'A futuristic city with flying cars at sunset',
+  size: '1024x1024',
+  quality: 'hd',
+})
+
+// Save to R2
+await $.R2.put('images/generated-' + Date.now() + '.png', image)
+
+// Generate variations
+const variations = await ai.generateImageVariations({
+  image: originalImage,
+  n: 3, // Generate 3 variations
+})
+```
+
+## Content Moderation
+
+Filter inappropriate content:
+
+```typescript
+// Check content safety
+const moderation = await ai.moderate({
+  text: userGeneratedContent,
+})
+
+if (moderation.flagged) {
+  console.log('Flagged categories:', moderation.categories)
+  // ['hate', 'violence']
+
+  // Block or filter content
+  throw new Error('Content violates community guidelines')
+}
+
+// Allow safe content
+await db.create('Comment', {
+  text: userGeneratedContent,
+  author: userId,
+})
+```
+
+## Prompt Templates
+
+Reusable prompts with variables:
+
+```typescript
+const templates = {
+  productDescription: `
+    Write a compelling product description for:
+    Name: {{name}}
+    Features: {{features}}
+    Target audience: {{audience}}
+    Tone: {{tone}}
+  `,
+
+  emailResponse: `
+    Write a professional email response to:
+
+    Original email: {{originalEmail}}
+
+    Key points to address:
+    {{#each points}}
+    - {{this}}
+    {{/each}}
+
+    Tone: {{tone}}
+  `,
+}
+
+// Use template
+const description = await ai.generate({
+  model: 'gpt-5',
+  prompt: templates.productDescription,
+  variables: {
+    name: 'Smart Widget',
+    features: ['AI-powered', 'Cloud-connected', 'Mobile app'],
+    audience: 'Tech enthusiasts',
+    tone: 'Exciting and innovative',
+  },
+})
+```
+
+## Cost Optimization
+
+Reduce AI costs:
+
+```typescript
+// Use cost-effective models
+await ai.generate({
+  model: 'gpt-5-mini', // 5x cheaper than gpt-5
+  prompt: 'Simple classification task',
+})
+
+// Batch processing (50% cost savings)
+await ai.batch({
+  model: 'gpt-5',
+  items: largeDataset,
+  task: (item) => `Process: ${item}`,
+})
+
+// Caching
+await ai.generate({
+  model: 'gpt-5',
+  prompt: commonPrompt,
+  cache: '1h', // Cache result for 1 hour
+  cacheKey: 'prompt-hash',
+})
+
+// Token limits
+await ai.generate({
+  model: 'gpt-5',
+  prompt: '...',
+  maxTokens: 100, // Limit response length
+})
+```
+
+## Error Handling
+
+Handle AI errors gracefully:
+
+```typescript
+try {
+  const response = await ai.generate({
+    model: 'gpt-5',
+    prompt: userPrompt,
+  })
+} catch (error) {
+  if (error.code === 'RATE_LIMIT_EXCEEDED') {
+    // Implement exponential backoff
+    await delay(5000)
+    return ai.generate({ model: 'gpt-5', prompt: userPrompt })
+  }
+
+  if (error.code === 'CONTENT_FILTER') {
+    // Prompt triggered content filter
+    return 'Unable to generate response for this request'
+  }
+
+  if (error.code === 'MODEL_OVERLOADED') {
+    // Fallback to different model
+    return ai.generate({ model: 'gpt-5-mini', prompt: userPrompt })
+  }
+
+  throw error
+}
+```
+
+## Monitoring & Observability
+
+Track AI usage:
+
+```typescript
+// Built-in metrics
+await ai.generate({
+  model: 'gpt-5',
+  prompt: '...',
+  metadata: {
+    userId: 'user_123',
+    feature: 'email-assistant',
+    environment: 'production',
+  },
+})
+
+// Automatic logging
+// - Tokens used
+// - Cost incurred
+// - Latency
+// - Success/failure
+// - Model version
+
+// Query metrics
+const metrics = await $.Metric.query({
+  service: 'ai',
+  timeRange: 'last_30_days',
+  groupBy: ['model', 'feature'],
+})
+
+console.log(metrics)
+// {
+//   'gpt-5 email-assistant': { tokens: 1500000, cost: 45.00 },
+//   'gpt-5-mini chatbot': { tokens: 5000000, cost: 25.00 }
+// }
+```
+
+## Best Practices
+
+1. **Choose the right model**: Use `gpt-5-mini` for simple tasks, `gpt-5` for complex reasoning
+2. **Use schemas**: Ensure structured, predictable outputs
+3. **Implement caching**: Reduce costs for repeated queries
+4. **Stream when possible**: Better UX for long-form content
+5. **Handle errors**: Implement fallbacks and retries
+6. **Monitor usage**: Track costs and performance
+7. **Test prompts**: Iterate to improve quality
+8. **Set token limits**: Prevent runaway costs
+
+## Real-World Examples
+
+### Customer Support Bot
+
+```typescript
+on($.Support.ticket.created, async (event) => {
+  // Generate suggested response
+  const response = await ai.generate({
+    model: 'claude-sonnet-4.5',
+    prompt: `Generate a helpful response for this support ticket`,
+    context: {
+      ticket: event.data,
+      customerHistory: await db.list('Ticket', {
+        where: { customer: event.data.customerId },
+      }),
+      productDocs: await $.Search.query(event.data.subject),
+    },
+  })
+
+  // Create draft response
+  await db.update('Ticket', event.data.id, {
+    draftResponse: response,
+    status: '$.AwaitingReview',
+  })
+})
+```
+
+### Content Enrichment
+
+```typescript
+on($.Product.created, async (event) => {
+  // Generate SEO metadata
+  const seo = await ai.generate({
+    model: 'gpt-5',
+    schema: $.SEOMetadata,
+    prompt: `Generate SEO metadata for: ${event.data.name}`,
+  })
+
+  // Generate product tags
+  const tags = await ai.generate({
+    model: 'gpt-5-mini',
+    prompt: `Generate 5 relevant tags for this product`,
+    context: event.data,
+  })
+
+  // Update product
+  await db.update('Product', event.data.id, {
+    seo: seo,
+    tags: tags,
+  })
+})
+```
+
+## Next Steps
+
+- [Complete AI API Reference](/docs/api-reference/sdk/ai.mdx)
+- [AI Examples](/docs/EXAMPLES#ai-examples)
+- [AI Providers Guide](/docs/ai-providers.mdx)
+- [Cost Optimization](/docs/ai-cost-optimization.mdx)
+
+---
+
+**Need help?** Ask in [Discord](https://discord.gg/dotdo) or see [examples](/docs/EXAMPLES).

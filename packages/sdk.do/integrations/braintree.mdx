@@ -1,0 +1,560 @@
+---
+$id: https://integrations.do/braintree
+$type: Integration
+name: Braintree
+service: braintree
+description: Payment processing platform with fraud protection (PayPal owned)
+category: payments
+sdkBased: true
+sdkPackage: 'braintree'
+sdkVersion: ^3.0.0
+sdkImport: BraintreeGateway
+
+auth:
+  type: api-key
+  location: header
+  headerName: Authorization
+  scheme: Basic
+
+resources:
+  - name: Transaction
+    plural: Transactions
+    description: Process payment transactions
+    operations:
+      - name: create
+        method: POST
+        path: /transactions
+        params:
+          - name: amount
+            type: string
+            required: true
+            description: Transaction amount
+          - name: payment_method_nonce
+            type: string
+            required: true
+            description: Payment method nonce from client
+          - name: customer_id
+            type: string
+            required: false
+            description: Customer ID
+          - name: options
+            type: object
+            required: false
+            description: Transaction options
+        returns: Transaction
+
+      - name: get
+        method: GET
+        path: /transactions/{transaction_id}
+        params:
+          - name: transaction_id
+            type: string
+            required: true
+            description: Transaction ID
+        returns: Transaction
+
+      - name: list
+        method: GET
+        path: /transactions/advanced_search
+        params:
+          - name: query
+            type: object
+            required: false
+            description: Search criteria
+        returns: Transaction[]
+
+      - name: refund
+        method: POST
+        path: /transactions/{transaction_id}/refund
+        params:
+          - name: transaction_id
+            type: string
+            required: true
+            description: Transaction ID
+          - name: amount
+            type: string
+            required: false
+            description: Refund amount
+        returns: Transaction
+
+  - name: Customer
+    plural: Customers
+    description: Manage customer profiles
+    operations:
+      - name: create
+        method: POST
+        path: /customers
+        params:
+          - name: first_name
+            type: string
+            required: false
+            description: Customer first name
+          - name: last_name
+            type: string
+            required: false
+            description: Customer last name
+          - name: email
+            type: string
+            required: false
+            description: Customer email
+          - name: phone
+            type: string
+            required: false
+            description: Customer phone
+        returns: Customer
+
+      - name: get
+        method: GET
+        path: /customers/{customer_id}
+        params:
+          - name: customer_id
+            type: string
+            required: true
+            description: Customer ID
+        returns: Customer
+
+      - name: update
+        method: PUT
+        path: /customers/{customer_id}
+        params:
+          - name: customer_id
+            type: string
+            required: true
+            description: Customer ID
+          - name: first_name
+            type: string
+            required: false
+            description: Updated first name
+          - name: email
+            type: string
+            required: false
+            description: Updated email
+        returns: Customer
+
+      - name: delete
+        method: DELETE
+        path: /customers/{customer_id}
+        params:
+          - name: customer_id
+            type: string
+            required: true
+            description: Customer ID
+        returns: boolean
+
+  - name: Subscription
+    plural: Subscriptions
+    description: Manage recurring subscriptions
+    operations:
+      - name: create
+        method: POST
+        path: /subscriptions
+        params:
+          - name: plan_id
+            type: string
+            required: true
+            description: Subscription plan ID
+          - name: payment_method_token
+            type: string
+            required: true
+            description: Payment method token
+          - name: price
+            type: string
+            required: false
+            description: Subscription price
+        returns: Subscription
+
+      - name: get
+        method: GET
+        path: /subscriptions/{subscription_id}
+        params:
+          - name: subscription_id
+            type: string
+            required: true
+            description: Subscription ID
+        returns: Subscription
+
+      - name: update
+        method: PUT
+        path: /subscriptions/{subscription_id}
+        params:
+          - name: subscription_id
+            type: string
+            required: true
+            description: Subscription ID
+          - name: price
+            type: string
+            required: false
+            description: Updated price
+        returns: Subscription
+
+      - name: cancel
+        method: DELETE
+        path: /subscriptions/{subscription_id}
+        params:
+          - name: subscription_id
+            type: string
+            required: true
+            description: Subscription ID
+        returns: boolean
+
+  - name: Plan
+    plural: Plans
+    description: Manage subscription plans
+    operations:
+      - name: list
+        method: GET
+        path: /plans
+        params: []
+        returns: Plan[]
+
+      - name: get
+        method: GET
+        path: /plans/{plan_id}
+        params:
+          - name: plan_id
+            type: string
+            required: true
+            description: Plan ID
+        returns: Plan
+
+webhooks:
+  enabled: true
+  signatureHeader: bt_signature
+  signatureAlgorithm: sha256
+  verificationMethod: signature
+  events:
+    - name: subscription.charged_successfully
+      type: subscription_charged_successfully
+      description: Subscription charged successfully
+    - name: subscription.charged_unsuccessfully
+      type: subscription_charged_unsuccessfully
+      description: Subscription charge failed
+    - name: subscription.canceled
+      type: subscription_canceled
+      description: Subscription was canceled
+    - name: subscription.expired
+      type: subscription_expired
+      description: Subscription expired
+    - name: subscription.went_active
+      type: subscription_went_active
+      description: Subscription became active
+    - name: subscription.went_past_due
+      type: subscription_went_past_due
+      description: Subscription went past due
+    - name: transaction.settled
+      type: transaction_settled
+      description: Transaction was settled
+    - name: transaction.settlement_declined
+      type: transaction_settlement_declined
+      description: Transaction settlement declined
+
+errors:
+  mapping:
+    - code: authentication_error
+      type: authentication
+      statusCode: 401
+      message: Authentication failed
+      retryable: false
+    - code: authorization_error
+      type: authorization
+      statusCode: 403
+      message: Not authorized
+      retryable: false
+    - code: not_found
+      type: not_found
+      statusCode: 404
+      message: Resource not found
+      retryable: false
+    - code: validation_error
+      type: validation
+      statusCode: 422
+      message: Validation failed
+      retryable: false
+    - code: rate_limit_error
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+    - code: server_error
+      type: server
+      statusCode: 500
+      message: Internal server error
+      retryable: true
+  retryable: [rate_limit_error, server_error, 429, 500, 503]
+  nonRetryable: [authentication_error, authorization_error, not_found, validation_error, 401, 403, 404, 422]
+
+tests:
+  enabled: true
+  cleanup: true
+  scenarios:
+    - name: Transaction Processing
+      description: Test transaction operations
+      steps:
+        - action: create
+          resource: Transaction
+        - action: retrieve
+          resource: Transaction
+        - action: list
+          resource: Transaction
+        - action: custom
+          resource: Transaction
+
+    - name: Customer Management
+      description: Test customer CRUD operations
+      steps:
+        - action: create
+          resource: Customer
+        - action: retrieve
+          resource: Customer
+        - action: update
+          resource: Customer
+        - action: delete
+          resource: Customer
+
+    - name: Subscription Management
+      description: Test subscription operations
+      steps:
+        - action: create
+          resource: Subscription
+        - action: retrieve
+          resource: Subscription
+        - action: update
+          resource: Subscription
+        - action: custom
+          resource: Subscription
+
+    - name: Plan Operations
+      description: Test plan retrieval
+      steps:
+        - action: list
+          resource: Plan
+        - action: retrieve
+          resource: Plan
+
+    - name: Webhook Verification
+      description: Test webhook signature verification
+      steps:
+        - action: assert
+          expects:
+            status: 200
+
+docs:
+  homepage: https://www.braintreepayments.com
+  apiDocs: https://developer.paypal.com/braintree/docs/
+  sdkDocs: https://github.com/braintree/braintree_node
+  guides:
+    quickstart: https://developer.paypal.com/braintree/docs/start/hello-server/node/
+    webhooks: https://developer.paypal.com/braintree/docs/reference/general/webhooks/overview
+    authentication: https://developer.paypal.com/braintree/docs/guides/authorization/overview
+---
+
+# Braintree Integration
+
+Braintree is a full-stack payment platform owned by PayPal, offering payment processing with advanced fraud protection.
+
+## Features
+
+- **Transactions**: Process one-time and recurring payments
+- **Customers**: Store customer information and payment methods
+- **Subscriptions**: Manage recurring billing
+- **Plans**: Define subscription plans
+- **Fraud Protection**: Advanced fraud detection tools
+- **Webhooks**: Real-time event notifications
+
+## Quick Start
+
+```typescript
+import { BraintreeClient } from '@dotdo/sdk.do/integrations/braintree'
+
+const braintree = new BraintreeClient({
+  environment: 'sandbox', // or 'production'
+  merchantId: process.env.BRAINTREE_MERCHANT_ID,
+  publicKey: process.env.BRAINTREE_PUBLIC_KEY,
+  privateKey: process.env.BRAINTREE_PRIVATE_KEY,
+})
+
+// Create a transaction
+const transaction = await braintree.transaction.create({
+  amount: '100.00',
+  payment_method_nonce: 'nonce-from-client',
+  options: {
+    submitForSettlement: true,
+  },
+})
+```
+
+## Authentication
+
+Braintree uses API key authentication with public/private key pairs:
+
+```bash
+export BRAINTREE_MERCHANT_ID=your_merchant_id
+export BRAINTREE_PUBLIC_KEY=your_public_key
+export BRAINTREE_PRIVATE_KEY=your_private_key
+```
+
+## Resources
+
+### Transactions
+
+Process payments:
+
+```typescript
+// Create transaction
+const transaction = await braintree.transaction.create({
+  amount: '50.00',
+  payment_method_nonce: 'nonce_from_client',
+  customer_id: 'customer_123',
+  options: {
+    submitForSettlement: true,
+    storeInVaultOnSuccess: true,
+  },
+})
+
+// Get transaction
+const transaction = await braintree.transaction.get({
+  transaction_id: 'txn_123',
+})
+
+// Search transactions
+const transactions = await braintree.transaction.list({
+  query: {
+    amount: { min: '10.00', max: '100.00' },
+  },
+})
+
+// Refund transaction
+const refund = await braintree.transaction.refund({
+  transaction_id: 'txn_123',
+  amount: '25.00',
+})
+```
+
+### Customers
+
+Manage customers:
+
+```typescript
+// Create customer
+const customer = await braintree.customer.create({
+  first_name: 'John',
+  last_name: 'Doe',
+  email: 'john@example.com',
+  phone: '555-1234',
+})
+
+// Get customer
+const customer = await braintree.customer.get({
+  customer_id: 'customer_123',
+})
+
+// Update customer
+await braintree.customer.update({
+  customer_id: 'customer_123',
+  email: 'newemail@example.com',
+})
+
+// Delete customer
+await braintree.customer.delete({
+  customer_id: 'customer_123',
+})
+```
+
+### Subscriptions
+
+Manage subscriptions:
+
+```typescript
+// Create subscription
+const subscription = await braintree.subscription.create({
+  plan_id: 'plan_123',
+  payment_method_token: 'token_123',
+  price: '29.99',
+})
+
+// Get subscription
+const subscription = await braintree.subscription.get({
+  subscription_id: 'sub_123',
+})
+
+// Update subscription
+await braintree.subscription.update({
+  subscription_id: 'sub_123',
+  price: '39.99',
+})
+
+// Cancel subscription
+await braintree.subscription.cancel({
+  subscription_id: 'sub_123',
+})
+```
+
+### Plans
+
+Retrieve plans:
+
+```typescript
+// List all plans
+const plans = await braintree.plan.list()
+
+// Get specific plan
+const plan = await braintree.plan.get({ plan_id: 'plan_123' })
+```
+
+## Webhooks
+
+Braintree supports webhooks with signature verification:
+
+```typescript
+import { BraintreeWebhookHandler, WebhookEventRouter } from '@dotdo/sdk.do/integrations/braintree'
+
+const handler = new BraintreeWebhookHandler(process.env.BRAINTREE_MERCHANT_ID, process.env.BRAINTREE_PUBLIC_KEY, process.env.BRAINTREE_PRIVATE_KEY)
+const event = await handler.handleRequest(request)
+
+const router = new WebhookEventRouter()
+router.onSubscriptionChargedSuccessfully(async (event) => {
+  console.log('Subscription charged:', event.data)
+})
+
+router.onTransactionSettled(async (event) => {
+  console.log('Transaction settled:', event.data)
+})
+
+await router.route(event)
+```
+
+## Error Handling
+
+```typescript
+import { BraintreeError } from '@dotdo/sdk.do/integrations/braintree'
+
+try {
+  await braintree.transaction.create({
+    /* ... */
+  })
+} catch (error) {
+  if (error instanceof BraintreeError) {
+    console.error('Braintree Error:', error.code, error.message)
+    if (error.isRetriable()) {
+      // Retry logic
+    }
+  }
+}
+```
+
+## Best Practices
+
+1. **Payment Nonces**: Nonces are one-time use and expire after 3 hours
+2. **Vault**: Store payment methods in the vault for recurring charges
+3. **Submit for Settlement**: Set this option to automatically settle transactions
+4. **Fraud Tools**: Enable Kount and Advanced Fraud Tools
+5. **Webhooks**: Use webhooks for subscription status updates
+6. **Testing**: Use test nonces in sandbox environment
+
+## API Reference
+
+Full API documentation: https://developer.paypal.com/braintree/docs/
+
+## License
+
+MIT

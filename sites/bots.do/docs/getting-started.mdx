@@ -1,0 +1,492 @@
+---
+$id: https://bots.do/docs/getting-started
+$type: TechArticle
+title: Getting Started with bots.do
+description: Learn how to create your first digital worker bot with the bots.do framework. Complete setup guide with examples.
+keywords: [bots, getting started, tutorial, setup, digital workers, automation]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Getting Started with bots.do
+
+This guide will help you create your first digital worker bot using the bots.do framework.
+
+## Prerequisites
+
+Before you begin, ensure you have:
+
+- Node.js 18 or later installed
+- A `.do` platform account
+- Basic understanding of TypeScript
+- API keys for any services your bot will integrate with
+
+## Installation
+
+Install the SDK:
+
+```bash
+pnpm add sdk.do
+```
+
+For TypeScript projects, types are included automatically.
+
+## Your First Bot
+
+Let's create a simple bot that monitors a queue and processes tasks.
+
+### Step 1: Import Dependencies
+
+```typescript
+import $, { bot, on, send } from 'sdk.do'
+```
+
+### Step 2: Define Your Bot
+
+```typescript
+const taskBot = await bot.create({
+  $type: 'Bot',
+  name: 'Task Processor Bot',
+  task: 'Process tasks from queue',
+  capabilities: ['task_processing', 'status_updates'],
+  model: 'gpt-5-mini',
+})
+```
+
+### Step 3: Configure Bot Behavior
+
+```typescript
+await taskBot.configure({
+  concurrency: 3, // Process 3 tasks simultaneously
+  batchSize: 10, // Fetch 10 tasks at a time
+  retryPolicy: {
+    attempts: 3,
+    backoff: 'exponential',
+  },
+  monitoring: {
+    logLevel: 'info',
+    metricsEnabled: true,
+  },
+})
+```
+
+### Step 4: Add Task Processing Logic
+
+```typescript
+// Define what the bot does with each task
+taskBot.onTask(async (task) => {
+  console.log(`Processing task: ${task.id}`)
+
+  try {
+    // Execute the task
+    const result = await executeTask(task)
+
+    // Send success event
+    await send($.Task.completed, {
+      taskId: task.id,
+      result: result,
+    })
+
+    return { success: true, result }
+  } catch (error) {
+    // Handle errors
+    await send($.Task.failed, {
+      taskId: task.id,
+      error: error.message,
+    })
+
+    throw error
+  }
+})
+
+// Helper function
+async function executeTask(task) {
+  // Your task processing logic here
+  switch (task.type) {
+    case 'send_email':
+      return await sendEmail(task.data)
+    case 'process_data':
+      return await processData(task.data)
+    default:
+      throw new Error(`Unknown task type: ${task.type}`)
+  }
+}
+```
+
+### Step 5: Start Your Bot
+
+```typescript
+// Start the bot
+await taskBot.start()
+
+console.log('Bot is running and processing tasks!')
+
+// The bot will now automatically:
+// 1. Listen for new tasks
+// 2. Process them according to your logic
+// 3. Send completion/failure events
+// 4. Handle retries on failures
+```
+
+## Complete Example
+
+Here's the complete code for a working bot:
+
+```typescript
+import $, { bot, on, send } from 'sdk.do'
+
+async function main() {
+  // Create bot
+  const taskBot = await bot.create({
+    $type: 'Bot',
+    name: 'Task Processor Bot',
+    task: 'Process tasks from queue',
+    capabilities: ['task_processing', 'status_updates'],
+    model: 'gpt-5-mini',
+  })
+
+  // Configure bot
+  await taskBot.configure({
+    concurrency: 3,
+    batchSize: 10,
+    retryPolicy: {
+      attempts: 3,
+      backoff: 'exponential',
+    },
+  })
+
+  // Define task handler
+  taskBot.onTask(async (task) => {
+    console.log(`Processing: ${task.id}`)
+
+    // Process the task
+    const result = await processTask(task)
+
+    // Notify completion
+    await send($.Task.completed, {
+      taskId: task.id,
+      result,
+    })
+
+    return result
+  })
+
+  // Start bot
+  await taskBot.start()
+
+  console.log('Bot started successfully!')
+}
+
+async function processTask(task) {
+  // Your task processing logic
+  return { status: 'completed', data: task.data }
+}
+
+main().catch(console.error)
+```
+
+## Event-Driven Bots
+
+Create bots that respond to events:
+
+```typescript
+import $, { bot, on } from 'sdk.do'
+
+// Create an event-driven bot
+const emailBot = await bot.create({
+  $type: 'Bot',
+  name: 'Email Notification Bot',
+  task: 'Send email notifications',
+  capabilities: ['email_sending', 'template_rendering'],
+})
+
+// Listen for order completion events
+await on($.Order.completed, async (order) => {
+  await emailBot.execute({
+    action: 'send_confirmation',
+    recipient: order.customer.email,
+    data: {
+      orderNumber: order.id,
+      items: order.items,
+      total: order.total,
+    },
+  })
+})
+
+// Listen for payment failure events
+await on($.Payment.failed, async (payment) => {
+  await emailBot.execute({
+    action: 'send_failure_notice',
+    recipient: payment.customer.email,
+    data: {
+      amount: payment.amount,
+      reason: payment.failureReason,
+    },
+  })
+})
+
+console.log('Event-driven bot is listening for events!')
+```
+
+## Scheduled Bots
+
+Create bots that run on a schedule:
+
+```typescript
+import $, { bot, every } from 'sdk.do'
+
+// Create a scheduled bot
+const reportBot = await bot.create({
+  $type: 'Bot',
+  name: 'Daily Report Bot',
+  task: 'Generate daily reports',
+  capabilities: ['data_analysis', 'report_generation'],
+})
+
+// Schedule the bot to run daily at 9 AM
+await every('0 9 * * *', async () => {
+  console.log('Generating daily report...')
+
+  const report = await reportBot.execute({
+    action: 'generate_report',
+    type: 'daily_summary',
+    date: new Date(),
+  })
+
+  console.log('Report generated:', report)
+})
+
+// Or use semantic schedule
+await every($.Daily, async () => {
+  await reportBot.execute({
+    action: 'generate_report',
+  })
+})
+```
+
+## Bot Intelligence Levels
+
+Choose the right intelligence level for your bot:
+
+### Rule-Based Bot
+
+Best for: Predictable, high-volume tasks
+
+```typescript
+const ruleBot = await bot.create({
+  $type: 'Bot',
+  name: 'Rule Bot',
+  intelligence: 'rules',
+  rules: [
+    {
+      if: { field: 'amount', operator: '>', value: 10000 },
+      then: { action: 'flag_for_review' },
+    },
+    {
+      if: { field: 'customer.vip', operator: '===', value: true },
+      then: { action: 'priority_processing' },
+    },
+  ],
+})
+```
+
+### AI-Powered Bot
+
+Best for: Complex, context-aware tasks
+
+```typescript
+const aiBot = await bot.create({
+  $type: 'Bot',
+  name: 'AI Bot',
+  intelligence: 'ai',
+  model: 'gpt-5-mini',
+  context: 'You are a customer support bot that helps users with their inquiries.',
+  capabilities: ['natural_language', 'sentiment_analysis'],
+})
+```
+
+### Hybrid Bot
+
+Best for: Balanced performance and flexibility
+
+```typescript
+const hybridBot = await bot.create({
+  $type: 'Bot',
+  name: 'Hybrid Bot',
+  intelligence: 'hybrid',
+  rules: [...], // Fast path for simple cases
+  model: 'gpt-5-mini', // AI for complex cases
+  fallback: 'ai' // When rules don't match, use AI
+})
+```
+
+## Error Handling
+
+Implement robust error handling:
+
+```typescript
+const bot = await bot.create({
+  $type: 'Bot',
+  name: 'Resilient Bot',
+  errorHandling: {
+    retry: {
+      attempts: 3,
+      backoff: 'exponential', // 1s, 2s, 4s
+      maxDelay: 30000, // 30 seconds max
+    },
+    onFailure: async (error, task) => {
+      // Log error
+      console.error(`Task ${task.id} failed:`, error)
+
+      // Send alert
+      await send($.Bot.error, {
+        botId: bot.id,
+        taskId: task.id,
+        error: error.message,
+        timestamp: new Date(),
+      })
+
+      // Optionally escalate to human
+      if (error.critical) {
+        await escalateToHuman(task, error)
+      }
+    },
+    deadLetterQueue: 'failed-tasks', // Move failed tasks here
+  },
+})
+```
+
+## Monitoring Your Bot
+
+Monitor bot performance:
+
+```typescript
+// Get bot status
+const status = await taskBot.getStatus()
+console.log('Bot Status:', status)
+// {
+//   state: 'running',
+//   tasksProcessed: 1543,
+//   successRate: 0.987,
+//   avgProcessingTime: 234,
+//   lastError: null,
+//   uptime: 3600000
+// }
+
+// Get detailed metrics
+const metrics = await taskBot.getMetrics({
+  period: 'last_hour',
+  metrics: ['throughput', 'latency', 'errors'],
+})
+
+// Get recent logs
+const logs = await taskBot.getLogs({
+  level: 'error',
+  limit: 10,
+})
+```
+
+## Next Steps
+
+Now that you've created your first bot, explore:
+
+- [Architecture](./architecture) - Learn about bot architecture and design
+- [Best Practices](./best-practices) - Bot development best practices
+- [API Reference](../api/) - Complete API documentation
+- [Examples](../examples/) - More real-world examples
+
+## Common Patterns
+
+### Queue Processing Bot
+
+```typescript
+const queueBot = await bot.create({
+  name: 'Queue Processor',
+  source: { type: 'queue', name: 'tasks' },
+  concurrency: 5,
+})
+```
+
+### Data Sync Bot
+
+```typescript
+const syncBot = await bot.create({
+  name: 'Data Sync Bot',
+  schedule: '*/15 * * * *', // Every 15 minutes
+  sources: ['crm', 'database'],
+  destination: 'warehouse',
+})
+```
+
+### Notification Bot
+
+```typescript
+const notifyBot = await bot.create({
+  name: 'Notification Bot',
+  triggers: [$.Order.completed, $.Payment.failed],
+  channels: ['email', 'slack', 'sms'],
+})
+```
+
+## Troubleshooting
+
+### Bot Won't Start
+
+Check:
+
+- API credentials are valid
+- Network connectivity to services
+- Bot configuration is correct
+
+```typescript
+// Debug mode
+await taskBot.start({ debug: true })
+```
+
+### High Error Rate
+
+Check:
+
+- External service availability
+- Rate limits
+- Data validation
+
+```typescript
+// Adjust retry policy
+await taskBot.configure({
+  retryPolicy: {
+    attempts: 5,
+    backoff: 'exponential',
+  },
+})
+```
+
+### Low Throughput
+
+Check:
+
+- Concurrency settings
+- Batch size
+- Processing time per task
+
+```typescript
+// Increase concurrency
+await taskBot.configure({
+  concurrency: 10,
+  batchSize: 50,
+})
+```
+
+## Support
+
+Need help? Check out:
+
+- [Troubleshooting Guide](./troubleshooting)
+- [API Reference](../api/)
+- [Community Forum](https://community.do)
+- [GitHub Issues](https://github.com/dot-do/platform/issues)
+
+---
+
+Ready to build more advanced bots? Continue to [Architecture](./architecture).

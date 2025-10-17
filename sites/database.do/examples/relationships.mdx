@@ -1,0 +1,758 @@
+---
+$id: https://database.do/examples/relationships
+$type: HowTo
+title: Semantic Relationships
+description: Working with semantic relationships between entities using predicates
+keywords: [relationships, semantic, predicates, graph, connections]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Semantic Relationships
+
+Learn how to work with semantic relationships between entities using predicates and the `$.Subject.predicate.Object` pattern.
+
+## Overview
+
+database.do uses GraphDL semantic patterns to define and query relationships between entities. Relationships are expressed as `$.Subject.predicate.Object` triples, enabling intuitive and type-safe graph operations.
+
+## Setup
+
+```typescript
+import $, { db } from 'sdk.do'
+import type { Business, Person, Brand, Product, Order } from 'schema.org.ai'
+```
+
+## Common Predicates
+
+### Ownership Relationships
+
+```typescript
+// Business owns Brand
+$.owns
+$.ownedBy // Reverse
+
+// Business owns Product
+$.owns
+$.manufacturer // Reverse
+```
+
+### Employment Relationships
+
+```typescript
+// Business employs Person
+$.employs
+$.worksFor // Reverse
+
+// Person manages Person
+$.manages
+$.managedBy // Reverse
+```
+
+### Service Relationships
+
+```typescript
+// Business serves Customer
+$.serves
+$.servedBy // Reverse
+
+// Business provides Service
+$.provides
+$.providedBy // Reverse
+```
+
+### Product Relationships
+
+```typescript
+// Business offers Product
+$.offers
+$.offeredBy // Reverse
+
+// Product hasPart Product
+$.hasPart
+$.isPartOf // Reverse
+```
+
+## Basic Relationships
+
+### Query Related Entities
+
+```typescript
+// Get a business
+const business = await db.get($.Business, 'biz_abc123')
+
+// Find all brands owned by the business
+const brands = await db.relate(business, $.owns, $.Brand)
+
+console.log(`Business owns ${brands.length} brands`)
+
+brands.forEach((brand) => {
+  console.log(`- ${brand.name}`)
+})
+```
+
+### Create Relationships
+
+Relationships are created when you reference entities:
+
+```typescript
+// Create a brand owned by a business
+const brand = await db.create($.Brand, {
+  $type: 'Brand',
+  name: 'Acme Cloud',
+  description: 'Cloud services brand',
+  manufacturer: {
+    $id: business.$id, // Creates $.owns relationship
+  },
+})
+
+// Verify relationship
+const brands = await db.relate(business, $.owns, $.Brand)
+console.log(`Business now owns ${brands.length} brands`)
+```
+
+### Explicit Relationship Creation
+
+```typescript
+// Create entities
+const business = await db.create($.Business, {
+  $type: 'Business',
+  name: 'Acme Corp',
+})
+
+const brand = await db.create($.Brand, {
+  $type: 'Brand',
+  name: 'Acme Cloud',
+})
+
+// Create relationship explicitly
+await db.relate(business, $.owns, brand)
+
+// Query relationship
+const brands = await db.relate(business, $.owns, $.Brand)
+console.log(`Business owns ${brands.length} brands`)
+```
+
+## Ownership Example
+
+Complete example showing ownership relationships:
+
+```typescript
+// Create a business
+const business = await db.create($.Business, {
+  $type: 'Business',
+  name: 'Acme Corporation',
+  industry: 'Technology',
+})
+
+// Create multiple brands
+const brand1 = await db.create($.Brand, {
+  $type: 'Brand',
+  name: 'Acme Cloud',
+  description: 'Cloud infrastructure platform',
+  manufacturer: {
+    $id: business.$id,
+  },
+})
+
+const brand2 = await db.create($.Brand, {
+  $type: 'Brand',
+  name: 'Acme Security',
+  description: 'Enterprise security solutions',
+  manufacturer: {
+    $id: business.$id,
+  },
+})
+
+// Query all brands owned by business
+const brands = await db.relate(business, $.owns, $.Brand)
+
+console.log(`${business.name} owns ${brands.length} brands:`)
+brands.forEach((brand) => {
+  console.log(`- ${brand.name}: ${brand.description}`)
+})
+
+// Reverse query - find business that owns a brand
+const owners = await db.relate(brand1, $.ownedBy, $.Business)
+console.log(`${brand1.name} is owned by ${owners[0].name}`)
+```
+
+## Employment Example
+
+Working with employment relationships:
+
+```typescript
+// Create a business
+const business = await db.create($.Business, {
+  $type: 'Business',
+  name: 'Acme Corporation',
+  industry: 'Technology',
+})
+
+// Create employees
+const ceo = await db.create($.Person, {
+  $type: 'Person',
+  givenName: 'Jane',
+  familyName: 'Smith',
+  jobTitle: 'Chief Executive Officer',
+  email: 'jane@acme.com',
+  worksFor: {
+    $id: business.$id,
+  },
+})
+
+const cto = await db.create($.Person, {
+  $type: 'Person',
+  givenName: 'John',
+  familyName: 'Doe',
+  jobTitle: 'Chief Technology Officer',
+  email: 'john@acme.com',
+  worksFor: {
+    $id: business.$id,
+  },
+})
+
+const engineer = await db.create($.Person, {
+  $type: 'Person',
+  givenName: 'Alice',
+  familyName: 'Johnson',
+  jobTitle: 'Senior Engineer',
+  email: 'alice@acme.com',
+  worksFor: {
+    $id: business.$id,
+  },
+})
+
+// Query all employees
+const employees = await db.relate(business, $.employs, $.Person)
+
+console.log(`${business.name} employs ${employees.length} people:`)
+employees.forEach((person) => {
+  console.log(`- ${person.givenName} ${person.familyName} (${person.jobTitle})`)
+})
+
+// Query by job title
+const engineers = await db.relate(business, $.employs, $.Person, {
+  where: {
+    jobTitle: { $contains: 'Engineer' },
+  },
+})
+
+console.log(`\nEngineers: ${engineers.length}`)
+
+// Reverse query - find employer
+const employer = await db.relate(engineer, $.worksFor, $.Business)
+console.log(`\n${engineer.givenName} works for ${employer[0].name}`)
+```
+
+## Product Catalog Example
+
+Building a product catalog with relationships:
+
+```typescript
+// Create business and brand
+const business = await db.create($.Business, {
+  $type: 'Business',
+  name: 'Acme Corporation',
+})
+
+const brand = await db.create($.Brand, {
+  $type: 'Brand',
+  name: 'Acme Cloud',
+  manufacturer: {
+    $id: business.$id,
+  },
+})
+
+// Create products
+const platform = await db.create($.Product, {
+  $type: 'Product',
+  name: 'Cloud Platform',
+  description: 'Scalable cloud infrastructure',
+  brand: {
+    $id: brand.$id,
+  },
+  manufacturer: {
+    $id: business.$id,
+  },
+  offers: {
+    $type: 'Offer',
+    price: '999.00',
+    priceCurrency: 'USD',
+  },
+})
+
+const security = await db.create($.Product, {
+  $type: 'Product',
+  name: 'Security Suite',
+  description: 'Enterprise security tools',
+  brand: {
+    $id: brand.$id,
+  },
+  manufacturer: {
+    $id: business.$id,
+  },
+  offers: {
+    $type: 'Offer',
+    price: '499.00',
+    priceCurrency: 'USD',
+  },
+})
+
+// Query products by brand
+const brandProducts = await db.relate(brand, $.hasProduct, $.Product)
+console.log(`${brand.name} has ${brandProducts.length} products`)
+
+// Query products by manufacturer
+const businessProducts = await db.relate(business, $.offers, $.Product)
+console.log(`${business.name} offers ${businessProducts.length} products`)
+
+// Query brand for a product
+const productBrand = await db.relate(platform, $.brand, $.Brand)
+console.log(`${platform.name} is branded as ${productBrand[0].name}`)
+```
+
+## Multi-Hop Relationships
+
+Query relationships across multiple hops:
+
+```typescript
+// Business -> Brand -> Product
+const business = await db.get($.Business, 'biz_abc123')
+
+// Get brands owned by business
+const brands = await db.relate(business, $.owns, $.Brand)
+
+// For each brand, get its products
+for (const brand of brands) {
+  const products = await db.relate(brand, $.hasProduct, $.Product)
+  console.log(`${brand.name}: ${products.length} products`)
+
+  products.forEach((product) => {
+    console.log(`  - ${product.name}`)
+  })
+}
+
+// Or use a single query with includes
+const brandsWithProducts = await db.relate(business, $.owns, $.Brand, {
+  include: ['products'],
+})
+```
+
+## Hierarchical Relationships
+
+Working with parent-child hierarchies:
+
+```typescript
+// Create parent organization
+const parent = await db.create($.Organization, {
+  $type: 'Organization',
+  name: 'Acme Global',
+  legalName: 'Acme Global Corporation',
+})
+
+// Create subsidiaries
+const subsidiary1 = await db.create($.Organization, {
+  $type: 'Organization',
+  name: 'Acme Americas',
+  parentOrganization: {
+    $id: parent.$id,
+  },
+})
+
+const subsidiary2 = await db.create($.Organization, {
+  $type: 'Organization',
+  name: 'Acme Europe',
+  parentOrganization: {
+    $id: parent.$id,
+  },
+})
+
+// Query subsidiaries
+const subsidiaries = await db.relate(parent, $.subOrganization, $.Organization)
+
+console.log(`${parent.name} has ${subsidiaries.length} subsidiaries:`)
+subsidiaries.forEach((sub) => {
+  console.log(`- ${sub.name}`)
+})
+
+// Reverse query - find parent
+const parentOrg = await db.relate(subsidiary1, $.parentOrganization, $.Organization)
+console.log(`${subsidiary1.name} is a subsidiary of ${parentOrg[0].name}`)
+```
+
+## Customer Relationships
+
+Managing customer relationships:
+
+```typescript
+// Create business
+const business = await db.create($.Business, {
+  $type: 'Business',
+  name: 'Acme Services',
+})
+
+// Create customers
+const customer1 = await db.create($.Person, {
+  $type: 'Person',
+  givenName: 'Robert',
+  familyName: 'Wilson',
+  email: 'robert@example.com',
+})
+
+const customer2 = await db.create($.Person, {
+  $type: 'Person',
+  givenName: 'Sarah',
+  familyName: 'Davis',
+  email: 'sarah@example.com',
+})
+
+// Create service relationships
+await db.relate(business, $.serves, customer1)
+await db.relate(business, $.serves, customer2)
+
+// Query customers
+const customers = await db.relate(business, $.serves, $.Person)
+console.log(`${business.name} serves ${customers.length} customers`)
+
+// Query with filters
+const recentCustomers = await db.relate(business, $.serves, $.Person, {
+  where: {
+    dateCreated: {
+      $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+  },
+})
+console.log(`Recent customers: ${recentCustomers.length}`)
+```
+
+## Order Relationships
+
+Complete order fulfillment with relationships:
+
+```typescript
+// Create entities
+const business = await db.get($.Business, 'biz_abc123')
+const customer = await db.get($.Person, 'person_xyz789')
+const product = await db.get($.Product, 'product_123')
+
+// Create order with relationships
+const order = await db.create($.Order, {
+  $type: 'Order',
+  orderNumber: 'ORD-2025-001',
+  orderStatus: 'https://schema.org/OrderProcessing',
+  orderDate: new Date().toISOString(),
+  customer: {
+    $id: customer.$id,
+  },
+  seller: {
+    $id: business.$id,
+  },
+  orderedItem: [
+    {
+      $type: 'OrderItem',
+      orderedItem: {
+        $id: product.$id,
+      },
+      orderQuantity: 2,
+    },
+  ],
+})
+
+// Query orders by customer
+const customerOrders = await db.relate(customer, $.hasOrder, $.Order, {
+  orderBy: {
+    orderDate: 'desc',
+  },
+})
+
+console.log(`${customer.givenName} has ${customerOrders.length} orders`)
+
+// Query orders by business
+const businessOrders = await db.relate(business, $.receivedOrder, $.Order, {
+  where: {
+    orderStatus: 'https://schema.org/OrderProcessing',
+  },
+})
+
+console.log(`${business.name} has ${businessOrders.length} pending orders`)
+
+// Query products in an order
+const orderProducts = await db.relate(order, $.orderedItem, $.Product)
+console.log(`Order contains ${orderProducts.length} products`)
+```
+
+## Management Hierarchy
+
+Building organizational hierarchies:
+
+```typescript
+// Create employees
+const ceo = await db.create($.Person, {
+  $type: 'Person',
+  givenName: 'Jane',
+  familyName: 'Smith',
+  jobTitle: 'CEO',
+})
+
+const vp1 = await db.create($.Person, {
+  $type: 'Person',
+  givenName: 'John',
+  familyName: 'Doe',
+  jobTitle: 'VP Engineering',
+  managedBy: {
+    $id: ceo.$id,
+  },
+})
+
+const vp2 = await db.create($.Person, {
+  $type: 'Person',
+  givenName: 'Alice',
+  familyName: 'Johnson',
+  jobTitle: 'VP Sales',
+  managedBy: {
+    $id: ceo.$id,
+  },
+})
+
+const engineer = await db.create($.Person, {
+  $type: 'Person',
+  givenName: 'Bob',
+  familyName: 'Brown',
+  jobTitle: 'Senior Engineer',
+  managedBy: {
+    $id: vp1.$id,
+  },
+})
+
+// Query direct reports
+const ceoReports = await db.relate(ceo, $.manages, $.Person)
+console.log(`${ceo.givenName} manages ${ceoReports.length} direct reports`)
+
+const vp1Reports = await db.relate(vp1, $.manages, $.Person)
+console.log(`${vp1.givenName} manages ${vp1Reports.length} people`)
+
+// Reverse query - find manager
+const manager = await db.relate(engineer, $.managedBy, $.Person)
+console.log(`${engineer.givenName} reports to ${manager[0].givenName}`)
+```
+
+## Relationship Queries with Filters
+
+Advanced relationship queries with filtering:
+
+```typescript
+const business = await db.get($.Business, 'biz_abc123')
+
+// Find senior engineers
+const seniorEngineers = await db.relate(business, $.employs, $.Person, {
+  where: {
+    jobTitle: { $contains: 'Senior' },
+    department: 'Engineering',
+  },
+})
+
+// Find recently hired employees
+const recentHires = await db.relate(business, $.employs, $.Person, {
+  where: {
+    dateHired: {
+      $gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+  },
+  orderBy: {
+    dateHired: 'desc',
+  },
+})
+
+// Find high-value customers
+const premiumCustomers = await db.relate(business, $.serves, $.Person, {
+  where: {
+    totalPurchases: { $gte: 10000 },
+  },
+})
+
+// Find products in specific price range
+const products = await db.relate(business, $.offers, $.Product, {
+  where: {
+    offers: {
+      price: { $gte: '100', $lte: '500' },
+    },
+  },
+})
+```
+
+## Reverse Relationships
+
+Query relationships in both directions:
+
+```typescript
+// Forward: Business owns Brand
+const business = await db.get($.Business, 'biz_abc123')
+const brands = await db.relate(business, $.owns, $.Brand)
+
+// Reverse: Brand owned by Business
+const brand = await db.get($.Brand, 'brand_xyz789')
+const owner = await db.relate(brand, $.ownedBy, $.Business)
+
+// Forward: Person works for Business
+const person = await db.get($.Person, 'person_123')
+const employer = await db.relate(person, $.worksFor, $.Business)
+
+// Reverse: Business employs Person
+const employees = await db.relate(employer[0], $.employs, $.Person)
+```
+
+## Complex Relationship Graph
+
+Building a complete business relationship graph:
+
+```typescript
+// Create business
+const business = await db.create($.Business, {
+  $type: 'Business',
+  name: 'Acme Corporation',
+  industry: 'Technology',
+})
+
+// Create brands
+const brand1 = await db.create($.Brand, {
+  $type: 'Brand',
+  name: 'Acme Cloud',
+  manufacturer: { $id: business.$id },
+})
+
+const brand2 = await db.create($.Brand, {
+  $type: 'Brand',
+  name: 'Acme Security',
+  manufacturer: { $id: business.$id },
+})
+
+// Create products for each brand
+const product1 = await db.create($.Product, {
+  $type: 'Product',
+  name: 'Cloud Platform',
+  brand: { $id: brand1.$id },
+  manufacturer: { $id: business.$id },
+})
+
+const product2 = await db.create($.Product, {
+  $type: 'Product',
+  name: 'Security Suite',
+  brand: { $id: brand2.$id },
+  manufacturer: { $id: business.$id },
+})
+
+// Create employees
+const ceo = await db.create($.Person, {
+  $type: 'Person',
+  givenName: 'Jane',
+  familyName: 'Smith',
+  jobTitle: 'CEO',
+  worksFor: { $id: business.$id },
+})
+
+const engineer = await db.create($.Person, {
+  $type: 'Person',
+  givenName: 'John',
+  familyName: 'Doe',
+  jobTitle: 'Engineer',
+  worksFor: { $id: business.$id },
+  managedBy: { $id: ceo.$id },
+})
+
+// Create customer and order
+const customer = await db.create($.Person, {
+  $type: 'Person',
+  givenName: 'Alice',
+  familyName: 'Wilson',
+  email: 'alice@example.com',
+})
+
+const order = await db.create($.Order, {
+  $type: 'Order',
+  orderNumber: 'ORD-001',
+  customer: { $id: customer.$id },
+  seller: { $id: business.$id },
+  orderedItem: [
+    {
+      $type: 'OrderItem',
+      orderedItem: { $id: product1.$id },
+      orderQuantity: 1,
+    },
+  ],
+})
+
+// Query the complete graph
+console.log('Business Graph:')
+console.log(`- ${business.name}`)
+
+const brands = await db.relate(business, $.owns, $.Brand)
+console.log(`  - Brands: ${brands.length}`)
+
+const products = await db.relate(business, $.offers, $.Product)
+console.log(`  - Products: ${products.length}`)
+
+const employees = await db.relate(business, $.employs, $.Person)
+console.log(`  - Employees: ${employees.length}`)
+
+const orders = await db.relate(business, $.receivedOrder, $.Order)
+console.log(`  - Orders: ${orders.length}`)
+```
+
+## Best Practices
+
+### Use Semantic Predicates
+
+```typescript
+// Good - semantic predicate
+const brands = await db.relate(business, $.owns, $.Brand)
+
+// Avoid - generic relationship
+const brands = await db.relate(business, 'owns', $.Brand)
+```
+
+### Always Specify Object Type
+
+```typescript
+// Good - type-safe
+const employees = await db.relate(business, $.employs, $.Person)
+
+// Avoid - untyped
+const employees = await db.relate(business, $.employs)
+```
+
+### Use Filters for Large Result Sets
+
+```typescript
+// Good - filtered query
+const activeEmployees = await db.relate(business, $.employs, $.Person, {
+  where: { status: 'active' },
+  limit: 100,
+})
+```
+
+### Handle Bidirectional Relationships
+
+```typescript
+// Create relationship in one direction
+const brand = await db.create($.Brand, {
+  $type: 'Brand',
+  manufacturer: { $id: business.$id },
+})
+
+// Query in both directions
+const forwardBrands = await db.relate(business, $.owns, $.Brand)
+const reverseOwner = await db.relate(brand, $.ownedBy, $.Business)
+```
+
+## See Also
+
+- [Operations Reference](../docs/operations) - Complete CRUD documentation
+- [Basic CRUD Example](./basic-crud) - CRUD operations
+- [Query Examples](./queries) - Advanced query patterns
+- [API Reference](../api/) - Full API documentation
+
+---
+
+Next: Explore [advanced query examples](./queries) for complex data retrieval patterns.

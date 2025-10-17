@@ -1,0 +1,101 @@
+---
+$id: https://integrations.do/tiktok
+$type: Integration
+name: Tiktok
+service: tiktok
+description: TikTok short-form video platform + creation tools + social sharing
+category: productivity
+sdkBased: false
+baseUrl: https://api.tiktok.com
+
+auth:
+  type: oauth2
+  authorizationUrl: https://www.tiktok.com/v2/auth/authorize
+  tokenUrl: https://open.tiktokapis.com/v2/oauth/token
+  scopes:
+    - user.info.basic
+    - user.info.profile
+    - user.info.stats
+    - video.list
+    - video.upload
+    - video.publish
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Tiktok actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: false
+  events: []
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://www.tiktok.com
+  apiDocs: https://www.tiktok.com
+---
+
+# Tiktok Integration
+
+TikTok short-form video platform + creation tools + social sharing
+
+## Quick Start
+
+```typescript
+import { TiktokClient } from '@dotdo/sdk.do/integrations/tiktok'
+
+const tiktok = new TiktokClient({
+  apiKey: process.env.TIKTOK_API_KEY,
+})
+
+const result = await tiktok.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Tiktok provides 9 actions through the Composio API.
+
+## License
+
+MIT

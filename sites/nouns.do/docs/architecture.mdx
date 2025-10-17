@@ -1,0 +1,699 @@
+---
+$id: https://nouns.do/docs/architecture
+$type: TechArticle
+title: nouns.do Architecture
+description: System design, patterns, and technical architecture of the nouns.do semantic entity type system
+keywords: [architecture, design, patterns, schema.org, type system, semantic web]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# nouns.do Architecture
+
+This document explains the technical architecture, design patterns, and implementation details of nouns.do.
+
+## System Overview
+
+nouns.do is a semantic entity type system built on three foundational technologies:
+
+1. **Schema.org Vocabulary** - 817+ standardized entity types
+2. **JSON-LD** - Linked data format for semantic interoperability
+3. **TypeScript** - Type-safe programming with full IDE support
+
+```
+┌─────────────────────────────────────────────┐
+│           Application Layer                  │
+│  (Your Business-as-Code Application)         │
+└────────────────┬────────────────────────────┘
+                 │
+┌────────────────▼────────────────────────────┐
+│           sdk.do ($ Proxy)                   │
+│  $.Person, $.Organization, $.Product, ...    │
+└────────────────┬────────────────────────────┘
+                 │
+┌────────────────▼────────────────────────────┐
+│         nouns.do Core                        │
+│  • Type Registry                             │
+│  • Validation Engine                         │
+│  • Type Resolution                           │
+│  • Schema Mapping                            │
+└────────────────┬────────────────────────────┘
+                 │
+┌────────────────▼────────────────────────────┐
+│       Schema.org Types                       │
+│  • Thing Hierarchy                           │
+│  • Property Definitions                      │
+│  • Type Relationships                        │
+└─────────────────────────────────────────────┘
+```
+
+## Core Components
+
+### 1. Type Registry
+
+The Type Registry maintains all entity type definitions:
+
+```typescript
+// Type registry structure
+interface TypeRegistry {
+  // All registered types
+  types: Map<string, TypeDefinition>
+
+  // Type hierarchy (parent-child relationships)
+  hierarchy: Map<string, string[]>
+
+  // Property definitions per type
+  properties: Map<string, PropertyDefinition[]>
+
+  // Custom type extensions
+  extensions: Map<string, TypeExtension>
+}
+
+// Type definition
+interface TypeDefinition {
+  $type: string // Type name (e.g., 'Person')
+  $id: string // Schema.org URL
+  label: string // Display name
+  description: string // Type description
+  parent: string // Parent type (e.g., 'Thing')
+  properties: Property[] // Allowed properties
+  subtypes: string[] // Child types
+}
+```
+
+**How it works**:
+
+```typescript
+import { registry } from 'nouns.do/core'
+
+// Get type definition
+const personType = registry.getType('Person')
+console.log(personType.parent) // 'Thing'
+console.log(personType.properties) // ['name', 'email', 'jobTitle', ...]
+
+// Get type hierarchy
+const subtypes = registry.getSubtypes('Organization')
+console.log(subtypes) // ['Corporation', 'LocalBusiness', 'NGO', ...]
+
+// Check type relationships
+registry.isSubtypeOf('Corporation', 'Organization') // true
+registry.isSubtypeOf('Person', 'Organization') // false
+```
+
+### 2. $ Semantic Proxy
+
+The `$` proxy provides runtime access to all entity types:
+
+```typescript
+// Proxy implementation (simplified)
+export const $ = new Proxy(
+  {},
+  {
+    get(target, prop: string) {
+      // Check if type exists
+      if (!registry.hasType(prop)) {
+        throw new Error(`Unknown type: ${prop}`)
+      }
+
+      // Return type reference
+      return {
+        $type: prop,
+        $schema: registry.getType(prop),
+
+        // Type metadata
+        $$typeof: Symbol.for('nouns.type'),
+        $$name: prop,
+        $$url: `https://schema.org/${prop}`,
+      }
+    },
+  }
+)
+
+// Usage
+$.Person // Returns PersonType reference
+$.Organization // Returns OrganizationType reference
+$.Product // Returns ProductType reference
+```
+
+**Type Resolution**:
+
+```typescript
+// Resolve type from string
+function resolveType(typeName: string): TypeReference {
+  return $[typeName]
+}
+
+// Resolve type from entity
+function getEntityType(entity: any): TypeDefinition {
+  if (!entity.$type) {
+    throw new Error('Entity missing $type property')
+  }
+  return registry.getType(entity.$type)
+}
+```
+
+### 3. Validation Engine
+
+The Validation Engine ensures entities conform to their types:
+
+```typescript
+// Validation implementation
+class EntityValidator {
+  validate(entity: any, type: TypeReference): ValidationResult {
+    const typeDef = registry.getType(type.$type)
+    const errors: ValidationError[] = []
+
+    // Check $type property
+    if (entity.$type !== type.$type) {
+      errors.push({
+        path: '$type',
+        message: `Expected ${type.$type}, got ${entity.$type}`,
+      })
+    }
+
+    // Validate properties
+    for (const [key, value] of Object.entries(entity)) {
+      if (key.startsWith('$')) continue // Skip metadata
+
+      const propDef = typeDef.properties.find((p) => p.name === key)
+
+      if (!propDef) {
+        errors.push({
+          path: key,
+          message: `Unknown property for type ${type.$type}`,
+        })
+        continue
+      }
+
+      // Validate property type
+      const propValid = this.validateProperty(value, propDef)
+      if (!propValid.valid) {
+        errors.push(...propValid.errors)
+      }
+    }
+
+    return {
+      valid: errors.length === 0,
+      errors,
+    }
+  }
+
+  validateProperty(value: any, propDef: PropertyDefinition): ValidationResult {
+    // Type checking based on property definition
+    // ...
+  }
+}
+```
+
+**Usage**:
+
+```typescript
+import { validate } from 'sdk.do'
+
+const person = {
+  $type: 'Person',
+  name: 'John Doe',
+  email: 'invalid-email', // Invalid format
+  age: 'thirty', // Should be number
+}
+
+const result = validate(person, $.Person)
+console.log(result.errors)
+// [
+//   { path: 'email', message: 'Invalid email format' },
+//   { path: 'age', message: 'Expected number, got string' }
+// ]
+```
+
+### 4. Schema Mapper
+
+The Schema Mapper converts between different representations:
+
+```typescript
+class SchemaMapper {
+  // Convert entity to JSON-LD
+  toJsonLD(entity: any): object {
+    return {
+      '@context': 'https://schema.org',
+      '@type': entity.$type,
+      '@id': entity.$id,
+      ...Object.entries(entity)
+        .filter(([key]) => !key.startsWith('$'))
+        .reduce((acc, [key, value]) => {
+          acc[key] = this.mapValue(value)
+          return acc
+        }, {}),
+    }
+  }
+
+  // Convert JSON-LD to entity
+  fromJsonLD(jsonld: any): object {
+    return {
+      $type: jsonld['@type'],
+      $id: jsonld['@id'],
+      ...Object.entries(jsonld)
+        .filter(([key]) => !key.startsWith('@'))
+        .reduce((acc, [key, value]) => {
+          acc[key] = this.unmapValue(value)
+          return acc
+        }, {}),
+    }
+  }
+
+  // Convert to TypeScript type
+  toTypeScript(typeName: string): string {
+    const typeDef = registry.getType(typeName)
+    return this.generateInterface(typeDef)
+  }
+}
+```
+
+**Usage**:
+
+```typescript
+import { mapper } from 'nouns.do/core'
+
+// Entity to JSON-LD
+const person = { $type: 'Person', name: 'John' }
+const jsonld = mapper.toJsonLD(person)
+console.log(jsonld)
+// {
+//   '@context': 'https://schema.org',
+//   '@type': 'Person',
+//   'name': 'John'
+// }
+
+// JSON-LD to entity
+const entity = mapper.fromJsonLD(jsonld)
+console.log(entity)
+// { $type: 'Person', name: 'John' }
+```
+
+## Type Hierarchy
+
+### Thing Base Type
+
+All Schema.org types inherit from `Thing`:
+
+```typescript
+interface Thing {
+  $id?: string // Unique identifier
+  $type: string // Type name
+  name?: string // Name of the thing
+  description?: string // Description
+  url?: string // URL
+  image?: string | ImageObject
+  identifier?: string // Alternative identifier
+  alternateName?: string // Alternate name
+  sameAs?: string // Related URL
+}
+```
+
+### Type Inheritance
+
+Types form a hierarchy through inheritance:
+
+```typescript
+// Thing (root)
+//   ├── Person
+//   │     ├── Patient
+//   │     └── ...
+//   ├── Organization
+//   │     ├── Corporation
+//   │     ├── LocalBusiness
+//   │     └── ...
+//   ├── CreativeWork
+//   │     ├── Article
+//   │     ├── Book
+//   │     └── ...
+//   └── ...
+
+// Implementation
+class TypeHierarchy {
+  getParent(type: string): string | null {
+    const typeDef = registry.getType(type)
+    return typeDef.parent
+  }
+
+  getAncestors(type: string): string[] {
+    const ancestors: string[] = []
+    let current = type
+
+    while (current !== 'Thing') {
+      const parent = this.getParent(current)
+      if (!parent) break
+      ancestors.push(parent)
+      current = parent
+    }
+
+    return ancestors
+  }
+
+  getChildren(type: string): string[] {
+    return registry.getSubtypes(type)
+  }
+
+  getDescendants(type: string): string[] {
+    const descendants: string[] = []
+    const queue = [type]
+
+    while (queue.length > 0) {
+      const current = queue.shift()!
+      const children = this.getChildren(current)
+      descendants.push(...children)
+      queue.push(...children)
+    }
+
+    return descendants
+  }
+}
+```
+
+### Property Inheritance
+
+Properties are inherited from parent types:
+
+```typescript
+// Person properties include Thing properties
+interface Person extends Thing {
+  $type: 'Person'
+  givenName?: string
+  familyName?: string
+  email?: string
+  telephone?: string
+  // ... plus all Thing properties
+}
+
+// Implementation
+function getTypeProperties(type: string): Property[] {
+  const properties: Property[] = []
+  const ancestors = hierarchy.getAncestors(type)
+
+  // Add properties from all ancestors
+  for (const ancestor of [type, ...ancestors]) {
+    const typeDef = registry.getType(ancestor)
+    properties.push(...typeDef.properties)
+  }
+
+  return properties
+}
+```
+
+## Database Integration
+
+### Storage Schema
+
+Entities are stored with type information:
+
+```sql
+-- Entities table
+CREATE TABLE entities (
+  id UUID PRIMARY KEY,
+  type VARCHAR(255) NOT NULL,
+  data JSONB NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Type index for fast queries
+CREATE INDEX idx_entities_type ON entities(type);
+
+-- Property indexes (generated per type)
+CREATE INDEX idx_entities_person_email ON entities((data->>'email'))
+  WHERE type = 'Person';
+
+CREATE INDEX idx_entities_org_industry ON entities((data->>'industry'))
+  WHERE type = 'Organization';
+```
+
+### Query Optimization
+
+Type-aware query optimization:
+
+```typescript
+class TypedQuery {
+  async list(type: TypeReference, options?: QueryOptions) {
+    const typeDef = registry.getType(type.$type)
+
+    // Include subtypes in query
+    const types = [type.$type, ...registry.getSubtypes(type.$type)]
+
+    // Build query
+    const query = db.query(`
+      SELECT * FROM entities
+      WHERE type IN (${types.join(',')})
+      ${this.buildWhereClause(options?.where)}
+      ${this.buildOrderClause(options?.orderBy)}
+      LIMIT ${options?.limit || 100}
+    `)
+
+    // Execute and map results
+    const rows = await query.execute()
+    return rows.map((row) => this.mapToEntity(row, type))
+  }
+}
+```
+
+## Performance Optimizations
+
+### 1. Type Caching
+
+Cache type definitions for fast access:
+
+```typescript
+class TypeCache {
+  private cache = new Map<string, TypeDefinition>()
+  private ttl = 3600 // 1 hour
+
+  get(type: string): TypeDefinition | null {
+    const cached = this.cache.get(type)
+    if (cached && Date.now() - cached.timestamp < this.ttl) {
+      return cached.value
+    }
+    return null
+  }
+
+  set(type: string, definition: TypeDefinition): void {
+    this.cache.set(type, {
+      value: definition,
+      timestamp: Date.now(),
+    })
+  }
+}
+```
+
+### 2. Property Validation Caching
+
+Cache validation rules per type:
+
+```typescript
+class ValidationCache {
+  private rules = new Map<string, ValidationRules>()
+
+  getRules(type: string): ValidationRules {
+    if (!this.rules.has(type)) {
+      this.rules.set(type, this.buildRules(type))
+    }
+    return this.rules.get(type)!
+  }
+
+  buildRules(type: string): ValidationRules {
+    const typeDef = registry.getType(type)
+    // Build validation rules once
+    // ...
+  }
+}
+```
+
+### 3. Lazy Type Loading
+
+Load type definitions on demand:
+
+```typescript
+class LazyTypeLoader {
+  private loaded = new Set<string>()
+
+  async ensureLoaded(type: string): Promise<void> {
+    if (this.loaded.has(type)) return
+
+    // Load type definition
+    const definition = await this.loadTypeDefinition(type)
+    registry.register(type, definition)
+    this.loaded.add(type)
+
+    // Load parent types
+    if (definition.parent) {
+      await this.ensureLoaded(definition.parent)
+    }
+  }
+}
+```
+
+## Extension Points
+
+### Custom Type Registration
+
+Register domain-specific types:
+
+```typescript
+import { registry } from 'nouns.do/core'
+
+// Register custom type
+registry.registerType({
+  $type: 'Lead',
+  $id: 'https://example.com/types/Lead',
+  label: 'Sales Lead',
+  description: 'A potential customer',
+  parent: 'Person',
+  properties: [
+    {
+      name: 'leadSource',
+      type: 'string',
+      description: 'How the lead was acquired',
+    },
+    {
+      name: 'leadScore',
+      type: 'number',
+      description: 'Lead quality score',
+    },
+    {
+      name: 'leadStatus',
+      type: 'string',
+      enum: ['New', 'Qualified', 'Converted', 'Lost'],
+    },
+  ],
+})
+
+// Use custom type
+const lead = await db.create($.Lead, {
+  $type: 'Lead',
+  name: 'Potential Customer',
+  email: 'customer@example.com',
+  leadSource: 'Website',
+  leadScore: 85,
+  leadStatus: 'Qualified',
+})
+```
+
+### Custom Validators
+
+Add custom validation logic:
+
+```typescript
+import { validator } from 'nouns.do/core'
+
+// Register custom validator
+validator.registerValidator('Person', 'email', (value) => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!emailRegex.test(value)) {
+    return { valid: false, message: 'Invalid email format' }
+  }
+  return { valid: true }
+})
+
+// Register business rule validator
+validator.registerValidator('Organization', 'taxID', async (value) => {
+  const exists = await checkTaxIDExists(value)
+  if (exists) {
+    return { valid: false, message: 'Tax ID already registered' }
+  }
+  return { valid: true }
+})
+```
+
+### Custom Property Types
+
+Define custom property types:
+
+```typescript
+import { registry } from 'nouns.do/core'
+
+// Register custom property type
+registry.registerPropertyType('PhoneNumber', {
+  validate: (value: string) => {
+    return /^\+?[1-9]\d{1,14}$/.test(value)
+  },
+  format: (value: string) => {
+    return value.replace(/\D/g, '')
+  },
+  serialize: (value: string) => value,
+  deserialize: (value: string) => value,
+})
+
+// Use in type definition
+registry.updateType('Person', {
+  properties: [
+    {
+      name: 'telephone',
+      type: 'PhoneNumber', // Custom type
+    },
+  ],
+})
+```
+
+## Best Practices
+
+### 1. Use Type Hierarchies
+
+Leverage inheritance for code reuse:
+
+```typescript
+// Define base type
+interface Employee extends Person {
+  $type: 'Employee'
+  employeeId: string
+  department: string
+  hireDate: string
+}
+
+// Extend further
+interface Manager extends Employee {
+  $type: 'Manager'
+  teamSize: number
+  reports: Employee[]
+}
+```
+
+### 2. Validate Early
+
+Validate entities before storage:
+
+```typescript
+async function createEntity(type: TypeReference, data: any) {
+  // Validate first
+  const validation = validate(data, type)
+  if (!validation.valid) {
+    throw new ValidationError(validation.errors)
+  }
+
+  // Then create
+  return await db.create(type, data)
+}
+```
+
+### 3. Cache Type Metadata
+
+Cache frequently used type information:
+
+```typescript
+const typeCache = new Map<string, TypeDefinition>()
+
+function getCachedType(type: string): TypeDefinition {
+  if (!typeCache.has(type)) {
+    typeCache.set(type, registry.getType(type))
+  }
+  return typeCache.get(type)!
+}
+```
+
+## Related Documentation
+
+- [Getting Started](./getting-started) - Basic usage guide
+- [Best Practices](./best-practices) - Recommended patterns
+- [API Reference](../api/reference) - Complete API docs
+- [Troubleshooting](./troubleshooting) - Common issues
+
+---
+
+**Next**: Learn [Best Practices](./best-practices) for working with entity types.

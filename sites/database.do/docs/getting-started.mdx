@@ -1,0 +1,448 @@
+---
+$id: https://database.do/docs/getting-started
+$type: TechArticle
+title: Getting Started with database.do
+description: Learn how to install and use database.do for semantic database operations
+keywords: [database, getting-started, installation, quickstart, tutorial]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Getting Started
+
+Learn how to install and use database.do for semantic database operations in your Business-as-Code applications.
+
+## Installation
+
+Install the SDK using pnpm:
+
+```bash
+pnpm add sdk.do
+```
+
+Or using npm:
+
+```bash
+npm install sdk.do
+```
+
+## Authentication
+
+database.do uses the `.do` platform's authentication system. Set your API token:
+
+```bash
+export DO_TOKEN="your-api-token"
+```
+
+Or pass it programmatically:
+
+```typescript
+import { create$ } from 'sdk.do'
+
+const $ = create$({
+  apiKey: 'your-api-token',
+})
+
+const { db } = $
+```
+
+## Basic Usage
+
+### Import the Database Service
+
+```typescript
+import $, { db } from 'sdk.do'
+
+// The $ proxy provides semantic types
+// The db service provides database operations
+```
+
+### Your First Query
+
+Let's query for businesses in the Technology industry:
+
+```typescript
+// List all technology businesses
+const businesses = await db.list($.Business, {
+  where: {
+    industry: 'Technology',
+  },
+})
+
+console.log(`Found ${businesses.length} technology businesses`)
+```
+
+### Create Your First Entity
+
+Create a new business entity:
+
+```typescript
+const newBusiness = await db.create($.Business, {
+  $type: 'Business',
+  name: 'Acme Corporation',
+  industry: 'Technology',
+  description: 'Leading provider of innovative solutions',
+  foundingDate: '2025-01-15',
+  address: {
+    $type: 'PostalAddress',
+    streetAddress: '123 Main Street',
+    addressLocality: 'San Francisco',
+    addressRegion: 'CA',
+    postalCode: '94105',
+    addressCountry: 'US',
+  },
+})
+
+console.log('Created business:', newBusiness.$id)
+```
+
+### Retrieve an Entity
+
+Get a specific business by ID:
+
+```typescript
+const business = await db.get($.Business, 'biz_abc123')
+
+console.log('Business name:', business.name)
+console.log('Industry:', business.industry)
+```
+
+### Update an Entity
+
+Modify an existing business:
+
+```typescript
+await db.update($.Business, 'biz_abc123', {
+  industry: 'Software',
+  description: 'Updated description',
+})
+
+console.log('Business updated')
+```
+
+### Delete an Entity
+
+Remove a business:
+
+```typescript
+await db.delete($.Business, 'biz_abc123')
+
+console.log('Business deleted')
+```
+
+## Understanding Semantic Types
+
+database.do uses the `$` proxy to provide semantic types based on Schema.org:
+
+```typescript
+// Entity types
+$.Business // Organization type
+$.Person // Person type
+$.Product // Product type
+$.Order // Order type
+
+// Relationship predicates
+$.owns // Ownership relationship
+$.employs // Employment relationship
+$.serves // Service relationship
+$.offers // Product/service offering
+```
+
+These types provide:
+
+- **Type safety** - TypeScript autocomplete and validation
+- **Semantic clarity** - Self-documenting code
+- **AI understanding** - AI agents can reason about the data
+
+## Working with Relationships
+
+Query semantic relationships between entities:
+
+```typescript
+// Get a business
+const business = await db.get($.Business, 'biz_abc123')
+
+// Find all brands owned by the business
+const brands = await db.relate(business, $.owns, $.Brand)
+
+console.log(`Business owns ${brands.length} brands`)
+
+// Find all employees
+const employees = await db.relate(business, $.employs, $.Person)
+
+console.log(`Business employs ${employees.length} people`)
+```
+
+## Advanced Queries
+
+### Filtering
+
+Apply filters to narrow results:
+
+```typescript
+const businesses = await db.list($.Business, {
+  where: {
+    industry: 'Technology',
+    foundingDate: {
+      $gte: '2020-01-01', // Founded on or after 2020
+    },
+  },
+})
+```
+
+### Sorting
+
+Order results by one or more fields:
+
+```typescript
+const businesses = await db.list($.Business, {
+  where: { industry: 'Technology' },
+  orderBy: {
+    name: 'asc', // Sort by name ascending
+    foundingDate: 'desc', // Then by founding date descending
+  },
+})
+```
+
+### Pagination
+
+Handle large result sets with pagination:
+
+```typescript
+const firstPage = await db.list($.Business, {
+  limit: 50,
+  offset: 0,
+})
+
+const secondPage = await db.list($.Business, {
+  limit: 50,
+  offset: 50,
+})
+```
+
+### Including Related Data
+
+Fetch related entities in a single query:
+
+```typescript
+const business = await db.get($.Business, 'biz_abc123', {
+  include: ['brands', 'employees', 'address', 'contactPoint'],
+})
+
+// Related data is now available
+console.log('Brands:', business.brands)
+console.log('Employees:', business.employees)
+```
+
+## Error Handling
+
+Always handle potential errors:
+
+```typescript
+import { DatabaseError } from 'sdk.do'
+
+try {
+  const business = await db.get($.Business, 'biz_invalid')
+} catch (error) {
+  if (error.code === 'NOT_FOUND') {
+    console.error('Business not found')
+  } else if (error.code === 'UNAUTHORIZED') {
+    console.error('Authentication required')
+  } else {
+    console.error('Database error:', error.message)
+  }
+}
+```
+
+## Common Patterns
+
+### Check if Entity Exists
+
+```typescript
+try {
+  const business = await db.get($.Business, 'biz_abc123')
+  console.log('Business exists')
+} catch (error) {
+  if (error.code === 'NOT_FOUND') {
+    console.log('Business does not exist')
+  }
+}
+```
+
+### Upsert (Create or Update)
+
+```typescript
+// Create if doesn't exist, update if it does
+const business = await db.upsert($.Business, 'biz_abc123', {
+  name: 'Acme Corp',
+  industry: 'Technology',
+})
+```
+
+### Count Results
+
+```typescript
+const businesses = await db.list($.Business, {
+  where: { industry: 'Technology' },
+  count: true,
+})
+
+console.log(`Total: ${businesses.total}`)
+```
+
+### Search
+
+Perform full-text search:
+
+```typescript
+const results = await db.search($.Business, 'technology innovation', {
+  fields: ['name', 'description'],
+  limit: 20,
+})
+```
+
+## TypeScript Support
+
+database.do provides full TypeScript support:
+
+```typescript
+import type { Business, Person, Order } from 'schema.org.ai'
+
+// Type-safe entity creation
+const business: Business = await db.create($.Business, {
+  $type: 'Business',
+  name: 'Acme Corp',
+  industry: 'Technology',
+})
+
+// Type-safe queries
+const businesses: Business[] = await db.list($.Business, {
+  where: { industry: 'Technology' },
+})
+
+// Autocomplete and validation
+const person: Person = await db.create($.Person, {
+  $type: 'Person',
+  givenName: 'John',
+  familyName: 'Doe',
+  email: 'john@example.com',
+})
+```
+
+## Environment Setup
+
+### Development
+
+For local development, create a `.env` file:
+
+```bash
+DO_TOKEN=your-development-token
+DO_BASE_URL=https://apis.do
+```
+
+### Production
+
+Set environment variables in your deployment:
+
+```bash
+DO_TOKEN=your-production-token
+DO_BASE_URL=https://apis.do
+```
+
+### Cloudflare Workers
+
+In Workers, pass the `env` binding:
+
+```typescript
+export default {
+  async fetch(request: Request, env: Env) {
+    const $ = await $(env) // Pass env binding
+    const { db } = $
+
+    const businesses = await db.list($.Business)
+
+    return Response.json(businesses)
+  },
+}
+```
+
+## Next Steps
+
+Now that you understand the basics, explore more advanced topics:
+
+- [Operations Reference](./operations) - Complete CRUD operations guide
+- [Querying Patterns](./querying) - Advanced query techniques
+- [API Reference](../api/) - Full API documentation
+- [Basic CRUD Examples](../examples/basic-crud) - Practical examples
+- [Relationships](../examples/relationships) - Working with semantic relationships
+
+## Example Application
+
+Here's a complete example application:
+
+```typescript
+import $, { db } from 'sdk.do'
+
+// Define a business management system
+async function main() {
+  // Create a business
+  const business = await db.create($.Business, {
+    $type: 'Business',
+    name: 'Acme Corporation',
+    industry: 'Technology',
+    foundingDate: '2025-01-15',
+  })
+
+  console.log('Created business:', business.$id)
+
+  // Create some employees
+  const employee1 = await db.create($.Person, {
+    $type: 'Person',
+    givenName: 'Alice',
+    familyName: 'Smith',
+    jobTitle: 'CEO',
+  })
+
+  const employee2 = await db.create($.Person, {
+    $type: 'Person',
+    givenName: 'Bob',
+    familyName: 'Jones',
+    jobTitle: 'CTO',
+  })
+
+  // Create employment relationships
+  await db.relate(business, $.employs, employee1)
+  await db.relate(business, $.employs, employee2)
+
+  // Query employees
+  const employees = await db.relate(business, $.employs, $.Person)
+  console.log(`Business has ${employees.length} employees`)
+
+  // List all technology businesses
+  const techBusinesses = await db.list($.Business, {
+    where: { industry: 'Technology' },
+  })
+
+  console.log(`Found ${techBusinesses.length} technology businesses`)
+}
+
+main().catch(console.error)
+```
+
+## Resources
+
+- [database.do Documentation](https://database.do)
+- [Schema.org Types](https://schema.org.ai)
+- [GraphDL Semantics](https://graphdl.do)
+- [SDK Documentation](https://sdk.do)
+
+## Getting Help
+
+- [GitHub Issues](https://github.com/dot-do/platform/issues)
+- [Documentation](https://database.do)
+- [Community](https://github.com/dot-do/platform/discussions)
+
+---
+
+Ready to dive deeper? Check out the [Operations Reference](./operations) for complete CRUD documentation.

@@ -1,0 +1,560 @@
+---
+$id: https://events.do/examples/basic-events
+$type: HowTo
+title: Basic Event Patterns
+description: Simple examples of publishing and subscribing to business events
+keywords: [examples, basic, events, patterns, tutorial]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Basic Event Patterns
+
+Learn the fundamentals of event-driven architecture with these simple, practical examples.
+
+## Hello Events
+
+The simplest possible event system:
+
+```typescript
+import { on, send } from 'sdk.do'
+
+// Listen for greetings
+on('Greeting.sent', async (event) => {
+  console.log(`Hello, ${event.data.name}!`)
+})
+
+// Send a greeting
+await send('Greeting.sent', {
+  name: 'World',
+  timestamp: new Date(),
+})
+
+// Output: "Hello, World!"
+```
+
+## User Registration
+
+Complete user registration flow:
+
+```typescript
+import { on, send } from 'sdk.do'
+
+// Listen for user registration
+on('User.registered', async (event) => {
+  const { id, email, name } = event.data
+
+  console.log(`New user registered: ${email}`)
+
+  // Send welcome email
+  await sendWelcomeEmail(email, name)
+
+  // Create user preferences
+  await createDefaultPreferences(id)
+
+  // Track analytics
+  await trackSignup(id)
+
+  console.log(`Welcome email sent to ${email}`)
+})
+
+// Register a new user
+async function registerUser(userData: any) {
+  // Create user in database
+  const user = await db.create($.User, {
+    email: userData.email,
+    name: userData.name,
+    password: await hashPassword(userData.password),
+    createdAt: new Date(),
+  })
+
+  // Publish registration event
+  await send('User.registered', {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    registeredAt: user.createdAt,
+  })
+
+  return user
+}
+
+// Usage
+await registerUser({
+  email: 'user@example.com',
+  name: 'John Doe',
+  password: 'secure-password',
+})
+```
+
+## Product Updates
+
+Track product changes:
+
+```typescript
+import { on, send } from 'sdk.do'
+
+// Listen for product updates
+on('Product.updated', async (event) => {
+  const { id, changes } = event.data
+
+  console.log(`Product ${id} updated:`, changes)
+
+  // Update search index
+  await updateSearchIndex(id)
+
+  // Clear cache
+  await clearProductCache(id)
+
+  // Notify subscribers
+  if (changes.price) {
+    await notifyPriceChange(id, changes.price)
+  }
+
+  if (changes.stock && changes.stock === 0) {
+    await send('Product.outOfStock', {
+      id,
+      name: event.data.name,
+    })
+  }
+})
+
+// Update a product
+async function updateProduct(productId: string, updates: any) {
+  const before = await db.get($.Product, productId)
+  const after = await db.update($.Product, productId, updates)
+
+  // Calculate what changed
+  const changes = Object.keys(updates).reduce((acc, key) => {
+    if (before[key] !== after[key]) {
+      acc[key] = { before: before[key], after: after[key] }
+    }
+    return acc
+  }, {})
+
+  // Publish update event
+  await send('Product.updated', {
+    id: productId,
+    name: after.name,
+    changes,
+    updatedAt: new Date(),
+  })
+
+  return after
+}
+
+// Usage
+await updateProduct('prod-123', {
+  price: 29.99,
+  stock: 0,
+})
+```
+
+## Email Notifications
+
+Send notifications via events:
+
+```typescript
+import { on, send } from 'sdk.do'
+
+// Listen for notification requests
+on('Notification.requested', async (event) => {
+  const { type, recipient, data } = event.data
+
+  try {
+    // Send notification based on type
+    switch (type) {
+      case 'email':
+        await sendEmail(recipient, data)
+        break
+      case 'sms':
+        await sendSMS(recipient, data)
+        break
+      case 'push':
+        await sendPushNotification(recipient, data)
+        break
+    }
+
+    // Publish success event
+    await send('Notification.sent', {
+      type,
+      recipient,
+      sentAt: new Date(),
+    })
+  } catch (error) {
+    // Publish failure event
+    await send('Notification.failed', {
+      type,
+      recipient,
+      error: error.message,
+      failedAt: new Date(),
+    })
+  }
+})
+
+// Request a notification
+async function notify(recipient: string, subject: string, message: string) {
+  await send('Notification.requested', {
+    type: 'email',
+    recipient,
+    data: { subject, message },
+    requestedAt: new Date(),
+  })
+}
+
+// Usage
+await notify('user@example.com', 'Welcome!', 'Thanks for signing up.')
+```
+
+## Multiple Listeners
+
+Multiple handlers for the same event:
+
+```typescript
+import { on, send } from 'sdk.do'
+
+// Handler 1: Send email
+on('Order.created', async (event) => {
+  await sendOrderConfirmation(event.data)
+  console.log('Order confirmation sent')
+})
+
+// Handler 2: Update analytics
+on('Order.created', async (event) => {
+  await trackOrderCreated(event.data)
+  console.log('Order tracked in analytics')
+})
+
+// Handler 3: Notify warehouse
+on('Order.created', async (event) => {
+  await notifyWarehouse(event.data)
+  console.log('Warehouse notified')
+})
+
+// Handler 4: Update inventory
+on('Order.created', async (event) => {
+  await reserveInventory(event.data.items)
+  console.log('Inventory reserved')
+})
+
+// Publish order created event
+await send('Order.created', {
+  id: '12345',
+  customer: 'acme-corp',
+  items: [{ product: 'widget', quantity: 10 }],
+  total: 999.9,
+})
+
+// All four handlers execute independently
+```
+
+## Event Filtering
+
+Filter events before processing:
+
+```typescript
+import { on, send } from 'sdk.do'
+
+// Only process high-value orders
+on('Order.created', async (event) => {
+  if (event.data.total > 10000) {
+    await notifyVIPTeam(event.data)
+    await applyVIPDiscount(event.data.id)
+  }
+})
+
+// Only process international orders
+on('Order.created', async (event) => {
+  if (event.data.country !== 'US') {
+    await calculateInternationalShipping(event.data)
+    await checkExportRestrictions(event.data)
+  }
+})
+
+// Only process subscription orders
+on('Order.created', async (event) => {
+  if (event.data.type === 'subscription') {
+    await setupRecurringBilling(event.data)
+    await scheduleNextDelivery(event.data)
+  }
+})
+```
+
+## Wildcard Listeners
+
+Listen to groups of events:
+
+```typescript
+import { on, send } from 'sdk.do'
+
+// Listen to all User events
+on('User.*', async (event) => {
+  console.log(`User event: ${event.type}`, event.data)
+
+  // Audit all user events
+  await auditLog({
+    eventType: event.type,
+    userId: event.data.id,
+    timestamp: new Date(),
+  })
+})
+
+// Listen to all creation events
+on('*.created', async (event) => {
+  console.log(`New ${event.type.split('.')[0]} created`)
+
+  // Track all creation metrics
+  await trackCreation(event.type, event.data)
+})
+
+// Listen to all events (use sparingly!)
+on('*', async (event) => {
+  // Global event log
+  await logEvent(event)
+})
+
+// Publish various events
+await send('User.created', { id: 'user-1' })
+await send('User.updated', { id: 'user-1' })
+await send('Order.created', { id: 'order-1' })
+```
+
+## Error Events
+
+Handle and publish error events:
+
+```typescript
+import { on, send } from 'sdk.do'
+
+// Try to process order, publish error if it fails
+on('Order.created', async (event) => {
+  try {
+    await processOrder(event.data)
+
+    await send('Order.processed', {
+      orderId: event.data.id,
+      processedAt: new Date(),
+    })
+  } catch (error) {
+    await send('Order.processingFailed', {
+      orderId: event.data.id,
+      error: error.message,
+      stack: error.stack,
+      failedAt: new Date(),
+    })
+  }
+})
+
+// Handle error events
+on('Order.processingFailed', async (event) => {
+  console.error(`Order ${event.data.orderId} failed:`, event.data.error)
+
+  // Notify support team
+  await notifySupport({
+    type: 'order-processing-error',
+    orderId: event.data.orderId,
+    error: event.data.error,
+  })
+
+  // Store for retry
+  await storeForRetry({
+    type: 'Order.created',
+    data: { id: event.data.orderId },
+    attempts: 0,
+  })
+})
+
+// Monitor error rate
+let errorCount = 0
+on('*.failed', async (event) => {
+  errorCount++
+
+  if (errorCount > 10) {
+    await send('System.highErrorRate', {
+      count: errorCount,
+      timestamp: new Date(),
+    })
+    errorCount = 0 // Reset
+  }
+})
+```
+
+## Scheduled Events
+
+Publish events on a schedule:
+
+```typescript
+import { every, send } from 'sdk.do'
+
+// Publish daily report event
+every($.Daily, async () => {
+  await send('Report.daily', {
+    date: new Date().toISOString().split('T')[0],
+    generatedAt: new Date(),
+  })
+})
+
+// Listen for report events
+on('Report.daily', async (event) => {
+  const report = await generateDailyReport(event.data.date)
+
+  await sendReportEmail(report)
+  await storeReport(report)
+})
+
+// Publish hourly metrics
+every($.Hourly, async () => {
+  const metrics = await collectMetrics()
+
+  await send('Metrics.collected', {
+    timestamp: new Date(),
+    metrics,
+  })
+})
+```
+
+## Event Metadata
+
+Use metadata for tracing and debugging:
+
+```typescript
+import { on, send } from 'sdk.do'
+
+// Publish with metadata
+await send('Order.created', orderData, {
+  timestamp: new Date(),
+  source: 'checkout-api',
+  userId: currentUser.id,
+  sessionId: session.id,
+  correlationId: requestId,
+  version: 2,
+})
+
+// Access metadata in handler
+on('Order.created', async (event) => {
+  console.log('Event metadata:', event.metadata)
+
+  // Use correlation ID for tracing
+  const correlationId = event.metadata.correlationId
+
+  await send('Payment.requested', paymentData, {
+    correlationId, // Pass through for tracing
+    causationId: event.metadata.eventId, // This event caused by Order.created
+  })
+})
+```
+
+## Unsubscribing
+
+Dynamically subscribe and unsubscribe:
+
+```typescript
+import { on } from 'sdk.do'
+
+// Subscribe and get unsubscribe function
+const unsubscribe = on('Order.created', async (event) => {
+  console.log('Order created:', event.data.id)
+})
+
+// Later, unsubscribe
+unsubscribe()
+
+// Conditional unsubscribe
+let processedCount = 0
+const unsubscribe2 = on('Order.created', async (event) => {
+  processedCount++
+
+  if (processedCount >= 100) {
+    unsubscribe2() // Stop after 100 orders
+  }
+})
+
+// Cleanup on shutdown
+const subscriptions = []
+subscriptions.push(on('Order.created', handler1))
+subscriptions.push(on('User.registered', handler2))
+
+process.on('SIGTERM', () => {
+  subscriptions.forEach((unsub) => unsub())
+})
+```
+
+## Best Practices
+
+### 1. Always Include Context
+
+```typescript
+// ✅ Good
+await send('Order.created', {
+  id: '12345',
+  customer: { id: 'cust-1', name: 'Acme Corp' },
+  items: [...],
+  total: 1500.00,
+  createdAt: new Date(),
+})
+
+// ❌ Bad
+await send('Order.created', { id: '12345' })
+```
+
+### 2. Use Semantic Names
+
+```typescript
+// ✅ Good
+on('Order.created', handler)
+on('Payment.completed', handler)
+
+// ❌ Bad
+on('order_create', handler)
+on('payment-done', handler)
+```
+
+### 3. Handle Errors
+
+```typescript
+// ✅ Good
+on('Order.created', async (event) => {
+  try {
+    await processOrder(event.data)
+  } catch (error) {
+    console.error('Failed:', error)
+    await send('Order.failed', { ...event.data, error: error.message })
+  }
+})
+
+// ❌ Bad
+on('Order.created', async (event) => {
+  await processOrder(event.data) // Unhandled errors
+})
+```
+
+### 4. Keep Handlers Focused
+
+```typescript
+// ✅ Good - separate concerns
+on('Order.created', sendConfirmationEmail)
+on('Order.created', updateAnalytics)
+on('Order.created', notifyWarehouse)
+
+// ❌ Bad - kitchen sink
+on('Order.created', async (event) => {
+  await sendConfirmationEmail(event.data)
+  await updateAnalytics(event.data)
+  await notifyWarehouse(event.data)
+  // ... many more things
+})
+```
+
+## Next Steps
+
+- [Order Workflow Example](./order-workflow) - Complete order processing workflow
+- [Event Chains Example](./event-chains) - Chain multiple events together
+- [Event Listeners Documentation](../docs/listeners) - Deep dive into listeners
+- [Event Publishers Documentation](../docs/publishers) - Master event publishing
+
+## See Also
+
+- [Getting Started](../docs/getting-started)
+- [API Reference](../api/)
+- [sdk.do](https://sdk.do)

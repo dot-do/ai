@@ -1,0 +1,659 @@
+---
+$id: https://analytics.do/docs/getting-started
+$type: TechArticle
+title: Getting Started with analytics.do
+description: Learn how to track events, record metrics, and build dashboards with the .do platform analytics framework
+keywords: [getting started, analytics setup, event tracking, metrics, dashboards, Business-as-Code analytics]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Getting Started with analytics.do
+
+Track events, record metrics, and build dashboards in minutes.
+
+## Installation
+
+```bash
+pnpm add sdk.do
+```
+
+## Your First Analytics
+
+Let's track events and metrics for a simple e-commerce workflow.
+
+### Step 1: Import SDK
+
+```typescript
+import $, { analytics } from 'sdk.do'
+```
+
+### Step 2: Track Events
+
+```typescript
+// Track when a user views a product
+await analytics.track($.Product.viewed, {
+  productId: 'prod-123',
+  productName: 'Enterprise Plan',
+  price: 1299.99,
+  userId: 'user-456',
+  timestamp: new Date(),
+})
+
+// Track when a user adds to cart
+await analytics.track($.Cart.item.added, {
+  productId: 'prod-123',
+  quantity: 1,
+  userId: 'user-456',
+  timestamp: new Date(),
+})
+
+// Track when an order is created
+await analytics.track($.Order.created, {
+  orderId: 'order-789',
+  amount: 1299.99,
+  items: 1,
+  userId: 'user-456',
+  timestamp: new Date(),
+})
+
+console.log('Events tracked successfully!')
+```
+
+### Step 3: Record Metrics
+
+```typescript
+// Counter: Count occurrences
+await analytics.counter($.Orders, 1)
+await analytics.counter($.ProductViews, 1)
+
+// Gauge: Current value
+await analytics.gauge($.ActiveUsers, 142)
+await analytics.gauge($.InventoryLevel, 856)
+
+// Metric with dimensions
+await analytics.metric($.Revenue, {
+  value: 1299.99,
+  dimensions: {
+    product: 'enterprise-plan',
+    region: 'us-west',
+    channel: 'website',
+  },
+})
+
+console.log('Metrics recorded!')
+```
+
+### Step 4: Query Metrics
+
+```typescript
+// Simple query
+const totalRevenue = await analytics.query({
+  metric: $.Revenue,
+  timeframe: 'last_30_days',
+  aggregation: 'sum',
+})
+
+console.log(`Total Revenue: $${totalRevenue.value}`)
+
+// Query with grouping
+const revenueByProduct = await analytics.query({
+  metric: $.Revenue,
+  timeframe: 'last_30_days',
+  groupBy: ['product'],
+  aggregation: 'sum',
+})
+
+console.log('Revenue by product:', revenueByProduct.data)
+// [
+//   { product: 'enterprise-plan', value: 45000 },
+//   { product: 'professional-plan', value: 28000 },
+//   { product: 'starter-plan', value: 12000 }
+// ]
+
+// Time-series query
+const dailyRevenue = await analytics.query({
+  metric: $.Revenue,
+  timeframe: 'last_7_days',
+  interval: 'day',
+  aggregation: 'sum',
+})
+
+console.log('Daily revenue:', dailyRevenue.timeseries)
+// [
+//   { date: '2025-10-04', value: 5200 },
+//   { date: '2025-10-05', value: 6100 },
+//   { date: '2025-10-06', value: 4800 },
+//   ...
+// ]
+```
+
+### Step 5: Create Dashboard
+
+```typescript
+const dashboard = await analytics.dashboard({
+  $type: 'Dashboard',
+  name: 'E-Commerce Analytics',
+  description: 'Real-time e-commerce metrics',
+
+  widgets: [
+    // Revenue counter
+    {
+      type: 'counter',
+      title: 'Total Revenue (30d)',
+      metric: $.Revenue,
+      timeframe: 'last_30_days',
+      aggregation: 'sum',
+      format: 'currency',
+    },
+
+    // Orders counter
+    {
+      type: 'counter',
+      title: 'Total Orders (30d)',
+      metric: $.Orders.count,
+      timeframe: 'last_30_days',
+    },
+
+    // Revenue time-series chart
+    {
+      type: 'timeseries',
+      title: 'Revenue Trend',
+      metric: $.Revenue,
+      timeframe: 'last_30_days',
+      interval: 'day',
+      aggregation: 'sum',
+    },
+
+    // Conversion funnel
+    {
+      type: 'funnel',
+      title: 'Conversion Funnel',
+      stages: [
+        { name: 'Product Views', metric: $.Product.viewed.count },
+        { name: 'Add to Cart', metric: $.Cart.item.added.count },
+        { name: 'Checkout Started', metric: $.Checkout.started.count },
+        { name: 'Order Completed', metric: $.Order.created.count },
+      ],
+      timeframe: 'last_30_days',
+    },
+
+    // Revenue by product
+    {
+      type: 'pie',
+      title: 'Revenue by Product',
+      metric: $.Revenue,
+      groupBy: 'product',
+      timeframe: 'last_30_days',
+    },
+
+    // Active users gauge
+    {
+      type: 'gauge',
+      title: 'Active Users',
+      metric: $.ActiveUsers,
+      min: 0,
+      max: 1000,
+      thresholds: [
+        { value: 100, color: 'red' },
+        { value: 300, color: 'yellow' },
+        { value: 500, color: 'green' },
+      ],
+    },
+  ],
+})
+
+console.log(`Dashboard created: ${dashboard.id}`)
+
+// Get dashboard URL
+const url = await analytics.getDashboardUrl(dashboard.id)
+console.log(`View dashboard: ${url}`)
+```
+
+## Complete Example
+
+Here's a complete e-commerce analytics implementation:
+
+```typescript
+import $, { analytics, on, every } from 'sdk.do'
+
+// Track product views
+on($.Product.viewed, async (event) => {
+  await analytics.track($.Product.viewed, event)
+  await analytics.counter($.ProductViews, 1)
+  await analytics.metric($.ProductViews, {
+    value: 1,
+    dimensions: {
+      product: event.productId,
+      category: event.category,
+    },
+  })
+})
+
+// Track cart additions
+on($.Cart.item.added, async (event) => {
+  await analytics.track($.Cart.item.added, event)
+  await analytics.counter($.CartAdditions, 1)
+})
+
+// Track orders
+on($.Order.created, async (order) => {
+  // Track event
+  await analytics.track($.Order.created, {
+    orderId: order.id,
+    amount: order.total,
+    items: order.items.length,
+    userId: order.userId,
+  })
+
+  // Record metrics
+  await analytics.counter($.Orders, 1)
+  await analytics.metric($.Revenue, {
+    value: order.total,
+    dimensions: {
+      product: order.items[0].productId,
+      region: order.shippingAddress.region,
+      channel: order.source,
+    },
+  })
+
+  // Calculate conversion rate
+  const views = await analytics.query({
+    metric: $.ProductViews,
+    timeframe: 'last_24_hours',
+    aggregation: 'sum',
+  })
+
+  const orders = await analytics.query({
+    metric: $.Orders,
+    timeframe: 'last_24_hours',
+    aggregation: 'count',
+  })
+
+  const conversionRate = orders.value / views.value
+
+  await analytics.gauge($.ConversionRate, conversionRate)
+})
+
+// Aggregate metrics hourly
+await every($.Hourly, async () => {
+  console.log('Running hourly analytics aggregation...')
+
+  // Calculate hourly metrics
+  const hourlyRevenue = await analytics.query({
+    metric: $.Revenue,
+    timeframe: 'last_hour',
+    aggregation: 'sum',
+  })
+
+  const hourlyOrders = await analytics.query({
+    metric: $.Orders,
+    timeframe: 'last_hour',
+    aggregation: 'count',
+  })
+
+  const avgOrderValue = hourlyRevenue.value / hourlyOrders.value
+
+  // Store aggregated metrics
+  await analytics.metric($.AverageOrderValue, {
+    value: avgOrderValue,
+    timestamp: new Date(),
+  })
+
+  console.log(`Hourly Revenue: $${hourlyRevenue.value}`)
+  console.log(`Hourly Orders: ${hourlyOrders.value}`)
+  console.log(`Average Order Value: $${avgOrderValue}`)
+})
+
+// Daily reporting
+await every($.Daily.at('9:00'), async () => {
+  console.log('Generating daily report...')
+
+  const report = await analytics.report({
+    name: 'Daily E-Commerce Report',
+    timeframe: 'yesterday',
+    sections: [
+      {
+        title: 'Summary',
+        metrics: [
+          { name: 'Total Revenue', metric: $.Revenue, aggregation: 'sum' },
+          { name: 'Total Orders', metric: $.Orders, aggregation: 'count' },
+          { name: 'Avg Order Value', metric: $.AverageOrderValue, aggregation: 'avg' },
+          { name: 'Conversion Rate', metric: $.ConversionRate, aggregation: 'avg' },
+        ],
+        comparison: 'previous_day',
+      },
+      {
+        title: 'Revenue by Product',
+        type: 'table',
+        query: {
+          metric: $.Revenue,
+          groupBy: ['product'],
+          aggregation: 'sum',
+          orderBy: { value: 'desc' },
+        },
+      },
+    ],
+  })
+
+  await analytics.deliverReport(report, {
+    email: ['team@company.com'],
+    slack: '#analytics',
+  })
+
+  console.log('Daily report sent!')
+})
+```
+
+## Understanding Analytics Concepts
+
+### Events vs Metrics
+
+**Events** are discrete occurrences that happen at specific points in time:
+
+```typescript
+// Events: Things that happen
+await analytics.track($.Order.created, { orderId: 'order-123' })
+await analytics.track($.User.signed_up, { userId: 'user-456' })
+await analytics.track($.Email.sent, { emailId: 'email-789' })
+```
+
+**Metrics** are numerical measurements that can be aggregated:
+
+```typescript
+// Metrics: Things you measure
+await analytics.metric($.Revenue, { value: 1299.99 })
+await analytics.metric($.ResponseTime, { value: 235 })
+await analytics.metric($.ErrorRate, { value: 0.02 })
+```
+
+### Metric Types
+
+**Counter**: Cumulative count that only increases:
+
+```typescript
+await analytics.counter($.Orders, 1) // Increment by 1
+await analytics.counter($.PageViews, 1)
+await analytics.counter($.ApiRequests, 1)
+```
+
+**Gauge**: Current value that can go up or down:
+
+```typescript
+await analytics.gauge($.ActiveUsers, 142)
+await analytics.gauge($.QueueDepth, 25)
+await analytics.gauge($.MemoryUsage, 85.5)
+```
+
+**Histogram**: Distribution of values in buckets:
+
+```typescript
+await analytics.histogram($.ResponseTime, 235, {
+  buckets: [50, 100, 250, 500, 1000, 5000],
+})
+```
+
+**Summary**: Statistical summary with percentiles:
+
+```typescript
+await analytics.summary($.RequestDuration, 150, {
+  quantiles: [0.5, 0.9, 0.95, 0.99],
+})
+```
+
+### Dimensions
+
+Dimensions allow you to slice and dice metrics:
+
+```typescript
+await analytics.metric($.Revenue, {
+  value: 1299.99,
+  dimensions: {
+    product: 'enterprise', // What product?
+    region: 'us-west', // Which region?
+    channel: 'direct', // Which channel?
+    customer_type: 'new', // New or existing?
+    campaign: 'spring-2025', // Which campaign?
+  },
+})
+
+// Query by dimensions
+const enterpriseRevenue = await analytics.query({
+  metric: $.Revenue,
+  where: { product: 'enterprise' },
+  groupBy: ['region'],
+})
+```
+
+### Timeframes
+
+Query metrics over different time periods:
+
+```typescript
+// Named timeframes
+await analytics.query({ metric: $.Revenue, timeframe: 'today' })
+await analytics.query({ metric: $.Revenue, timeframe: 'yesterday' })
+await analytics.query({ metric: $.Revenue, timeframe: 'last_7_days' })
+await analytics.query({ metric: $.Revenue, timeframe: 'last_30_days' })
+await analytics.query({ metric: $.Revenue, timeframe: 'this_month' })
+await analytics.query({ metric: $.Revenue, timeframe: 'last_month' })
+
+// Custom timeframes
+await analytics.query({
+  metric: $.Revenue,
+  timeframe: {
+    start: '2025-09-01',
+    end: '2025-09-30',
+  },
+})
+
+// Relative timeframes
+await analytics.query({
+  metric: $.Revenue,
+  timeframe: {
+    last: 24,
+    unit: 'hours',
+  },
+})
+```
+
+### Aggregations
+
+Combine multiple data points into summary values:
+
+```typescript
+// Sum
+const totalRevenue = await analytics.query({
+  metric: $.Revenue,
+  aggregation: 'sum',
+})
+
+// Average
+const avgResponseTime = await analytics.query({
+  metric: $.ResponseTime,
+  aggregation: 'avg',
+})
+
+// Min/Max
+const peakUsers = await analytics.query({
+  metric: $.ActiveUsers,
+  aggregation: 'max',
+})
+
+// Count
+const orderCount = await analytics.query({
+  metric: $.Orders,
+  aggregation: 'count',
+})
+
+// Percentiles
+const responseTimeP95 = await analytics.query({
+  metric: $.ResponseTime,
+  aggregation: 'p95',
+})
+
+// Multiple aggregations
+const responseTimeStats = await analytics.query({
+  metric: $.ResponseTime,
+  aggregations: ['min', 'avg', 'max', 'p50', 'p95', 'p99'],
+})
+```
+
+## Best Practices
+
+### 1. Use Semantic Names
+
+Always use semantic `$.Subject.predicate.Object` patterns:
+
+```typescript
+// Good: Semantic patterns
+await analytics.track($.Order.created, data)
+await analytics.track($.Lead.qualified, data)
+await analytics.metric($.Revenue, { value })
+
+// Avoid: Generic names
+await analytics.track('order_created', data)
+await analytics.track('event1', data)
+```
+
+### 2. Add Context with Dimensions
+
+Include relevant dimensions for detailed analysis:
+
+```typescript
+// Good: Rich dimensions
+await analytics.metric($.Revenue, {
+  value: 1299.99,
+  dimensions: {
+    product: 'enterprise',
+    region: 'us-west',
+    channel: 'direct',
+    agent: 'agent-sarah',
+  },
+})
+
+// Avoid: No dimensions
+await analytics.metric($.Revenue, { value: 1299.99 })
+```
+
+### 3. Track Both Events and Metrics
+
+Events for audit trail, metrics for analysis:
+
+```typescript
+// Track event for record
+await analytics.track($.Order.created, {
+  orderId: 'order-123',
+  amount: 1299.99,
+  timestamp: new Date(),
+})
+
+// Record metric for analysis
+await analytics.metric($.Revenue, {
+  value: 1299.99,
+  dimensions: { product: 'enterprise' },
+})
+```
+
+### 4. Use Appropriate Metric Types
+
+Choose the right metric type for your use case:
+
+```typescript
+// Counter for cumulative counts
+await analytics.counter($.Orders, 1)
+
+// Gauge for current values
+await analytics.gauge($.ActiveUsers, 142)
+
+// Histogram for distributions
+await analytics.histogram($.ResponseTime, duration)
+
+// Summary for percentiles
+await analytics.summary($.RequestDuration, duration)
+```
+
+### 5. Query Efficiently
+
+Use filters and grouping to reduce data volume:
+
+```typescript
+// Good: Filtered and grouped
+const revenue = await analytics.query({
+  metric: $.Revenue,
+  timeframe: 'last_7_days',
+  where: { product: 'enterprise' },
+  groupBy: ['region'],
+  aggregation: 'sum',
+})
+
+// Avoid: Querying all data
+const allData = await analytics.query({
+  metric: $.Revenue,
+  timeframe: 'all_time',
+})
+```
+
+## Next Steps
+
+- [Architecture](./architecture.mdx) - Understand system design
+- [Best Practices](./best-practices.mdx) - Learn recommended patterns
+- [API Reference](../api/reference.mdx) - Explore complete API
+- [Examples](../examples/) - See real-world implementations
+
+## Troubleshooting
+
+### Events Not Showing Up
+
+Check that events are being tracked correctly:
+
+```typescript
+try {
+  await analytics.track($.Order.created, data)
+  console.log('Event tracked successfully')
+} catch (error) {
+  console.error('Failed to track event:', error)
+}
+```
+
+### Metrics Not Updating
+
+Verify metric recording:
+
+```typescript
+const result = await analytics.metric($.Revenue, {
+  value: 1299.99,
+  dimensions: { product: 'enterprise' },
+})
+console.log('Metric recorded:', result)
+```
+
+### Query Returns No Data
+
+Check timeframe and filters:
+
+```typescript
+// Expand timeframe
+const data = await analytics.query({
+  metric: $.Revenue,
+  timeframe: 'last_90_days', // Instead of last_7_days
+})
+
+// Remove filters
+const allData = await analytics.query({
+  metric: $.Revenue,
+  timeframe: 'last_30_days',
+  // Remove 'where' clause
+})
+```
+
+## Support
+
+- [Documentation](https://analytics.do/docs)
+- [GitHub Issues](https://github.com/dot-do/platform/issues)
+- [Community Discord](https://discord.gg/dotdo)
+
+---
+
+Ready to analyze your workflows? Continue with [Architecture](./architecture.mdx) to understand how analytics.do works.

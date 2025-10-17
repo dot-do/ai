@@ -1,0 +1,496 @@
+---
+$id: https://queue.do/api/reference
+$type: APIReference
+title: queue.do API Reference
+description: Complete API reference for queue.do task queue management.
+keywords: [queue, api, reference, functions, types]
+---
+
+# queue.do API Reference
+
+Complete API documentation for queue.do.
+
+## Functions
+
+### queue.enqueue()
+
+Enqueue a task for background processing.
+
+**Signature:**
+
+```typescript
+function enqueue<T>(type: string | $.Type, data: T, options?: EnqueueOptions): Promise<string>
+```
+
+**Parameters:**
+
+- `type` - Task type (semantic type like `$.EmailTask`)
+- `data` - Task data payload
+- `options` - Optional configuration
+
+**Options:**
+
+```typescript
+interface EnqueueOptions {
+  priority?: 'critical' | 'high' | 'normal' | 'low'
+  delay?: number // Milliseconds
+  runAt?: Date // Specific time
+  retries?: number
+  retryDelay?: number
+  retryBackoff?: 'exponential' | 'linear' | 'fixed'
+  timeout?: number
+  deadLetterQueue?: string
+}
+```
+
+**Returns:** Task ID
+
+**Example:**
+
+```typescript
+const taskId = await queue.enqueue(
+  $.EmailTask,
+  {
+    to: 'user@example.com',
+    subject: 'Hello',
+  },
+  {
+    priority: 'high',
+    retries: 3,
+  }
+)
+```
+
+### queue.enqueueBatch()
+
+Enqueue multiple tasks efficiently.
+
+**Signature:**
+
+```typescript
+function enqueueBatch(
+  tasks: Array<{
+    type: string | $.Type
+    data: any
+    options?: EnqueueOptions
+  }>
+): Promise<string[]>
+```
+
+**Returns:** Array of task IDs
+
+**Example:**
+
+```typescript
+const taskIds = await queue.enqueueBatch([
+  { type: $.EmailTask, data: { to: 'user1@example.com' } },
+  { type: $.EmailTask, data: { to: 'user2@example.com' } },
+  { type: $.EmailTask, data: { to: 'user3@example.com' } },
+])
+```
+
+### queue.worker()
+
+Create a worker to process tasks.
+
+**Signature:**
+
+```typescript
+function worker<T>(type: string | $.Type, handler: (task: Task<T>) => Promise<any>, options?: WorkerOptions): Promise<Worker>
+```
+
+**Parameters:**
+
+- `type` - Task type to process
+- `handler` - Async function to process task
+- `options` - Worker configuration
+
+**Options:**
+
+```typescript
+interface WorkerOptions {
+  concurrency?: number // Default: 1
+  timeout?: number // Milliseconds
+  retries?: number
+  onRetry?: (task: Task, attempt: number, error: Error) => void
+  onTimeout?: (task: Task) => void
+  onError?: (task: Task, error: Error) => void
+}
+```
+
+**Example:**
+
+```typescript
+await queue.worker(
+  $.EmailTask,
+  async (task) => {
+    await sendEmail(task.data)
+    return { sent: true }
+  },
+  {
+    concurrency: 10,
+    timeout: 30000,
+    retries: 3,
+  }
+)
+```
+
+### queue.status()
+
+Get task status.
+
+**Signature:**
+
+```typescript
+function status(taskId: string): Promise<TaskStatus>
+```
+
+**Returns:**
+
+```typescript
+interface TaskStatus {
+  id: string
+  state: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'
+  attempts: number
+  createdAt: Date
+  startedAt?: Date
+  completedAt?: Date
+  error?: Error
+  result?: any
+}
+```
+
+**Example:**
+
+```typescript
+const status = await queue.status(taskId)
+console.log('Task state:', status.state)
+```
+
+### queue.wait()
+
+Wait for task completion.
+
+**Signature:**
+
+```typescript
+function wait(taskId: string, options?: { timeout?: number }): Promise<any>
+```
+
+**Returns:** Task result
+
+**Throws:** Error if task fails or times out
+
+**Example:**
+
+```typescript
+try {
+  const result = await queue.wait(taskId, {
+    timeout: 60000, // 1 minute
+  })
+  console.log('Task result:', result)
+} catch (error) {
+  console.error('Task failed:', error)
+}
+```
+
+### queue.cancel()
+
+Cancel a task.
+
+**Signature:**
+
+```typescript
+function cancel(taskId: string, options?: { cleanup?: (task: Task) => Promise<void> }): Promise<void>
+```
+
+**Example:**
+
+```typescript
+await queue.cancel(taskId, {
+  cleanup: async (task) => {
+    await cleanupResources(task.data)
+  },
+})
+```
+
+### queue.cancelAll()
+
+Cancel multiple tasks.
+
+**Signature:**
+
+```typescript
+function cancelAll(type: string | $.Type, filter?: { state?: TaskState }): Promise<number>
+```
+
+**Returns:** Number of cancelled tasks
+
+**Example:**
+
+```typescript
+const cancelled = await queue.cancelAll($.Task, {
+  state: 'pending',
+})
+```
+
+### queue.list()
+
+List tasks with filtering.
+
+**Signature:**
+
+```typescript
+function list(filter?: TaskFilter): Promise<Task[]>
+```
+
+**Filter:**
+
+```typescript
+interface TaskFilter {
+  type?: string | $.Type
+  state?: 'pending' | 'processing' | 'completed' | 'failed'
+  priority?: 'critical' | 'high' | 'normal' | 'low'
+  createdAt?: { $gt?: Date; $lt?: Date }
+  limit?: number
+  offset?: number
+}
+```
+
+**Example:**
+
+```typescript
+const pending = await queue.list({
+  state: 'pending',
+  priority: 'high',
+  limit: 100,
+})
+```
+
+### queue.get()
+
+Get task by ID.
+
+**Signature:**
+
+```typescript
+function get(taskId: string): Promise<Task>
+```
+
+**Example:**
+
+```typescript
+const task = await queue.get(taskId)
+console.log('Task data:', task.data)
+```
+
+### queue.delete()
+
+Delete a task.
+
+**Signature:**
+
+```typescript
+function delete(taskId: string): Promise<void>
+```
+
+**Example:**
+
+```typescript
+await queue.delete(taskId)
+```
+
+### queue.metrics()
+
+Get queue metrics.
+
+**Signature:**
+
+```typescript
+function metrics(): Promise<QueueMetrics>
+```
+
+**Returns:**
+
+```typescript
+interface QueueMetrics {
+  pending: number
+  processing: number
+  completed: number
+  failed: number
+  throughput: number // tasks per second
+  avgExecutionTime: number // milliseconds
+  p50ExecutionTime: number
+  p95ExecutionTime: number
+  p99ExecutionTime: number
+  errorRate: number // 0-1
+  retryRate: number // 0-1
+}
+```
+
+**Example:**
+
+```typescript
+const metrics = await queue.metrics()
+console.log('Pending tasks:', metrics.pending)
+console.log('Throughput:', metrics.throughput, 'tasks/s')
+```
+
+### queue.size()
+
+Get queue size.
+
+**Signature:**
+
+```typescript
+function size(state?: TaskState): Promise<number>
+```
+
+**Example:**
+
+```typescript
+const totalSize = await queue.size()
+const pendingSize = await queue.size('pending')
+```
+
+### queue.cleanup()
+
+Clean up old tasks.
+
+**Signature:**
+
+```typescript
+function cleanup(filter: {
+  state: TaskState
+  olderThan: number // Timestamp
+}): Promise<number>
+```
+
+**Returns:** Number of cleaned up tasks
+
+**Example:**
+
+```typescript
+const cleaned = await queue.cleanup({
+  state: 'completed',
+  olderThan: Date.now() - 7 * 24 * 60 * 60 * 1000, // 7 days
+})
+```
+
+## Types
+
+### Task
+
+```typescript
+interface Task<T = any> {
+  $type: 'Task'
+  $id: string
+  queue: string
+  data: T
+  priority: 'critical' | 'high' | 'normal' | 'low'
+  state: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'
+  attempts: number
+  maxRetries: number
+  createdAt: Date
+  startedAt?: Date
+  completedAt?: Date
+  timeout: number
+  error?: Error
+  result?: any
+}
+```
+
+### Worker
+
+```typescript
+interface Worker {
+  $type: 'Worker'
+  $id: string
+  queue: string
+  handler: TaskHandler
+  concurrency: number
+  timeout: number
+  retries: number
+  state: 'idle' | 'processing' | 'stopped'
+  processed: number
+  failed: number
+
+  // Methods
+  pause(): Promise<void>
+  resume(): Promise<void>
+  stop(): Promise<void>
+  drain(options?: { timeout?: number }): Promise<void>
+}
+```
+
+### Queue
+
+```typescript
+interface Queue {
+  $type: 'Queue'
+  $id: string
+  name: string
+  backend: 'redis' | 'memory' | 'postgres'
+  maxSize?: number
+  maxRetries: number
+  retryDelay: number
+  retryBackoff: 'exponential' | 'linear' | 'fixed'
+  deadLetterQueue?: string
+  priority: boolean
+}
+```
+
+## Error Handling
+
+### TaskTimeoutError
+
+```typescript
+class TaskTimeoutError extends Error {
+  taskId: string
+  timeout: number
+}
+```
+
+### TaskCancelledError
+
+```typescript
+class TaskCancelledError extends Error {
+  taskId: string
+}
+```
+
+### QueueFullError
+
+```typescript
+class QueueFullError extends Error {
+  maxSize: number
+  currentSize: number
+}
+```
+
+## Configuration
+
+### Environment Variables
+
+```bash
+# Queue backend
+QUEUE_BACKEND=redis # redis | memory | postgres
+
+# Redis configuration
+QUEUE_REDIS_URL=redis://localhost:6379
+
+# PostgreSQL configuration
+QUEUE_DATABASE_URL=postgres://user:pass@localhost/db
+
+# Default settings
+QUEUE_CONCURRENCY=10
+QUEUE_TIMEOUT=30000
+QUEUE_RETRIES=3
+QUEUE_RETRY_BACKOFF=exponential
+```
+
+## Related
+
+- [Getting Started](../docs/getting-started)
+- [Architecture](../docs/architecture)
+- [Examples](../examples/)

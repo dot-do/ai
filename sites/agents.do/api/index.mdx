@@ -1,0 +1,745 @@
+---
+$id: https://agents.do/api
+$type: APIReference
+title: API Reference
+description: Complete API reference for the agents.do framework
+keywords: [API, reference, documentation, agent API, SDK]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# API Reference
+
+Complete API reference for building autonomous agents with agents.do.
+
+## Core Functions
+
+### agent.create()
+
+Create a new agent instance.
+
+**Signature**:
+
+```typescript
+function create(config: AgentConfig): Promise<Agent>
+```
+
+**Parameters**:
+
+- `config` (AgentConfig) - Agent configuration object
+
+**Returns**: Promise\<Agent\> - The created agent instance
+
+**Example**:
+
+```typescript
+const agent = await agent.create({
+  $type: 'Agent',
+  name: 'Sales Agent',
+  role: 'SDR',
+  capabilities: ['research', 'outreach'],
+  tools: { email: emailTool },
+  model: 'claude-sonnet-4.5',
+})
+```
+
+### agent.execute()
+
+Execute an agent task.
+
+**Signature**:
+
+```typescript
+function execute(task: AgentTask): Promise<AgentResult>
+```
+
+**Parameters**:
+
+- `task` (AgentTask) - Task definition with input and context
+
+**Returns**: Promise\<AgentResult\> - Task execution result
+
+**Example**:
+
+```typescript
+const result = await agent.execute({
+  task: 'research_company',
+  input: { company: 'Acme Corp' },
+})
+```
+
+### agent.configure()
+
+Configure agent behavior.
+
+**Signature**:
+
+```typescript
+function configure(config: AgentBehaviorConfig): Promise<void>
+```
+
+**Parameters**:
+
+- `config` (AgentBehaviorConfig) - Behavior configuration
+
+**Returns**: Promise\<void\>
+
+**Example**:
+
+```typescript
+await agent.configure({
+  autonomy: 'supervised',
+  notifications: ['task_complete', 'error'],
+  rate_limits: { emails_per_day: 50 },
+})
+```
+
+### agent.delegate()
+
+Delegate a task to another agent.
+
+**Signature**:
+
+```typescript
+function delegate(params: DelegationParams): Promise<AgentResult>
+```
+
+**Parameters**:
+
+- `params` (DelegationParams) - Delegation parameters
+
+**Returns**: Promise\<AgentResult\> - Result from delegated task
+
+**Example**:
+
+```typescript
+const result = await orchestratorAgent.delegate({
+  to: researchAgent,
+  task: { type: 'research_company', input: { company: 'Acme' } },
+  priority: 'high',
+})
+```
+
+### agent.send()
+
+Send a message to another agent.
+
+**Signature**:
+
+```typescript
+function send(params: MessageParams): Promise<void>
+```
+
+**Parameters**:
+
+- `params` (MessageParams) - Message parameters
+
+**Returns**: Promise\<void\>
+
+**Example**:
+
+```typescript
+await agentA.send({
+  to: agentB,
+  message: {
+    $type: 'TaskRequest',
+    task: 'research',
+    params: { company: 'Acme' },
+  },
+})
+```
+
+### agent.on()
+
+Register an event handler.
+
+**Signature**:
+
+```typescript
+function on(event: string, handler: EventHandler): void
+```
+
+**Parameters**:
+
+- `event` (string) - Event name
+- `handler` (EventHandler) - Event handler function
+
+**Returns**: void
+
+**Example**:
+
+```typescript
+agent.on('task_complete', (event) => {
+  console.log(`Task completed: ${event.task}`)
+})
+```
+
+### agent.createTeam()
+
+Create a team of agents.
+
+**Signature**:
+
+```typescript
+function createTeam(config: TeamConfig): Promise<AgentTeam>
+```
+
+**Parameters**:
+
+- `config` (TeamConfig) - Team configuration
+
+**Returns**: Promise\<AgentTeam\> - The created team
+
+**Example**:
+
+```typescript
+const team = await agent.createTeam({
+  name: 'Sales Team',
+  members: [researchAgent, outreachAgent, qualifierAgent],
+  goals: [{ metric: 'leads_qualified', target: 100 }],
+})
+```
+
+## Types
+
+### Agent
+
+Agent instance type.
+
+```typescript
+interface Agent {
+  $type: 'Agent'
+  $id: string
+  name: string
+  role: string
+  persona?: AgentPersona
+  goals: Goal[]
+  capabilities: string[]
+  tools: Record<string, Tool>
+  model: string
+  memory: AgentMemory
+  state: AgentState
+
+  // Methods
+  execute(task: AgentTask): Promise<AgentResult>
+  configure(config: AgentBehaviorConfig): Promise<void>
+  send(params: MessageParams): Promise<void>
+  on(event: string, handler: EventHandler): void
+  delegate(params: DelegationParams): Promise<AgentResult>
+  remember(data: MemoryData): Promise<void>
+  recall(query: MemoryQuery): Promise<any>
+  getMetrics(params?: MetricsParams): Promise<AgentMetrics>
+}
+```
+
+### AgentConfig
+
+Agent configuration type.
+
+```typescript
+interface AgentConfig {
+  $type: 'Agent'
+  $id?: string
+  name: string
+  role: string
+  persona?: AgentPersona
+  goal?: string | string[]
+  goals?: Goal[]
+  capabilities: string[]
+  tools: Record<string, Tool>
+  model: string
+  temperature?: number
+  reasoning?: ReasoningConfig
+  memory?: MemoryConfig
+}
+```
+
+### AgentPersona
+
+Agent persona type.
+
+```typescript
+interface AgentPersona {
+  background: string
+  expertise: string[]
+  style: string
+  communication?: {
+    tone: string
+    approach: string
+    format?: string
+    preferences?: string[]
+  }
+  values?: string[]
+}
+```
+
+### Goal
+
+Goal type with metrics.
+
+```typescript
+interface Goal {
+  $type: 'Goal'
+  name: string
+  description: string
+  target: {
+    metric: string
+    value: number
+    period: string
+  }
+  priority: 'low' | 'medium' | 'high'
+}
+```
+
+### Tool
+
+Tool type for agent capabilities.
+
+```typescript
+interface Tool {
+  $type: 'Tool'
+  name: string
+  description: string
+  functions: Record<string, Function>
+}
+```
+
+### AgentTask
+
+Task definition type.
+
+```typescript
+interface AgentTask {
+  task: string
+  input: any
+  context?: any
+  options?: {
+    max_iterations?: number
+    timeout?: number
+    priority?: 'low' | 'normal' | 'high' | 'urgent'
+  }
+}
+```
+
+### AgentResult
+
+Task result type.
+
+```typescript
+interface AgentResult {
+  task: string
+  status: 'completed' | 'failed' | 'timeout'
+  result: any
+  execution_metadata: {
+    duration_ms: number
+    tools_used: string[]
+    iterations: number
+    confidence?: number
+  }
+  error?: Error
+}
+```
+
+### AgentBehaviorConfig
+
+Agent behavior configuration type.
+
+```typescript
+interface AgentBehaviorConfig {
+  autonomy?: 'autonomous' | 'supervised' | 'manual'
+  approval_required?: string[]
+  notifications?: string[]
+  error_handling?: {
+    retry?: { attempts: number; backoff?: 'linear' | 'exponential' }
+    fallback?: string
+    notification?: boolean
+  }
+  rate_limits?: {
+    emails_per_day?: number
+    api_calls_per_hour?: number
+    [key: string]: number | undefined
+  }
+  logging?: 'none' | 'basic' | 'detailed'
+  timeout?: number
+}
+```
+
+### AgentMemory
+
+Agent memory system type.
+
+```typescript
+interface AgentMemory {
+  short_term: {
+    enabled: boolean
+    capacity: number
+    contents?: Map<string, any>
+  }
+  long_term: {
+    enabled: boolean
+    storage: 'memory' | 'database' | 'vector_store'
+    indexing?: 'keyword' | 'semantic'
+  }
+  episodic?: {
+    enabled: boolean
+    retention: string
+    max_entries: number
+  }
+}
+```
+
+### AgentState
+
+Agent state type.
+
+```typescript
+interface AgentState {
+  status: 'idle' | 'busy' | 'error'
+  current_task?: string
+  last_active: string
+  total_tasks: number
+  successful_tasks: number
+  failed_tasks: number
+}
+```
+
+### AgentTeam
+
+Agent team type.
+
+```typescript
+interface AgentTeam {
+  $type: 'AgentTeam'
+  $id: string
+  name: string
+  description?: string
+  members: Array<{
+    agent: Agent
+    role: string
+    responsibilities: string[]
+  }>
+  orchestrator?: {
+    agent: Agent
+    responsibilities: string[]
+  }
+  goals: Goal[]
+  communication: CommunicationConfig
+
+  // Methods
+  assignTask(task: any): Promise<void>
+  getMetrics(): Promise<TeamMetrics>
+  rebalance(): Promise<void>
+}
+```
+
+### MessageParams
+
+Message parameters type.
+
+```typescript
+interface MessageParams {
+  to: Agent | Agent[]
+  message: {
+    $type: string
+    [key: string]: any
+  }
+  priority?: 'low' | 'normal' | 'high' | 'urgent'
+  requires_response?: boolean
+  deadline?: string
+  context?: {
+    conversation_id?: string
+    parent_message_id?: string
+    thread_id?: string
+  }
+}
+```
+
+### DelegationParams
+
+Task delegation parameters type.
+
+```typescript
+interface DelegationParams {
+  to: Agent
+  task: {
+    type: string
+    input: any
+    context?: any
+  }
+  priority?: 'low' | 'normal' | 'high' | 'urgent'
+  deadline?: string
+  approval_required?: boolean
+}
+```
+
+### AgentMetrics
+
+Agent performance metrics type.
+
+```typescript
+interface AgentMetrics {
+  timeframe: string
+  tasks_completed: number
+  tasks_failed: number
+  success_rate: number
+  avg_execution_time: number
+  avg_confidence?: number
+  tools_usage: Record<string, number>
+  errors: number
+  error_types?: Record<string, number>
+  goal_progress?: Record<
+    string,
+    {
+      current: number
+      target: number
+      progress: number
+      status: 'behind' | 'on_track' | 'ahead'
+    }
+  >
+}
+```
+
+### TeamMetrics
+
+Team performance metrics type.
+
+```typescript
+interface TeamMetrics {
+  team_name: string
+  team_efficiency: number
+  agents: Record<string, AgentMetrics>
+  pipeline_metrics?: {
+    leads_processed: number
+    leads_qualified: number
+    qualification_rate: number
+    [key: string]: number
+  }
+  bottlenecks?: Array<{
+    stage: string
+    agent: string
+    issue: string
+    recommendation: string
+  }>
+  collaboration: {
+    avg_handoff_time: number
+    successful_handoffs: number
+    communication_volume: number
+    consensus_agreements: number
+  }
+}
+```
+
+## Events
+
+### Agent Events
+
+Agents emit events during execution:
+
+#### task_start
+
+Emitted when a task starts.
+
+```typescript
+agent.on('task_start', (event: { task: string; timestamp: string }) => {
+  console.log(`Task started: ${event.task}`)
+})
+```
+
+#### task_complete
+
+Emitted when a task completes successfully.
+
+```typescript
+agent.on('task_complete', (event: { task: string; duration: number; result: any }) => {
+  console.log(`Task completed: ${event.task}`)
+})
+```
+
+#### task_failed
+
+Emitted when a task fails.
+
+```typescript
+agent.on('task_failed', (event: { task: string; error: Error }) => {
+  console.error(`Task failed: ${event.task}`, event.error)
+})
+```
+
+#### tool_used
+
+Emitted when an agent uses a tool.
+
+```typescript
+agent.on('tool_used', (event: { tool: string; function: string; params: any }) => {
+  console.log(`Tool used: ${event.tool}.${event.function}`)
+})
+```
+
+#### action_executed
+
+Emitted when an agent executes an action.
+
+```typescript
+agent.on('action_executed', (event: { action: string; result: any }) => {
+  console.log(`Action executed: ${event.action}`)
+})
+```
+
+#### decision_required
+
+Emitted when agent needs approval.
+
+```typescript
+agent.on('decision_required', async (event: { decision: any; context: any }) => {
+  const approved = await getUserApproval(event.decision)
+  return approved
+})
+```
+
+#### error
+
+Emitted when an error occurs.
+
+```typescript
+agent.on('error', (event: { error: Error; context: any }) => {
+  console.error('Agent error:', event.error)
+})
+```
+
+### Communication Events
+
+Events for agent-to-agent communication:
+
+#### message_received
+
+Emitted when an agent receives a message.
+
+```typescript
+agent.on('message_received', (message: AgentMessage) => {
+  console.log(`Message from ${message.from.name}`)
+})
+```
+
+#### request
+
+Emitted when an agent receives a request.
+
+```typescript
+agent.on('request', async (request: AgentMessage) => {
+  const result = await handleRequest(request)
+  return result
+})
+```
+
+#### response
+
+Emitted when an agent receives a response.
+
+```typescript
+agent.on('response', (response: AgentMessage) => {
+  console.log(`Response received:`, response)
+})
+```
+
+## Utility Functions
+
+### agent.findAgent()
+
+Find agents by criteria.
+
+```typescript
+function findAgent(criteria: { capabilities?: string[]; role?: string; availability?: boolean }): Promise<Agent[]>
+```
+
+### agent.validateConfig()
+
+Validate agent configuration.
+
+```typescript
+function validateConfig(config: AgentConfig): { valid: boolean; errors: string[] }
+```
+
+### agent.getTools()
+
+Get available tools.
+
+```typescript
+function getTools(): Promise<Tool[]>
+```
+
+### agent.getCapabilities()
+
+Get available capabilities.
+
+```typescript
+function getCapabilities(): Promise<string[]>
+```
+
+## Best Practices
+
+### Error Handling
+
+Always handle errors gracefully:
+
+```typescript
+try {
+  const result = await agent.execute({ task: 'research_company' })
+} catch (error) {
+  console.error('Agent error:', error)
+  await notifyTeam(error)
+}
+```
+
+### Monitoring
+
+Monitor agent performance:
+
+```typescript
+// Real-time monitoring
+agent.on('task_complete', logMetrics)
+agent.on('error', notifyTeam)
+
+// Periodic metrics
+setInterval(async () => {
+  const metrics = await agent.getMetrics()
+  console.log('Agent metrics:', metrics)
+}, 3600000) // Every hour
+```
+
+### Memory Management
+
+Manage agent memory effectively:
+
+```typescript
+// Store important information
+await agent.remember({
+  type: 'company_profile',
+  company: 'Acme Corp',
+  data: profile,
+})
+
+// Recall when needed
+const profile = await agent.recall({
+  type: 'company_profile',
+  company: 'Acme Corp',
+})
+```
+
+## Examples
+
+See complete examples:
+
+- [Basic Agent](../examples/basic-agent)
+- [Sales Agent](../examples/sales-agent)
+- [Multi-Agent System](../examples/multi-agent)
+
+## Support
+
+- [Documentation](https://agents.do/docs)
+- [GitHub Issues](https://github.com/dot-do/platform/issues)
+- [Community Discord](https://discord.gg/dotdo)
+
+---
+
+For more information, see the [Getting Started](../docs/getting-started) guide or explore the [examples](../examples/).

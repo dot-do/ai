@@ -1,0 +1,677 @@
+---
+$id: https://rpc.do/api
+$type: APIReference
+title: rpc.do API Reference
+description: Complete API reference for rpc.do RPC communication layer
+keywords: [api, reference, rpc, typescript, types, functions]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# API Reference
+
+Complete API documentation for rpc.do RPC communication layer.
+
+## Core Functions
+
+### createRpcClient()
+
+Creates a type-safe RPC client for calling remote worker methods.
+
+**Signature**:
+
+```typescript
+function createRpcClient<TMethods extends Record<string, { params: any; response: any }>>(service: Fetcher): TypedRpcClient<TMethods>
+```
+
+**Type Parameters**:
+
+- `TMethods` - Object mapping method names to their params and response types
+
+**Parameters**:
+
+- `service: Fetcher` - Cloudflare Workers service binding or Fetcher instance
+
+**Returns**: `TypedRpcClient<TMethods>` - Typed RPC client with `call` method
+
+**Example**:
+
+```typescript
+const client = createRpcClient<AIWorkerRPC.Methods>(env.AI_SERVICE)
+
+const result = await client.call('generateText', {
+  prompt: 'Hello, world!',
+  model: 'gpt-5',
+})
+```
+
+**Notes**:
+
+- Service binding must be configured in `wrangler.jsonc`
+- All method calls are strongly typed
+- Automatically handles request/response serialization
+- Throws errors on failed RPC calls
+
+---
+
+### createDurableObjectClient()
+
+Creates a type-safe RPC client for calling Durable Object methods.
+
+**Signature**:
+
+```typescript
+function createDurableObjectClient<TMethods extends Record<string, { params: any; response: any }>>(stub: DurableObjectStub): TypedRpcClient<TMethods>
+```
+
+**Type Parameters**:
+
+- `TMethods` - Object mapping method names to their params and response types
+
+**Parameters**:
+
+- `stub: DurableObjectStub` - Durable Object stub from namespace.get()
+
+**Returns**: `TypedRpcClient<TMethods>` - Typed RPC client with `call` method
+
+**Example**:
+
+```typescript
+const id = env.COUNTER_SERVICE.idFromName('my-counter')
+const stub = env.COUNTER_SERVICE.get(id)
+const client = createDurableObjectClient<CounterServiceRPC.Methods>(stub)
+
+const result = await client.call('increment', { amount: 5 })
+```
+
+---
+
+### createWorkerClients()
+
+Helper function to create typed clients for all configured workers.
+
+**Signature**:
+
+```typescript
+function createWorkerClients(env: WorkerServiceBindings): Partial<WorkerClients>
+```
+
+**Parameters**:
+
+- `env: WorkerServiceBindings` - Worker environment with service bindings
+
+**Returns**: `Partial<WorkerClients>` - Object with typed clients for available services
+
+**Example**:
+
+```typescript
+const clients = createWorkerClients(env)
+
+if (clients.ai) {
+  const result = await clients.ai.call('generateText', { prompt: 'Hello' })
+}
+
+if (clients.user) {
+  const user = await clients.user.call('getUser', { id: '123' })
+}
+```
+
+**Notes**:
+
+- Only creates clients for services that exist in env
+- Returns partial object, so check for existence before using
+- Useful for working with multiple services
+
+---
+
+## Core Types
+
+### TypedRpcClient<TMethods>
+
+Interface for a typed RPC client.
+
+**Type**:
+
+```typescript
+interface TypedRpcClient<TMethods extends Record<string, { params: any; response: any }>> {
+  call<TMethod extends keyof TMethods>(method: TMethod, params: TMethods[TMethod]['params']): Promise<TMethods[TMethod]['response']>
+}
+```
+
+**Type Parameters**:
+
+- `TMethods` - Object mapping method names to their params and response types
+
+**Methods**:
+
+- `call<TMethod>(method, params)` - Call an RPC method with type-safe params
+
+**Example**:
+
+```typescript
+type Methods = {
+  getData: {
+    params: { id: string }
+    response: { data: string }
+  }
+}
+
+const client: TypedRpcClient<Methods> = createRpcClient(env.SERVICE)
+const result = await client.call('getData', { id: '123' })
+// result is typed as { data: string }
+```
+
+---
+
+### RpcRequest<TMethod, TParams>
+
+Generic RPC request structure.
+
+**Type**:
+
+```typescript
+interface RpcRequest<TMethod extends string = string, TParams = unknown> {
+  method: TMethod
+  params: TParams
+}
+```
+
+**Properties**:
+
+- `method: TMethod` - Name of the RPC method to call
+- `params: TParams` - Parameters for the method call
+
+**Example**:
+
+```typescript
+const request: RpcRequest = {
+  method: 'generateText',
+  params: {
+    prompt: 'Hello',
+    model: 'gpt-5',
+  },
+}
+```
+
+---
+
+### RpcResponse<TData>
+
+Generic RPC response structure.
+
+**Type**:
+
+```typescript
+interface RpcResponse<TData = unknown> {
+  success: boolean
+  data?: TData
+  error?: string
+}
+```
+
+**Properties**:
+
+- `success: boolean` - Whether the RPC call succeeded
+- `data?: TData` - Response data (present on success)
+- `error?: string` - Error message (present on failure)
+
+**Example**:
+
+```typescript
+// Success response
+const response: RpcResponse<{ text: string }> = {
+  success: true,
+  data: { text: 'Generated text' },
+}
+
+// Error response
+const errorResponse: RpcResponse = {
+  success: false,
+  error: 'Method not found',
+}
+```
+
+---
+
+### WorkerServiceBindings
+
+Interface for worker service bindings in environment.
+
+**Type**:
+
+```typescript
+interface WorkerServiceBindings {
+  // AI Worker
+  AI?: Fetcher
+  AI_SERVICE?: Fetcher
+
+  // OAuth Worker
+  OAUTH?: Fetcher
+  OAUTH_SERVICE?: Fetcher
+
+  // Admin Worker
+  ADMIN?: Fetcher
+  ADMIN_SERVICE?: Fetcher
+
+  // MCP Worker
+  MCP?: Fetcher
+  MCP_SERVICE?: Fetcher
+
+  // Patent Worker
+  PATENT?: Fetcher
+  PATENT_SERVICE?: Fetcher
+
+  // Pipeline Worker
+  PIPELINE?: Fetcher
+  PIPELINE_SERVICE?: Fetcher
+
+  // API Worker
+  API?: Fetcher
+  API_SERVICE?: Fetcher
+
+  // Loader Worker
+  LOADER?: Fetcher
+  LOADER_SERVICE?: Fetcher
+}
+```
+
+**Usage**:
+
+```typescript
+interface Env extends WorkerServiceBindings {
+  // Add your worker-specific bindings
+  MY_KV: KVNamespace
+}
+```
+
+---
+
+### WorkerClients
+
+Type for all available typed worker clients.
+
+**Type**:
+
+```typescript
+type WorkerClients = {
+  ai: TypedRpcClient<AIWorkerRPC.Methods>
+  oauth: TypedRpcClient<OAuthWorkerRPC.Methods>
+  patent: TypedRpcClient<PatentWorkerRPC.Methods>
+  mcp: TypedRpcClient<MCPWorkerRPC.Methods>
+  pipeline: TypedRpcClient<PipelineWorkerRPC.Methods>
+}
+```
+
+**Usage**:
+
+```typescript
+const clients = createWorkerClients(env)
+
+// All clients are typed
+if (clients.ai) {
+  const result = await clients.ai.call('generateText', { prompt: 'Hello' })
+}
+```
+
+---
+
+## Platform Worker RPC Types
+
+### AIWorkerRPC
+
+RPC types for AI worker.
+
+**Namespace**:
+
+```typescript
+namespace AIWorkerRPC {
+  interface GenerateTextParams {
+    prompt: string
+    model?: string
+    provider?: 'workers-ai' | 'openai' | 'openrouter' | 'googleai' | 'anthropic'
+    system?: string
+    temperature?: number
+    maxTokens?: number
+    topP?: number
+    frequencyPenalty?: number
+    presencePenalty?: number
+    tools?: Array<{
+      name: string
+      description: string
+      parameters: Record<string, any>
+    }>
+    enableWebSearch?: boolean
+    background?: boolean
+    metadata?: Record<string, any>
+  }
+
+  interface GenerateTextResponse {
+    text: string
+    finishReason?: string
+    usage?: {
+      promptTokens: number
+      completionTokens: number
+      totalTokens: number
+    }
+    toolCalls?: Array<{
+      id: string
+      name: string
+      arguments: Record<string, any>
+    }>
+    jobId?: string
+  }
+
+  interface GenerateObjectParams {
+    prompt: string
+    schema: Record<string, any>
+    model?: string
+    provider?: 'workers-ai' | 'openai' | 'openrouter' | 'googleai' | 'anthropic'
+    system?: string
+    temperature?: number
+  }
+
+  interface GenerateObjectResponse<T = any> {
+    object: T
+    usage?: {
+      promptTokens: number
+      completionTokens: number
+      totalTokens: number
+    }
+  }
+
+  interface EmbedParams {
+    text: string | string[]
+    model?: string
+    provider?: 'workers-ai' | 'openai' | 'googleai'
+  }
+
+  interface EmbedResponse {
+    embeddings: number[][]
+    usage?: {
+      totalTokens: number
+    }
+  }
+
+  interface ListParams {
+    prompt: string
+    model?: string
+    provider?: 'workers-ai' | 'openai' | 'openrouter' | 'googleai' | 'anthropic'
+    system?: string
+    temperature?: number
+  }
+
+  interface ListResponse {
+    items: string[]
+    usage?: {
+      promptTokens: number
+      completionTokens: number
+      totalTokens: number
+    }
+  }
+
+  type Methods = {
+    generateText: {
+      params: GenerateTextParams
+      response: GenerateTextResponse
+    }
+    generateObject: {
+      params: GenerateObjectParams
+      response: GenerateObjectResponse
+    }
+    embed: {
+      params: EmbedParams
+      response: EmbedResponse
+    }
+    list: {
+      params: ListParams
+      response: ListResponse
+    }
+  }
+}
+```
+
+**Example**:
+
+```typescript
+const aiClient = createRpcClient<AIWorkerRPC.Methods>(env.AI_SERVICE)
+
+// Generate text
+const text = await aiClient.call('generateText', {
+  prompt: 'Explain quantum computing',
+  model: 'gpt-5',
+  temperature: 0.7,
+})
+
+// Generate object
+const product = await aiClient.call('generateObject', {
+  prompt: 'Create a product',
+  schema: { type: 'object', properties: { name: { type: 'string' } } },
+})
+
+// Create embeddings
+const embeddings = await aiClient.call('embed', {
+  text: ['machine learning', 'AI'],
+})
+
+// Generate list
+const items = await aiClient.call('list', {
+  prompt: 'List 5 programming languages',
+})
+```
+
+---
+
+### OAuthWorkerRPC
+
+RPC types for OAuth worker.
+
+**Namespace**:
+
+```typescript
+namespace OAuthWorkerRPC {
+  interface GetUserParams {
+    token: string
+  }
+
+  interface GetUserResponse {
+    id: string
+    email?: string
+    name?: string
+    picture?: string
+    provider: string
+  }
+
+  interface VerifyTokenParams {
+    token: string
+  }
+
+  interface VerifyTokenResponse {
+    valid: boolean
+    userId?: string
+    expiresAt?: number
+  }
+
+  type Methods = {
+    'user.get': {
+      params: GetUserParams
+      response: GetUserResponse
+    }
+    'user.verify': {
+      params: VerifyTokenParams
+      response: VerifyTokenResponse
+    }
+  }
+}
+```
+
+**Example**:
+
+```typescript
+const oauthClient = createRpcClient<OAuthWorkerRPC.Methods>(env.OAUTH_SERVICE)
+
+// Get user info
+const user = await oauthClient.call('user.get', {
+  token: 'user-token-123',
+})
+
+// Verify token
+const verification = await oauthClient.call('user.verify', {
+  token: 'user-token-123',
+})
+```
+
+---
+
+### PatentWorkerRPC
+
+RPC types for patent worker.
+
+**Namespace**:
+
+```typescript
+namespace PatentWorkerRPC {
+  interface SearchPatentsParams {
+    q: Record<string, any>
+    f?: string[]
+    o?: {
+      page?: number
+      size?: number
+      sort?: string
+    }
+  }
+
+  interface Patent {
+    patent_id: string
+    patent_number: string
+    patent_title?: string
+    patent_date?: string
+    patent_type?: string
+    patent_abstract?: string
+    patent_num_claims?: number
+  }
+
+  interface SearchPatentsResponse {
+    patents: Patent[]
+    count: number
+    total_patent_count: number
+  }
+
+  type Methods = {
+    'patents.search': {
+      params: SearchPatentsParams
+      response: SearchPatentsResponse
+    }
+    'patents.getById': {
+      params: { id: string; fields?: string[] }
+      response: Patent | null
+    }
+    'rateLimit.info': {
+      params: Record<string, never>
+      response: {
+        limit: number
+        remaining: number
+        reset: number
+      } | null
+    }
+  }
+}
+```
+
+---
+
+## Error Handling
+
+### RPC Errors
+
+RPC calls throw errors when they fail:
+
+```typescript
+try {
+  const result = await client.call('generateText', { prompt: 'Hello' })
+} catch (error) {
+  if (error instanceof Error) {
+    if (error.message.includes('404')) {
+      // Method not found
+    } else if (error.message.includes('500')) {
+      // Server error
+    } else if (error.message.includes('Timeout')) {
+      // Request timeout
+    }
+  }
+}
+```
+
+### Common Error Messages
+
+- `RPC call to {method} failed: 404 Not Found` - Method doesn't exist
+- `RPC call to {method} failed: 500 Internal Server Error` - Server-side error
+- `RPC call to {method} failed: {statusText}` - Generic HTTP error
+- `{error message}` - Custom error from RPC response
+
+---
+
+## Best Practices
+
+### Type Safety
+
+Always use typed clients:
+
+```typescript
+// Good - Type-safe
+const client = createRpcClient<AIWorkerRPC.Methods>(env.AI_SERVICE)
+const result = await client.call('generateText', { prompt: 'Hello' })
+
+// Bad - Untyped
+const response = await env.AI_SERVICE.fetch('http://service/rpc/generateText')
+```
+
+### Error Handling
+
+Always handle RPC errors:
+
+```typescript
+try {
+  const result = await client.call('getData', { id: '123' })
+  return Response.json(result)
+} catch (error) {
+  console.error('RPC failed:', error)
+  return Response.json({ error: 'Service unavailable' }, { status: 503 })
+}
+```
+
+### Service Availability
+
+Check if services are available:
+
+```typescript
+const clients = createWorkerClients(env)
+
+if (!clients.ai) {
+  return Response.json({ error: 'AI service not available' }, { status: 503 })
+}
+
+const result = await clients.ai.call('generateText', { prompt: 'Hello' })
+```
+
+### Timeouts
+
+Implement timeouts for long-running calls:
+
+```typescript
+const timeout = (ms: number) => new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), ms))
+
+const result = await Promise.race([
+  client.call('generateText', { prompt: 'Hello' }),
+  timeout(5000), // 5 second timeout
+])
+```
+
+---
+
+## See Also
+
+- [Getting Started](../docs/getting-started) - Setup guide
+- [RPC Patterns](../docs/rpc-patterns) - Communication patterns
+- [Service Objects](../docs/service-objects) - Durable Objects RPC
+- [Examples](../examples/) - Code examples

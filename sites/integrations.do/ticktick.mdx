@@ -1,0 +1,97 @@
+---
+$id: https://integrations.do/ticktick
+$type: Integration
+name: Ticktick
+service: ticktick
+description: TickTick is a cross-platform task management and to-do list application designed to help users organize their tasks and schedules efficiently.
+category: productivity
+sdkBased: false
+baseUrl: https://api.ticktick.com
+
+auth:
+  type: oauth2
+  authorizationUrl: https://ticktick.com/oauth/authorize
+  tokenUrl: https://ticktick.com/oauth/token
+  scopes:
+    - tasks:read
+    - tasks:write
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Ticktick actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: false
+  events: []
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://ticktick.com
+  apiDocs: https://ticktick.com
+---
+
+# Ticktick Integration
+
+TickTick is a cross-platform task management and to-do list application designed to help users organize their tasks and schedules efficiently.
+
+## Quick Start
+
+```typescript
+import { TicktickClient } from '@dotdo/sdk.do/integrations/ticktick'
+
+const ticktick = new TicktickClient({
+  apiKey: process.env.TICKTICK_API_KEY,
+})
+
+const result = await ticktick.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Ticktick provides 14 actions through the Composio API.
+
+## License
+
+MIT

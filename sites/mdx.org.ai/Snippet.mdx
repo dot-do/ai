@@ -1,0 +1,391 @@
+---
+title: Snippets - Reusable Worker Components
+description: Learn how to create, deploy, and use reusable code snippets as Cloudflare Workers
+---
+
+# Snippets
+
+Snippets are reusable Cloudflare Worker components packaged as MDX files. They combine documentation with executable TypeScript code that can be deployed as standalone workers or composed into larger applications.
+
+## What is a Snippet?
+
+A snippet is an MDX file with:
+
+1. **YAML Frontmatter** - Configuration metadata with `$type: snippet`
+2. **Documentation** - Markdown describing usage and features
+3. **TypeScript Code** - Implementation in a code block
+4. **Examples** - Usage examples and API documentation
+
+## Snippet Structure
+
+```mdx
+---
+$type: snippet
+name: my-snippet
+description: A reusable worker component
+version: 1.0.0
+compatibility_date: 2025-10-04
+---
+
+# My Snippet
+
+Documentation goes here...
+
+## Implementation
+
+\`\`\`typescript
+interface Env {}
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    return new Response('Hello from snippet!')
+  }
+} satisfies ExportedHandler<Env>
+\`\`\`
+
+## Usage
+
+More documentation...
+```
+
+## Creating Snippets
+
+### 1. Create the MDX File
+
+Create a new file in the `snippets/` directory:
+
+```bash
+touch snippets/my-snippet.mdx
+```
+
+### 2. Add Frontmatter
+
+The frontmatter must include:
+
+- `$type: snippet` - Identifies this as a snippet
+- `name` - Unique identifier for the snippet
+- `description` - Brief description
+- `version` - Semantic version number
+- `compatibility_date` - Cloudflare Workers compatibility date
+
+### 3. Write Documentation
+
+Use Markdown to document:
+
+- Purpose and features
+- API endpoints and parameters
+- Response formats
+- Security considerations
+- Usage examples
+
+### 4. Implement the Code
+
+Add your TypeScript implementation in a code block:
+
+```typescript
+interface Env {
+  // Add your bindings here
+}
+
+export default {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    // Your implementation
+  },
+} satisfies ExportedHandler<Env>
+```
+
+## Deploying Snippets
+
+### Deploy a Single Snippet
+
+```bash
+pnpm deploy:snippet my-snippet
+```
+
+This will:
+
+1. Parse the MDX file and extract the TypeScript code
+2. Create a temporary worker directory
+3. Generate `wrangler.jsonc` from frontmatter config
+4. Deploy to Cloudflare using `wrangler deploy`
+5. Clean up temporary files
+
+### Deploy All Snippets
+
+```bash
+pnpm deploy:snippet --all
+```
+
+### Deploy Script
+
+The deploy script (`scripts/deploySnippet.ts`):
+
+- Reads MDX files from `snippets/` directory
+- Parses YAML frontmatter for configuration
+- Extracts TypeScript code from code blocks
+- Creates temporary worker structure
+- Deploys using Cloudflare Wrangler CLI
+- Reports deployment status
+
+## Available Snippets
+
+### Scraper
+
+HTML scraping using HTMLRewriter with selector-based extraction and framework prop detection.
+
+**Features:**
+
+- CSS selector-based HTML extraction
+- Framework prop extraction (React, Vue, Svelte)
+- Next.js, Nuxt.js, and SvelteKit data detection
+- CORS-enabled responses
+
+**Usage:**
+
+```bash
+GET /h1/https://example.com         # Extract all h1 elements
+GET /.title/https://example.com     # Extract elements with class "title"
+GET /#main/https://example.com      # Extract element with id "main"
+```
+
+**Deploy:**
+
+```bash
+pnpm deploy:snippet scraper
+```
+
+**Example Response:**
+
+```json
+{
+  "url": "https://example.com",
+  "selector": "h1",
+  "elements": [
+    {
+      "tag": "h1",
+      "text": "Example Domain",
+      "attributes": { "class": "title" }
+    }
+  ],
+  "frameworkProps": {
+    "react": [{ "type": "next", "data": {...} }],
+    "vue": [],
+    "svelte": []
+  },
+  "timestamp": "2025-10-06T00:00:00.000Z"
+}
+```
+
+### Render
+
+Bidirectional conversion between Markdown and HTML.
+
+**Features:**
+
+- Markdown to HTML conversion
+- HTML to Markdown conversion
+- Support for headers, lists, code blocks, links, images
+- No external dependencies
+- CORS-enabled
+
+**Usage:**
+
+```bash
+# Markdown to HTML
+POST /md2html
+Content-Type: text/plain
+Body: # Hello World
+
+# HTML to Markdown
+POST /html2md
+Content-Type: text/html
+Body: <h1>Hello World</h1>
+
+# Via query parameters
+GET /?md=# Hello World
+GET /?html=<h1>Hello World</h1>
+```
+
+**Deploy:**
+
+```bash
+pnpm deploy:snippet render
+```
+
+## Best Practices
+
+### Snippet Design
+
+1. **Keep it focused** - Each snippet should do one thing well
+2. **Document thoroughly** - Include usage examples and API docs
+3. **Handle errors gracefully** - Return meaningful error messages
+4. **Enable CORS** - Make snippets accessible from browsers
+5. **Use TypeScript** - Provide type safety and better DX
+
+### Security
+
+1. **Validate inputs** - Check URLs, parameters, and request data
+2. **Set security headers** - Use appropriate CORS and CSP headers
+3. **Handle secrets properly** - Use environment variables, not hardcoded values
+4. **Rate limiting** - Consider adding rate limits for public endpoints
+5. **Sanitize output** - Escape HTML and validate data before returning
+
+### Performance
+
+1. **Optimize for cold starts** - Minimize initialization code
+2. **Use streaming** - Stream large responses when possible
+3. **Cache appropriately** - Use Cloudflare Cache API where beneficial
+4. **Consider limits** - Stay within Workers CPU and memory limits
+5. **Handle timeouts** - Set appropriate timeouts for external requests
+
+### Testing
+
+Test snippets locally before deploying:
+
+```bash
+# Use wrangler dev from the snippet directory
+cd .tmp-snippet-deploy/my-snippet
+wrangler dev
+```
+
+## Composing Snippets
+
+Snippets can be composed into larger applications:
+
+### Service Bindings
+
+Reference snippets from other workers using service bindings:
+
+```jsonc
+// wrangler.jsonc
+{
+  "services": [
+    {
+      "binding": "SCRAPER",
+      "service": "snippet-scraper",
+    },
+    {
+      "binding": "RENDER",
+      "service": "snippet-render",
+    },
+  ],
+}
+```
+
+```typescript
+interface Env {
+  SCRAPER: Fetcher
+  RENDER: Fetcher
+}
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    // Use snippets via service bindings
+    const scraped = await env.SCRAPER.fetch('https://...')
+    const rendered = await env.RENDER.fetch(new Request('...'))
+    return Response.json({ scraped, rendered })
+  },
+}
+```
+
+### Direct Import
+
+For local development, you can extract and import snippet code:
+
+```typescript
+// Extract snippet code to a module
+import { scrapeHtml } from './snippets/scraper'
+import { markdownToHtml } from './snippets/render'
+```
+
+## Advanced Features
+
+### Custom Bindings
+
+Add Cloudflare bindings to your snippets by extending the frontmatter:
+
+```mdx
+---
+$type: snippet
+name: my-snippet
+bindings:
+  kv:
+    - binding: MY_KV
+      id: your-kv-id
+  d1:
+    - binding: MY_DB
+      id: your-db-id
+---
+```
+
+Then reference in the TypeScript code:
+
+```typescript
+interface Env {
+  MY_KV: KVNamespace
+  MY_DB: D1Database
+}
+```
+
+### Environment Variables
+
+Specify required environment variables in frontmatter:
+
+```mdx
+---
+$type: snippet
+name: my-snippet
+vars:
+  API_KEY: ''
+  API_URL: https://api.example.com
+---
+```
+
+## Troubleshooting
+
+### Deployment Fails
+
+1. Check that the MDX file has valid frontmatter
+2. Ensure TypeScript code is in a code block marked `typescript`
+3. Verify that `wrangler` is installed and authenticated
+4. Check for syntax errors in the TypeScript code
+
+### Runtime Errors
+
+1. Test locally with `wrangler dev`
+2. Check Workers logs: `wrangler tail snippet-name`
+3. Verify environment variables and bindings are configured
+4. Review error messages in the response
+
+### Type Errors
+
+1. Ensure you have `@cloudflare/workers-types` installed
+2. Add proper interface definitions for `Env`
+3. Use `satisfies ExportedHandler<Env>` for type checking
+4. Run `wrangler types` to generate type definitions
+
+## Related Documentation
+
+- [Workers Documentation](/Worker.mdx)
+- [MDX Overview](/readme.mdx)
+- [Cloudflare Workers Docs](https://developers.cloudflare.com/workers/)
+- [HTMLRewriter API](https://developers.cloudflare.com/workers/runtime-apis/html-rewriter/)
+
+## Contributing
+
+To contribute a new snippet:
+
+1. Create an MDX file in `snippets/` with proper frontmatter
+2. Document the snippet thoroughly
+3. Test the deployment script
+4. Submit a pull request with:
+   - The snippet file
+   - Updated documentation
+   - Usage examples
+
+## Examples
+
+See the `snippets/` directory for complete examples:
+
+- `scraper.mdx` - HTML scraping with selector syntax
+- `render.mdx` - Markdown/HTML conversion

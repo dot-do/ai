@@ -1,0 +1,86 @@
+---
+$id: https://validate.do/examples/advanced-patterns
+$type: HowTo
+title: Advanced Data Validation Patterns
+description: Advanced patterns and techniques for validate.do
+keywords: [validate, advanced, patterns, techniques]
+---
+
+# Advanced Data Validation Patterns
+
+Advanced patterns and techniques for using validate.do in complex scenarios.
+
+## Pattern 1: Pipeline Processing
+
+```typescript
+import { validate } from 'validate.do'
+
+// Create processing pipeline
+const pipeline = validate.pipeline([validate.step1, validate.step2, validate.step3])
+
+const result = await pipeline.execute(data)
+```
+
+## Pattern 2: Conditional Logic
+
+```typescript
+import { validate } from 'validate.do'
+
+// Conditional processing
+const result = await validate({
+  data,
+  conditions: [{ if: 'type === "A"', then: processA }, { if: 'type === "B"', then: processB }, { else: processDefault }],
+})
+```
+
+## Pattern 3: Error Recovery
+
+```typescript
+import { validate } from 'validate.do'
+
+// Retry with exponential backoff
+async function withRetry(operation, maxRetries = 3) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await operation()
+    } catch (error) {
+      if (i === maxRetries - 1) throw error
+      await new Promise((r) => setTimeout(r, Math.pow(2, i) * 1000))
+    }
+  }
+}
+
+const result = await withRetry(() => validate(data))
+```
+
+## Pattern 4: Streaming
+
+```typescript
+import { validate } from 'validate.do'
+
+// Process data streams
+for await (const chunk of validate.stream(largeDataset)) {
+  console.log('Processing chunk:', chunk)
+  await processChunk(chunk)
+}
+```
+
+## Pattern 5: Parallel Processing
+
+```typescript
+import { validate } from 'validate.do'
+
+// Process in parallel with concurrency limit
+const limit = 10
+const results = await validate.parallel(items, { concurrency: limit })
+```
+
+## Learn More
+
+- [Basic Usage](./basic-usage) - Simple examples
+- [Integration](./integration) - Service integration
+- [Best Practices](../docs/best-practices) - Recommended patterns
+
+---
+
+Part of the [validate.do](https://validate.do) documentation.

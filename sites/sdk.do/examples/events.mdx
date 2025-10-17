@@ -1,0 +1,586 @@
+---
+$id: https://sdk.do/examples/events
+$type: HowTo
+title: Event Handling Example
+description: Event-driven architecture with semantic event patterns
+keywords: [events, event-driven, pub-sub, messaging, workflows]
+---
+
+# Event Handling Example
+
+Build event-driven applications with semantic event patterns.
+
+## Overview
+
+This example demonstrates:
+
+- Publishing semantic events
+- Listening to event patterns
+- Event-driven workflows
+- Error handling in events
+- Event chaining
+
+## Complete Example
+
+```typescript
+import $, { db, ai, on, send } from 'sdk.do'
+
+// ==========================================
+// Event Handlers
+// ==========================================
+
+// Customer lifecycle events
+on($.Customer.created, async (customer) => {
+  console.log(`→ Customer created: ${customer.name}`)
+
+  // Generate welcome message with AI
+  const welcomeMessage = await ai.generate(`Write a warm welcome message for new customer: ${customer.name}`)
+
+  // Send welcome email
+  send($.Email.send, {
+    to: customer.email,
+    subject: 'Welcome!',
+    body: welcomeMessage,
+  })
+
+  // Create onboarding tasks
+  send($.Task.create, {
+    title: 'Complete customer profile',
+    assignee: customer.$id,
+    dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+  })
+
+  console.log(`✓ Sent welcome email and created tasks`)
+})
+
+on($.Customer.upgraded, async (customer) => {
+  console.log(`→ Customer upgraded: ${customer.name}`)
+
+  // Send upgrade confirmation
+  send($.Email.send, {
+    to: customer.email,
+    subject: 'Account Upgraded!',
+    body: 'Your account has been upgraded successfully.',
+  })
+
+  // Assign account manager
+  const accountManager = await db.list($.Person, {
+    where: { jobTitle: 'Account Manager' },
+    limit: 1,
+  })
+
+  if (accountManager[0]) {
+    await db.relate(customer, $.hasAccountManager, accountManager[0])
+    console.log(`✓ Assigned account manager: ${accountManager[0].name}`)
+  }
+})
+
+// Order processing events
+on($.Order.created, async (order) => {
+  console.log(`→ Order created: ${order.$id}`)
+
+  // Validate order with AI
+  const validation = await ai.generate(`Validate order for fraud and completeness: ${JSON.stringify(order)}`, {
+    schema: {
+      isValid: 'boolean',
+      issues: 'array',
+      riskScore: 'number',
+    },
+  })
+
+  if (validation.isValid && validation.riskScore < 0.5) {
+    send($.Order.validated, order)
+  } else {
+    send($.Order.flagged, {
+      ...order,
+      issues: validation.issues,
+      riskScore: validation.riskScore,
+    })
+  }
+})
+
+on($.Order.validated, async (order) => {
+  console.log(`→ Order validated: ${order.$id}`)
+
+  // Process payment
+  send($.Payment.process, {
+    orderId: order.$id,
+    amount: order.total,
+    method: order.paymentMethod,
+  })
+})
+
+on($.Order.flagged, async (order) => {
+  console.log(`⚠ Order flagged: ${order.$id}`)
+
+  // Create review task
+  send($.Task.create, {
+    title: `Review flagged order ${order.$id}`,
+    priority: 'High',
+    type: 'Fraud Review',
+    details: order,
+  })
+})
+
+// Payment events
+on($.Payment.process, async (payment) => {
+  console.log(`→ Processing payment: $${payment.amount}`)
+
+  // Simulate payment processing
+  const success = Math.random() > 0.1 // 90% success rate
+
+  if (success) {
+    send($.Payment.succeeded, {
+      ...payment,
+      transactionId: `txn-${Date.now()}`,
+    })
+  } else {
+    send($.Payment.failed, {
+      ...payment,
+      reason: 'Insufficient funds',
+    })
+  }
+})
+
+on($.Payment.succeeded, async (payment) => {
+  console.log(`✓ Payment succeeded: ${payment.transactionId}`)
+
+  // Update order status
+  const order = await db.get($.Order, payment.orderId)
+  if (order) {
+    await db.update(order, { status: 'Paid' })
+    send($.Order.paid, order)
+  }
+})
+
+on($.Payment.failed, async (payment) => {
+  console.log(`✗ Payment failed: ${payment.reason}`)
+
+  // Notify customer
+  const order = await db.get($.Order, payment.orderId)
+  if (order) {
+    send($.Email.send, {
+      to: order.customerEmail,
+      subject: 'Payment Failed',
+      body: `Your payment for order ${order.$id} failed: ${payment.reason}`,
+    })
+  }
+})
+
+on($.Order.paid, async (order) => {
+  console.log(`→ Order paid: ${order.$id}`)
+
+  // Send to fulfillment
+  send($.Order.fulfill, order)
+
+  // Send confirmation email
+  send($.Email.send, {
+    to: order.customerEmail,
+    subject: 'Order Confirmed',
+    body: `Your order ${order.$id} has been confirmed and is being processed.`,
+  })
+})
+
+on($.Order.fulfill, async (order) => {
+  console.log(`→ Fulfilling order: ${order.$id}`)
+
+  // Update inventory
+  for (const item of order.items || []) {
+    const product = await db.get($.Product, item.productId)
+    if (product) {
+      await db.update(product, {
+        inventory: product.inventory - item.quantity,
+      })
+    }
+  }
+
+  // Mark as fulfilled
+  await db.update(order, { status: 'Fulfilled' })
+  send($.Order.fulfilled, order)
+})
+
+on($.Order.fulfilled, async (order) => {
+  console.log(`✓ Order fulfilled: ${order.$id}`)
+
+  // Send shipping notification
+  send($.Email.send, {
+    to: order.customerEmail,
+    subject: 'Order Shipped',
+    body: `Your order ${order.$id} has been shipped!`,
+  })
+})
+
+// Email events
+on($.Email.send, async (email) => {
+  console.log(`→ Sending email to: ${email.to}`)
+  console.log(`  Subject: ${email.subject}`)
+
+  // Simulate email sending
+  // In production, integrate with SendGrid, AWS SES, etc.
+
+  await new Promise((resolve) => setTimeout(resolve, 100))
+  console.log(`✓ Email sent to: ${email.to}`)
+})
+
+// Task events
+on($.Task.create, async (task) => {
+  console.log(`→ Creating task: ${task.title}`)
+
+  const newTask = await db.create($.Task, task)
+
+  console.log(`✓ Task created: ${newTask.$id}`)
+})
+
+// ==========================================
+// Main Example
+// ==========================================
+
+async function eventsExample() {
+  console.log('=== Event Handling Example ===\n')
+
+  // ==========================================
+  // 1. Customer Registration
+  // ==========================================
+
+  console.log('1. Customer registration flow...\n')
+
+  const customer = await db.create($.Customer, {
+    name: 'Alice Johnson',
+    email: 'alice@example.com',
+    customerStatus: 'Active',
+  })
+
+  // Trigger customer created event
+  send($.Customer.created, customer)
+
+  // Wait for events to process
+  await new Promise((resolve) => setTimeout(resolve, 500))
+
+  console.log()
+
+  // ==========================================
+  // 2. Customer Upgrade
+  // ==========================================
+
+  console.log('2. Customer upgrade flow...\n')
+
+  await db.update(customer, { tier: 'Premium' })
+
+  // Trigger upgrade event
+  send($.Customer.upgraded, customer)
+
+  await new Promise((resolve) => setTimeout(resolve, 500))
+
+  console.log()
+
+  // ==========================================
+  // 3. Order Processing
+  // ==========================================
+
+  console.log('3. Order processing flow...\n')
+
+  // Create products
+  const product1 = await db.create($.Product, {
+    name: 'Widget A',
+    price: 29.99,
+    inventory: 100,
+  })
+
+  const product2 = await db.create($.Product, {
+    name: 'Widget B',
+    price: 39.99,
+    inventory: 50,
+  })
+
+  // Create order
+  const order = await db.create($.Order, {
+    orderNumber: `ORD-${Date.now()}`,
+    customer: customer.$id,
+    customerEmail: customer.email,
+    orderDate: new Date().toISOString(),
+    orderStatus: 'Processing',
+    total: 69.98,
+    paymentMethod: 'CreditCard',
+    items: [
+      { productId: product1.$id, quantity: 1, price: 29.99 },
+      { productId: product2.$id, quantity: 1, price: 39.99 },
+    ],
+  })
+
+  // Trigger order processing
+  send($.Order.created, order)
+
+  // Wait for full workflow to complete
+  await new Promise((resolve) => setTimeout(resolve, 2000))
+
+  console.log()
+
+  // ==========================================
+  // 4. Check Final State
+  // ==========================================
+
+  console.log('4. Checking final state...\n')
+
+  const finalOrder = await db.get($.Order, order.$id)
+  console.log(`Order status: ${finalOrder.orderStatus}`)
+
+  const updatedProduct1 = await db.get($.Product, product1.$id)
+  console.log(`Product 1 inventory: ${updatedProduct1.inventory}`)
+
+  console.log()
+
+  // ==========================================
+  // 5. Cleanup
+  // ==========================================
+
+  console.log('5. Cleanup...\n')
+
+  await db.delete(customer)
+  await db.delete(order)
+  await db.delete(product1)
+  await db.delete(product2)
+
+  console.log('✓ Cleanup complete')
+  console.log()
+
+  console.log('=== Example Complete ===')
+}
+
+// Run the example
+eventsExample().catch(console.error)
+```
+
+## Event Patterns
+
+### Publishing Events
+
+```typescript
+// Simple event
+send($.Order.created, {
+  $type: 'Order',
+  $id: 'order-123',
+  total: 99.99,
+})
+
+// Event with context
+send($.Customer.upgraded, {
+  customerId: 'customer-456',
+  previousTier: 'Basic',
+  newTier: 'Premium',
+})
+```
+
+### Listening to Events
+
+```typescript
+// Listen to specific event
+on($.Order.created, async (order) => {
+  console.log('Order created:', order.$id)
+})
+
+// Listen with error handling
+on($.Order.created, async (order) => {
+  try {
+    await processOrder(order)
+  } catch (error) {
+    console.error('Failed to process:', error)
+    send($.Order.failed, { orderId: order.$id, error })
+  }
+})
+```
+
+### Event Chaining
+
+```typescript
+// Event chain: created → validated → paid → fulfilled
+on($.Order.created, async (order) => {
+  send($.Order.validated, order)
+})
+
+on($.Order.validated, async (order) => {
+  send($.Payment.process, { orderId: order.$id })
+})
+
+on($.Payment.succeeded, async (payment) => {
+  send($.Order.paid, { orderId: payment.orderId })
+})
+
+on($.Order.paid, async (order) => {
+  send($.Order.fulfilled, order)
+})
+```
+
+## Common Event Patterns
+
+### Lifecycle Events
+
+```typescript
+// Entity lifecycle
+on($.Entity.created, handler)
+on($.Entity.updated, handler)
+on($.Entity.deleted, handler)
+
+// State transitions
+on($.Order.pending, handler)
+on($.Order.processing, handler)
+on($.Order.completed, handler)
+on($.Order.cancelled, handler)
+```
+
+### Notification Events
+
+```typescript
+// Communication
+on($.Email.send, handler)
+on($.SMS.send, handler)
+on($.Notification.push, handler)
+
+// Alerts
+on($.Alert.critical, handler)
+on($.Alert.warning, handler)
+on($.Alert.info, handler)
+```
+
+### Integration Events
+
+```typescript
+// External systems
+on($.Webhook.received, handler)
+on($.API.called, handler)
+on($.Sync.triggered, handler)
+
+// Data flows
+on($.Data.imported, handler)
+on($.Data.exported, handler)
+on($.Data.transformed, handler)
+```
+
+## Error Handling
+
+### Try-Catch Pattern
+
+```typescript
+on($.Order.created, async (order) => {
+  try {
+    await processOrder(order)
+    send($.Order.processed, order)
+  } catch (error) {
+    console.error('Error processing order:', error)
+    send($.Order.failed, { orderId: order.$id, error: error.message })
+  }
+})
+```
+
+### Retry Pattern
+
+```typescript
+on($.Order.failed, async (orderData) => {
+  const retries = orderData.retries || 0
+
+  if (retries < 3) {
+    console.log(`Retrying order (attempt ${retries + 1})`)
+    send($.Order.created, { ...orderData, retries: retries + 1 })
+  } else {
+    console.error('Max retries reached')
+    send($.Order.abandoned, orderData)
+  }
+})
+```
+
+### Dead Letter Queue
+
+```typescript
+on($.Order.abandoned, async (order) => {
+  // Log to dead letter queue
+  await db.create($.DeadLetter, {
+    entityType: 'Order',
+    entityId: order.$id,
+    reason: 'Max retries exceeded',
+    data: order,
+    timestamp: new Date().toISOString(),
+  })
+
+  // Notify administrators
+  send($.Alert.critical, {
+    title: 'Order Processing Failed',
+    description: `Order ${order.$id} could not be processed after 3 attempts`,
+  })
+})
+```
+
+## Best Practices
+
+### 1. Use Semantic Events
+
+```typescript
+// Good - semantic events
+send($.Customer.created, customer)
+send($.Order.fulfilled, order)
+
+// Avoid - generic events
+send('customer:created', customer)
+send('order-fulfilled', order)
+```
+
+### 2. Keep Handlers Focused
+
+```typescript
+// Good - single responsibility
+on($.Order.created, async (order) => {
+  await validateOrder(order)
+  send($.Order.validated, order)
+})
+
+on($.Order.validated, async (order) => {
+  await processPayment(order)
+})
+
+// Avoid - doing too much
+on($.Order.created, async (order) => {
+  await validateOrder(order)
+  await processPayment(order)
+  await updateInventory(order)
+  await sendConfirmation(order)
+})
+```
+
+### 3. Handle Errors
+
+```typescript
+// Good - error handling
+on($.Order.created, async (order) => {
+  try {
+    await processOrder(order)
+  } catch (error) {
+    send($.Order.failed, { orderId: order.$id, error })
+  }
+})
+
+// Avoid - no error handling
+on($.Order.created, async (order) => {
+  await processOrder(order) // May throw
+})
+```
+
+### 4. Use Event Chaining
+
+```typescript
+// Good - event chains
+on($.Order.created, (order) => send($.Order.validate, order))
+on($.Order.validated, (order) => send($.Order.process, order))
+on($.Order.processed, (order) => send($.Order.fulfill, order))
+
+// Avoid - nested handlers
+on($.Order.created, async (order) => {
+  await validate(order)
+  await process(order)
+  await fulfill(order)
+})
+```
+
+## See Also
+
+- [Basic Example](./basic) - Basic operations
+- [Database Example](./database) - Database patterns
+- [Workflows Example](./workflows) - Scheduled workflows
+- [events.do](https://events.do) - Event system guide

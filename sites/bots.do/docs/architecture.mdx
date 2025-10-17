@@ -1,0 +1,694 @@
+---
+$id: https://bots.do/docs/architecture
+$type: TechArticle
+title: Bot Architecture and Design
+description: Understand the architecture and design patterns of the bots.do framework for building scalable digital worker bots.
+keywords: [bot architecture, design patterns, scalability, bot framework, system design]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Bot Architecture and Design
+
+Understanding bot architecture is essential for building scalable, reliable digital worker bots.
+
+## Core Architecture
+
+### Bot Components
+
+Every bot consists of four core components:
+
+```typescript
+interface Bot {
+  // Identity & Configuration
+  core: {
+    $type: 'Bot'
+    $id: string
+    name: string
+    task: string
+    capabilities: Capability[]
+  }
+
+  // Intelligence & Decision Making
+  brain: {
+    intelligence: 'rules' | 'ai' | 'hybrid'
+    model?: string
+    rules?: Rule[]
+    context?: string
+  }
+
+  // Execution & Processing
+  executor: {
+    handler: TaskHandler
+    concurrency: number
+    batchSize: number
+    timeout: number
+  }
+
+  // Integration & Communication
+  integrations: {
+    apis: APIConnection[]
+    databases: DatabaseConnection[]
+    queues: QueueConnection[]
+    events: EventSubscription[]
+  }
+}
+```
+
+### Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                         BOT INSTANCE                         │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
+│  │   PERCEPTION │  │   REASONING  │  │    ACTION    │      │
+│  │              │  │              │  │              │      │
+│  │ • Triggers   │─▶│ • Rules/AI   │─▶│ • Execution  │      │
+│  │ • Events     │  │ • Context    │  │ • Tools      │      │
+│  │ • Schedules  │  │ • Decision   │  │ • APIs       │      │
+│  └──────────────┘  └──────────────┘  └──────────────┘      │
+│                                                              │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │               INTEGRATION LAYER                      │   │
+│  │                                                       │   │
+│  │  APIs  │  Databases  │  Queues  │  Events  │  Tools │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                              │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │               MONITORING & CONTROL                   │   │
+│  │                                                       │   │
+│  │  Metrics  │  Logs  │  Alerts  │  Health  │  Status  │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Execution Models
+
+### Synchronous Execution
+
+Best for: Real-time operations, low-latency requirements
+
+```typescript
+const syncBot = await bot.create({
+  name: 'Sync Bot',
+  execution: {
+    mode: 'sync',
+    timeout: 5000, // 5 seconds
+  },
+})
+
+// Blocks until complete
+const result = await syncBot.execute({
+  task: 'validate_input',
+  input: data,
+})
+```
+
+### Asynchronous Execution
+
+Best for: Long-running tasks, background processing
+
+```typescript
+const asyncBot = await bot.create({
+  name: 'Async Bot',
+  execution: {
+    mode: 'async',
+    queue: 'processing-queue',
+    timeout: 300000, // 5 minutes
+  },
+})
+
+// Returns immediately with job ID
+const jobId = await asyncBot.execute({
+  task: 'process_large_file',
+  input: file,
+})
+
+// Check status later
+const status = await asyncBot.getJobStatus(jobId)
+```
+
+### Streaming Execution
+
+Best for: Real-time data processing, progressive results
+
+```typescript
+const streamBot = await bot.create({
+  name: 'Stream Bot',
+  execution: {
+    mode: 'stream',
+    chunkSize: 100,
+  },
+})
+
+// Process stream of data
+const stream = await streamBot.executeStream({
+  task: 'analyze_logs',
+  input: logStream,
+})
+
+for await (const chunk of stream) {
+  console.log('Processed chunk:', chunk)
+}
+```
+
+## Scaling Patterns
+
+### Horizontal Scaling
+
+Scale by adding more bot instances:
+
+```typescript
+const scalableBot = await bot.create({
+  name: 'Scalable Bot',
+  scaling: {
+    mode: 'horizontal',
+    min: 2, // Minimum instances
+    max: 10, // Maximum instances
+    metric: 'queue_depth',
+    threshold: {
+      scaleUp: 100, // Scale up when queue > 100
+      scaleDown: 10, // Scale down when queue < 10
+    },
+    cooldown: 60, // Wait 60s between scaling actions
+  },
+})
+```
+
+### Vertical Scaling
+
+Scale by increasing bot resources:
+
+```typescript
+const powerBot = await bot.create({
+  name: 'Power Bot',
+  scaling: {
+    mode: 'vertical',
+    resources: {
+      cpu: '2000m', // 2 CPU cores
+      memory: '4Gi', // 4GB RAM
+      concurrency: 20, // 20 parallel tasks
+    },
+  },
+})
+```
+
+### Auto-Scaling
+
+Automatically adjust based on load:
+
+```typescript
+const autoBot = await bot.create({
+  name: 'Auto-Scaling Bot',
+  scaling: {
+    mode: 'auto',
+    metrics: [
+      { name: 'cpu', target: 70 }, // 70% CPU utilization
+      { name: 'memory', target: 80 }, // 80% memory utilization
+      { name: 'queue_depth', target: 50 }, // 50 items in queue
+    ],
+    policy: 'aggressive', // 'conservative' | 'balanced' | 'aggressive'
+    limits: {
+      minInstances: 1,
+      maxInstances: 20,
+      maxConcurrency: 100,
+    },
+  },
+})
+```
+
+## Data Flow Patterns
+
+### Pipeline Pattern
+
+Sequential data processing:
+
+```typescript
+const pipelineBot = await bot.create({
+  name: 'Pipeline Bot',
+  pipeline: [
+    {
+      stage: 'extract',
+      handler: async (input) => {
+        return await extractData(input)
+      },
+    },
+    {
+      stage: 'transform',
+      handler: async (data) => {
+        return await transformData(data)
+      },
+    },
+    {
+      stage: 'validate',
+      handler: async (data) => {
+        return await validateData(data)
+      },
+    },
+    {
+      stage: 'load',
+      handler: async (data) => {
+        return await loadData(data)
+      },
+    },
+  ],
+})
+```
+
+### Fan-Out Pattern
+
+Distribute work to multiple workers:
+
+```typescript
+const fanOutBot = await bot.create({
+  name: 'Fan-Out Bot',
+  pattern: 'fan-out',
+  workers: {
+    count: 5,
+    distribution: 'round-robin', // 'round-robin' | 'random' | 'least-loaded'
+  },
+  handler: async (batch) => {
+    // Distribute batch to workers
+    return await Promise.all(batch.map((item) => processItem(item)))
+  },
+})
+```
+
+### Fan-In Pattern
+
+Aggregate results from multiple sources:
+
+```typescript
+const fanInBot = await bot.create({
+  name: 'Fan-In Bot',
+  pattern: 'fan-in',
+  sources: ['api-1', 'api-2', 'api-3'],
+  aggregator: async (results) => {
+    // Combine results from all sources
+    return results.reduce(
+      (acc, result) => ({
+        ...acc,
+        ...result,
+      }),
+      {}
+    )
+  },
+})
+```
+
+### Map-Reduce Pattern
+
+Process and aggregate large datasets:
+
+```typescript
+const mapReduceBot = await bot.create({
+  name: 'MapReduce Bot',
+  pattern: 'map-reduce',
+  map: async (item) => {
+    // Transform each item
+    return processItem(item)
+  },
+  reduce: async (results) => {
+    // Aggregate all results
+    return results.reduce((sum, val) => sum + val, 0)
+  },
+  concurrency: 10,
+})
+```
+
+## State Management
+
+### Stateless Bots
+
+No persistent state between executions:
+
+```typescript
+const statelessBot = await bot.create({
+  name: 'Stateless Bot',
+  state: 'stateless',
+  handler: async (input) => {
+    // Process input without maintaining state
+    return processInput(input)
+  },
+})
+```
+
+### Stateful Bots
+
+Maintain state across executions:
+
+```typescript
+const statefulBot = await bot.create({
+  name: 'Stateful Bot',
+  state: {
+    type: 'stateful',
+    storage: 'database', // 'memory' | 'database' | 'distributed'
+    persistence: true,
+  },
+  handler: async (input, state) => {
+    // Access and update state
+    state.counter = (state.counter || 0) + 1
+    state.lastProcessed = new Date()
+
+    return {
+      result: processInput(input),
+      state,
+    }
+  },
+})
+
+// Get current state
+const state = await statefulBot.getState()
+
+// Reset state
+await statefulBot.resetState()
+```
+
+### Distributed State
+
+Share state across multiple bot instances:
+
+```typescript
+const distributedBot = await bot.create({
+  name: 'Distributed Bot',
+  state: {
+    type: 'distributed',
+    backend: 'redis',
+    ttl: 3600, // 1 hour
+    consistency: 'strong', // 'eventual' | 'strong'
+  },
+  handler: async (input, state) => {
+    // Shared state across all instances
+    const count = await state.increment('global_counter')
+    return { count }
+  },
+})
+```
+
+## Communication Patterns
+
+### Request-Response
+
+Synchronous communication:
+
+```typescript
+const apiBot = await bot.create({
+  name: 'API Bot',
+  communication: {
+    pattern: 'request-response',
+    timeout: 5000,
+  },
+  handler: async (request) => {
+    const result = await processRequest(request)
+    return { status: 'success', data: result }
+  },
+})
+```
+
+### Publish-Subscribe
+
+Event-driven communication:
+
+```typescript
+import { on, send } from 'sdk.do'
+
+const pubSubBot = await bot.create({
+  name: 'PubSub Bot',
+  communication: {
+    pattern: 'pub-sub',
+    topics: ['orders', 'payments', 'shipments'],
+  },
+})
+
+// Subscribe to events
+await on($.Order.created, async (order) => {
+  await pubSubBot.execute({ input: order })
+})
+
+// Publish events
+await send($.Order.processed, {
+  orderId: order.id,
+  status: 'completed',
+})
+```
+
+### Message Queue
+
+Asynchronous task processing:
+
+```typescript
+const queueBot = await bot.create({
+  name: 'Queue Bot',
+  communication: {
+    pattern: 'queue',
+    source: 'tasks-queue',
+    destination: 'results-queue',
+    concurrency: 5,
+  },
+  handler: async (message) => {
+    const result = await processMessage(message)
+    return result
+  },
+})
+```
+
+## Error Handling Strategies
+
+### Retry with Backoff
+
+```typescript
+const resilientBot = await bot.create({
+  name: 'Resilient Bot',
+  errorHandling: {
+    strategy: 'retry',
+    retries: {
+      attempts: 5,
+      backoff: 'exponential', // 1s, 2s, 4s, 8s, 16s
+      maxDelay: 30000, // Cap at 30s
+      jitter: true, // Add randomness to prevent thundering herd
+    },
+  },
+})
+```
+
+### Circuit Breaker
+
+Prevent cascading failures:
+
+```typescript
+const protectedBot = await bot.create({
+  name: 'Protected Bot',
+  errorHandling: {
+    strategy: 'circuit-breaker',
+    circuitBreaker: {
+      threshold: 5, // Open after 5 failures
+      timeout: 60000, // Try again after 60s
+      halfOpenRequests: 3, // Test with 3 requests when half-open
+    },
+  },
+})
+```
+
+### Dead Letter Queue
+
+Handle permanently failed tasks:
+
+```typescript
+const robustBot = await bot.create({
+  name: 'Robust Bot',
+  errorHandling: {
+    strategy: 'dlq',
+    deadLetterQueue: {
+      name: 'failed-tasks',
+      maxRetries: 3,
+      retentionPeriod: 86400, // 24 hours
+    },
+    onDLQ: async (task, error) => {
+      // Alert on permanent failure
+      await send($.Task.permanentFailure, { task, error })
+    },
+  },
+})
+```
+
+## Performance Optimization
+
+### Batching
+
+Process multiple items together:
+
+```typescript
+const batchBot = await bot.create({
+  name: 'Batch Bot',
+  batching: {
+    enabled: true,
+    size: 100, // Process 100 items at once
+    timeout: 5000, // Or wait max 5s
+    strategy: 'size-or-timeout', // Whichever comes first
+  },
+  handler: async (batch) => {
+    return await processBatch(batch)
+  },
+})
+```
+
+### Caching
+
+Cache frequently accessed data:
+
+```typescript
+const cachedBot = await bot.create({
+  name: 'Cached Bot',
+  caching: {
+    enabled: true,
+    strategy: 'lru', // Least Recently Used
+    maxSize: 1000, // Cache 1000 items
+    ttl: 3600, // 1 hour expiration
+  },
+  handler: async (input, cache) => {
+    const key = generateKey(input)
+
+    // Check cache first
+    if (await cache.has(key)) {
+      return await cache.get(key)
+    }
+
+    // Process and cache
+    const result = await processInput(input)
+    await cache.set(key, result)
+
+    return result
+  },
+})
+```
+
+### Connection Pooling
+
+Reuse connections:
+
+```typescript
+const poolBot = await bot.create({
+  name: 'Pool Bot',
+  connections: {
+    database: {
+      pool: {
+        min: 2,
+        max: 10,
+        idleTimeout: 30000,
+      },
+    },
+    api: {
+      pool: {
+        keepAlive: true,
+        maxSockets: 50,
+      },
+    },
+  },
+})
+```
+
+## Monitoring and Observability
+
+### Structured Logging
+
+```typescript
+const observableBot = await bot.create({
+  name: 'Observable Bot',
+  logging: {
+    level: 'info',
+    format: 'json',
+    fields: ['timestamp', 'botId', 'taskId', 'duration', 'status'],
+    destination: 'cloudwatch',
+  },
+})
+```
+
+### Metrics Collection
+
+```typescript
+const monitoredBot = await bot.create({
+  name: 'Monitored Bot',
+  metrics: {
+    enabled: true,
+    collect: ['throughput', 'latency', 'error_rate', 'success_rate', 'queue_depth'],
+    interval: 60000, // Collect every minute
+    destination: 'prometheus',
+  },
+})
+```
+
+### Distributed Tracing
+
+```typescript
+const tracedBot = await bot.create({
+  name: 'Traced Bot',
+  tracing: {
+    enabled: true,
+    provider: 'opentelemetry',
+    sampleRate: 1.0, // 100% sampling
+    propagation: 'w3c', // W3C Trace Context
+  },
+})
+```
+
+## Security Patterns
+
+### Authentication
+
+```typescript
+const secureBot = await bot.create({
+  name: 'Secure Bot',
+  security: {
+    authentication: {
+      type: 'oauth2',
+      provider: 'auth.do',
+      scopes: ['bot:execute', 'data:read'],
+    },
+  },
+})
+```
+
+### Authorization
+
+```typescript
+const authorizedBot = await bot.create({
+  name: 'Authorized Bot',
+  security: {
+    authorization: {
+      type: 'rbac', // Role-Based Access Control
+      roles: ['processor', 'reader'],
+      permissions: ['execute:task', 'read:data'],
+    },
+  },
+})
+```
+
+### Encryption
+
+```typescript
+const encryptedBot = await bot.create({
+  name: 'Encrypted Bot',
+  security: {
+    encryption: {
+      atRest: true, // Encrypt stored data
+      inTransit: true, // Use TLS
+      algorithm: 'AES-256-GCM',
+    },
+  },
+})
+```
+
+## See Also
+
+- [Getting Started](./getting-started) - Create your first bot
+- [Best Practices](./best-practices) - Bot development guidelines
+- [API Reference](../api/) - Complete API documentation
+- [Examples](../examples/) - Real-world implementations
+
+---
+
+Continue to [Best Practices](./best-practices) to learn bot development guidelines.

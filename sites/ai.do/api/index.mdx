@@ -1,0 +1,637 @@
+---
+$id: https://ai.do/api
+$type: APIReference
+title: AI API Reference
+description: Complete API reference for ai.do AI services
+keywords: [ai, api, reference, documentation, functions]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# AI API Reference
+
+Complete API reference for ai.do AI services.
+
+## Overview
+
+The AI API provides three main functions:
+
+- `ai.generate()` - Generate text with optional schema validation
+- `ai.embed()` - Create vector embeddings
+- `ai.batch` - Batch processing operations
+
+## ai.generate()
+
+Generate AI content with semantic context and schema support.
+
+### Signature
+
+```typescript
+function generate<T = string>(prompt: string, options?: GenerateOptions<T>): Promise<T>
+```
+
+### Parameters
+
+#### `prompt: string` (required)
+
+The prompt text to generate content from.
+
+```typescript
+await ai.generate('Write a haiku about coding')
+```
+
+#### `options?: GenerateOptions<T>` (optional)
+
+Configuration options for generation.
+
+```typescript
+interface GenerateOptions<T> {
+  // Model selection
+  model?: 'gpt-5' | 'gpt-5-mini' | 'gpt-5-nano' | 'gpt-5-codex' | 'claude-sonnet-4.5'
+
+  // Schema for structured output
+  schema?: SchemaType<T>
+
+  // Enable structured mode
+  structured?: boolean
+
+  // Semantic context
+  context?: Record<string, any>
+
+  // Generation parameters
+  temperature?: number // 0-1, default: 0.7
+  maxTokens?: number // Default: 4096
+  topP?: number // 0-1, default: 1.0
+  frequencyPenalty?: number // -2 to 2, default: 0
+  presencePenalty?: number // -2 to 2, default: 0
+  stop?: string[] // Stop sequences
+}
+```
+
+### Returns
+
+- **Without schema**: `Promise<string>` - Generated text
+- **With schema**: `Promise<T>` - Structured object of type T
+
+### Examples
+
+**Basic generation:**
+
+```typescript
+const text = await ai.generate('Write a haiku')
+// Returns: string
+```
+
+**Structured generation:**
+
+```typescript
+import { $ } from 'sdk.do'
+
+const product = await ai.generate('Create laptop product', {
+  schema: $.Product,
+  structured: true,
+})
+// Returns: Product object with $type, name, description, etc.
+```
+
+**With context:**
+
+```typescript
+const description = await ai.generate('Write product description', {
+  context: {
+    name: 'Smart Watch',
+    features: ['Heart rate monitor', 'GPS'],
+  },
+})
+```
+
+**Custom parameters:**
+
+```typescript
+const creative = await ai.generate('Write creative story', {
+  model: 'claude-sonnet-4.5',
+  temperature: 0.9,
+  maxTokens: 2000,
+})
+```
+
+### Error Codes
+
+- `RATE_LIMIT_EXCEEDED` - API rate limit exceeded
+- `INVALID_API_KEY` - Invalid or missing API key
+- `CONTEXT_LENGTH_EXCEEDED` - Prompt too long
+- `CONTENT_FILTER` - Content filtered by safety system
+- `MODEL_UNAVAILABLE` - Model temporarily unavailable
+- `SCHEMA_VALIDATION_ERROR` - Schema validation failed
+
+## ai.embed()
+
+Create vector embeddings for semantic operations.
+
+### Signature
+
+```typescript
+function embed(text: string | string[]): Promise<number[] | number[][]>
+```
+
+### Parameters
+
+#### `text: string | string[]` (required)
+
+Single text or array of texts to embed.
+
+**Single text:**
+
+```typescript
+const embedding = await ai.embed('machine learning')
+// Returns: number[]
+```
+
+**Multiple texts:**
+
+```typescript
+const embeddings = await ai.embed(['text one', 'text two', 'text three'])
+// Returns: number[][]
+```
+
+### Returns
+
+- **Single text**: `Promise<number[]>` - Vector embedding (1536 or 1024 dimensions)
+- **Multiple texts**: `Promise<number[][]>` - Array of embeddings
+
+### Embedding Dimensions
+
+- **OpenAI** (text-embedding-3-large): 1536 dimensions
+- **OpenAI** (text-embedding-3-small): 512 dimensions
+- **Anthropic** (claude-embed-v1): 1024 dimensions
+
+### Examples
+
+**Single embedding:**
+
+```typescript
+const embedding = await ai.embed('semantic search query')
+console.log(embedding.length) // 1536
+```
+
+**Batch embeddings:**
+
+```typescript
+const texts = ['text 1', 'text 2', 'text 3']
+const embeddings = await ai.embed(texts)
+console.log(embeddings.length) // 3
+console.log(embeddings[0].length) // 1536
+```
+
+**Calculate similarity:**
+
+```typescript
+function cosineSimilarity(a: number[], b: number[]): number {
+  const dot = a.reduce((sum, val, i) => sum + val * b[i], 0)
+  const magA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0))
+  const magB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0))
+  return dot / (magA * magB)
+}
+
+const embed1 = await ai.embed('machine learning')
+const embed2 = await ai.embed('artificial intelligence')
+
+const similarity = cosineSimilarity(embed1, embed2)
+console.log(similarity) // 0.87 (high similarity)
+```
+
+### Error Codes
+
+- `TEXT_TOO_LONG` - Text exceeds maximum length (8192 tokens)
+- `RATE_LIMIT_EXCEEDED` - API rate limit exceeded
+- `INVALID_API_KEY` - Invalid or missing API key
+
+## ai.batch
+
+Batch processing operations for asynchronous AI requests.
+
+### ai.batch.create()
+
+Create a batch job for processing multiple requests.
+
+#### Signature
+
+```typescript
+function create(requests: BatchRequest[]): Promise<BatchJob>
+```
+
+#### Parameters
+
+**`requests: BatchRequest[]`** (required)
+
+Array of batch requests.
+
+```typescript
+interface BatchRequest {
+  // Simplified format
+  custom_id?: string
+  prompt: string
+  schema?: SchemaType
+  structured?: boolean
+  context?: Record<string, any>
+
+  // Or OpenAI format
+  custom_id?: string
+  method: 'POST'
+  url: '/v1/chat/completions'
+  body: {
+    model: string
+    messages: Array<{ role: string; content: string }>
+    max_tokens?: number
+    temperature?: number
+  }
+}
+```
+
+#### Returns
+
+```typescript
+interface BatchJob {
+  id: string
+  status: 'validating' | 'in_progress' | 'completed' | 'failed' | 'cancelled'
+  createdAt: string
+}
+```
+
+#### Example
+
+```typescript
+const batch = await ai.batch.create([
+  {
+    custom_id: 'req-1',
+    prompt: 'Generate description for laptop',
+  },
+  {
+    custom_id: 'req-2',
+    prompt: 'Generate description for phone',
+    schema: $.Product,
+    structured: true,
+  },
+])
+
+console.log(batch.id) // 'batch_abc123'
+console.log(batch.status) // 'validating'
+```
+
+### ai.batch.status()
+
+Check the status of a batch job.
+
+#### Signature
+
+```typescript
+function status(batchId: string): Promise<BatchStatus>
+```
+
+#### Parameters
+
+**`batchId: string`** (required)
+
+The batch job ID returned from `create()`.
+
+#### Returns
+
+```typescript
+interface BatchStatus {
+  id: string
+  status: 'validating' | 'in_progress' | 'completed' | 'failed' | 'cancelled'
+  total: number
+  completed: number
+  failed: number
+  createdAt: string
+  completedAt?: string
+  error?: string
+}
+```
+
+#### Example
+
+```typescript
+const status = await ai.batch.status('batch_abc123')
+
+console.log(status.status) // 'in_progress'
+console.log(`${status.completed}/${status.total}`) // '50/100'
+```
+
+### ai.batch.results()
+
+Retrieve results from a completed batch job.
+
+#### Signature
+
+```typescript
+function results(batchId: string): Promise<BatchResult[]>
+```
+
+#### Parameters
+
+**`batchId: string`** (required)
+
+The batch job ID.
+
+#### Returns
+
+```typescript
+interface BatchResult {
+  custom_id: string
+  response?: any
+  error?: {
+    code: string
+    message: string
+  }
+}
+```
+
+#### Example
+
+```typescript
+const results = await ai.batch.results('batch_abc123')
+
+for (const result of results) {
+  if (result.error) {
+    console.error(`${result.custom_id} failed:`, result.error)
+  } else {
+    console.log(`${result.custom_id}:`, result.response)
+  }
+}
+```
+
+### ai.batch.cancel()
+
+Cancel a running batch job.
+
+#### Signature
+
+```typescript
+function cancel(batchId: string): Promise<void>
+```
+
+#### Parameters
+
+**`batchId: string`** (required)
+
+The batch job ID to cancel.
+
+#### Example
+
+```typescript
+await ai.batch.cancel('batch_abc123')
+```
+
+## ai.config()
+
+Configure default AI settings.
+
+### Signature
+
+```typescript
+function config(options: AIConfig): void
+```
+
+### Parameters
+
+```typescript
+interface AIConfig {
+  model?: string
+  temperature?: number
+  maxTokens?: number
+  topP?: number
+  frequencyPenalty?: number
+  presencePenalty?: number
+}
+```
+
+### Example
+
+```typescript
+ai.config({
+  model: 'gpt-5',
+  temperature: 0.7,
+  maxTokens: 4096,
+})
+```
+
+## Type Definitions
+
+### SchemaType
+
+Schema.org type from `schema.org.ai` package.
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Available schemas
+$.Product
+$.Organization
+$.Person
+$.Article
+$.Event
+// ... 817 total Schema.org types
+```
+
+See [schema.org.ai](https://schema.org.ai) for all available types.
+
+### GenerationOptions
+
+```typescript
+interface GenerationOptions<T> {
+  model?: AIModel
+  schema?: SchemaType<T>
+  structured?: boolean
+  context?: Record<string, any>
+  temperature?: number
+  maxTokens?: number
+  topP?: number
+  frequencyPenalty?: number
+  presencePenalty?: number
+  stop?: string[]
+}
+```
+
+### AIModel
+
+```typescript
+type AIModel = 'gpt-5' | 'gpt-5-mini' | 'gpt-5-nano' | 'gpt-5-codex' | 'claude-sonnet-4.5'
+```
+
+## Environment Variables
+
+Configure AI services via environment variables:
+
+```bash
+# Required: API keys
+OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
+
+# Optional: Default configuration
+AI_MODEL=gpt-5
+AI_TEMPERATURE=0.7
+AI_MAX_TOKENS=4096
+```
+
+## Error Handling
+
+All AI functions throw errors with the following structure:
+
+```typescript
+interface AIError extends Error {
+  code: string
+  message: string
+  details?: any
+  retryAfter?: number // For rate limit errors
+}
+```
+
+### Common Error Codes
+
+- `INVALID_API_KEY` - API key is invalid or missing
+- `RATE_LIMIT_EXCEEDED` - API rate limit exceeded
+- `CONTEXT_LENGTH_EXCEEDED` - Input text too long
+- `CONTENT_FILTER` - Content filtered by safety system
+- `MODEL_UNAVAILABLE` - Model temporarily unavailable
+- `SCHEMA_VALIDATION_ERROR` - Schema validation failed
+- `TEXT_TOO_LONG` - Embedding text exceeds limit
+- `BATCH_NOT_FOUND` - Batch job not found
+- `BATCH_FAILED` - Batch job failed
+
+### Example
+
+```typescript
+try {
+  const result = await ai.generate('prompt')
+} catch (error) {
+  if (error.code === 'RATE_LIMIT_EXCEEDED') {
+    console.log(`Rate limited. Retry after ${error.retryAfter}ms`)
+  } else {
+    console.error('Generation failed:', error.message)
+  }
+}
+```
+
+## Rate Limits
+
+Rate limits vary by model and API key:
+
+### OpenAI
+
+- **GPT-5**: 10,000 requests/minute
+- **GPT-5 Mini**: 30,000 requests/minute
+- **Embeddings**: 100,000 requests/minute
+- **Batch API**: No rate limits
+
+### Anthropic
+
+- **Claude Sonnet 4.5**: 5,000 requests/minute
+- **Embeddings**: 50,000 requests/minute
+
+## Best Practices
+
+### 1. Use Appropriate Models
+
+```typescript
+// Simple tasks
+await ai.generate('...', { model: 'gpt-5-nano' })
+
+// Standard tasks
+await ai.generate('...', { model: 'gpt-5' })
+
+// Code tasks
+await ai.generate('...', { model: 'gpt-5-codex' })
+```
+
+### 2. Implement Retry Logic
+
+```typescript
+async function generateWithRetry(prompt: string, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await ai.generate(prompt)
+    } catch (error) {
+      if (error.code === 'RATE_LIMIT_EXCEEDED' && i < retries - 1) {
+        await new Promise((r) => setTimeout(r, error.retryAfter || 1000))
+        continue
+      }
+      throw error
+    }
+  }
+}
+```
+
+### 3. Cache Embeddings
+
+```typescript
+const embeddingCache = new Map<string, number[]>()
+
+async function getCachedEmbedding(text: string) {
+  if (!embeddingCache.has(text)) {
+    embeddingCache.set(text, await ai.embed(text))
+  }
+  return embeddingCache.get(text)
+}
+```
+
+### 4. Use Batch for Scale
+
+```typescript
+// For 100+ requests, use batch API for 50% cost savings
+const batch = await ai.batch.create(requests)
+```
+
+### 5. Provide Rich Context
+
+```typescript
+await ai.generate('Generate description', {
+  context: {
+    product: existingProduct,
+    brand: brand,
+    keywords: keywords,
+    tone: 'professional',
+  },
+})
+```
+
+## Migration Guide
+
+### From GPT-4 to GPT-5
+
+```typescript
+// Old (deprecated)
+await ai.generate('prompt', { model: 'gpt-4o' })
+
+// New (current)
+await ai.generate('prompt', { model: 'gpt-5' })
+```
+
+### From Claude 3.5 to 4.5
+
+```typescript
+// Old (deprecated)
+await ai.generate('prompt', { model: 'claude-sonnet-3.5' })
+
+// New (current)
+await ai.generate('prompt', { model: 'claude-sonnet-4.5' })
+```
+
+## See Also
+
+- [Getting Started](../docs/getting-started) - Quick start guide
+- [Text Generation](../docs/generation) - Generation guide
+- [Embeddings](../docs/embeddings) - Embeddings guide
+- [Batch Processing](../docs/batch-processing) - Batch guide
+- [Examples](../examples/) - Code examples
+
+## Support
+
+- [GitHub Issues](https://github.com/dot-do/ai/issues) - Report bugs
+- [Discord Community](https://discord.gg/dotdo) - Get help
+- [Documentation](https://ai.do) - Full documentation
+
+## License
+
+MIT (Open Source)

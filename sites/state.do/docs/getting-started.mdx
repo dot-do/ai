@@ -1,0 +1,502 @@
+---
+$id: https://state.do/docs/getting-started
+$type: HowTo
+title: Getting Started with state.do
+description: Learn how to use state.do for distributed state management with Cloudflare Durable Objects
+keywords: [state, durable objects, distributed, consistency, getting started]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Getting Started with state.do
+
+Learn how to use state.do for distributed state management with Cloudflare Durable Objects.
+
+## What is state.do?
+
+state.do provides distributed state management built on Cloudflare Durable Objects, offering:
+
+- **Strong Consistency** - Single-writer guarantee per object
+- **Global Distribution** - Low-latency access worldwide
+- **Automatic Persistence** - State saved to durable storage
+- **Real-time Updates** - WebSocket support for live data
+- **Transactional Operations** - Atomic state changes
+
+## Installation
+
+state.do is included in the sdk.do package:
+
+```bash
+npm install sdk.do
+```
+
+## Basic Concepts
+
+### Durable Objects
+
+Durable Objects are unique, strongly-consistent objects that:
+
+- Have a unique identifier
+- Run in a single location at a time
+- Provide single-writer consistency
+- Persist state automatically
+- Can handle WebSocket connections
+
+### State Management Patterns
+
+state.do supports several patterns:
+
+1. **Key-Value Storage** - Simple state storage and retrieval
+2. **Counters** - Atomic increment/decrement operations
+3. **Queues** - FIFO message processing
+4. **Sessions** - User session management
+5. **Rate Limiting** - Request throttling
+6. **Leaderboards** - Sorted sets with scores
+
+## Your First State Object
+
+### Step 1: Define a State Class
+
+```typescript
+import { $, state } from 'sdk.do'
+
+// Define a counter state object
+export class Counter {
+  private count: number = 0
+
+  async increment() {
+    this.count++
+    await state.save(this)
+    return this.count
+  }
+
+  async decrement() {
+    this.count--
+    await state.save(this)
+    return this.count
+  }
+
+  async get() {
+    return this.count
+  }
+
+  async reset() {
+    this.count = 0
+    await state.save(this)
+    return this.count
+  }
+}
+```
+
+### Step 2: Create a State Instance
+
+```typescript
+import { $, state } from 'sdk.do'
+
+// Get or create a counter instance
+const counter = await state.get($.Counter, 'global-counter')
+
+// Increment the counter
+const newValue = await counter.increment()
+console.log('Count:', newValue)
+
+// Get current value
+const current = await counter.get()
+console.log('Current:', current)
+```
+
+### Step 3: Use in Your Application
+
+```typescript
+import { $, state, on } from 'sdk.do'
+
+// Increment counter on every page view
+on($.PageView.created, async (event) => {
+  const counter = await state.get($.Counter, 'page-views')
+  await counter.increment()
+})
+
+// Get total page views
+export async function getPageViews() {
+  const counter = await state.get($.Counter, 'page-views')
+  return await counter.get()
+}
+```
+
+## Common Patterns
+
+### User Session Management
+
+```typescript
+import { $, state, user } from 'sdk.do'
+
+export class UserSession {
+  userId: string
+  data: Record<string, any> = {}
+  lastActivity: number = Date.now()
+
+  async set(key: string, value: any) {
+    this.data[key] = value
+    this.lastActivity = Date.now()
+    await state.save(this)
+  }
+
+  async get(key: string) {
+    this.lastActivity = Date.now()
+    await state.save(this)
+    return this.data[key]
+  }
+
+  async isExpired(ttl: number = 3600000) {
+    return Date.now() - this.lastActivity > ttl
+  }
+}
+
+// Usage
+const session = await state.get($.UserSession, user.current.$id)
+await session.set('cart', { items: ['product-1', 'product-2'] })
+
+const cart = await session.get('cart')
+console.log('Cart:', cart)
+```
+
+### Rate Limiting
+
+```typescript
+import { $, state } from 'sdk.do'
+
+export class RateLimiter {
+  requests: number[] = []
+  limit: number = 100
+  window: number = 60000 // 1 minute
+
+  async check(): Promise<boolean> {
+    const now = Date.now()
+
+    // Remove old requests outside the window
+    this.requests = this.requests.filter((time) => now - time < this.window)
+
+    // Check if under limit
+    if (this.requests.length >= this.limit) {
+      return false
+    }
+
+    // Add current request
+    this.requests.push(now)
+    await state.save(this)
+
+    return true
+  }
+
+  async remaining(): Promise<number> {
+    const now = Date.now()
+    this.requests = this.requests.filter((time) => now - time < this.window)
+    return Math.max(0, this.limit - this.requests.length)
+  }
+}
+
+// Usage
+const limiter = await state.get($.RateLimiter, `api:${userId}`)
+
+if (await limiter.check()) {
+  // Process request
+  return processRequest()
+} else {
+  // Rate limit exceeded
+  const remaining = await limiter.remaining()
+  throw new Error(`Rate limit exceeded. ${remaining} requests remaining.`)
+}
+```
+
+### Leaderboard
+
+```typescript
+import { $, state } from 'sdk.do'
+
+export class Leaderboard {
+  scores: Map<string, number> = new Map()
+
+  async setScore(playerId: string, score: number) {
+    this.scores.set(playerId, score)
+    await state.save(this)
+  }
+
+  async getScore(playerId: string): Promise<number> {
+    return this.scores.get(playerId) || 0
+  }
+
+  async getTop(limit: number = 10): Promise<Array<{ playerId: string; score: number }>> {
+    return Array.from(this.scores.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit)
+      .map(([playerId, score]) => ({ playerId, score }))
+  }
+
+  async getRank(playerId: string): Promise<number> {
+    const sorted = Array.from(this.scores.entries()).sort((a, b) => b[1] - a[1])
+
+    const index = sorted.findIndex(([id]) => id === playerId)
+    return index === -1 ? -1 : index + 1
+  }
+}
+
+// Usage
+const leaderboard = await state.get($.Leaderboard, 'game-1')
+
+await leaderboard.setScore('player-1', 1000)
+await leaderboard.setScore('player-2', 1500)
+
+const top = await leaderboard.getTop(10)
+console.log('Top 10:', top)
+
+const rank = await leaderboard.getRank('player-1')
+console.log('Player 1 rank:', rank)
+```
+
+## Real-time Updates with WebSockets
+
+```typescript
+import { $, state } from 'sdk.do'
+
+export class ChatRoom {
+  messages: Array<{ user: string; text: string; timestamp: number }> = []
+  connections: Set<WebSocket> = new Set()
+
+  async connect(ws: WebSocket) {
+    this.connections.add(ws)
+
+    // Send message history
+    ws.send(
+      JSON.stringify({
+        type: 'history',
+        messages: this.messages,
+      })
+    )
+  }
+
+  async disconnect(ws: WebSocket) {
+    this.connections.delete(ws)
+  }
+
+  async sendMessage(user: string, text: string) {
+    const message = {
+      user,
+      text,
+      timestamp: Date.now(),
+    }
+
+    this.messages.push(message)
+    await state.save(this)
+
+    // Broadcast to all connections
+    const data = JSON.stringify({ type: 'message', message })
+    this.connections.forEach((ws) => ws.send(data))
+  }
+}
+
+// Usage
+const room = await state.get($.ChatRoom, 'room-1')
+
+// Connect WebSocket
+await room.connect(websocket)
+
+// Send message
+await room.sendMessage('user-1', 'Hello, world!')
+```
+
+## Alarm Scheduling
+
+Schedule future actions with alarms:
+
+```typescript
+import { $, state } from 'sdk.do'
+
+export class Reminder {
+  reminders: Array<{ id: string; text: string; time: number }> = []
+
+  async add(text: string, delayMs: number) {
+    const reminder = {
+      id: crypto.randomUUID(),
+      text,
+      time: Date.now() + delayMs,
+    }
+
+    this.reminders.push(reminder)
+    await state.save(this)
+
+    // Schedule alarm
+    await state.alarm(this, reminder.time)
+
+    return reminder.id
+  }
+
+  async onAlarm() {
+    const now = Date.now()
+    const due = this.reminders.filter((r) => r.time <= now)
+
+    // Process due reminders
+    for (const reminder of due) {
+      console.log('Reminder:', reminder.text)
+      // Send notification, email, etc.
+    }
+
+    // Remove processed reminders
+    this.reminders = this.reminders.filter((r) => r.time > now)
+    await state.save(this)
+
+    // Schedule next alarm if reminders remain
+    if (this.reminders.length > 0) {
+      const next = Math.min(...this.reminders.map((r) => r.time))
+      await state.alarm(this, next)
+    }
+  }
+}
+
+// Usage
+const reminders = await state.get($.Reminder, 'user-1')
+
+// Add reminder for 1 hour from now
+await reminders.add('Meeting with team', 3600000)
+```
+
+## State Persistence
+
+State is automatically persisted, but you can control when:
+
+```typescript
+import { $, state } from 'sdk.do'
+
+export class BankAccount {
+  balance: number = 0
+  transactions: Array<{ amount: number; timestamp: number }> = []
+
+  async deposit(amount: number) {
+    if (amount <= 0) {
+      throw new Error('Amount must be positive')
+    }
+
+    this.balance += amount
+    this.transactions.push({ amount, timestamp: Date.now() })
+
+    // Explicit save for important operations
+    await state.save(this)
+
+    return this.balance
+  }
+
+  async withdraw(amount: number) {
+    if (amount <= 0) {
+      throw new Error('Amount must be positive')
+    }
+
+    if (amount > this.balance) {
+      throw new Error('Insufficient funds')
+    }
+
+    this.balance -= amount
+    this.transactions.push({ amount: -amount, timestamp: Date.now() })
+
+    await state.save(this)
+
+    return this.balance
+  }
+
+  async getBalance() {
+    return this.balance
+  }
+}
+```
+
+## State Consistency Guarantees
+
+state.do provides strong consistency:
+
+```typescript
+import { $, state } from 'sdk.do'
+
+// Multiple concurrent operations on the same object are serialized
+const counter = await state.get($.Counter, 'global')
+
+// These operations are guaranteed to be atomic
+await Promise.all([
+  counter.increment(), // 1
+  counter.increment(), // 2
+  counter.increment(), // 3
+])
+
+// Final count will always be 3 (not undefined behavior)
+const count = await counter.get()
+console.log('Count:', count) // Always 3
+```
+
+## Configuration
+
+Configure state objects:
+
+```typescript
+import { $, state } from 'sdk.do'
+
+// Set storage namespace
+state.config({
+  namespace: 'production',
+  region: 'auto', // Automatic location selection
+})
+
+// Use specific regions for compliance
+state.config({
+  namespace: 'eu-users',
+  region: 'eu', // Keep data in EU
+})
+```
+
+## Error Handling
+
+```typescript
+import { $, state } from 'sdk.do'
+
+try {
+  const counter = await state.get($.Counter, 'test')
+  await counter.increment()
+} catch (error) {
+  if (error.code === 'STATE_NOT_FOUND') {
+    // State object doesn't exist
+    console.error('State not found')
+  } else if (error.code === 'STATE_CONFLICT') {
+    // Concurrent modification detected
+    console.error('Conflict detected, retry')
+  } else {
+    // Other error
+    console.error('Error:', error.message)
+  }
+}
+```
+
+## Best Practices
+
+1. **Keep State Small** - Store only essential data in state objects
+2. **Use Appropriate IDs** - Choose meaningful, unique identifiers
+3. **Handle Concurrency** - Implement retry logic for conflicts
+4. **Clean Up** - Remove expired or unused state objects
+5. **Monitor Usage** - Track state object count and size
+6. **Use Alarms Wisely** - Schedule cleanup and maintenance tasks
+7. **Validate Input** - Always validate data before storing
+8. **Log Operations** - Track important state changes
+
+## Next Steps
+
+- Read the [Architecture Guide](./architecture.mdx) to understand how state.do works
+- Explore [Advanced Patterns](../examples/advanced-patterns.mdx) for complex use cases
+- Review [Best Practices](./best-practices.mdx) for production deployments
+- Check [API Reference](../api/reference.mdx) for complete function documentation
+
+## Resources
+
+- [Cloudflare Durable Objects](https://developers.cloudflare.com/durable-objects/)
+- [sdk.do Documentation](https://sdk.do)
+- [Real-world Examples](../examples/real-world-use-case.mdx)
+
+---
+
+Documentation licensed under [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/).
+Code examples licensed under MIT.

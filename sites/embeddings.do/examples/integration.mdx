@@ -1,0 +1,239 @@
+---
+$id: https://embeddings.do/examples/integration
+$type: HowTo
+title: Integration Examples - embeddings.do
+description: Integrate embeddings with vector databases and search engines
+keywords: [embeddings, integration, pinecone, weaviate, vector database]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Integration Examples
+
+Integrate embeddings with vector databases and external services.
+
+## Pinecone Integration
+
+```typescript
+import { ai } from 'sdk.do'
+import { Pinecone } from '@pinecone-database/pinecone'
+
+const pinecone = new Pinecone({
+  apiKey: process.env.PINECONE_API_KEY,
+})
+
+const index = pinecone.index('products')
+
+// Index products in Pinecone
+async function indexInPinecone(products: any[]) {
+  const vectors = []
+
+  for (const product of products) {
+    const text = `${product.name} ${product.description}`
+    const embedding = await ai.embed(text)
+
+    vectors.push({
+      id: product.$id,
+      values: embedding,
+      metadata: {
+        name: product.name,
+        category: product.category,
+        price: product.price,
+      },
+    })
+  }
+
+  await index.upsert(vectors)
+  console.log(`Indexed ${vectors.length} products`)
+}
+
+// Search in Pinecone
+async function searchPinecone(query: string, topK = 10) {
+  const queryEmbedding = await ai.embed(query)
+
+  const results = await index.query({
+    vector: queryEmbedding,
+    topK,
+    includeMetadata: true,
+  })
+
+  return results.matches
+}
+
+// Use it
+await indexInPinecone(products)
+const results = await searchPinecone('affordable laptop', 10)
+```
+
+## Weaviate Integration
+
+```typescript
+import { ai } from 'sdk.do'
+import weaviate from 'weaviate-ts-client'
+
+const client = weaviate.client({
+  scheme: 'https',
+  host: process.env.WEAVIATE_URL,
+})
+
+// Import to Weaviate
+async function importToWeaviate(products: any[]) {
+  for (const product of products) {
+    const text = `${product.name} ${product.description}`
+    const embedding = await ai.embed(text)
+
+    await client.data
+      .creator()
+      .withClassName('Product')
+      .withProperties({
+        name: product.name,
+        description: product.description,
+        category: product.category,
+      })
+      .withVector(embedding)
+      .do()
+  }
+}
+
+// Search in Weaviate
+async function searchWeaviate(query: string, limit = 10) {
+  const embedding = await ai.embed(query)
+
+  const result = await client.graphql
+    .get()
+    .withClassName('Product')
+    .withNearVector({ vector: embedding })
+    .withLimit(limit)
+    .withFields('name description category')
+    .do()
+
+  return result.data.Get.Product
+}
+```
+
+## Elasticsearch Integration
+
+```typescript
+import { ai } from 'sdk.do'
+import { Client } from '@elastic/elasticsearch'
+
+const elastic = new Client({
+  node: process.env.ELASTICSEARCH_URL,
+})
+
+// Create index with dense vector field
+await elastic.indices.create({
+  index: 'products',
+  body: {
+    mappings: {
+      properties: {
+        name: { type: 'text' },
+        description: { type: 'text' },
+        embedding: {
+          type: 'dense_vector',
+          dims: 1536,
+          index: true,
+          similarity: 'cosine',
+        },
+      },
+    },
+  },
+})
+
+// Index products
+async function indexInElastic(products: any[]) {
+  for (const product of products) {
+    const text = `${product.name} ${product.description}`
+    const embedding = await ai.embed(text)
+
+    await elastic.index({
+      index: 'products',
+      id: product.$id,
+      body: {
+        name: product.name,
+        description: product.description,
+        embedding,
+      },
+    })
+  }
+}
+
+// Search
+async function searchElastic(query: string, size = 10) {
+  const embedding = await ai.embed(query)
+
+  const result = await elastic.search({
+    index: 'products',
+    body: {
+      knn: {
+        field: 'embedding',
+        query_vector: embedding,
+        k: size,
+        num_candidates: 100,
+      },
+    },
+  })
+
+  return result.hits.hits
+}
+```
+
+## Redis Search Integration
+
+```typescript
+import { ai } from 'sdk.do'
+import { createClient } from 'redis'
+
+const redis = createClient()
+await redis.connect()
+
+// Create index
+await redis.ft.create(
+  'idx:products',
+  {
+    '$.embedding': {
+      type: 'VECTOR',
+      ALGORITHM: 'HNSW',
+      TYPE: 'FLOAT32',
+      DIM: 1536,
+      DISTANCE_METRIC: 'COSINE',
+    },
+  },
+  {
+    ON: 'JSON',
+    PREFIX: 'product:',
+  }
+)
+
+// Index products
+async function indexInRedis(products: any[]) {
+  for (const product of products) {
+    const text = `${product.name} ${product.description}`
+    const embedding = await ai.embed(text)
+
+    await redis.json.set(`product:${product.$id}`, '$', {
+      name: product.name,
+      description: product.description,
+      embedding,
+    })
+  }
+}
+
+// Search
+async function searchRedis(query: string, limit = 10) {
+  const embedding = await ai.embed(query)
+
+  return await redis.ft.search('idx:products', `*=>[KNN ${limit} @embedding $vec AS score]`, {
+    PARAMS: {
+      vec: Buffer.from(new Float32Array(embedding).buffer),
+    },
+    SORTBY: 'score',
+    RETURN: ['name', 'description', 'score'],
+  })
+}
+```
+
+## License
+
+CC-BY-4.0 (Open Source)

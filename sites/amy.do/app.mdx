@@ -1,0 +1,167 @@
+---
+$id: https://amy.do/app
+$type: WebPage
+title: Talk to Amy - Your Marketing AI Agent
+description: Chat, call, or text with Amy - your personal AI marketing expert
+---
+
+import { $, db, agent, send, on, every } from 'sdk.do'
+
+# Talk to Amy
+
+<VoiceCall agent="amy" />
+<TextChat agent="amy" />
+<SMSWidget phoneNumber="+1-555-AMY-MKTG" />
+
+## Quick Actions
+
+<AgentActions>
+  <Action
+    label="Marketing Strategy Call"
+    icon="strategy"
+    onClick={async () => {
+      const session = await agent.create({
+        $type: $.AgentSession,
+        agent: 'amy',
+        mode: 'voice_call',
+        agenda: ['Q1 strategy', 'Campaign review', 'Budget allocation'],
+        duration: 45
+      })
+
+      return session
+    }}
+
+/>
+
+  <Action
+    label="Content Review"
+    icon="document"
+    onClick={async () => {
+      const files = await selectFiles()
+
+      const review = await agent.execute({
+        agent: 'amy',
+        task: 'content_review',
+        files: files,
+        aspects: ['messaging', 'seo', 'cta', 'audience_fit']
+      })
+
+      return review
+    }}
+
+/>
+
+  <Action
+    label="Campaign Performance"
+    icon="chart"
+    onClick={async () => {
+      const report = await agent.execute({
+        agent: 'amy',
+        task: 'campaign_analysis',
+        period: 'last_30_days',
+        metrics: ['conversions', 'roi', 'engagement', 'reach']
+      })
+
+      return report
+    }}
+
+/>
+
+  <Action
+    label="Generate Content Ideas"
+    icon="lightbulb"
+    onClick={async () => {
+      const ideas = await agent.execute({
+        agent: 'amy',
+        task: 'content_ideation',
+        context: {
+          industry: await db.get($.Business, $.user.business_id),
+          trends: await db.list($.Trend, { period: 'last_week' }),
+          competitors: await db.list($.Competitor)
+        }
+      })
+
+      return ideas
+    }}
+
+/>
+
+</AgentActions>
+
+## Recent Conversations
+
+<ConversationHistory agent="amy" limit={10} />
+
+## Amy's Marketing Expertise
+
+export const AmyCapabilities = () => {
+  const capabilities = [
+    {
+      category: 'Content Marketing',
+      skills: ['Content strategy', 'SEO optimization', 'Copywriting', 'Editorial calendar'],
+      available: 'Now'
+    },
+    {
+      category: 'Campaign Management',
+      skills: ['Multi-channel campaigns', 'A/B testing', 'Budget optimization', 'Performance tracking'],
+      available: 'Now'
+    },
+    {
+      category: 'Audience Intelligence',
+      skills: ['Segmentation', 'Persona development', 'Behavioral analysis', 'Journey mapping'],
+      available: 'Now'
+    },
+    {
+      category: 'Growth Strategy',
+      skills: ['Funnel optimization', 'Conversion rate optimization', 'Retention campaigns', 'Viral loops'],
+      available: 'Now'
+    }
+  ]
+
+return (
+
+<div className="grid grid-cols-2 gap-4">
+  {capabilities.map((cat) => (
+    <CapabilityCard key={cat.category} {...cat} />
+  ))}
+</div>
+) }
+
+<AmyCapabilities />
+
+## Active Campaigns
+
+export const ActiveCampaigns = async () => {
+  const campaigns = await db.list($.Campaign, {
+    status: 'active',
+    owner: 'amy'
+  })
+
+return (
+
+<div className="space-y-4">
+  {campaigns.map((campaign) => (
+    <CampaignCard
+      key={campaign.$id}
+      campaign={campaign}
+      onCallAmy={async () => {
+        await send($.AgentCall.requested, {
+          agent: 'amy',
+          topic: `Campaign: ${campaign.name}`,
+          priority: 'high',
+        })
+      }}
+    />
+  ))}
+</div>
+) }
+
+<ActiveCampaigns />
+
+## Start a Strategy Session
+
+<GroupChatInvite
+  agents={['amy', 'tom', 'dara']}
+  topic="Q1 Marketing Strategy"
+  agenda={['Review current performance', 'Discuss technical requirements (Tom)', 'Budget and analytics (Dara)', 'Campaign planning']}
+/>

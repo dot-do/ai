@@ -1,0 +1,560 @@
+---
+$id: https://integrations.do/helpscout
+$type: Integration
+name: Help Scout
+service: helpscout
+description: Customer support platform with shared inbox and knowledge base
+category: support
+sdkBased: false
+baseUrl: https://api.helpscout.net/v2
+
+auth:
+  type: oauth2
+  authorizationUrl: https://secure.helpscout.net/authentication/authorizeClientApplication
+  tokenUrl: https://api.helpscout.net/v2/oauth2/token
+  scopes: []
+
+resources:
+  - name: Conversation
+    plural: Conversations
+    description: Manage customer conversations
+    operations:
+      - name: create
+        method: POST
+        path: /conversations
+        params:
+          - name: subject
+            type: string
+            required: true
+            description: Conversation subject
+          - name: type
+            type: string
+            required: true
+            description: Conversation type (email, chat, phone)
+          - name: mailboxId
+            type: number
+            required: true
+            description: Mailbox ID
+          - name: customer
+            type: object
+            required: true
+            description: Customer object
+          - name: threads
+            type: array
+            required: true
+            description: Initial thread(s)
+          - name: status
+            type: string
+            required: false
+            description: Conversation status (active, pending, closed)
+        returns: Conversation
+
+      - name: get
+        method: GET
+        path: /conversations/{id}
+        params:
+          - name: id
+            type: number
+            required: true
+            description: Conversation ID
+        returns: Conversation
+
+      - name: list
+        method: GET
+        path: /conversations
+        params:
+          - name: mailbox
+            type: number
+            required: false
+            description: Filter by mailbox ID
+          - name: status
+            type: string
+            required: false
+            description: Filter by status
+          - name: page
+            type: number
+            required: false
+            description: Page number
+        returns: Conversation[]
+        pagination:
+          type: page
+          pageField: page
+          limitField: pageSize
+          defaultLimit: 50
+
+      - name: update
+        method: PATCH
+        path: /conversations/{id}
+        params:
+          - name: id
+            type: number
+            required: true
+            description: Conversation ID
+          - name: status
+            type: string
+            required: false
+            description: Updated status
+          - name: subject
+            type: string
+            required: false
+            description: Updated subject
+        returns: Conversation
+
+  - name: Customer
+    plural: Customers
+    description: Manage customer profiles
+    operations:
+      - name: create
+        method: POST
+        path: /customers
+        params:
+          - name: firstName
+            type: string
+            required: true
+            description: Customer first name
+          - name: lastName
+            type: string
+            required: false
+            description: Customer last name
+          - name: emails
+            type: array
+            required: true
+            description: Email addresses
+          - name: phones
+            type: array
+            required: false
+            description: Phone numbers
+        returns: Customer
+
+      - name: get
+        method: GET
+        path: /customers/{id}
+        params:
+          - name: id
+            type: number
+            required: true
+            description: Customer ID
+        returns: Customer
+
+      - name: update
+        method: PUT
+        path: /customers/{id}
+        params:
+          - name: id
+            type: number
+            required: true
+            description: Customer ID
+          - name: firstName
+            type: string
+            required: false
+            description: Updated first name
+          - name: lastName
+            type: string
+            required: false
+            description: Updated last name
+        returns: Customer
+
+      - name: list
+        method: GET
+        path: /customers
+        params:
+          - name: query
+            type: string
+            required: false
+            description: Search query
+          - name: page
+            type: number
+            required: false
+            description: Page number
+        returns: Customer[]
+        pagination:
+          type: page
+          pageField: page
+          limitField: pageSize
+          defaultLimit: 50
+
+  - name: Mailbox
+    plural: Mailboxes
+    description: Manage mailboxes
+    operations:
+      - name: get
+        method: GET
+        path: /mailboxes/{id}
+        params:
+          - name: id
+            type: number
+            required: true
+            description: Mailbox ID
+        returns: Mailbox
+
+      - name: list
+        method: GET
+        path: /mailboxes
+        params:
+          - name: page
+            type: number
+            required: false
+            description: Page number
+        returns: Mailbox[]
+        pagination:
+          type: page
+          pageField: page
+          limitField: pageSize
+          defaultLimit: 50
+
+  - name: Tag
+    plural: Tags
+    description: Manage conversation tags
+    operations:
+      - name: list
+        method: GET
+        path: /tags
+        params:
+          - name: page
+            type: number
+            required: false
+            description: Page number
+        returns: Tag[]
+        pagination:
+          type: page
+          pageField: page
+          limitField: pageSize
+          defaultLimit: 50
+
+webhooks:
+  enabled: true
+  signatureHeader: X-HelpScout-Signature
+  signatureAlgorithm: sha1
+  verificationMethod: signature
+  events:
+    - name: conversation.created
+      type: convo.created
+      description: Conversation was created
+    - name: conversation.updated
+      type: convo.updated
+      description: Conversation was updated
+    - name: conversation.deleted
+      type: convo.deleted
+      description: Conversation was deleted
+    - name: conversation.status
+      type: convo.status
+      description: Conversation status changed
+    - name: conversation.assigned
+      type: convo.assigned
+      description: Conversation was assigned
+    - name: conversation.moved
+      type: convo.moved
+      description: Conversation moved to different mailbox
+    - name: customer.created
+      type: customer.created
+      description: Customer was created
+    - name: customer.updated
+      type: customer.updated
+      description: Customer was updated
+
+errors:
+  mapping:
+    - code: invalid_token
+      type: authentication
+      statusCode: 401
+      message: Invalid or expired OAuth token
+      retryable: false
+    - code: forbidden
+      type: authorization
+      statusCode: 403
+      message: Insufficient permissions
+      retryable: false
+    - code: not_found
+      type: not_found
+      statusCode: 404
+      message: Resource not found
+      retryable: false
+    - code: validation_error
+      type: validation
+      statusCode: 400
+      message: Request validation failed
+      retryable: false
+    - code: rate_limit
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded (400 requests per minute)
+      retryable: true
+    - code: server_error
+      type: server
+      statusCode: 500
+      message: Internal server error
+      retryable: true
+  retryable: [rate_limit, server_error, 429, 500, 503]
+  nonRetryable: [invalid_token, forbidden, not_found, validation_error, 401, 403, 404, 400]
+
+tests:
+  enabled: true
+  cleanup: true
+  scenarios:
+    - name: Conversation Management
+      description: Test conversation operations
+      steps:
+        - action: create
+          resource: Conversation
+        - action: retrieve
+          resource: Conversation
+        - action: list
+          resource: Conversation
+        - action: update
+          resource: Conversation
+
+    - name: Customer Management
+      description: Test customer CRUD operations
+      steps:
+        - action: create
+          resource: Customer
+        - action: retrieve
+          resource: Customer
+        - action: update
+          resource: Customer
+        - action: list
+          resource: Customer
+
+    - name: Mailbox Operations
+      description: Test mailbox retrieval
+      steps:
+        - action: retrieve
+          resource: Mailbox
+        - action: list
+          resource: Mailbox
+
+    - name: Tag Operations
+      description: Test tag listing
+      steps:
+        - action: list
+          resource: Tag
+
+    - name: Webhook Verification
+      description: Test webhook signature verification
+      steps:
+        - action: assert
+          expects:
+            status: 200
+
+docs:
+  homepage: https://www.helpscout.com
+  apiDocs: https://developer.helpscout.com/mailbox-api/
+  guides:
+    quickstart: https://developer.helpscout.com/apps/getting-started/
+    webhooks: https://developer.helpscout.com/webhooks/
+    authentication: https://developer.helpscout.com/mailbox-api/overview/authentication/
+---
+
+# Help Scout Integration
+
+Help Scout is a customer support platform with shared inbox capabilities and a knowledge base solution for customer service teams.
+
+## Features
+
+- **Conversations**: Manage email, chat, and phone conversations
+- **Customers**: Maintain customer profiles and contact information
+- **Mailboxes**: Organize conversations into shared inboxes
+- **Tags**: Categorize and organize conversations
+- **OAuth 2.0**: Secure authentication
+- **Webhooks**: Real-time event notifications with SHA-1 signature verification
+
+## Quick Start
+
+```typescript
+import { HelpscoutClient } from '@dotdo/sdk.do/integrations/helpscout'
+
+const helpscout = new HelpscoutClient({
+  clientId: process.env.HELPSCOUT_CLIENT_ID,
+  clientSecret: process.env.HELPSCOUT_CLIENT_SECRET,
+})
+
+// Create a conversation
+const conversation = await helpscout.conversation.create({
+  subject: 'Need help',
+  type: 'email',
+  mailboxId: 123,
+  customer: {
+    email: 'customer@example.com',
+  },
+  threads: [
+    {
+      type: 'customer',
+      text: 'I need help with my account',
+    },
+  ],
+})
+
+// Update conversation status
+await helpscout.conversation.update({
+  id: conversation.id,
+  status: 'closed',
+})
+```
+
+## Authentication
+
+Help Scout uses OAuth 2.0 authentication:
+
+```bash
+export HELPSCOUT_CLIENT_ID=your_client_id
+export HELPSCOUT_CLIENT_SECRET=your_client_secret
+```
+
+## Resources
+
+### Conversations
+
+Manage customer conversations:
+
+```typescript
+// Create conversation
+const conversation = await helpscout.conversation.create({
+  subject: 'Billing Question',
+  type: 'email',
+  mailboxId: 123,
+  customer: {
+    email: 'customer@example.com',
+    firstName: 'John',
+  },
+  threads: [
+    {
+      type: 'customer',
+      text: 'I have a question about my invoice',
+    },
+  ],
+  status: 'active',
+})
+
+// Get conversation
+const conv = await helpscout.conversation.get({ id: 456 })
+
+// List conversations
+const conversations = await helpscout.conversation.list({
+  mailbox: 123,
+  status: 'active',
+})
+
+// Update conversation
+await helpscout.conversation.update({
+  id: 456,
+  status: 'closed',
+})
+```
+
+### Customers
+
+Manage customer profiles:
+
+```typescript
+// Create customer
+const customer = await helpscout.customer.create({
+  firstName: 'Jane',
+  lastName: 'Smith',
+  emails: [
+    {
+      type: 'work',
+      value: 'jane@company.com',
+    },
+  ],
+  phones: [
+    {
+      type: 'work',
+      value: '+1-555-0100',
+    },
+  ],
+})
+
+// Get customer
+const customer = await helpscout.customer.get({ id: 789 })
+
+// Search customers
+const customers = await helpscout.customer.list({
+  query: 'jane@company.com',
+})
+
+// Update customer
+await helpscout.customer.update({
+  id: 789,
+  firstName: 'Jane',
+  lastName: 'Doe',
+})
+```
+
+### Mailboxes
+
+Access mailbox information:
+
+```typescript
+// Get mailbox
+const mailbox = await helpscout.mailbox.get({ id: 123 })
+
+// List all mailboxes
+const mailboxes = await helpscout.mailbox.list()
+```
+
+### Tags
+
+Work with conversation tags:
+
+```typescript
+// List tags
+const tags = await helpscout.tag.list()
+```
+
+## Webhooks
+
+Help Scout supports webhooks with SHA-1 HMAC signature verification:
+
+```typescript
+import { HelpscoutWebhookHandler, WebhookEventRouter } from '@dotdo/sdk.do/integrations/helpscout'
+
+const handler = new HelpscoutWebhookHandler(process.env.HELPSCOUT_WEBHOOK_SECRET)
+const event = await handler.handleRequest(request)
+
+const router = new WebhookEventRouter()
+router.onConversationCreated(async (event) => {
+  console.log('New conversation:', event.data)
+})
+
+router.onConversationStatus(async (event) => {
+  console.log('Status changed:', event.data)
+})
+
+await router.route(event)
+```
+
+## Error Handling
+
+```typescript
+import { HelpscoutError } from '@dotdo/sdk.do/integrations/helpscout'
+
+try {
+  await helpscout.conversation.create({
+    /* ... */
+  })
+} catch (error) {
+  if (error instanceof HelpscoutError) {
+    console.error('Help Scout Error:', error.code, error.message)
+    if (error.isRetriable()) {
+      // Retry logic
+    }
+  }
+}
+```
+
+## Best Practices
+
+1. **Rate Limits**: 400 requests per minute per account
+2. **OAuth Tokens**: Refresh tokens before expiration
+3. **Webhooks**: Verify SHA-1 signatures for security
+4. **Pagination**: Use page-based pagination (default 50, max 100)
+5. **Conversation Types**: Support email, chat, and phone conversations
+6. **Customer Search**: Use email addresses for precise customer lookup
+
+## API Reference
+
+Full API documentation: https://developer.helpscout.com/mailbox-api/
+
+## License
+
+MIT

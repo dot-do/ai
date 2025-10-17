@@ -1,0 +1,542 @@
+---
+$id: https://nouns.do/docs/troubleshooting
+$type: TechArticle
+title: nouns.do Troubleshooting
+description: Common issues, solutions, and debugging tips for working with semantic entity types
+keywords: [troubleshooting, debugging, errors, solutions, common issues]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# nouns.do Troubleshooting
+
+Common issues and solutions when working with semantic entity types.
+
+## Import and Setup Issues
+
+### Cannot Find Module 'sdk.do'
+
+**Problem**: `Cannot find module 'sdk.do' or its corresponding type declarations`
+
+**Solution**:
+
+```bash
+# Install SDK
+pnpm add sdk.do
+
+# Or reinstall if corrupted
+rm -rf node_modules pnpm-lock.yaml
+pnpm install
+```
+
+### TypeScript Errors with $ Proxy
+
+**Problem**: `Property 'Person' does not exist on type '{}'`
+
+**Solution**:
+
+```typescript
+// Ensure proper import
+import $ from 'sdk.do'  // Not: import { $ } from 'sdk.do'
+
+// Check tsconfig.json
+{
+  "compilerOptions": {
+    "moduleResolution": "bundler",
+    "esModuleInterop": true
+  }
+}
+```
+
+### Missing Type Definitions
+
+**Problem**: No autocomplete for entity properties
+
+**Solution**:
+
+```bash
+# Install Schema.org types
+pnpm add schema.org.ai
+
+# Use in code
+import type { Person, Organization } from 'schema.org.ai'
+```
+
+## Validation Errors
+
+### Invalid Email Format
+
+**Problem**: `Validation error: Invalid email format`
+
+**Solution**:
+
+```typescript
+// Validate email before creating
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
+
+const person = await db.create($.Person, {
+  $type: 'Person',
+  name: 'John',
+  email: isValidEmail(email) ? email : undefined,
+})
+```
+
+### Missing Required $type Property
+
+**Problem**: `Validation error: $type property is required`
+
+**Solution**:
+
+```typescript
+// Always include $type
+const person = await db.create($.Person, {
+  $type: 'Person', // Required!
+  name: 'Jane',
+})
+```
+
+### Unknown Property for Type
+
+**Problem**: `Validation error: Unknown property 'customField' for type Person`
+
+**Solution**:
+
+```typescript
+// Option 1: Remove invalid property
+const person = {
+  $type: 'Person',
+  name: 'John',
+  // Remove: customField: 'value'
+}
+
+// Option 2: Extend type
+interface CustomPerson extends Person {
+  customField: string
+}
+```
+
+## Database Issues
+
+### Entity Not Found
+
+**Problem**: `Entity not found: person-123`
+
+**Solution**:
+
+```typescript
+// Always check if entity exists
+const person = await db.get($.Person, id).catch(() => null)
+
+if (!person) {
+  console.error('Person not found')
+  return
+}
+
+// Or use optional chaining
+const email = (await db.get($.Person, id))?.email
+```
+
+### Connection Errors
+
+**Problem**: `Database connection failed`
+
+**Solution**:
+
+```bash
+# Check environment variables
+echo $SDK_DATABASE_URL
+
+# Test connection
+psql $SDK_DATABASE_URL
+
+# Verify correct format
+SDK_DATABASE_URL=postgres://user:pass@localhost:5432/dbname
+```
+
+### Query Timeout
+
+**Problem**: `Query timeout after 30000ms`
+
+**Solution**:
+
+```typescript
+// Add limit to queries
+const people = await db.list($.Person, { limit: 100 })
+
+// Use pagination
+async function* getAllPeople() {
+  let offset = 0
+  while (true) {
+    const page = await db.list($.Person, { limit: 100, offset })
+    if (page.length === 0) break
+    yield* page
+    offset += 100
+  }
+}
+```
+
+## Type System Issues
+
+### Type Not Registered
+
+**Problem**: `Unknown type: CustomType`
+
+**Solution**:
+
+```typescript
+import { registry } from 'nouns.do/core'
+
+// Register custom type
+registry.registerType({
+  $type: 'CustomType',
+  parent: 'Thing',
+  properties: [...]
+})
+
+// Then use it
+const entity = await db.create($.CustomType, data)
+```
+
+### Type Mismatch
+
+**Problem**: `Type mismatch: expected Person, got Organization`
+
+**Solution**:
+
+```typescript
+// Ensure correct type
+const person = await db.create($.Person, {
+  $type: 'Person', // Must match $.Person
+  name: 'John',
+})
+
+// Check type at runtime
+function isPerson(entity: any): entity is Person {
+  return entity.$type === 'Person'
+}
+```
+
+### Inheritance Issues
+
+**Problem**: Properties from parent type not available
+
+**Solution**:
+
+```typescript
+// Ensure proper extension
+interface Employee extends Person {
+  // Extends Person
+  $type: 'Employee'
+  employeeId: string
+  // All Person properties are inherited
+}
+
+// Access parent properties
+const employee: Employee = {
+  $type: 'Employee',
+  name: 'John', // From Person
+  email: 'john@example.com', // From Person
+  employeeId: 'EMP001',
+}
+```
+
+## Performance Issues
+
+### Slow Queries
+
+**Problem**: Queries taking too long
+
+**Solution**:
+
+```typescript
+// Add where clause
+const people = await db.list($.Person, {
+  where: { email: 'specific@example.com' },
+  limit: 10,
+})
+
+// Use indexes (in database)
+// CREATE INDEX idx_person_email ON entities((data->>'email'))
+//   WHERE type = 'Person'
+
+// Cache frequently accessed data
+const cache = new Map()
+function getCachedPerson(id: string) {
+  if (!cache.has(id)) {
+    cache.set(id, db.get($.Person, id))
+  }
+  return cache.get(id)
+}
+```
+
+### Memory Leaks
+
+**Problem**: Memory usage growing over time
+
+**Solution**:
+
+```typescript
+// Use pagination instead of loading all
+async function processAllPeople() {
+  let offset = 0
+  const limit = 100
+
+  while (true) {
+    const page = await db.list($.Person, { limit, offset })
+    if (page.length === 0) break
+
+    // Process page
+    for (const person of page) {
+      await processPerson(person)
+    }
+
+    offset += limit
+    // Page is garbage collected after each iteration
+  }
+}
+
+// Clean up listeners
+const unsubscribe = on($.Person.created, handler)
+// Later: unsubscribe()
+```
+
+### Large Object Issues
+
+**Problem**: Payload too large
+
+**Solution**:
+
+```typescript
+// Reference instead of embedding
+const article = {
+  $type: 'Article',
+  author: {
+    $id: person.$id, // Reference only
+    $type: 'Person',
+  },
+}
+
+// Instead of:
+const article = {
+  $type: 'Article',
+  author: person, // Full object (large)
+}
+```
+
+## Runtime Errors
+
+### Cannot Read Property of Undefined
+
+**Problem**: `Cannot read property 'email' of undefined`
+
+**Solution**:
+
+```typescript
+// Use optional chaining
+const email = person?.email
+const street = person?.address?.streetAddress
+
+// Provide defaults
+const name = person.name || 'Unknown'
+const email = person.email ?? 'no-email@example.com'
+
+// Check before accessing
+if (person && person.email) {
+  console.log(person.email)
+}
+```
+
+### Circular Reference Error
+
+**Problem**: `Converting circular structure to JSON`
+
+**Solution**:
+
+```typescript
+// Avoid circular references
+const person = {
+  $type: 'Person',
+  name: 'John',
+  worksFor: {
+    $id: org.$id, // Reference by ID
+    $type: 'Organization',
+  },
+}
+
+// Not:
+person.worksFor = org
+org.employees = [person] // Creates cycle
+```
+
+### Type Coercion Issues
+
+**Problem**: Unexpected type conversions
+
+**Solution**:
+
+```typescript
+// Validate types explicitly
+const product = {
+  $type: 'Product',
+  price: Number(priceString), // Explicit conversion
+  quantity: parseInt(quantityString, 10),
+}
+
+// Use type guards
+function isNumber(value: any): value is number {
+  return typeof value === 'number' && !isNaN(value)
+}
+
+if (isNumber(product.price)) {
+  // Safe to use as number
+}
+```
+
+## AI Generation Issues
+
+### Schema Mismatch
+
+**Problem**: AI generates invalid properties
+
+**Solution**:
+
+```typescript
+// Validate AI output
+const person = await ai.generate('Create a person profile', { schema: $.Person })
+
+// Always validate
+const validation = validate(person, $.Person)
+if (!validation.valid) {
+  console.error('AI generated invalid data:', validation.errors)
+  // Retry or fix manually
+}
+```
+
+### Incomplete Data
+
+**Problem**: AI doesn't generate all required fields
+
+**Solution**:
+
+```typescript
+// Provide defaults
+const person = await ai.generate('Create a person profile', { schema: $.Person })
+
+const complete = {
+  $type: 'Person',
+  ...person,
+  // Ensure required fields
+  name: person.name || 'Unknown',
+  email: person.email || generateEmail(),
+}
+```
+
+## Debugging Tips
+
+### Enable Debug Logging
+
+```typescript
+// Set environment variable
+process.env.SDK_DEBUG = 'true'
+
+// Or programmatically
+import { setDebug } from 'sdk.do'
+setDebug(true)
+
+// View detailed logs
+const person = await db.create($.Person, data)
+// Logs: Creating entity of type Person with data {...}
+```
+
+### Inspect Entity Structure
+
+```typescript
+// Log full entity
+console.log(JSON.stringify(person, null, 2))
+
+// Check type
+console.log('Type:', person.$type)
+console.log('ID:', person.$id)
+
+// List all properties
+console.log('Properties:', Object.keys(person))
+
+// Check validation
+const validation = validate(person, $.Person)
+console.log('Valid:', validation.valid)
+console.log('Errors:', validation.errors)
+```
+
+### Test Queries
+
+```typescript
+// Test query in isolation
+const results = await db.list($.Person, {
+  where: { email: test@example.com },
+  limit: 1
+})
+
+console.log('Found:', results.length)
+console.log('Results:', results)
+
+// Check SQL query (if using SQL database)
+const query = db.buildQuery($.Person, options)
+console.log('Query:', query.sql)
+console.log('Params:', query.params)
+```
+
+## Getting Help
+
+### Check Documentation
+
+- [Getting Started](./getting-started)
+- [Architecture](./architecture)
+- [Best Practices](./best-practices)
+- [API Reference](../api/reference)
+
+### Search Issues
+
+- GitHub Issues: [github.com/dot-do/ai/issues](https://github.com/dot-do/ai/issues)
+- Discussions: [github.com/dot-do/ai/discussions](https://github.com/dot-do/ai/discussions)
+
+### Community Support
+
+- Discord: Join our community server
+- Stack Overflow: Tag with `nouns-do` and `business-as-code`
+
+### Report Bugs
+
+```bash
+# Create minimal reproduction
+git clone https://github.com/dot-do/ai
+cd ai/packages/sdk.do
+pnpm install
+
+# Create test file
+cat > test-issue.ts << 'EOF'
+import $, { db } from 'sdk.do'
+
+// Reproduce issue here
+const person = await db.create($.Person, {
+  $type: 'Person',
+  // ... issue details
+})
+EOF
+
+# Run test
+tsx test-issue.ts
+
+# Report issue with reproduction steps
+```
+
+---
+
+**Still having issues?** Open an issue on [GitHub](https://github.com/dot-do/ai/issues) with:
+
+- Error message
+- Code to reproduce
+- Expected vs actual behavior
+- Environment details (Node version, OS, etc.)

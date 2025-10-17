@@ -1,0 +1,632 @@
+---
+$id: https://on.do
+$type: WebSite
+name: on.do
+description: Event listeners for Business-as-Code with Object.Action patterns
+license: MIT
+keywords: [event-listeners, on, subscribers, event-driven, reactive, business-as-code]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# on.do
+
+**Event listeners for Business-as-Code with Object.Action patterns**
+
+on.do provides the `on` SDK function for subscribing to business events using semantic `Object.Action` naming patterns. Build reactive, event-driven applications that respond to business state changes in real-time.
+
+## Quick Start
+
+```bash
+pnpm add sdk.do
+```
+
+```typescript
+import { on } from 'sdk.do'
+
+// Listen for business events
+on('Order.created', async (event) => {
+  console.log('New order:', event.data.id)
+  await processOrder(event.data)
+})
+
+on('Payment.completed', async (event) => {
+  console.log('Payment received:', event.data.amount)
+  await fulfillOrder(event.data.orderId)
+})
+
+on('User.registered', async (event) => {
+  console.log('Welcome new user:', event.data.email)
+  await sendWelcomeEmail(event.data)
+})
+```
+
+## Overview
+
+The `on` function enables reactive programming for Business-as-Code by subscribing to semantic business events. When events are published using `send`, all registered listeners are notified and can react accordingly.
+
+### Key Features
+
+- **Semantic Patterns**: Subscribe using clear `Object.Action` naming
+- **Type Safety**: Full TypeScript support with typed event handlers
+- **Pattern Matching**: Listen to multiple events with wildcards
+- **Event Filtering**: Filter events based on data properties
+- **Async Handlers**: All handlers support async/await
+- **Error Handling**: Graceful error handling and retries
+- **Correlation Tracking**: Track related events across workflows
+
+## Basic Usage
+
+### Single Event Listener
+
+Subscribe to a specific event:
+
+```typescript
+import { on } from 'sdk.do'
+
+on('Order.created', async (event) => {
+  console.log('Order created:', event.data.id)
+  await notifyWarehouse(event.data)
+})
+```
+
+### Multiple Events
+
+Listen to multiple events with the same handler:
+
+```typescript
+on(['Order.created', 'Order.updated'], async (event) => {
+  await syncToAnalytics(event)
+})
+```
+
+### Pattern Matching
+
+Use wildcards to listen to related events:
+
+```typescript
+// Listen to all Order events
+on('Order.*', async (event) => {
+  await auditLog(event.type, event.data)
+})
+
+// Listen to all events
+on('*', async (event) => {
+  await logAllEvents(event)
+})
+```
+
+## Semantic Patterns
+
+Use the semantic `$` proxy for type-safe event subscriptions:
+
+```typescript
+import $, { on } from 'sdk.do'
+
+// Semantic event patterns
+on($.Order.created, async (event) => {
+  // TypeScript knows the event structure
+  console.log(`Order ${event.data.$id} created`)
+})
+
+on($.Payment.completed, async (event) => {
+  console.log(`Payment of $${event.data.amount} completed`)
+})
+
+on($.User.registered, async (event) => {
+  console.log(`User ${event.data.email} registered`)
+})
+```
+
+## Event Structure
+
+Events follow a standard structure:
+
+```typescript
+interface Event<T = any> {
+  type: string // Event name (e.g., 'Order.created')
+  data: T // Event payload
+  metadata?: {
+    timestamp: Date
+    source?: string
+    correlationId?: string
+    causationId?: string
+    userId?: string
+  }
+}
+```
+
+### Example Event
+
+```typescript
+{
+  type: 'Order.created',
+  data: {
+    $id: 'order-12345',
+    $type: 'Order',
+    customer: { id: 'cust-1', name: 'Acme Corp' },
+    items: [
+      { product: 'widget', quantity: 10, price: 99.99 }
+    ],
+    total: 999.90
+  },
+  metadata: {
+    timestamp: new Date('2025-01-15T10:30:00Z'),
+    source: 'checkout-service',
+    correlationId: 'session-abc123',
+    userId: 'user-456'
+  }
+}
+```
+
+## Event Filtering
+
+Filter events based on data properties:
+
+```typescript
+// Only process high-value orders
+on(
+  'Order.created',
+  {
+    filter: (event) => event.data.total > 1000,
+  },
+  async (event) => {
+    await flagForReview(event.data)
+  }
+)
+
+// Only process specific customer orders
+on(
+  'Order.created',
+  {
+    filter: (event) => event.data.customer.tier === 'enterprise',
+  },
+  async (event) => {
+    await priorityProcessing(event.data)
+  }
+)
+
+// Filter by multiple conditions
+on(
+  'Payment.completed',
+  {
+    filter: (event) => {
+      return event.data.amount > 500 && event.data.currency === 'USD' && event.data.method === 'credit_card'
+    },
+  },
+  async (event) => {
+    await fraudCheck(event.data)
+  }
+)
+```
+
+## Event Chains
+
+Create workflows by chaining events:
+
+```typescript
+// Step 1: Order created
+on('Order.created', async (event) => {
+  const valid = await validateOrder(event.data)
+
+  if (valid) {
+    await send('Order.validated', event.data)
+  } else {
+    await send('Order.rejected', {
+      ...event.data,
+      reason: 'validation-failed',
+    })
+  }
+})
+
+// Step 2: Order validated
+on('Order.validated', async (event) => {
+  await send('Payment.requested', {
+    orderId: event.data.id,
+    amount: event.data.total,
+  })
+})
+
+// Step 3: Payment completed
+on('Payment.completed', async (event) => {
+  await send('Order.confirmed', {
+    orderId: event.data.orderId,
+  })
+})
+```
+
+## Error Handling
+
+Handle errors gracefully in event listeners:
+
+```typescript
+on('Order.created', async (event) => {
+  try {
+    await processOrder(event.data)
+  } catch (error) {
+    console.error('Failed to process order:', error)
+
+    // Publish error event
+    await send('Order.processingFailed', {
+      orderId: event.data.id,
+      error: error.message,
+      timestamp: new Date(),
+    })
+
+    // Don't re-throw to allow other handlers to continue
+  }
+})
+```
+
+## Unsubscribing
+
+Remove event listeners when no longer needed:
+
+```typescript
+// Save unsubscribe function
+const unsubscribe = on('Order.created', handler)
+
+// Later, unsubscribe
+unsubscribe()
+
+// Or with timeout
+const unsubscribe = on('Order.created', handler)
+setTimeout(() => unsubscribe(), 60000) // Remove after 1 minute
+```
+
+## Common Event Patterns
+
+### Lifecycle Events
+
+```typescript
+on('Order.created', handler) // Entity created
+on('Order.updated', handler) // Entity modified
+on('Order.deleted', handler) // Entity removed
+on('Order.archived', handler) // Entity archived
+```
+
+### State Change Events
+
+```typescript
+on('Order.submitted', handler) // Submitted by customer
+on('Order.validated', handler) // Validated by system
+on('Order.confirmed', handler) // Confirmed and paid
+on('Order.shipped', handler) // Shipped from warehouse
+on('Order.delivered', handler) // Delivered to customer
+on('Order.completed', handler) // Process completed
+on('Order.cancelled', handler) // Cancelled by user
+```
+
+### Action Events
+
+```typescript
+on('Payment.requested', handler) // Payment requested
+on('Payment.authorized', handler) // Payment authorized
+on('Payment.captured', handler) // Payment captured
+on('Payment.completed', handler) // Payment completed
+on('Payment.failed', handler) // Payment failed
+on('Payment.refunded', handler) // Payment refunded
+```
+
+## Integration Patterns
+
+### With Database Operations
+
+```typescript
+import { db, on, send } from 'sdk.do'
+
+// Auto-publish events on database changes
+db.on('create', async (entity) => {
+  await send(`${entity.$type}.created`, entity)
+})
+
+// React to events and update database
+on('Order.completed', async (event) => {
+  await db.update($.Order, event.data.id, {
+    status: 'completed',
+    completedAt: new Date(),
+  })
+})
+```
+
+### With AI Services
+
+```typescript
+import { ai, on, send } from 'sdk.do'
+
+// AI-powered event processing
+on('CustomerFeedback.received', async (event) => {
+  const sentiment = await ai.generate({
+    prompt: `Analyze sentiment: ${event.data.feedback}`,
+    schema: $.SentimentAnalysis,
+  })
+
+  if (sentiment.score < 0.3) {
+    await send('CustomerIssue.detected', {
+      feedbackId: event.data.id,
+      sentiment,
+      priority: 'high',
+    })
+  }
+})
+```
+
+### With Scheduled Workflows
+
+```typescript
+import { every, on, send } from 'sdk.do'
+
+// Periodic event generation
+every($.Daily, async () => {
+  await send('Report.generationRequested', {
+    type: 'daily-summary',
+    date: new Date(),
+  })
+})
+
+// React to report requests
+on('Report.generationRequested', async (event) => {
+  const report = await generateReport(event.data)
+  await send('Report.generated', report)
+})
+```
+
+## Documentation
+
+- [Getting Started](./docs/getting-started) - Install and start using `on`
+- [Event Patterns](./docs/patterns) - Common event listener patterns
+- [Event Filtering](./docs/filtering) - Filter events by properties
+- [API Reference](./api/) - Complete API documentation
+- [Examples](./examples/) - Real-world usage examples
+
+## Examples
+
+### Basic Event Listeners
+
+```typescript
+// User registration workflow
+on('User.registered', async (event) => {
+  await sendWelcomeEmail(event.data.email)
+  await createDefaultPreferences(event.data.id)
+  await notifyAdmins(event.data)
+})
+
+// Order processing
+on('Order.created', async (event) => {
+  await validateInventory(event.data.items)
+  await calculateShipping(event.data)
+  await send('Order.validated', event.data)
+})
+
+// Payment handling
+on('Payment.completed', async (event) => {
+  await updateAccountingRecords(event.data)
+  await issueReceipt(event.data)
+  await send('Order.paymentReceived', {
+    orderId: event.data.orderId,
+  })
+})
+```
+
+### Advanced Patterns
+
+See [Workflow Listeners Example](./examples/workflow-listeners) for complex multi-step workflows.
+
+## Best Practices
+
+### 1. Use Semantic Naming
+
+Always use clear `Object.Action` patterns:
+
+```typescript
+// Good
+on('Order.created', handler)
+on('Payment.completed', handler)
+on('User.registered', handler)
+
+// Bad
+on('order_create', handler)
+on('payment-done', handler)
+on('newUser', handler)
+```
+
+### 2. Keep Handlers Focused
+
+Each handler should do one thing well:
+
+```typescript
+// Good - focused handlers
+on('Order.created', validateOrder)
+on('Order.validated', requestPayment)
+on('Payment.completed', fulfillOrder)
+
+// Bad - kitchen sink handler
+on('Order.created', async (event) => {
+  // validates, processes payment, fulfills, ships...
+})
+```
+
+### 3. Handle Errors Gracefully
+
+Don't let errors break the event chain:
+
+```typescript
+on('Order.created', async (event) => {
+  try {
+    await processOrder(event.data)
+  } catch (error) {
+    console.error('Failed:', error)
+    await send('Order.failed', {
+      orderId: event.data.id,
+      error: error.message,
+    })
+  }
+})
+```
+
+### 4. Use TypeScript Types
+
+Define typed event handlers:
+
+```typescript
+import type { Event } from 'sdk.do'
+
+interface OrderCreatedEvent
+  extends Event<{
+    id: string
+    total: number
+  }> {
+  type: 'Order.created'
+}
+
+on('Order.created', async (event: OrderCreatedEvent) => {
+  // TypeScript knows event.data structure
+})
+```
+
+### 5. Track Correlations
+
+Pass correlation IDs through event chains:
+
+```typescript
+on('Order.created', async (event) => {
+  await send('Payment.requested', paymentData, {
+    correlationId: event.metadata.correlationId,
+  })
+})
+```
+
+## TypeScript Support
+
+Full TypeScript support with typed event handlers:
+
+```typescript
+import { on } from 'sdk.do'
+import type { Event, EventHandler } from 'sdk.do'
+
+// Define event type
+interface OrderEvent
+  extends Event<{
+    id: string
+    customer: { id: string; name: string }
+    items: Array<{ product: string; quantity: number; price: number }>
+    total: number
+  }> {
+  type: 'Order.created'
+}
+
+// Type-safe handler
+const handleOrderCreated: EventHandler<OrderEvent> = async (event) => {
+  console.log(`Order ${event.data.id} total: $${event.data.total}`)
+}
+
+on('Order.created', handleOrderCreated)
+```
+
+## Performance Considerations
+
+### Async Handlers
+
+All handlers should be async:
+
+```typescript
+// Good - async handler
+on('Order.created', async (event) => {
+  await processOrder(event.data)
+})
+
+// Bad - sync handler (blocks event loop)
+on('Order.created', (event) => {
+  processOrderSync(event.data)
+})
+```
+
+### Handler Execution
+
+Handlers execute in parallel by default:
+
+```typescript
+// These three handlers execute in parallel
+on('Order.created', handler1)
+on('Order.created', handler2)
+on('Order.created', handler3)
+```
+
+### Unsubscribe Unused Listeners
+
+Remove listeners that are no longer needed:
+
+```typescript
+const unsubscribe = on('Order.created', handler)
+
+// When done
+unsubscribe()
+```
+
+## Testing
+
+Test event listeners with mock events:
+
+```typescript
+import { on, send } from 'sdk.do'
+import { expect, test } from 'vitest'
+
+test('handles order creation', async () => {
+  let processed = false
+
+  on('Order.created', async (event) => {
+    processed = true
+    expect(event.data.id).toBe('12345')
+  })
+
+  await send('Order.created', {
+    id: '12345',
+    total: 100,
+  })
+
+  expect(processed).toBe(true)
+})
+```
+
+## Integration with .do Platform
+
+on.do works seamlessly with other `.do` platform domains:
+
+- **[events.do](https://events.do)** - Complete event system documentation
+- **[send.do](https://send.do)** - Event publishing with `send`
+- **[sdk.do](https://sdk.do)** - Core SDK documentation
+- **[workflows.do](https://workflows.do)** - Workflow orchestration
+- **[triggers.org.ai](https://triggers.org.ai)** - Advanced trigger patterns
+- **[database.do](https://database.do)** - Database operations
+
+## License
+
+MIT (Open Source)
+
+on.do is open-source software released under the MIT License. You are free to use, modify, and distribute it for any purpose.
+
+## Resources
+
+- [GitHub Repository](https://github.com/dot-do/ai)
+- [Issue Tracker](https://github.com/dot-do/ai/issues)
+- [Contributing Guide](https://github.com/dot-do/ai/blob/main/CONTRIBUTING.md)
+- [API Reference](./api/)
+- [Examples](./examples/)
+
+## Related Functions
+
+- **`send`** - Publish events that listeners receive
+- **`every`** - Schedule periodic events
+- **`db`** - Database operations that can trigger events
+- **`ai`** - AI processing in event handlers
+
+## Contributing
+
+Contributions are welcome! on.do is part of the [`.do` platform](https://github.com/dot-do/platform) ecosystem.
+
+See [CONTRIBUTING.md](https://github.com/dot-do/ai/blob/main/CONTRIBUTING.md) for guidelines.
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

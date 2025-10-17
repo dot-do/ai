@@ -1,0 +1,354 @@
+---
+$id: https://docs.do/examples/basic-usage
+$type: HowTo
+title: Basic Usage Example - docs.do
+description: Learn the fundamental operations of docs.do with practical examples
+keywords: [examples, basic, tutorial, crud, search]
+---
+
+# Basic Usage Example
+
+Learn the fundamental operations of docs.do through practical examples.
+
+## Overview
+
+This example demonstrates:
+
+- Creating documentation
+- Searching content
+- Managing versions
+- Basic relationships
+
+## Complete Example
+
+```typescript
+import $, { docs } from 'docs.do'
+
+async function basicUsageExample() {
+  console.log('=== docs.do Basic Usage Example ===\n')
+
+  // ==========================================
+  // 1. Create Documentation
+  // ==========================================
+
+  console.log('1. Creating documentation...')
+
+  // Create a technical article
+  const article = await docs.create($.TechArticle, {
+    headline: 'Introduction to SDK',
+    articleBody: `
+# Introduction to SDK
+
+The SDK provides a comprehensive set of tools for building applications.
+
+## Installation
+
+\`\`\`bash
+pnpm add sdk.do
+\`\`\`
+
+## Quick Start
+
+\`\`\`typescript
+import $ from 'sdk.do'
+\`\`\`
+    `,
+    keywords: ['sdk', 'introduction', 'getting-started'],
+    author: {
+      $type: 'Organization',
+      name: '.do Platform',
+    },
+    domain: 'sdk.do',
+    version: '1.0.0',
+  })
+
+  console.log('✓ Created article:', article.$id)
+
+  // Create API documentation
+  const apiDoc = await docs.create($.APIReference, {
+    name: 'Database API',
+    description: 'Complete database operations API',
+    content: `
+## db.create()
+
+Creates a new entity.
+
+**Parameters:**
+- \`type\`: Entity type
+- \`data\`: Entity data
+
+**Returns:** Created entity
+
+**Example:**
+\`\`\`typescript
+const entity = await db.create($.Business, { name: 'Acme' })
+\`\`\`
+    `,
+    domain: 'database.do',
+    version: '1.0.0',
+  })
+
+  console.log('✓ Created API doc:', apiDoc.$id)
+
+  // Create how-to guide
+  const guide = await docs.create($.HowTo, {
+    name: 'Create Your First Entity',
+    description: 'Step-by-step guide to creating entities',
+    step: [
+      {
+        $type: 'HowToStep',
+        name: 'Install SDK',
+        text: 'Install the SDK package',
+        code: 'pnpm add sdk.do',
+      },
+      {
+        $type: 'HowToStep',
+        name: 'Import Functions',
+        text: 'Import required functions',
+        code: "import $, { db } from 'sdk.do'",
+      },
+      {
+        $type: 'HowToStep',
+        name: 'Create Entity',
+        text: 'Use db.create() to create an entity',
+        code: 'const business = await db.create($.Business, { name: "Acme" })',
+      },
+    ],
+    domain: 'sdk.do',
+  })
+
+  console.log('✓ Created how-to:', guide.$id)
+  console.log()
+
+  // ==========================================
+  // 2. Search Documentation
+  // ==========================================
+
+  console.log('2. Searching documentation...')
+
+  // Basic keyword search
+  const keywordResults = await docs.search('database', {
+    limit: 5,
+  })
+
+  console.log(`✓ Keyword search found ${keywordResults.length} results:`)
+  keywordResults.forEach((r) => {
+    console.log(`  - ${r.title}`)
+  })
+
+  // Search by domain
+  const sdkDocs = await docs.search('', {
+    domains: ['sdk.do'],
+    limit: 10,
+  })
+
+  console.log(`\n✓ Found ${sdkDocs.length} docs in sdk.do`)
+
+  // Search by type
+  const howtos = await docs.list($.HowTo, {
+    limit: 10,
+  })
+
+  console.log(`✓ Found ${howtos.length} how-to guides`)
+  console.log()
+
+  // ==========================================
+  // 3. Read Documentation
+  // ==========================================
+
+  console.log('3. Reading documentation...')
+
+  // Get by ID
+  const retrieved = await docs.get(article.$id)
+  console.log(`✓ Retrieved: ${retrieved.headline}`)
+
+  // Get with specific version
+  const v1 = await docs.get(article.$id, { version: '1.0.0' })
+  console.log(`✓ Retrieved version 1.0.0`)
+
+  // List all articles
+  const articles = await docs.list($.TechArticle, {
+    where: { domain: 'sdk.do' },
+    limit: 10,
+  })
+
+  console.log(`✓ Listed ${articles.length} articles`)
+  console.log()
+
+  // ==========================================
+  // 4. Update Documentation
+  // ==========================================
+
+  console.log('4. Updating documentation...')
+
+  // Update content
+  await docs.update(article, {
+    articleBody: article.articleBody + '\n\n## Advanced Topics\n\nMore content...',
+    dateModified: new Date(),
+  })
+
+  console.log('✓ Updated article content')
+
+  // Update metadata
+  await docs.update(article, {
+    keywords: [...article.keywords, 'advanced', 'tutorial'],
+  })
+
+  console.log('✓ Updated keywords')
+  console.log()
+
+  // ==========================================
+  // 5. Version Management
+  // ==========================================
+
+  console.log('5. Managing versions...')
+
+  // Create new version
+  await docs.update(article, {
+    articleBody: '# Updated Introduction\n\nNew content for version 2.0...',
+    version: '2.0.0',
+    previousVersion: '1.0.0',
+    changeLog: 'Major rewrite with new examples',
+  })
+
+  console.log('✓ Created version 2.0.0')
+
+  // List versions
+  const versions = await docs.versions(article.$id)
+  console.log(`✓ Article has ${versions.length} versions:`)
+  versions.forEach((v) => {
+    console.log(`  - ${v.version} (${v.date})`)
+  })
+
+  // Get old version
+  const oldVersion = await docs.get(article.$id, { version: '1.0.0' })
+  console.log(`✓ Retrieved old version`)
+
+  // Compare versions
+  const diff = await docs.diff(article.$id, '1.0.0', '2.0.0')
+  console.log(`✓ Versions differ by ${diff.changes.length} changes`)
+  console.log()
+
+  // ==========================================
+  // 6. Create Relationships
+  // ==========================================
+
+  console.log('6. Creating relationships...')
+
+  // Link related docs
+  await docs.relate(guide, $.relatedTo, article)
+  await docs.relate(guide, $.mentions, apiDoc)
+
+  console.log('✓ Created relationships')
+
+  // Query relationships
+  const related = await docs.related(guide, $.relatedTo)
+  console.log(`✓ Found ${related.length} related docs`)
+
+  // Get backlinks
+  const backlinks = await docs.backlinks(article.$id)
+  console.log(`✓ Article has ${backlinks.length} backlinks`)
+  console.log()
+
+  // ==========================================
+  // 7. Delete Documentation
+  // ==========================================
+
+  console.log('7. Cleanup...')
+
+  await docs.delete(article)
+  await docs.delete(apiDoc)
+  await docs.delete(guide)
+
+  console.log('✓ Deleted test documentation')
+  console.log()
+
+  console.log('=== Example Complete ===')
+}
+
+// Run the example
+basicUsageExample().catch(console.error)
+```
+
+## Key Concepts
+
+### Creating Documents
+
+```typescript
+// Technical articles
+const article = await docs.create($.TechArticle, {
+  headline: 'Title',
+  articleBody: 'Content...',
+  keywords: ['key1', 'key2'],
+})
+
+// API references
+const api = await docs.create($.APIReference, {
+  name: 'API Name',
+  description: 'Description',
+  content: 'API documentation...',
+})
+
+// How-to guides
+const howto = await docs.create($.HowTo, {
+  name: 'Guide Title',
+  step: [{ $type: 'HowToStep', name: 'Step 1', text: '...' }],
+})
+```
+
+### Searching
+
+```typescript
+// Basic search
+const results = await docs.search('query')
+
+// Filtered search
+const filtered = await docs.search('query', {
+  domains: ['sdk.do'],
+  type: 'TechArticle',
+  limit: 10,
+})
+
+// List by type
+const articles = await docs.list($.TechArticle, {
+  where: { domain: 'sdk.do' },
+})
+```
+
+### Version Management
+
+```typescript
+// Create versioned document
+await docs.create($.TechArticle, {
+  headline: 'Guide',
+  version: '1.0.0',
+})
+
+// Update with new version
+await docs.update(doc, {
+  content: 'New content',
+  version: '2.0.0',
+  previousVersion: '1.0.0',
+})
+
+// Access specific version
+const v1 = await docs.get(id, { version: '1.0.0' })
+```
+
+### Relationships
+
+```typescript
+// Create links
+await docs.relate(doc1, $.relatedTo, doc2)
+await docs.relate(doc1, $.mentions, doc3)
+
+// Query relationships
+const related = await docs.related(doc1, $.relatedTo)
+const backlinks = await docs.backlinks(doc2.$id)
+```
+
+## See Also
+
+- [Advanced Patterns](./advanced-patterns) - Advanced usage patterns
+- [Integration](./integration) - Integration examples
+- [API Reference](../api/reference) - Complete API documentation

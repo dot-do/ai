@@ -1,0 +1,889 @@
+---
+title: Events.do - Event-Driven Architecture
+---
+
+# Events.do - Event-Driven Architecture
+
+The `.do` platform provides a comprehensive event system for building event-driven applications with pub/sub patterns, event streaming, and semantic event routing.
+
+## Table of Contents
+
+- [Quick Start](#quick-start)
+- [Core Concepts](#core-concepts)
+- [Event Publishing](#event-publishing)
+- [Event Subscription](#event-subscription)
+- [Event Streaming](#event-streaming)
+- [Event History](#event-history)
+- [Dead Letter Queue](#dead-letter-queue)
+- [Event Metrics](#event-metrics)
+- [Best Practices](#best-practices)
+- [Real-World Examples](#real-world-examples)
+
+## Quick Start
+
+```bash
+pnpm install sdk.do
+```
+
+```typescript
+import { events } from 'sdk.do'
+
+// Publish an event
+await events.publish('user.created', {
+  userId: '123',
+  email: 'alice@example.com',
+})
+
+// Subscribe to events
+events.subscribe('user.*', async (event) => {
+  console.log('User event:', event.type, event.payload)
+})
+
+// Stream events
+const stream = await events.stream('orders.*', {
+  from: 'beginning',
+})
+
+for await (const event of stream) {
+  console.log('Order event:', event)
+}
+```
+
+## Core Concepts
+
+### Event Structure
+
+Every event in the `.do` platform follows this structure:
+
+```typescript
+interface Event {
+  id: string // Unique event ID
+  type: string // Event type (e.g., 'user.created')
+  payload: any // Event data
+  metadata?: object // Optional metadata
+  timestamp: string // ISO 8601 timestamp
+  source?: string // Event source identifier
+  version?: string // Event schema version
+}
+```
+
+### Event Patterns
+
+Events use dot-notation patterns for hierarchical organization:
+
+```typescript
+// Specific events
+'user.created'
+'order.shipped'
+'payment.succeeded'
+
+// Wildcard patterns
+'user.*' // All user events
+'order.*.failed' // All failed order events
+'*.created' // All creation events
+```
+
+### Semantic Events
+
+Use semantic patterns with `$` for type-safe events:
+
+```typescript
+import { $ } from 'sdk.do'
+
+// Semantic event types
+$.User.created
+$.Order.shipped
+$.Payment.succeeded
+
+// Type-safe publishing
+await events.publish($.User.created, {
+  $type: $.Person,
+  $id: 'user-123',
+  email: 'alice@example.com',
+})
+```
+
+## Event Publishing
+
+### Basic Publishing
+
+```typescript
+import { events } from 'sdk.do'
+
+// Publish a single event
+const event = await events.publish('user.created', {
+  userId: '123',
+  email: 'alice@example.com',
+  name: 'Alice Smith',
+})
+
+console.log('Published event:', event.id)
+```
+
+### Publishing with Metadata
+
+```typescript
+await events.publish(
+  'order.created',
+  {
+    orderId: 'order-456',
+    total: 99.99,
+  },
+  {
+    // Metadata
+    correlationId: 'req-789',
+    source: 'web-app',
+    userId: 'user-123',
+  }
+)
+```
+
+### Batch Publishing
+
+Publish multiple events efficiently:
+
+```typescript
+const result = await events.batchPublish([
+  {
+    type: 'user.created',
+    payload: { userId: '123' },
+  },
+  {
+    type: 'user.created',
+    payload: { userId: '456' },
+  },
+  {
+    type: 'user.updated',
+    payload: { userId: '789', email: 'new@example.com' },
+  },
+])
+
+console.log(`Published: ${result.success}, Failed: ${result.failed}`)
+console.log('Event IDs:', result.eventIds)
+```
+
+### Type-Safe Publishing
+
+```typescript
+import { $, events } from 'sdk.do'
+
+// Define payload type
+interface UserCreatedPayload {
+  $type: typeof $.Person
+  $id: string
+  email: string
+  name: string
+}
+
+// Publish with type safety
+await events.publish<UserCreatedPayload>($.User.created, {
+  $type: $.Person,
+  $id: 'user-123',
+  email: 'alice@example.com',
+  name: 'Alice Smith',
+})
+```
+
+## Event Subscription
+
+### Basic Subscription
+
+Subscribe to events in real-time using WebSockets:
+
+```typescript
+// Subscribe to specific event
+const sub1 = events.subscribe('user.created', async (event) => {
+  console.log('New user:', event.payload)
+})
+
+// Subscribe to pattern
+const sub2 = events.subscribe('order.*', async (event) => {
+  console.log('Order event:', event.type)
+})
+
+// Unsubscribe when done
+sub1.unsubscribe()
+sub2.unsubscribe()
+```
+
+### Subscription Options
+
+```typescript
+events.subscribe('user.created', handler, {
+  // Start from beginning of event log
+  from: 'beginning',
+
+  // Or start from specific time
+  from: '2025-01-01T00:00:00Z',
+
+  // Filter events by payload fields
+  filter: {
+    role: 'admin',
+    verified: true,
+  },
+
+  // Durable subscription (survives restarts)
+  durable: true,
+
+  // Consumer group for load balancing
+  group: 'user-processors',
+
+  // Max concurrent event processing
+  maxConcurrent: 10,
+})
+```
+
+### Consumer Groups
+
+Use consumer groups for load balancing across multiple instances:
+
+```typescript
+// Instance 1
+events.subscribe('order.created', processOrder, {
+  group: 'order-processors',
+})
+
+// Instance 2 (same group)
+events.subscribe('order.created', processOrder, {
+  group: 'order-processors',
+})
+
+// Each event will be delivered to only ONE instance in the group
+```
+
+### Durable Subscriptions
+
+Persist subscriptions across restarts:
+
+```typescript
+// Create durable subscription with specific ID
+const sub = events.subscribe('payment.*', processPayment, {
+  id: 'payment-processor-v1',
+  durable: true,
+  from: 'now', // Will resume from where it left off
+})
+
+// On restart, same subscription continues
+```
+
+## Event Streaming
+
+### Basic Streaming
+
+Stream events asynchronously:
+
+```typescript
+const stream = await events.stream('user.*', {
+  from: 'beginning',
+})
+
+for await (const event of stream) {
+  console.log('User event:', event.type, event.payload)
+}
+```
+
+### Stream with Time Range
+
+```typescript
+const stream = await events.stream('order.*', {
+  from: '2025-01-01T00:00:00Z',
+  to: '2025-01-31T23:59:59Z',
+})
+
+for await (const event of stream) {
+  await processHistoricalOrder(event)
+}
+```
+
+### Stream with Filtering
+
+```typescript
+const stream = await events.stream('payment.*', {
+  from: 'now',
+  filter: {
+    amount: { $gt: 1000 },
+    currency: 'USD',
+  },
+  batchSize: 100, // Process in batches
+})
+
+for await (const event of stream) {
+  await alertOnLargePayment(event)
+}
+```
+
+### Catch-Up Streaming
+
+Process historical events and then switch to real-time:
+
+```typescript
+const stream = await events.stream('order.*', {
+  from: '2025-01-01', // Start from Jan 1st
+  // Automatically switches to real-time after catch-up
+})
+
+for await (const event of stream) {
+  // Processes historical events first, then real-time
+  await syncOrderToWarehouse(event)
+}
+```
+
+## Event History
+
+### Query Event History
+
+```typescript
+const history = await events.history('user.*', {
+  from: '2025-01-01',
+  to: '2025-01-31',
+  limit: 100,
+  offset: 0,
+  order: 'desc', // or 'asc'
+})
+
+for (const event of history) {
+  console.log(event.type, event.timestamp)
+}
+```
+
+### Filtered History
+
+```typescript
+const recentFailures = await events.history('payment.failed', {
+  from: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+  filter: {
+    errorCode: 'insufficient_funds',
+  },
+  limit: 50,
+})
+```
+
+### Pagination
+
+```typescript
+async function getAllEvents(pattern: string) {
+  const events = []
+  let offset = 0
+  const limit = 100
+
+  while (true) {
+    const batch = await events.history(pattern, {
+      limit,
+      offset,
+      order: 'asc',
+    })
+
+    if (batch.length === 0) break
+
+    events.push(...batch)
+    offset += limit
+
+    if (batch.length < limit) break
+  }
+
+  return events
+}
+```
+
+## Dead Letter Queue
+
+### List Failed Events
+
+```typescript
+// Get all DLQ entries
+const dlq = await events.dlq()
+
+for (const entry of dlq) {
+  console.log('Failed event:', entry.event.type)
+  console.log('Error:', entry.error)
+  console.log('Retry count:', entry.retryCount)
+}
+
+// Get DLQ entries for specific queue
+const failedPayments = await events.dlq('payment-failures')
+```
+
+### Retry Failed Events
+
+```typescript
+const dlq = await events.dlq()
+
+for (const entry of dlq) {
+  try {
+    // Retry the event
+    await events.retry(entry.id)
+    console.log(`Retried event ${entry.event.id}`)
+  } catch (error) {
+    console.error(`Retry failed for ${entry.event.id}:`, error)
+  }
+}
+```
+
+### Discard Failed Events
+
+```typescript
+const dlq = await events.dlq()
+
+for (const entry of dlq) {
+  // Discard events that can't be recovered
+  if (entry.retryCount > 5) {
+    await events.discard(entry.id)
+    console.log(`Discarded event ${entry.event.id}`)
+  }
+}
+```
+
+### Automated DLQ Monitoring
+
+```typescript
+import { every } from 'sdk.do'
+
+// Check DLQ every hour
+every($.Hourly, async () => {
+  const dlq = await events.dlq()
+
+  if (dlq.length > 0) {
+    // Alert on DLQ accumulation
+    await send($.Alert.critical, {
+      message: `${dlq.length} events in DLQ`,
+      dlqEntries: dlq,
+    })
+
+    // Auto-retry events with low retry count
+    for (const entry of dlq) {
+      if (entry.retryCount < 3) {
+        await events.retry(entry.id)
+      }
+    }
+  }
+})
+```
+
+## Event Metrics
+
+### Get Metrics
+
+```typescript
+const metrics = await events.metrics('order.*', {
+  from: '2025-01-01',
+  to: '2025-01-31',
+  granularity: 60, // 1 hour intervals
+})
+
+console.log('Published:', metrics.published)
+console.log('Consumed:', metrics.consumed)
+console.log('Rate:', metrics.rate, 'events/sec')
+console.log('Latency:', metrics.latency, 'ms')
+console.log('Error rate:', (metrics.errorRate * 100).toFixed(2), '%')
+
+// Top event types
+for (const { type, count } of metrics.topTypes) {
+  console.log(`${type}: ${count}`)
+}
+```
+
+### Real-Time Monitoring
+
+```typescript
+import { every } from 'sdk.do'
+
+every('*/5 * * * *', async () => {
+  // Every 5 minutes
+  const metrics = await events.metrics('*', {
+    from: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+    granularity: 1,
+  })
+
+  // Alert on high error rate
+  if (metrics.errorRate > 0.05) {
+    await send($.Alert.warning, {
+      message: `High event error rate: ${(metrics.errorRate * 100).toFixed(2)}%`,
+      metrics,
+    })
+  }
+
+  // Alert on low throughput
+  if (metrics.rate < 10) {
+    await send($.Alert.info, {
+      message: `Low event throughput: ${metrics.rate} events/sec`,
+      metrics,
+    })
+  }
+})
+```
+
+## Subscription Management
+
+### List Subscriptions
+
+```typescript
+const subscriptions = await events.listSubscriptions()
+
+for (const sub of subscriptions) {
+  console.log('ID:', sub.id)
+  console.log('Pattern:', sub.pattern)
+  console.log('Status:', sub.status)
+  console.log('Durable:', sub.durable)
+  console.log('Group:', sub.group || 'none')
+}
+```
+
+### Get Subscription Details
+
+```typescript
+const sub = await events.getSubscription('sub-123')
+
+console.log('Created at:', sub.createdAt)
+console.log('Pattern:', sub.pattern)
+console.log('Status:', sub.status)
+```
+
+### Cancel Subscription
+
+```typescript
+// Cancel by ID
+await events.cancelSubscription('sub-123')
+
+// Or use the unsubscribe function
+const sub = events.subscribe('user.*', handler)
+sub.unsubscribe()
+```
+
+## Best Practices
+
+### Event Naming
+
+Use consistent, hierarchical event naming:
+
+```typescript
+// Good
+'user.created'
+'order.payment.succeeded'
+'inventory.item.reserved'
+
+// Bad
+'UserCreated'
+'order_payment_success'
+'inventory-item-reserved'
+```
+
+### Idempotency
+
+Ensure event handlers are idempotent:
+
+```typescript
+events.subscribe('order.created', async (event) => {
+  const orderId = event.payload.orderId
+
+  // Check if already processed
+  const existing = await db.get($.Order, orderId)
+  if (existing) {
+    console.log('Order already processed:', orderId)
+    return
+  }
+
+  // Process order
+  await createOrder(event.payload)
+})
+```
+
+### Error Handling
+
+Always handle errors in event handlers:
+
+```typescript
+events.subscribe('payment.process', async (event) => {
+  try {
+    await processPayment(event.payload)
+  } catch (error) {
+    console.error('Payment processing failed:', error)
+
+    // Publish failure event
+    await events.publish('payment.failed', {
+      ...event.payload,
+      error: error.message,
+    })
+  }
+})
+```
+
+### Event Schema Versioning
+
+Include version information in events:
+
+```typescript
+await events.publish(
+  'user.created',
+  {
+    userId: '123',
+    email: 'alice@example.com',
+  },
+  {
+    version: 'v2', // Schema version
+    schemaUrl: 'https://schemas.example.com/user.created.v2.json',
+  }
+)
+```
+
+### Graceful Shutdown
+
+Clean up subscriptions on shutdown:
+
+```typescript
+import { events } from 'sdk.do'
+
+// Subscribe to events
+const sub1 = events.subscribe('user.*', handler1)
+const sub2 = events.subscribe('order.*', handler2)
+
+// Handle shutdown
+process.on('SIGTERM', () => {
+  console.log('Shutting down gracefully...')
+  events.cleanup() // Unsubscribe all
+  process.exit(0)
+})
+```
+
+## Real-World Examples
+
+### E-Commerce Order Processing
+
+Complete event-driven order workflow:
+
+```typescript
+import { events, db, api, $ } from 'sdk.do'
+
+// 1. Order created
+events.subscribe('order.created', async (event) => {
+  const { orderId, items, customerId } = event.payload
+
+  // Validate inventory
+  for (const item of items) {
+    const available = await db.get($.Product, item.productId)
+    if (available.stock < item.quantity) {
+      await events.publish('order.rejected', {
+        orderId,
+        reason: 'insufficient_stock',
+        product: item.productId,
+      })
+      return
+    }
+  }
+
+  // Reserve inventory
+  await events.publish('inventory.reserve', { orderId, items })
+})
+
+// 2. Inventory reserved
+events.subscribe('inventory.reserved', async (event) => {
+  const { orderId } = event.payload
+
+  // Process payment
+  await events.publish('payment.process', {
+    orderId,
+    amount: await calculateOrderTotal(orderId),
+  })
+})
+
+// 3. Payment succeeded
+events.subscribe('payment.succeeded', async (event) => {
+  const { orderId } = event.payload
+
+  // Create shipment
+  await events.publish('shipment.create', { orderId })
+})
+
+// 4. Shipment created
+events.subscribe('shipment.created', async (event) => {
+  const { orderId, trackingNumber } = event.payload
+
+  // Send confirmation email
+  const order = await db.get($.Order, orderId)
+  await api.sendgrid.send({
+    to: order.customerEmail,
+    template: 'order-shipped',
+    data: { orderId, trackingNumber },
+  })
+
+  // Mark order as shipped
+  await db.update($.Order, orderId, { status: 'shipped' })
+})
+```
+
+### Real-Time Analytics Pipeline
+
+Stream events for analytics processing:
+
+```typescript
+import { events, db, $ } from 'sdk.do'
+
+// Subscribe to all events for analytics
+events.subscribe(
+  '*',
+  async (event) => {
+    // Store in analytics database
+    await db.create($.AnalyticsEvent, {
+      $id: event.id,
+      $type: $.Action,
+      eventType: event.type,
+      payload: event.payload,
+      timestamp: event.timestamp,
+      source: event.source,
+    })
+  },
+  {
+    group: 'analytics-pipeline',
+    maxConcurrent: 100,
+  }
+)
+
+// Real-time dashboard updates
+events.subscribe('order.*', async (event) => {
+  // Update dashboard metrics
+  await send($.Dashboard.update, {
+    metric: 'orders',
+    event: event.type,
+    timestamp: event.timestamp,
+  })
+})
+```
+
+### Event Replay for Data Recovery
+
+Replay events to rebuild state:
+
+```typescript
+async function rebuildCustomerState(customerId: string) {
+  // Get all customer events
+  const stream = await events.stream('customer.*', {
+    from: 'beginning',
+    filter: { customerId },
+  })
+
+  // Replay events to rebuild state
+  const state = {
+    profile: {},
+    orders: [],
+    payments: [],
+  }
+
+  for await (const event of stream) {
+    switch (event.type) {
+      case 'customer.created':
+        state.profile = event.payload
+        break
+
+      case 'customer.updated':
+        state.profile = { ...state.profile, ...event.payload }
+        break
+
+      case 'order.created':
+        state.orders.push(event.payload)
+        break
+
+      case 'payment.succeeded':
+        state.payments.push(event.payload)
+        break
+    }
+  }
+
+  return state
+}
+```
+
+### Saga Pattern for Distributed Transactions
+
+Implement sagas with compensating transactions:
+
+```typescript
+import { events } from 'sdk.do'
+
+// Orchestrator for booking saga
+events.subscribe('booking.requested', async (event) => {
+  const { bookingId, flightId, hotelId, carId } = event.payload
+
+  try {
+    // Step 1: Reserve flight
+    await events.publish('flight.reserve', { bookingId, flightId })
+
+    // Step 2: Reserve hotel
+    await events.publish('hotel.reserve', { bookingId, hotelId })
+
+    // Step 3: Reserve car
+    await events.publish('car.reserve', { bookingId, carId })
+
+    // All succeeded
+    await events.publish('booking.confirmed', { bookingId })
+  } catch (error) {
+    // Compensate (undo reservations)
+    await events.publish('booking.compensation', {
+      bookingId,
+      reason: error.message,
+    })
+  }
+})
+
+// Compensation handler
+events.subscribe('booking.compensation', async (event) => {
+  const { bookingId } = event.payload
+
+  // Undo all reservations
+  await events.publish('flight.cancel', { bookingId })
+  await events.publish('hotel.cancel', { bookingId })
+  await events.publish('car.cancel', { bookingId })
+
+  // Mark booking as failed
+  await events.publish('booking.failed', { bookingId })
+})
+```
+
+## Configuration
+
+### Custom Configuration
+
+```typescript
+import { createEventsService } from 'sdk.do'
+
+const events = createEventsService({
+  apiUrl: 'https://events.do',
+  apiKey: process.env.DO_TOKEN,
+  telemetry: true, // Enable logging
+})
+```
+
+### Environment Variables
+
+```bash
+# .env
+EVENTS_API_URL=https://events.do
+DO_TOKEN=your-api-key-here
+```
+
+## API Reference
+
+Complete API documentation:
+
+- [`events.publish()`](#event-publishing) - Publish single event
+- [`events.batchPublish()`](#batch-publishing) - Publish multiple events
+- [`events.subscribe()`](#event-subscription) - Subscribe to events
+- [`events.stream()`](#event-streaming) - Stream events
+- [`events.history()`](#event-history) - Query event history
+- [`events.dlq()`](#dead-letter-queue) - Get DLQ entries
+- [`events.retry()`](#retry-failed-events) - Retry failed event
+- [`events.discard()`](#discard-failed-events) - Discard failed event
+- [`events.metrics()`](#event-metrics) - Get event metrics
+- [`events.listSubscriptions()`](#list-subscriptions) - List all subscriptions
+- [`events.getSubscription()`](#get-subscription-details) - Get subscription details
+- [`events.cancelSubscription()`](#cancel-subscription) - Cancel subscription
+- [`events.cleanup()`](#graceful-shutdown) - Cleanup all subscriptions
+
+## Related
+
+- [SDK.do Documentation](./SDK.mdx) - Main SDK guide
+- [on - Event Listeners](./SDK.mdx#on-event-listeners) - Simpler event listener API
+- [send - Event Publishing](./SDK.mdx#send-event-publishing) - Simpler event publishing API
+- [Webhooks](./SDK.mdx#webhooks-signature-verification) - Webhook integration
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform)

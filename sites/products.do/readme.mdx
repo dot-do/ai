@@ -1,0 +1,702 @@
+---
+$id: https://products.do
+$type: WebSite
+title: products.do - Product Management for Business-as-Code
+description: Build autonomous product catalog systems with semantic patterns. Manage products, inventory, variants, pricing, and categories using Schema.org Product types.
+keywords: [products, product management, catalog, inventory, variants, pricing, Business-as-Code, Schema.org]
+author:
+  $type: Organization
+  name: .do Platform
+license: MIT
+---
+
+# products.do
+
+**Semantic Product Management for Business-as-Code**
+
+products.do provides a comprehensive product catalog and inventory management framework for the `.do` platform, enabling you to build autonomous product systems using semantic patterns with Schema.org Product types.
+
+## What is Product Management?
+
+Product management encompasses the complete product lifecycle:
+
+- **Product Catalog**: Create and organize product information
+- **Inventory Management**: Track stock levels and locations
+- **Product Variants**: Handle sizes, colors, and other options
+- **Pricing Management**: Manage prices, discounts, and promotions
+- **Product Categories**: Organize products into hierarchies
+- **Product Search**: Enable discovery and filtering
+- **Product Analytics**: Track sales, views, and performance
+
+## Quick Start
+
+```bash
+pnpm add sdk.do
+```
+
+```typescript
+import $, { db } from 'sdk.do'
+
+// Create a product
+const product = await db.create($.Product, {
+  $type: 'Product',
+  name: 'Wireless Headphones',
+  sku: 'WH-1000',
+  description: 'Premium noise-cancelling wireless headphones',
+  brand: {
+    $type: 'Brand',
+    name: 'AudioPro',
+  },
+  offers: {
+    $type: 'Offer',
+    price: 299.99,
+    priceCurrency: 'USD',
+    availability: 'InStock',
+  },
+  category: 'Electronics > Audio > Headphones',
+  image: ['https://example.com/product-image.jpg'],
+  aggregateRating: {
+    $type: 'AggregateRating',
+    ratingValue: 4.5,
+    reviewCount: 0,
+  },
+  // Inventory
+  quantityOnHand: 100,
+  quantityAvailable: 100,
+  quantityReserved: 0,
+  reorderPoint: 20,
+  reorderQuantity: 50,
+})
+```
+
+## Key Features
+
+### Product Catalog Management
+
+Comprehensive product information:
+
+```typescript
+interface Product {
+  $type: 'Product'
+  $id: string
+  name: string
+  sku: string
+  gtin?: string // Global Trade Item Number (UPC/EAN)
+  mpn?: string // Manufacturer Part Number
+  description?: string
+  longDescription?: string
+
+  // Brand & Manufacturer
+  brand?: Brand
+  manufacturer?: Organization
+
+  // Pricing
+  offers?: Offer | Offer[]
+  priceRange?: string
+
+  // Media
+  image?: string[]
+  video?: string[]
+
+  // Categorization
+  category?: string
+  additionalType?: string[]
+
+  // Physical attributes
+  weight?: QuantitativeValue
+  width?: QuantitativeValue
+  height?: QuantitativeValue
+  depth?: QuantitativeValue
+  color?: string
+  material?: string
+
+  // Inventory
+  quantityOnHand: number
+  quantityAvailable: number
+  quantityReserved: number
+  reorderPoint: number
+  reorderQuantity: number
+
+  // Analytics
+  totalSold?: number
+  totalViews?: number
+  lastSoldDate?: string
+  lastViewedDate?: string
+
+  // Ratings & Reviews
+  aggregateRating?: AggregateRating
+  review?: Review[]
+
+  // Status
+  isActive: boolean
+  discontinuedDate?: string
+}
+
+// Create product with full details
+const product = await db.create($.Product, {
+  $type: 'Product',
+  name: 'Classic White T-Shirt',
+  sku: 'TSH-WHT-M',
+  gtin: '0012345678905',
+  description: '100% organic cotton t-shirt',
+  longDescription: 'Premium quality t-shirt made from 100% organic cotton...',
+  brand: {
+    $type: 'Brand',
+    name: 'EcoWear',
+  },
+  offers: {
+    $type: 'Offer',
+    price: 29.99,
+    priceCurrency: 'USD',
+    availability: 'InStock',
+    validFrom: new Date().toISOString(),
+  },
+  category: 'Clothing > Men > Shirts',
+  image: ['https://example.com/tshirt-front.jpg', 'https://example.com/tshirt-back.jpg'],
+  color: 'White',
+  material: 'Organic Cotton',
+  weight: {
+    $type: 'QuantitativeValue',
+    value: 200,
+    unitCode: 'GRM',
+  },
+  quantityOnHand: 500,
+  quantityAvailable: 500,
+  quantityReserved: 0,
+  reorderPoint: 50,
+  reorderQuantity: 200,
+  isActive: true,
+})
+```
+
+### Product Variants
+
+Handle product variations:
+
+```typescript
+interface ProductVariant extends Product {
+  isVariantOf: Product // Parent product
+  variantAttributes: {
+    size?: string
+    color?: string
+    material?: string
+    style?: string
+  }
+}
+
+// Create parent product
+const parentProduct = await db.create($.Product, {
+  $type: 'Product',
+  name: 'Classic T-Shirt',
+  sku: 'TSH-CLASSIC',
+  description: 'Classic cotton t-shirt',
+  brand: { $type: 'Brand', name: 'EcoWear' },
+  hasVariants: true,
+})
+
+// Create variants
+const sizes = ['S', 'M', 'L', 'XL']
+const colors = ['White', 'Black', 'Navy', 'Gray']
+
+for (const size of sizes) {
+  for (const color of colors) {
+    await db.create($.Product, {
+      $type: 'Product',
+      name: `Classic T-Shirt - ${color} - ${size}`,
+      sku: `TSH-${color.substring(0, 3).toUpperCase()}-${size}`,
+      isVariantOf: parentProduct.$id,
+      variantAttributes: { size, color },
+      offers: {
+        $type: 'Offer',
+        price: 29.99,
+        priceCurrency: 'USD',
+        availability: 'InStock',
+      },
+      color,
+      quantityOnHand: 50,
+      quantityAvailable: 50,
+      quantityReserved: 0,
+      isActive: true,
+    })
+  }
+}
+
+// Get all variants of a product
+async function getProductVariants(productId: string) {
+  return await db.list($.Product, {
+    where: { isVariantOf: productId },
+  })
+}
+```
+
+### Inventory Management
+
+Track and manage inventory:
+
+```typescript
+// Reserve inventory (on order placement)
+async function reserveInventory(productId: string, quantity: number) {
+  const product = await db.get($.Product, productId)
+
+  if (product.quantityAvailable < quantity) {
+    throw new Error(`Insufficient inventory. Available: ${product.quantityAvailable}`)
+  }
+
+  await db.update(product, {
+    quantityAvailable: product.quantityAvailable - quantity,
+    quantityReserved: product.quantityReserved + quantity,
+  })
+
+  // Check reorder point
+  if (product.quantityAvailable <= product.reorderPoint) {
+    await sendReorderNotification(product)
+  }
+}
+
+// Commit inventory (on order shipment)
+async function commitInventory(productId: string, quantity: number) {
+  const product = await db.get($.Product, productId)
+
+  await db.update(product, {
+    quantityReserved: product.quantityReserved - quantity,
+    quantityOnHand: product.quantityOnHand - quantity,
+    totalSold: (product.totalSold || 0) + quantity,
+    lastSoldDate: new Date().toISOString(),
+  })
+}
+
+// Release inventory (on order cancellation)
+async function releaseInventory(productId: string, quantity: number) {
+  const product = await db.get($.Product, productId)
+
+  await db.update(product, {
+    quantityAvailable: product.quantityAvailable + quantity,
+    quantityReserved: product.quantityReserved - quantity,
+  })
+}
+
+// Receive inventory (on purchase order receipt)
+async function receiveInventory(productId: string, quantity: number) {
+  const product = await db.get($.Product, productId)
+
+  await db.update(product, {
+    quantityOnHand: product.quantityOnHand + quantity,
+    quantityAvailable: product.quantityAvailable + quantity,
+    lastReceivedDate: new Date().toISOString(),
+  })
+}
+
+// Inventory adjustment (physical count)
+async function adjustInventory(productId: string, newQuantity: number, reason: string) {
+  const product = await db.get($.Product, productId)
+  const difference = newQuantity - product.quantityOnHand
+
+  await db.update(product, {
+    quantityOnHand: newQuantity,
+    quantityAvailable: product.quantityAvailable + difference,
+    lastAdjustmentDate: new Date().toISOString(),
+    lastAdjustmentReason: reason,
+  })
+
+  // Log adjustment
+  await db.create($.InventoryAdjustment, {
+    $type: 'InventoryAdjustment',
+    product: product.$id,
+    previousQuantity: product.quantityOnHand,
+    newQuantity,
+    difference,
+    reason,
+    adjustedAt: new Date().toISOString(),
+  })
+}
+```
+
+### Pricing Management
+
+Dynamic pricing and promotions:
+
+```typescript
+interface Offer {
+  $type: 'Offer'
+  price: number
+  priceCurrency: string
+  priceValidUntil?: string
+  availability: 'InStock' | 'OutOfStock' | 'PreOrder' | 'Discontinued'
+  availabilityStarts?: string
+  availabilityEnds?: string
+}
+
+// Update price
+async function updatePrice(productId: string, newPrice: number) {
+  const product = await db.get($.Product, productId)
+
+  await db.update(product, {
+    offers: {
+      ...product.offers,
+      price: newPrice,
+    },
+    priceHistory: [
+      ...(product.priceHistory || []),
+      {
+        price: product.offers.price,
+        effectiveDate: new Date().toISOString(),
+      },
+    ],
+  })
+}
+
+// Create promotion
+async function createPromotion(params: { productIds: string[]; discountPercent: number; startDate: string; endDate: string }) {
+  for (const productId of params.productIds) {
+    const product = await db.get($.Product, productId)
+    const originalPrice = product.offers.price
+    const salePrice = originalPrice * (1 - params.discountPercent / 100)
+
+    await db.update(product, {
+      offers: {
+        ...product.offers,
+        price: salePrice,
+        priceValidUntil: params.endDate,
+      },
+      originalPrice,
+      onSale: true,
+      saleStartDate: params.startDate,
+      saleEndDate: params.endDate,
+    })
+  }
+}
+
+// End promotion
+import { every } from 'sdk.do'
+
+await every('0 * * * *', async () => {
+  const now = new Date().toISOString()
+
+  const expiredPromotions = await db.list($.Product, {
+    where: {
+      onSale: true,
+      saleEndDate: { $lte: now },
+    },
+  })
+
+  for (const product of expiredPromotions) {
+    await db.update(product, {
+      offers: {
+        ...product.offers,
+        price: product.originalPrice,
+      },
+      onSale: false,
+      originalPrice: undefined,
+      saleStartDate: undefined,
+      saleEndDate: undefined,
+    })
+  }
+})
+```
+
+### Product Categories
+
+Organize products hierarchically:
+
+```typescript
+interface ProductCategory {
+  $type: 'Category'
+  name: string
+  slug: string
+  description?: string
+  parent?: string
+  children?: string[]
+  level: number
+  path: string
+  productCount: number
+}
+
+// Create category hierarchy
+const electronics = await db.create($.Category, {
+  $type: 'Category',
+  name: 'Electronics',
+  slug: 'electronics',
+  level: 0,
+  path: 'electronics',
+  productCount: 0,
+})
+
+const audio = await db.create($.Category, {
+  $type: 'Category',
+  name: 'Audio',
+  slug: 'audio',
+  parent: electronics.$id,
+  level: 1,
+  path: 'electronics/audio',
+  productCount: 0,
+})
+
+const headphones = await db.create($.Category, {
+  $type: 'Category',
+  name: 'Headphones',
+  slug: 'headphones',
+  parent: audio.$id,
+  level: 2,
+  path: 'electronics/audio/headphones',
+  productCount: 0,
+})
+
+// Assign product to category
+await db.update(product, {
+  category: headphones.path,
+  categories: [electronics.$id, audio.$id, headphones.$id],
+})
+
+// Get products in category
+async function getProductsByCategory(categoryId: string, includeSubcategories = false) {
+  if (includeSubcategories) {
+    const category = await db.get($.Category, categoryId)
+    return await db.list($.Product, {
+      where: {
+        category: { $regex: `^${category.path}` },
+      },
+    })
+  } else {
+    return await db.list($.Product, {
+      where: {
+        categories: categoryId,
+      },
+    })
+  }
+}
+```
+
+### Product Search & Filtering
+
+Enable product discovery:
+
+```typescript
+// Search products
+async function searchProducts(query: string) {
+  return await db.list($.Product, {
+    where: {
+      $or: [
+        { name: { $regex: query, $options: 'i' } },
+        { description: { $regex: query, $options: 'i' } },
+        { sku: { $regex: query, $options: 'i' } },
+        { 'brand.name': { $regex: query, $options: 'i' } },
+      ],
+      isActive: true,
+    },
+  })
+}
+
+// Filter products
+async function filterProducts(filters: {
+  category?: string
+  minPrice?: number
+  maxPrice?: number
+  brand?: string
+  color?: string
+  inStock?: boolean
+  rating?: number
+}) {
+  const where: any = { isActive: true }
+
+  if (filters.category) {
+    where.category = { $regex: `^${filters.category}` }
+  }
+
+  if (filters.minPrice || filters.maxPrice) {
+    where['offers.price'] = {}
+    if (filters.minPrice) where['offers.price'].$gte = filters.minPrice
+    if (filters.maxPrice) where['offers.price'].$lte = filters.maxPrice
+  }
+
+  if (filters.brand) {
+    where['brand.name'] = filters.brand
+  }
+
+  if (filters.color) {
+    where.color = filters.color
+  }
+
+  if (filters.inStock) {
+    where.quantityAvailable = { $gt: 0 }
+  }
+
+  if (filters.rating) {
+    where['aggregateRating.ratingValue'] = { $gte: filters.rating }
+  }
+
+  return await db.list($.Product, { where })
+}
+
+// Sort products
+async function sortProducts(products: Product[], sortBy: 'price' | 'name' | 'rating' | 'newest'): Promise<Product[]> {
+  switch (sortBy) {
+    case 'price':
+      return products.sort((a, b) => a.offers.price - b.offers.price)
+    case 'name':
+      return products.sort((a, b) => a.name.localeCompare(b.name))
+    case 'rating':
+      return products.sort((a, b) => (b.aggregateRating?.ratingValue || 0) - (a.aggregateRating?.ratingValue || 0))
+    case 'newest':
+      return products.sort((a, b) => new Date(b.dateCreated).getTime() - new Date(a.dateCreated).getTime())
+    default:
+      return products
+  }
+}
+```
+
+### Product Analytics
+
+Track product performance:
+
+```typescript
+// Track product view
+await on('ProductViewed', async (event) => {
+  const product = await db.get($.Product, event.productId)
+
+  await db.update(product, {
+    totalViews: (product.totalViews || 0) + 1,
+    lastViewedDate: new Date().toISOString(),
+  })
+})
+
+// Get bestsellers
+async function getBestsellers(limit = 10, timeframe?: { start: string; end: string }) {
+  const where: any = { isActive: true }
+
+  if (timeframe) {
+    where.lastSoldDate = {
+      $gte: timeframe.start,
+      $lte: timeframe.end,
+    }
+  }
+
+  return await db.list($.Product, {
+    where,
+    sort: { totalSold: -1 },
+    limit,
+  })
+}
+
+// Get low stock products
+async function getLowStockProducts() {
+  return await db.list($.Product, {
+    where: {
+      isActive: true,
+      $expr: { $lte: ['$quantityAvailable', '$reorderPoint'] },
+    },
+  })
+}
+
+// Product performance report
+async function getProductPerformance(productId: string, days = 30) {
+  const product = await db.get($.Product, productId)
+  const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+
+  const orders = await db.list($.Order, {
+    where: {
+      'orderedItem.orderedItem.$id': productId,
+      orderDate: { $gte: startDate },
+    },
+  })
+
+  const totalSold = orders.reduce((sum, order) => {
+    const item = order.orderedItem.find((i) => i.orderedItem.$id === productId)
+    return sum + (item?.orderQuantity || 0)
+  }, 0)
+
+  const revenue = orders.reduce((sum, order) => {
+    const item = order.orderedItem.find((i) => i.orderedItem.$id === productId)
+    return sum + (item ? item.price.price * item.orderQuantity : 0)
+  }, 0)
+
+  return {
+    product: {
+      id: product.$id,
+      name: product.name,
+      sku: product.sku,
+    },
+    period: { days, startDate },
+    metrics: {
+      totalSold,
+      revenue,
+      averagePrice: revenue / totalSold,
+      conversionRate: product.totalViews ? (totalSold / product.totalViews) * 100 : 0,
+      currentStock: product.quantityAvailable,
+      stockValue: product.quantityOnHand * product.offers.price,
+    },
+  }
+}
+```
+
+## Semantic Patterns
+
+```typescript
+import $ from 'sdk.do'
+
+// Product types
+$.Product
+$.ProductVariant
+$.Offer
+$.Brand
+$.Category
+$.Review
+$.AggregateRating
+
+// Product events
+$.Product.created
+$.Product.updated
+$.Product.viewed
+$.Product.purchased
+$.Product.reviewed
+$.Product.discontinued
+
+// Product relationships
+$.Product.has.Variant
+$.Product.belongs.to.Category
+$.Product.made.by.Brand
+$.Product.has.Offer
+$.Product.has.Review
+$.Order.contains.Product
+```
+
+## Integration
+
+```typescript
+// Products → Orders
+await on($.Order.created, async (order) => {
+  for (const item of order.orderedItem) {
+    await reserveInventory(item.orderedItem.$id, item.orderQuantity)
+  }
+})
+
+// Products → Inventory
+await on($.Product.updated, async (product) => {
+  if (product.quantityAvailable <= product.reorderPoint) {
+    await createPurchaseOrder(product)
+  }
+})
+```
+
+## Documentation
+
+- [Getting Started](./docs/getting-started)
+- [Architecture](./docs/architecture)
+- [Best Practices](./docs/best-practices)
+- [Troubleshooting](./docs/troubleshooting)
+- [API Reference](./api/)
+- [Examples](./examples/)
+
+## Related Projects
+
+- [orders.do](https://orders.do) - Order management
+- [customers.do](https://customers.do) - Customer management
+- [invoices.do](https://invoices.do) - Invoice management
+- [sdk.do](https://sdk.do) - Core SDK
+
+## License
+
+MIT (Open Source)
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

@@ -1,0 +1,698 @@
+---
+$id: https://integrations.do/stripe
+$type: Integration
+name: Stripe
+service: stripe
+description: Payment processing for internet businesses
+category: payments
+sdkBased: true
+sdkPackage: stripe
+sdkVersion: ^17.4.0
+sdkImport: Stripe
+
+auth:
+  type: api-key
+  location: header
+  headerName: Authorization
+  scheme: Bearer
+
+apiVersion: '2024-12-18'
+
+resources:
+  - name: Customer
+    plural: Customers
+    sdkPath: customers
+    operations:
+      - name: create
+        method: create
+        params:
+          - name: params
+            type: Stripe.CustomerCreateParams
+            required: true
+            description: Customer creation parameters
+        returns: Stripe.Customer
+
+      - name: get
+        method: retrieve
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Customer ID
+        returns: Stripe.Customer
+
+      - name: update
+        method: update
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Customer ID
+          - name: params
+            type: Stripe.CustomerUpdateParams
+            required: true
+            description: Update parameters
+        returns: Stripe.Customer
+
+      - name: delete
+        method: del
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Customer ID
+        returns: Stripe.DeletedCustomer
+
+      - name: list
+        method: list
+        params:
+          - name: params
+            type: Stripe.CustomerListParams
+            required: false
+            description: List parameters
+        returns: Stripe.ApiList<Stripe.Customer>
+        pagination:
+          type: cursor
+          cursorField: starting_after
+          limitField: limit
+          hasMoreField: has_more
+
+  - name: PaymentIntent
+    plural: PaymentIntents
+    sdkPath: paymentIntents
+    operations:
+      - name: create
+        method: create
+        params:
+          - name: params
+            type: Stripe.PaymentIntentCreateParams
+            required: true
+            description: Payment intent creation parameters (amount, currency, etc.)
+        returns: Stripe.PaymentIntent
+
+      - name: get
+        method: retrieve
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Payment intent ID
+        returns: Stripe.PaymentIntent
+
+      - name: update
+        method: update
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Payment intent ID
+          - name: params
+            type: Stripe.PaymentIntentUpdateParams
+            required: true
+            description: Update parameters
+        returns: Stripe.PaymentIntent
+
+      - name: confirm
+        method: confirm
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Payment intent ID
+          - name: params
+            type: Stripe.PaymentIntentConfirmParams
+            required: false
+            description: Confirmation parameters
+        returns: Stripe.PaymentIntent
+
+      - name: cancel
+        method: cancel
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Payment intent ID
+        returns: Stripe.PaymentIntent
+
+      - name: list
+        method: list
+        params:
+          - name: params
+            type: Stripe.PaymentIntentListParams
+            required: false
+            description: List parameters
+        returns: Stripe.ApiList<Stripe.PaymentIntent>
+        pagination:
+          type: cursor
+          cursorField: starting_after
+          limitField: limit
+          hasMoreField: has_more
+
+  - name: Subscription
+    plural: Subscriptions
+    sdkPath: subscriptions
+    operations:
+      - name: create
+        method: create
+        params:
+          - name: params
+            type: Stripe.SubscriptionCreateParams
+            required: true
+            description: Subscription creation parameters
+        returns: Stripe.Subscription
+
+      - name: get
+        method: retrieve
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Subscription ID
+        returns: Stripe.Subscription
+
+      - name: update
+        method: update
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Subscription ID
+          - name: params
+            type: Stripe.SubscriptionUpdateParams
+            required: true
+            description: Update parameters
+        returns: Stripe.Subscription
+
+      - name: cancel
+        method: cancel
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Subscription ID
+        returns: Stripe.Subscription
+
+      - name: list
+        method: list
+        params:
+          - name: params
+            type: Stripe.SubscriptionListParams
+            required: false
+            description: List parameters
+        returns: Stripe.ApiList<Stripe.Subscription>
+        pagination:
+          type: cursor
+          cursorField: starting_after
+          limitField: limit
+          hasMoreField: has_more
+
+  - name: Charge
+    plural: Charges
+    sdkPath: charges
+    operations:
+      - name: create
+        method: create
+        params:
+          - name: params
+            type: Stripe.ChargeCreateParams
+            required: true
+            description: Charge creation parameters
+        returns: Stripe.Charge
+
+      - name: get
+        method: retrieve
+        params:
+          - name: id
+            type: string
+            required: true
+            description: Charge ID
+        returns: Stripe.Charge
+
+      - name: list
+        method: list
+        params:
+          - name: params
+            type: Stripe.ChargeListParams
+            required: false
+            description: List parameters
+        returns: Stripe.ApiList<Stripe.Charge>
+        pagination:
+          type: cursor
+          cursorField: starting_after
+          limitField: limit
+          hasMoreField: has_more
+
+webhooks:
+  enabled: true
+  signatureHeader: Stripe-Signature
+  signatureAlgorithm: sha256
+  verificationMethod: signature
+  events:
+    - name: customer.created
+      type: customer.created
+      description: Occurs when a new customer is created
+    - name: customer.updated
+      type: customer.updated
+      description: Occurs when a customer is updated
+    - name: customer.deleted
+      type: customer.deleted
+      description: Occurs when a customer is deleted
+    - name: payment_intent.created
+      type: payment_intent.created
+      description: Occurs when a payment intent is created
+    - name: payment_intent.succeeded
+      type: payment_intent.succeeded
+      description: Occurs when a payment intent succeeds
+    - name: payment_intent.payment_failed
+      type: payment_intent.payment_failed
+      description: Occurs when a payment intent fails
+    - name: payment_intent.canceled
+      type: payment_intent.canceled
+      description: Occurs when a payment intent is canceled
+    - name: charge.succeeded
+      type: charge.succeeded
+      description: Occurs when a charge succeeds
+    - name: charge.failed
+      type: charge.failed
+      description: Occurs when a charge fails
+    - name: charge.refunded
+      type: charge.refunded
+      description: Occurs when a charge is refunded
+    - name: subscription.created
+      type: subscription.created
+      description: Occurs when a subscription is created
+    - name: subscription.updated
+      type: subscription.updated
+      description: Occurs when a subscription is updated
+    - name: subscription.deleted
+      type: subscription.deleted
+      description: Occurs when a subscription is deleted
+
+errors:
+  mapping:
+    - code: invalid_request_error
+      type: validation
+      statusCode: 400
+      message: Invalid request parameters
+      retryable: false
+    - code: authentication_error
+      type: authentication
+      statusCode: 401
+      message: Authentication failed - check your API key
+      retryable: false
+    - code: permission_error
+      type: authorization
+      statusCode: 403
+      message: Permission denied
+      retryable: false
+    - code: not_found_error
+      type: not_found
+      statusCode: 404
+      message: Resource not found
+      retryable: false
+    - code: rate_limit_error
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded - please retry
+      retryable: true
+  retryable: [rate_limit_error, connection_error, api_error]
+  nonRetryable: [invalid_request_error, authentication_error, permission_error, not_found_error]
+
+tests:
+  enabled: true
+  cleanup: true
+  scenarios:
+    - name: Customer Operations
+      description: Test customer CRUD operations
+      steps:
+        - action: create
+          resource: Customer
+        - action: retrieve
+          resource: Customer
+        - action: update
+          resource: Customer
+        - action: delete
+          resource: Customer
+        - action: list
+          resource: Customer
+    - name: Payment Intent Flow
+      description: Test payment intent lifecycle
+      steps:
+        - action: create
+          resource: PaymentIntent
+        - action: retrieve
+          resource: PaymentIntent
+        - action: update
+          resource: PaymentIntent
+        - action: list
+          resource: PaymentIntent
+    - name: Subscription Management
+      description: Test subscription operations
+      steps:
+        - action: create
+          resource: Subscription
+        - action: retrieve
+          resource: Subscription
+        - action: update
+          resource: Subscription
+        - action: list
+          resource: Subscription
+    - name: Charge Operations
+      description: Test charge operations
+      steps:
+        - action: create
+          resource: Charge
+        - action: retrieve
+          resource: Charge
+        - action: list
+          resource: Charge
+
+docs:
+  homepage: https://stripe.com
+  apiDocs: https://stripe.com/docs/api
+  sdkDocs: https://github.com/stripe/stripe-node
+  guides:
+    quickstart: https://stripe.com/docs/quickstart
+    webhooks: https://stripe.com/docs/webhooks
+    testing: https://stripe.com/docs/testing
+    authentication: https://stripe.com/docs/keys
+---
+
+# Stripe Payment Processing
+
+Stripe is a technology company that builds economic infrastructure for the internet. Businesses of every size—from new startups to public companies—use Stripe's software to accept payments and manage their businesses online.
+
+## Features
+
+- **Payment Processing**: Accept payments from customers worldwide with support for 135+ currencies
+- **Subscriptions**: Recurring billing and subscription management with flexible pricing models
+- **Connect**: Marketplace and platform payments with automated payouts
+- **Billing**: Invoicing and billing automation with dunning management
+- **Fraud Prevention**: Machine learning-based fraud detection (Radar)
+- **Global Scale**: Process billions of dollars annually with 99.99% uptime
+
+## Quick Start
+
+```typescript
+import { StripeClient } from '@dotdo/sdk.do/integrations/stripe'
+
+const stripe = new StripeClient({
+  apiKey: process.env.STRIPE_SECRET_KEY,
+  apiVersion: '2024-12-18',
+})
+
+// Create a customer
+const customer = await stripe.createCustomer({
+  email: 'customer@example.com',
+  name: 'John Doe',
+  metadata: {
+    userId: '12345',
+  },
+})
+
+// Create a payment intent
+const paymentIntent = await stripe.createPaymentIntent({
+  amount: 2000, // $20.00 in cents
+  currency: 'usd',
+  customer: customer.id,
+  automatic_payment_methods: {
+    enabled: true,
+  },
+})
+
+// Confirm the payment
+await stripe.confirmPaymentIntent(paymentIntent.id)
+```
+
+## Authentication
+
+Set your Stripe secret key as an environment variable:
+
+```bash
+export STRIPE_SECRET_KEY=sk_test_xxxxx
+```
+
+**Important**: Never expose your secret key in client-side code. Use publishable keys (pk\_\*) for client-side operations.
+
+## Resources
+
+### Customers
+
+Manage customer records for repeat transactions:
+
+```typescript
+// Create a customer
+const customer = await stripe.createCustomer({
+  email: 'customer@example.com',
+  name: 'Jane Smith',
+})
+
+// Retrieve a customer
+const retrieved = await stripe.getCustomer(customer.id)
+
+// Update customer
+await stripe.updateCustomer(customer.id, {
+  email: 'newemail@example.com',
+})
+
+// List customers
+const customers = await stripe.listCustomers({ limit: 10 })
+
+// Delete customer
+await stripe.deleteCustomer(customer.id)
+```
+
+### Payment Intents
+
+Create and manage payment intents for one-time or recurring payments:
+
+```typescript
+// Create payment intent
+const paymentIntent = await stripe.createPaymentIntent({
+  amount: 5000, // $50.00
+  currency: 'usd',
+  customer: 'cus_xxxxx',
+  description: 'Premium subscription',
+})
+
+// Confirm payment
+await stripe.confirmPaymentIntent(paymentIntent.id, {
+  payment_method: 'pm_xxxxx',
+})
+
+// Cancel payment
+await stripe.cancelPaymentIntent(paymentIntent.id)
+
+// List payment intents
+const intents = await stripe.listPaymentIntents({
+  customer: 'cus_xxxxx',
+  limit: 20,
+})
+```
+
+### Subscriptions
+
+Manage recurring billing:
+
+```typescript
+// Create subscription
+const subscription = await stripe.createSubscription({
+  customer: 'cus_xxxxx',
+  items: [
+    {
+      price: 'price_xxxxx',
+    },
+  ],
+})
+
+// Update subscription
+await stripe.updateSubscription(subscription.id, {
+  items: [
+    {
+      id: subscription.items.data[0].id,
+      price: 'price_yyyyy',
+    },
+  ],
+})
+
+// Cancel subscription
+await stripe.cancelSubscription(subscription.id)
+```
+
+### Charges (Legacy)
+
+Direct charge API (use Payment Intents for new integrations):
+
+```typescript
+// Create charge
+const charge = await stripe.createCharge({
+  amount: 1000,
+  currency: 'usd',
+  source: 'tok_xxxxx',
+})
+```
+
+## Webhooks
+
+Stripe sends webhooks for asynchronous events. Always verify webhook signatures:
+
+```typescript
+import { StripeWebhooks } from '@dotdo/sdk.do/integrations/stripe'
+
+// Verify webhook signature
+const event = StripeWebhooks.verify(
+  req.body, // Raw body string
+  req.headers['stripe-signature'],
+  process.env.STRIPE_WEBHOOK_SECRET
+)
+
+// Handle event
+switch (event.type) {
+  case 'payment_intent.succeeded':
+    const paymentIntent = event.data.object
+    // Handle successful payment
+    break
+
+  case 'customer.subscription.deleted':
+    const subscription = event.data.object
+    // Handle subscription cancellation
+    break
+}
+```
+
+### Webhook Events
+
+Stripe supports 300+ event types. Common events:
+
+- **Payments**: `payment_intent.succeeded`, `payment_intent.payment_failed`
+- **Customers**: `customer.created`, `customer.updated`, `customer.deleted`
+- **Subscriptions**: `subscription.created`, `subscription.updated`, `subscription.deleted`
+- **Charges**: `charge.succeeded`, `charge.failed`, `charge.refunded`
+- **Disputes**: `charge.dispute.created`, `charge.dispute.closed`
+
+## Error Handling
+
+```typescript
+import { StripeIntegrationError } from '@dotdo/sdk.do/integrations/stripe'
+
+try {
+  await stripe.createPaymentIntent({
+    amount: 100,
+    currency: 'usd',
+  })
+} catch (error) {
+  if (error instanceof StripeIntegrationError) {
+    console.error('Stripe Error:', error.code, error.message)
+
+    if (error.isAuthenticationError()) {
+      // Handle invalid API key
+    } else if (error.isRateLimitError()) {
+      // Handle rate limiting
+    } else if (error.isRetriable()) {
+      // Retry the operation
+    }
+  }
+}
+```
+
+## Rate Limits
+
+Stripe enforces rate limits:
+
+- **API requests**: 100/second per API key
+- **Test mode**: 25/second
+
+Handle rate limit errors with exponential backoff (built into the client).
+
+## Best Practices
+
+1. **Use Idempotency Keys**: Include idempotency keys for safe retries on payment operations
+2. **Handle Webhooks**: Use webhooks for asynchronous events instead of polling
+3. **Test Mode**: Use test keys (sk*test*\*) for development and testing
+4. **Metadata**: Store application IDs in metadata for easy reconciliation
+5. **Error Handling**: Implement comprehensive error handling with retries
+6. **Security**: Never expose secret keys; use publishable keys for client-side code
+7. **Webhook Security**: Always verify webhook signatures
+8. **Pagination**: Use cursor-based pagination for large result sets
+
+## Testing
+
+Stripe provides test card numbers for testing:
+
+- **Success**: 4242 4242 4242 4242
+- **Decline**: 4000 0000 0000 0002
+- **Requires Authentication**: 4000 0025 0000 3155
+
+Test mode data is separate from live mode and never processes real payments.
+
+## Common Use Cases
+
+### Accept a One-Time Payment
+
+```typescript
+// 1. Create customer
+const customer = await stripe.createCustomer({
+  email: 'customer@example.com',
+})
+
+// 2. Create payment intent
+const paymentIntent = await stripe.createPaymentIntent({
+  amount: 2000,
+  currency: 'usd',
+  customer: customer.id,
+})
+
+// 3. Confirm with payment method (client-side)
+// await stripe.confirmCardPayment(paymentIntent.client_secret, {...})
+```
+
+### Set Up Recurring Subscription
+
+```typescript
+// 1. Create customer
+const customer = await stripe.createCustomer({
+  email: 'subscriber@example.com',
+  payment_method: 'pm_xxxxx',
+  invoice_settings: {
+    default_payment_method: 'pm_xxxxx',
+  },
+})
+
+// 2. Create subscription
+const subscription = await stripe.createSubscription({
+  customer: customer.id,
+  items: [{ price: 'price_monthly' }],
+  expand: ['latest_invoice.payment_intent'],
+})
+```
+
+### Handle Failed Payment
+
+```typescript
+// Listen for webhook
+if (event.type === 'invoice.payment_failed') {
+  const invoice = event.data.object
+
+  // Retry payment or notify customer
+  // Send dunning email
+  // Update subscription status
+}
+```
+
+## API Reference
+
+Full API documentation: https://stripe.com/docs/api
+
+**Key Resources**:
+
+- Customers: https://stripe.com/docs/api/customers
+- Payment Intents: https://stripe.com/docs/api/payment_intents
+- Subscriptions: https://stripe.com/docs/api/subscriptions
+- Webhooks: https://stripe.com/docs/webhooks
+
+## Support
+
+- **Documentation**: https://stripe.com/docs
+- **API Reference**: https://stripe.com/docs/api
+- **Support**: https://support.stripe.com
+- **Status**: https://status.stripe.com

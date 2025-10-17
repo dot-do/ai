@@ -1,0 +1,189 @@
+---
+$id: https://gateway.do/docs/architecture
+$type: TechArticle
+title: API Gateway Architecture
+description: Architecture and design patterns for gateway.do
+keywords: [gateway, architecture, design patterns, caching, rate limiting]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Architecture
+
+Understanding gateway.do architecture.
+
+## System Overview
+
+```
+┌──────────────┐
+│ Application  │
+└──────┬───────┘
+       │
+       ▼
+┌──────────────────────────────────────┐
+│        gateway.do Gateway            │
+│  ┌─────────────────────────────────┐│
+│  │  Authentication & Authorization ││
+│  └─────────────────────────────────┘│
+│  ┌─────────────────────────────────┐│
+│  │       Rate Limiter              ││
+│  └─────────────────────────────────┘│
+│  ┌─────────────────────────────────┐│
+│  │       Cache Layer               ││
+│  └─────────────────────────────────┘│
+│  ┌─────────────────────────────────┐│
+│  │  Request/Response Transform     ││
+│  └─────────────────────────────────┘│
+│  ┌─────────────────────────────────┐│
+│  │      HTTP Client Pool           ││
+│  └─────────────────────────────────┘│
+└──────────────┬───────────────────────┘
+               │
+               ▼
+       ┌───────────────┐
+       │ External APIs │
+       └───────────────┘
+```
+
+## Core Components
+
+### 1. Request Handler
+
+```typescript
+async function handleRequest(url: string, options: RequestOptions) {
+  // 1. Validate input
+  validateRequest(url, options)
+
+  // 2. Apply authentication
+  const authHeaders = await authenticate(options.auth)
+
+  // 3. Check rate limit
+  await rateLimiter.check(url)
+
+  // 4. Check cache
+  const cached = await cache.get(createCacheKey(url, options))
+  if (cached) return cached
+
+  // 5. Transform request
+  const transformedData = options.transform?.request?.(options.data) || options.data
+
+  // 6. Execute request with retry
+  const response = await executeWithRetry(url, { ...options, data: transformedData, headers: authHeaders })
+
+  // 7. Transform response
+  const transformedResponse = options.transform?.response?.(response) || response
+
+  // 8. Cache response
+  if (options.cache?.enabled) {
+    await cache.set(createCacheKey(url, options), transformedResponse, options.cache.ttl)
+  }
+
+  return transformedResponse
+}
+```
+
+### 2. Authentication Manager
+
+```typescript
+class AuthManager {
+  async authenticate(auth: AuthOptions) {
+    switch (auth.type) {
+      case 'bearer':
+        return { Authorization: `Bearer ${auth.token}` }
+      case 'basic':
+        const encoded = btoa(`${auth.username}:${auth.password}`)
+        return { Authorization: `Basic ${encoded}` }
+      case 'apiKey':
+        return auth.in === 'header' ? { [auth.key]: auth.value } : { query: { [auth.key]: auth.value } }
+      case 'oauth2':
+        const token = await this.getOAuthToken(auth)
+        return { Authorization: `Bearer ${token}` }
+      case 'custom':
+        return await auth.handler()
+    }
+  }
+}
+```
+
+### 3. Rate Limiter
+
+```typescript
+class RateLimiter {
+  async check(endpoint: string, options: RateLimitOptions) {
+    const key = `rate_limit:${endpoint}`
+    const count = await store.get(key)
+
+    if (count >= options.requests) {
+      throw new Error('Rate limit exceeded')
+    }
+
+    await store.increment(key)
+
+    if (count === 0) {
+      await store.expire(key, options.window / 1000)
+    }
+  }
+}
+```
+
+### 4. Cache Layer
+
+```typescript
+class CacheLayer {
+  async get(key: string): Promise<any | null> {
+    const cached = await store.get(key)
+    if (!cached) return null
+
+    if (Date.now() > cached.expiresAt) {
+      await store.delete(key)
+      return null
+    }
+
+    return cached.data
+  }
+
+  async set(key: string, data: any, ttl: number) {
+    await store.set(key, {
+      data,
+      expiresAt: Date.now() + ttl * 1000,
+      createdAt: Date.now(),
+    })
+  }
+}
+```
+
+## Design Patterns
+
+### Circuit Breaker Pattern
+
+```typescript
+class CircuitBreaker {
+  private state: 'closed' | 'open' | 'half-open' = 'closed'
+  private failures = 0
+
+  async execute<T>(fn: () => Promise<T>): Promise<T> {
+    if (this.state === 'open') {
+      throw new Error('Circuit breaker is open')
+    }
+
+    try {
+      const result = await fn()
+      this.onSuccess()
+      return result
+    } catch (error) {
+      this.onFailure()
+      throw error
+    }
+  }
+}
+```
+
+## Next Steps
+
+- [Best Practices](./best-practices)
+- [API Reference](../api/reference)
+
+## License
+
+MIT (Open Source)

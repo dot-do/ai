@@ -1,0 +1,558 @@
+---
+$id: https://orders.do/examples/advanced-patterns
+$type: HowTo
+title: Advanced Order Management Patterns
+description: Advanced patterns for order management including split fulfillment, partial shipments, subscriptions, and complex workflows.
+keywords: [advanced patterns, split fulfillment, partial shipments, subscriptions, complex workflows]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Advanced Order Management Patterns
+
+This example demonstrates advanced order management patterns with orders.do.
+
+## Split Fulfillment
+
+Handle orders fulfilled from multiple locations:
+
+```typescript
+import $, { db, send } from 'sdk.do'
+
+interface FulfillmentLocation {
+  $type: 'Place'
+  name: string
+  address: PostalAddress
+  items: OrderItem[]
+}
+
+async function createSplitFulfillmentOrder(orderData: Partial<Order>): Promise<Order> {
+  const order = await db.create($.Order, orderData)
+
+  // Determine fulfillment locations
+  const locations = await determineFulfillmentLocations(order.orderedItem)
+
+  // Create shipment for each location
+  for (const location of locations) {
+    await send({
+      $type: 'FulfillmentTask',
+      order: order.$id,
+      location: location.name,
+      items: location.items,
+    })
+  }
+
+  return order
+}
+
+async function determineFulfillmentLocations(items: OrderItem[]): Promise<FulfillmentLocation[]> {
+  const locations: Map<string, FulfillmentLocation> = new Map()
+
+  for (const item of items) {
+    // Find warehouse with inventory
+    const warehouse = await findWarehouseWithInventory(item.orderedItem.$id, item.orderQuantity)
+
+    if (!locations.has(warehouse.name)) {
+      locations.set(warehouse.name, {
+        $type: 'Place',
+        name: warehouse.name,
+        address: warehouse.address,
+        items: [],
+      })
+    }
+
+    locations.get(warehouse.name).items.push(item)
+  }
+
+  return Array.from(locations.values())
+}
+```
+
+## Partial Shipments
+
+Handle orders shipped in multiple packages:
+
+```typescript
+interface Shipment {
+  $type: 'ParcelDelivery'
+  shipmentNumber: string
+  trackingNumber: string
+  items: OrderItem[]
+  shippedAt: string
+  estimatedDelivery: string
+}
+
+async function createPartialShipment(orderId: string, items: OrderItem[]): Promise<Shipment> {
+  const order = await db.get($.Order, orderId)
+
+  // Generate tracking number
+  const trackingNumber = await generateTrackingNumber()
+
+  // Create shipment
+  const shipment: Shipment = {
+    $type: 'ParcelDelivery',
+    shipmentNumber: `${order.orderNumber}-${Date.now()}`,
+    trackingNumber,
+    items,
+    shippedAt: new Date().toISOString(),
+    estimatedDelivery: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+  }
+
+  // Update order
+  await db.update(order, {
+    shipments: [...(order.shipments || []), shipment],
+  })
+
+  // Check if all items shipped
+  const allShipped = checkAllItemsShipped(order)
+
+  if (allShipped) {
+    await db.update(order, {
+      orderStatus: 'OrderInTransit',
+    })
+  }
+
+  // Notify customer
+  await send({
+    $type: 'EmailMessage',
+    recipient: order.customer.email,
+    subject: `Shipment ${shipment.shipmentNumber}`,
+    text: `Part of your order has shipped. Tracking: ${trackingNumber}`,
+  })
+
+  return shipment
+}
+
+function checkAllItemsShipped(order: Order): boolean {
+  const orderedQuantities = new Map()
+  const shippedQuantities = new Map()
+
+  // Count ordered quantities
+  for (const item of order.orderedItem) {
+    const key = item.orderedItem.$id
+    orderedQuantities.set(key, (orderedQuantities.get(key) || 0) + item.orderQuantity)
+  }
+
+  // Count shipped quantities
+  for (const shipment of order.shipments || []) {
+    for (const item of shipment.items) {
+      const key = item.orderedItem.$id
+      shippedQuantities.set(key, (shippedQuantities.get(key) || 0) + item.orderQuantity)
+    }
+  }
+
+  // Check if all items shipped
+  for (const [productId, ordered] of orderedQuantities) {
+    const shipped = shippedQuantities.get(productId) || 0
+    if (shipped < ordered) {
+      return false
+    }
+  }
+
+  return true
+}
+```
+
+## Subscription Orders
+
+Handle recurring subscription orders:
+
+```typescript
+interface SubscriptionOrder extends Order {
+  subscriptionId: string
+  subscriptionInterval: string
+  nextOrderDate: string
+  subscriptionStatus: 'Active' | 'Paused' | 'Cancelled'
+}
+
+async function createSubscriptionOrder(customerId: string, items: OrderItem[], interval: string): Promise<SubscriptionOrder> {
+  const subscriptionId = `SUB-${Date.now()}`
+
+  const order = (await db.create($.Order, {
+    $type: 'Order',
+    orderNumber: `${subscriptionId}-001`,
+    orderDate: new Date().toISOString(),
+    customer: { $id: customerId, $type: 'Person' },
+    orderedItem: items,
+    orderStatus: 'OrderProcessing',
+    subscriptionId,
+    subscriptionInterval: interval,
+    nextOrderDate: calculateNextOrderDate(interval),
+    subscriptionStatus: 'Active',
+  })) as SubscriptionOrder
+
+  // Schedule next order
+  await scheduleNextSubscriptionOrder(order)
+
+  return order
+}
+
+async function scheduleNextSubscriptionOrder(order: SubscriptionOrder): Promise<void> {
+  const nextDate = new Date(order.nextOrderDate)
+
+  await send({
+    $type: 'ScheduledTask',
+    scheduledFor: nextDate.toISOString(),
+    task: 'create_subscription_order',
+    data: {
+      subscriptionId: order.subscriptionId,
+      customerId: order.customer.$id,
+      items: order.orderedItem,
+    },
+  })
+}
+
+function calculateNextOrderDate(interval: string): string {
+  const now = new Date()
+
+  switch (interval) {
+    case 'weekly':
+      return new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString()
+    case 'biweekly':
+      return new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString()
+    case 'monthly':
+      return new Date(now.setMonth(now.getMonth() + 1)).toISOString()
+    case 'quarterly':
+      return new Date(now.setMonth(now.getMonth() + 3)).toISOString()
+    default:
+      throw new Error(`Invalid interval: ${interval}`)
+  }
+}
+```
+
+## Pre-Orders and Backorders
+
+Handle products not yet available:
+
+```typescript
+interface PreOrder extends Order {
+  expectedAvailabilityDate: string
+  preOrderStatus: 'Pending' | 'Available' | 'Shipped'
+}
+
+async function createPreOrder(orderData: Partial<Order>, expectedDate: string): Promise<PreOrder> {
+  const order = (await db.create($.Order, {
+    ...orderData,
+    orderStatus: 'OrderPending',
+    expectedAvailabilityDate: expectedDate,
+    preOrderStatus: 'Pending',
+  })) as PreOrder
+
+  // Schedule availability check
+  await send({
+    $type: 'ScheduledTask',
+    scheduledFor: expectedDate,
+    task: 'check_preorder_availability',
+    data: { orderId: order.$id },
+  })
+
+  return order
+}
+
+async function processAvailablePreOrders(productId: string): Promise<void> {
+  // Find all pending pre-orders for this product
+  const preOrders = await db.list($.Order, {
+    where: {
+      'orderedItem.orderedItem.$id': productId,
+      preOrderStatus: 'Pending',
+    },
+  })
+
+  for (const order of preOrders) {
+    // Check inventory
+    const product = await db.get($.Product, productId)
+
+    if (product.quantityAvailable > 0) {
+      // Update order status
+      await db.update(order, {
+        orderStatus: 'OrderProcessing',
+        preOrderStatus: 'Available',
+      })
+
+      // Notify customer
+      await send({
+        $type: 'EmailMessage',
+        recipient: order.customer.email,
+        subject: `Pre-order ${order.orderNumber} now available`,
+        text: 'Your pre-ordered item is now available and will ship soon!',
+      })
+
+      // Process order
+      await processOrder(order)
+    }
+  }
+}
+```
+
+## Order Modification
+
+Allow customers to modify orders before shipment:
+
+```typescript
+async function modifyOrder(orderId: string, modifications: OrderModification): Promise<Order> {
+  const order = await db.get($.Order, orderId)
+
+  // Check if order can be modified
+  if (order.orderStatus !== 'OrderProcessing') {
+    throw new Error('Order cannot be modified after processing')
+  }
+
+  const modifiedOrder = { ...order }
+
+  // Handle item additions
+  if (modifications.addItems) {
+    modifiedOrder.orderedItem = [...modifiedOrder.orderedItem, ...modifications.addItems]
+  }
+
+  // Handle item removals
+  if (modifications.removeItems) {
+    modifiedOrder.orderedItem = modifiedOrder.orderedItem.filter((item) => !modifications.removeItems.includes(item.orderItemNumber))
+  }
+
+  // Handle quantity changes
+  if (modifications.updateQuantities) {
+    for (const [itemNumber, newQuantity] of Object.entries(modifications.updateQuantities)) {
+      const item = modifiedOrder.orderedItem.find((i) => i.orderItemNumber === itemNumber)
+      if (item) {
+        item.orderQuantity = newQuantity
+      }
+    }
+  }
+
+  // Handle address change
+  if (modifications.newAddress) {
+    modifiedOrder.orderDelivery.deliveryAddress = modifications.newAddress
+  }
+
+  // Recalculate totals
+  const newTotal = calculateOrderTotal(modifiedOrder)
+
+  // Update order
+  await db.update(order, {
+    ...modifiedOrder,
+    priceSpecification: {
+      $type: 'PriceSpecification',
+      price: newTotal.total,
+      priceCurrency: 'USD',
+    },
+    modifiedAt: new Date().toISOString(),
+    modificationHistory: [
+      ...(order.modificationHistory || []),
+      {
+        modifiedAt: new Date().toISOString(),
+        modifications,
+      },
+    ],
+  })
+
+  return modifiedOrder
+}
+
+interface OrderModification {
+  addItems?: OrderItem[]
+  removeItems?: string[]
+  updateQuantities?: Record<string, number>
+  newAddress?: PostalAddress
+}
+```
+
+## Gift Orders
+
+Handle gift orders with gift messages and separate billing:
+
+```typescript
+interface GiftOrder extends Order {
+  isGift: boolean
+  giftMessage?: string
+  giftWrap?: boolean
+  giftReceipt?: boolean
+  sender: Person
+}
+
+async function createGiftOrder(
+  sender: Person,
+  recipient: Person,
+  items: OrderItem[],
+  giftOptions: {
+    message?: string
+    wrap?: boolean
+    hidePrice?: boolean
+  }
+): Promise<GiftOrder> {
+  const order = (await db.create($.Order, {
+    $type: 'Order',
+    orderNumber: await generateOrderNumber(),
+    orderDate: new Date().toISOString(),
+    customer: recipient,
+    sender,
+    orderedItem: items,
+    orderStatus: 'OrderProcessing',
+    isGift: true,
+    giftMessage: giftOptions.message,
+    giftWrap: giftOptions.wrap,
+    giftReceipt: giftOptions.hidePrice,
+    billingAddress: sender.address,
+    orderDelivery: {
+      $type: 'ParcelDelivery',
+      deliveryAddress: recipient.address,
+    },
+  })) as GiftOrder
+
+  // Add gift wrap as line item if requested
+  if (giftOptions.wrap) {
+    await db.update(order, {
+      orderedItem: [
+        ...order.orderedItem,
+        {
+          $type: 'OrderItem',
+          orderItemNumber: String(order.orderedItem.length + 1),
+          orderedItem: {
+            $type: 'Service',
+            name: 'Gift Wrap',
+          },
+          orderQuantity: 1,
+          price: {
+            $type: 'PriceSpecification',
+            price: 5.99,
+            priceCurrency: 'USD',
+          },
+        },
+      ],
+    })
+  }
+
+  return order
+}
+```
+
+## Bulk Order Import
+
+Import multiple orders from CSV or API:
+
+```typescript
+import { parse } from 'csv-parse/sync'
+
+async function importOrdersFromCSV(csvData: string): Promise<Order[]> {
+  const records = parse(csvData, {
+    columns: true,
+    skip_empty_lines: true,
+  })
+
+  const orders: Order[] = []
+  const errors: Array<{ row: number; error: string }> = []
+
+  for (let i = 0; i < records.length; i++) {
+    try {
+      const record = records[i]
+
+      const order = await db.create($.Order, {
+        $type: 'Order',
+        orderNumber: record.orderNumber,
+        orderDate: record.orderDate,
+        customer: {
+          $type: 'Person',
+          name: record.customerName,
+          email: record.customerEmail,
+        },
+        orderedItem: JSON.parse(record.items),
+        orderStatus: 'OrderProcessing',
+        billingAddress: JSON.parse(record.billingAddress),
+        orderDelivery: {
+          $type: 'ParcelDelivery',
+          deliveryAddress: JSON.parse(record.shippingAddress),
+        },
+      })
+
+      orders.push(order)
+    } catch (error) {
+      errors.push({
+        row: i + 1,
+        error: error.message,
+      })
+    }
+  }
+
+  if (errors.length > 0) {
+    console.error('Import errors:', errors)
+  }
+
+  console.log(`Imported ${orders.length} orders with ${errors.length} errors`)
+  return orders
+}
+```
+
+## Order Analytics
+
+Track order metrics and generate reports:
+
+```typescript
+interface OrderMetrics {
+  totalOrders: number
+  totalRevenue: number
+  averageOrderValue: number
+  ordersByStatus: Record<OrderStatus, number>
+  topProducts: Array<{ product: string; quantity: number }>
+}
+
+async function getOrderMetrics(startDate: Date, endDate: Date): Promise<OrderMetrics> {
+  const orders = await db.list($.Order, {
+    where: {
+      orderDate: {
+        $gte: startDate.toISOString(),
+        $lte: endDate.toISOString(),
+      },
+    },
+  })
+
+  const metrics: OrderMetrics = {
+    totalOrders: orders.length,
+    totalRevenue: 0,
+    averageOrderValue: 0,
+    ordersByStatus: {},
+    topProducts: [],
+  }
+
+  // Calculate revenue and status counts
+  const productCounts = new Map<string, number>()
+
+  for (const order of orders) {
+    const total = calculateOrderTotal(order).total
+    metrics.totalRevenue += total
+
+    // Count by status
+    metrics.ordersByStatus[order.orderStatus] = (metrics.ordersByStatus[order.orderStatus] || 0) + 1
+
+    // Count products
+    for (const item of order.orderedItem) {
+      const key = item.orderedItem.name
+      productCounts.set(key, (productCounts.get(key) || 0) + item.orderQuantity)
+    }
+  }
+
+  metrics.averageOrderValue = metrics.totalRevenue / metrics.totalOrders
+
+  // Get top products
+  metrics.topProducts = Array.from(productCounts.entries())
+    .map(([product, quantity]) => ({ product, quantity }))
+    .sort((a, b) => b.quantity - a.quantity)
+    .slice(0, 10)
+
+  return metrics
+}
+```
+
+## See Also
+
+- [Basic Usage](./basic-usage)
+- [Integration](./integration)
+- [Real-World Use Case](./real-world-use-case)
+- [API Reference](../api/)
+
+## License
+
+MIT (Open Source)
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

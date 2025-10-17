@@ -1,0 +1,945 @@
+---
+$id: https://database.do/api
+$type: APIReference
+title: Database API Reference
+description: Complete API reference for database.do operations
+keywords: [api, reference, database, operations, types]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Database API Reference
+
+Complete API reference for all database.do operations and types.
+
+## Table of Contents
+
+- [Core Operations](#core-operations)
+  - [list](#list)
+  - [get](#get)
+  - [create](#create)
+  - [update](#update)
+  - [delete](#delete)
+  - [relate](#relate)
+- [Batch Operations](#batch-operations)
+- [Query Operations](#query-operations)
+- [Utility Operations](#utility-operations)
+- [Types](#types)
+- [Options](#options)
+- [Error Codes](#error-codes)
+
+## Core Operations
+
+### list
+
+Query multiple entities with optional filters, sorting, and pagination.
+
+**Signature**:
+
+```typescript
+db.list<T>(
+  type: SemanticType,
+  options?: ListOptions
+): Promise<T[]>
+```
+
+**Parameters**:
+
+- `type` - Semantic type (e.g., `$.Business`, `$.Person`)
+- `options` - Optional query options
+  - `where` - Filter conditions (optional)
+  - `orderBy` - Sort order (optional)
+  - `limit` - Maximum results (optional)
+  - `offset` - Skip results (optional)
+  - `include` - Related data to include (optional)
+  - `select` - Fields to include (optional)
+  - `exclude` - Fields to exclude (optional)
+  - `count` - Include total count (optional)
+  - `cache` - Cache options (optional)
+
+**Returns**: `Promise<T[]>` - Array of entities
+
+**Example**:
+
+```typescript
+const businesses = await db.list($.Business, {
+  where: {
+    industry: 'Technology',
+    status: 'active',
+  },
+  orderBy: {
+    name: 'asc',
+  },
+  limit: 50,
+  offset: 0,
+})
+```
+
+**With Count**:
+
+```typescript
+const result = await db.list($.Business, {
+  limit: 50,
+  count: true,
+})
+// result.items: T[]
+// result.total: number
+// result.limit: number
+// result.offset: number
+```
+
+---
+
+### get
+
+Retrieve a single entity by ID.
+
+**Signature**:
+
+```typescript
+db.get<T>(
+  type: SemanticType,
+  id: string,
+  options?: GetOptions
+): Promise<T>
+```
+
+**Parameters**:
+
+- `type` - Semantic type (e.g., `$.Business`)
+- `id` - Entity ID
+- `options` - Optional query options
+  - `include` - Related data to include (optional)
+  - `select` - Fields to include (optional)
+  - `exclude` - Fields to exclude (optional)
+
+**Returns**: `Promise<T>` - Single entity
+
+**Throws**:
+
+- `NOT_FOUND` - Entity does not exist
+- `UNAUTHORIZED` - Authentication required
+- `FORBIDDEN` - Permission denied
+
+**Example**:
+
+```typescript
+const business = await db.get($.Business, 'biz_abc123', {
+  include: ['brands', 'employees'],
+})
+```
+
+---
+
+### create
+
+Create a new entity.
+
+**Signature**:
+
+```typescript
+db.create<T>(
+  type: SemanticType,
+  data: Partial<T>
+): Promise<T>
+```
+
+**Parameters**:
+
+- `type` - Semantic type (e.g., `$.Business`)
+- `data` - Entity data
+
+**Returns**: `Promise<T>` - Created entity with generated `$id` and timestamps
+
+**Throws**:
+
+- `VALIDATION_ERROR` - Invalid data
+- `ALREADY_EXISTS` - Entity with ID already exists
+- `UNAUTHORIZED` - Authentication required
+
+**Example**:
+
+```typescript
+const business = await db.create($.Business, {
+  $type: 'Business',
+  name: 'Acme Corporation',
+  industry: 'Technology',
+  foundingDate: '2025-01-15',
+})
+```
+
+**Auto-Generated Fields**:
+
+- `$id` - Unique entity ID (e.g., `biz_abc123`)
+- `dateCreated` - ISO timestamp
+- `dateModified` - ISO timestamp
+
+---
+
+### update
+
+Modify an existing entity.
+
+**Signature**:
+
+```typescript
+db.update<T>(
+  type: SemanticType,
+  id: string,
+  data: Partial<T>,
+  options?: UpdateOptions
+): Promise<T>
+```
+
+**Parameters**:
+
+- `type` - Semantic type
+- `id` - Entity ID
+- `data` - Fields to update
+- `options` - Optional update options
+  - `where` - Conditional update (optional)
+  - `version` - Optimistic locking version (optional)
+
+**Returns**: `Promise<T>` - Updated entity
+
+**Throws**:
+
+- `NOT_FOUND` - Entity does not exist
+- `VALIDATION_ERROR` - Invalid data
+- `CONFLICT` - Concurrent modification (if using versioning)
+- `UNAUTHORIZED` - Authentication required
+
+**Example**:
+
+```typescript
+const business = await db.update($.Business, 'biz_abc123', {
+  industry: 'Software',
+  numberOfEmployees: 150,
+})
+```
+
+**Conditional Update**:
+
+```typescript
+const business = await db.update($.Business, 'biz_abc123', { verified: true }, { where: { status: 'active' } })
+```
+
+---
+
+### delete
+
+Remove an entity.
+
+**Signature**:
+
+```typescript
+db.delete(
+  type: SemanticType,
+  id: string,
+  options?: DeleteOptions
+): Promise<void>
+```
+
+**Parameters**:
+
+- `type` - Semantic type
+- `id` - Entity ID
+- `options` - Optional delete options
+  - `cascade` - Delete related entities (optional)
+
+**Returns**: `Promise<void>`
+
+**Throws**:
+
+- `NOT_FOUND` - Entity does not exist
+- `UNAUTHORIZED` - Authentication required
+- `FORBIDDEN` - Permission denied
+
+**Example**:
+
+```typescript
+await db.delete($.Business, 'biz_abc123')
+```
+
+**Cascade Delete**:
+
+```typescript
+await db.delete($.Business, 'biz_abc123', {
+  cascade: true, // Delete related entities
+})
+```
+
+---
+
+### relate
+
+Query semantic relationships between entities.
+
+**Signature**:
+
+```typescript
+db.relate<T>(
+  subject: Entity,
+  predicate: Predicate,
+  objectType: SemanticType,
+  options?: RelateOptions
+): Promise<T[]>
+```
+
+**Parameters**:
+
+- `subject` - Source entity or entity ID
+- `predicate` - Relationship type (e.g., `$.owns`, `$.employs`)
+- `objectType` - Target entity type
+- `options` - Optional query options (same as `list`)
+
+**Returns**: `Promise<T[]>` - Array of related entities
+
+**Example**:
+
+```typescript
+const business = await db.get($.Business, 'biz_abc123')
+
+const brands = await db.relate(business, $.owns, $.Brand, {
+  orderBy: { name: 'asc' },
+})
+```
+
+**Create Relationship**:
+
+```typescript
+await db.relate(business, $.owns, brand)
+```
+
+---
+
+## Batch Operations
+
+### createMany
+
+Create multiple entities in one operation.
+
+**Signature**:
+
+```typescript
+db.createMany<T>(
+  type: SemanticType,
+  data: Partial<T>[]
+): Promise<T[]>
+```
+
+**Example**:
+
+```typescript
+const businesses = await db.createMany($.Business, [
+  { $type: 'Business', name: 'Business 1' },
+  { $type: 'Business', name: 'Business 2' },
+])
+```
+
+---
+
+### getMany
+
+Retrieve multiple entities by IDs.
+
+**Signature**:
+
+```typescript
+db.getMany<T>(
+  type: SemanticType,
+  ids: string[]
+): Promise<T[]>
+```
+
+**Example**:
+
+```typescript
+const businesses = await db.getMany($.Business, ['biz_1', 'biz_2', 'biz_3'])
+```
+
+---
+
+### updateMany
+
+Update multiple entities matching criteria.
+
+**Signature**:
+
+```typescript
+db.updateMany<T>(
+  type: SemanticType,
+  update: {
+    where: FilterConditions
+    data: Partial<T>
+  }
+): Promise<{ count: number }>
+```
+
+**Example**:
+
+```typescript
+const result = await db.updateMany($.Business, {
+  where: {
+    industry: 'Technology',
+  },
+  data: {
+    verified: true,
+  },
+})
+
+console.log(`Updated ${result.count} businesses`)
+```
+
+---
+
+### deleteMany
+
+Delete multiple entities matching criteria.
+
+**Signature**:
+
+```typescript
+db.deleteMany(
+  type: SemanticType,
+  options: {
+    where: FilterConditions
+  }
+): Promise<{ count: number }>
+```
+
+**Example**:
+
+```typescript
+const result = await db.deleteMany($.Business, {
+  where: {
+    status: 'inactive',
+  },
+})
+
+console.log(`Deleted ${result.count} businesses`)
+```
+
+---
+
+## Query Operations
+
+### search
+
+Perform full-text search on entities.
+
+**Signature**:
+
+```typescript
+db.search<T>(
+  type: SemanticType,
+  query: string,
+  options?: SearchOptions
+): Promise<T[]>
+```
+
+**Parameters**:
+
+- `type` - Semantic type
+- `query` - Search query string
+- `options` - Search options
+  - `fields` - Fields to search (required)
+  - `where` - Additional filters (optional)
+  - `orderBy` - Sort order (optional)
+  - `limit` - Maximum results (optional)
+  - `highlight` - Include highlights (optional)
+
+**Example**:
+
+```typescript
+const results = await db.search($.Business, 'technology innovation', {
+  fields: ['name', 'description'],
+  where: { status: 'active' },
+  limit: 20,
+})
+```
+
+---
+
+### count
+
+Count entities matching criteria.
+
+**Signature**:
+
+```typescript
+db.count(
+  type: SemanticType,
+  options?: { where?: FilterConditions }
+): Promise<number>
+```
+
+**Example**:
+
+```typescript
+const count = await db.count($.Business, {
+  where: {
+    industry: 'Technology',
+  },
+})
+```
+
+---
+
+### aggregate
+
+Perform aggregation operations.
+
+**Signature**:
+
+```typescript
+db.aggregate(
+  type: SemanticType,
+  options: AggregateOptions
+): Promise<AggregateResult[]>
+```
+
+**Parameters**:
+
+- `type` - Semantic type
+- `options` - Aggregation options
+  - `groupBy` - Field(s) to group by
+  - `aggregations` - Aggregation operations
+    - `count` - Count records
+    - `sum` - Sum field values
+    - `avg` - Average field values
+    - `min` - Minimum value
+    - `max` - Maximum value
+
+**Example**:
+
+```typescript
+const stats = await db.aggregate($.Business, {
+  groupBy: 'industry',
+  aggregations: {
+    count: true,
+    sum: 'revenue',
+    avg: 'revenue',
+  },
+})
+```
+
+---
+
+### exists
+
+Check if entity exists matching criteria.
+
+**Signature**:
+
+```typescript
+db.exists(
+  type: SemanticType,
+  options: { where: FilterConditions }
+): Promise<boolean>
+```
+
+**Example**:
+
+```typescript
+const exists = await db.exists($.Business, {
+  where: {
+    name: 'Acme Corporation',
+  },
+})
+```
+
+---
+
+### distinct
+
+Get distinct values for a field.
+
+**Signature**:
+
+```typescript
+db.distinct(
+  type: SemanticType,
+  field: string,
+  options?: { where?: FilterConditions }
+): Promise<any[]>
+```
+
+**Example**:
+
+```typescript
+const industries = await db.distinct($.Business, 'industry')
+// ['Technology', 'Manufacturing', 'Retail', ...]
+```
+
+---
+
+## Utility Operations
+
+### upsert
+
+Create or update an entity.
+
+**Signature**:
+
+```typescript
+db.upsert<T>(
+  type: SemanticType,
+  id: string,
+  data: Partial<T>
+): Promise<T>
+```
+
+**Example**:
+
+```typescript
+const business = await db.upsert($.Business, 'biz_abc123', {
+  name: 'Acme Corp',
+  industry: 'Technology',
+})
+```
+
+---
+
+### transaction
+
+Execute multiple operations atomically.
+
+**Signature**:
+
+```typescript
+db.transaction<T>(
+  callback: (tx: Transaction) => Promise<T>
+): Promise<T>
+```
+
+**Example**:
+
+```typescript
+const result = await db.transaction(async (tx) => {
+  const business = await tx.create($.Business, businessData)
+  const person = await tx.create($.Person, personData)
+  await tx.relate(business, $.employs, person)
+  return { business, person }
+})
+```
+
+---
+
+### createIndex
+
+Create a database index for performance.
+
+**Signature**:
+
+```typescript
+db.createIndex(
+  type: SemanticType,
+  fields: string[]
+): Promise<void>
+```
+
+**Example**:
+
+```typescript
+await db.createIndex($.Business, ['industry', 'status'])
+```
+
+---
+
+## Types
+
+### SemanticType
+
+Semantic entity type from the `$` proxy.
+
+```typescript
+type SemanticType = $.Business | $.Person | $.Product | $.Order | $.Brand | $.Organization
+// ... 800+ Schema.org types
+```
+
+---
+
+### Predicate
+
+Semantic relationship predicate.
+
+```typescript
+type Predicate = $.owns | $.employs | $.serves | $.offers | $.worksFor | $.manages
+// ... relationship types
+```
+
+---
+
+### Entity
+
+Base entity with common fields.
+
+```typescript
+interface Entity {
+  $id?: string
+  $type: string
+  dateCreated?: string
+  dateModified?: string
+  [key: string]: any
+}
+```
+
+---
+
+### FilterConditions
+
+Query filter conditions.
+
+```typescript
+interface FilterConditions {
+  [field: string]:
+    | any // Exact match
+    | ComparisonOperator // Comparison
+    | LogicalOperator // Logical combination
+}
+```
+
+**Comparison Operators**:
+
+```typescript
+interface ComparisonOperator {
+  $eq?: any // Equals
+  $ne?: any // Not equals
+  $gt?: any // Greater than
+  $gte?: any // Greater than or equal
+  $lt?: any // Less than
+  $lte?: any // Less than or equal
+  $in?: any[] // In array
+  $nin?: any[] // Not in array
+  $contains?: string // Contains substring
+  $startsWith?: string
+  $endsWith?: string
+  $icontains?: string // Case-insensitive contains
+  $null?: boolean // Is null/not null
+}
+```
+
+**Logical Operators**:
+
+```typescript
+interface LogicalOperator {
+  $or?: FilterConditions[]
+  $and?: FilterConditions[]
+  $not?: FilterConditions
+}
+```
+
+---
+
+## Options
+
+### ListOptions
+
+Options for `list` operation.
+
+```typescript
+interface ListOptions {
+  where?: FilterConditions
+  orderBy?: {
+    [field: string]: 'asc' | 'desc'
+  }
+  limit?: number
+  offset?: number
+  include?: string[] | IncludeSpec[]
+  select?: string[]
+  exclude?: string[]
+  count?: boolean
+  cache?: CacheOptions
+}
+```
+
+---
+
+### GetOptions
+
+Options for `get` operation.
+
+```typescript
+interface GetOptions {
+  include?: string[] | IncludeSpec[]
+  select?: string[]
+  exclude?: string[]
+}
+```
+
+---
+
+### UpdateOptions
+
+Options for `update` operation.
+
+```typescript
+interface UpdateOptions {
+  where?: FilterConditions
+  version?: number // Optimistic locking
+}
+```
+
+---
+
+### DeleteOptions
+
+Options for `delete` operation.
+
+```typescript
+interface DeleteOptions {
+  cascade?: boolean
+}
+```
+
+---
+
+### RelateOptions
+
+Options for `relate` operation (extends `ListOptions`).
+
+```typescript
+interface RelateOptions extends ListOptions {
+  // All ListOptions fields available
+}
+```
+
+---
+
+### SearchOptions
+
+Options for `search` operation.
+
+```typescript
+interface SearchOptions {
+  fields: string[] // Required
+  where?: FilterConditions
+  orderBy?: {
+    [field: string]: 'asc' | 'desc'
+  }
+  limit?: number
+  highlight?: boolean
+}
+```
+
+---
+
+### AggregateOptions
+
+Options for `aggregate` operation.
+
+```typescript
+interface AggregateOptions {
+  groupBy: string | string[]
+  aggregations?: {
+    count?: boolean
+    sum?: string
+    avg?: string
+    min?: string
+    max?: string
+  }
+  where?: FilterConditions
+  orderBy?: {
+    [field: string]: 'asc' | 'desc'
+  }
+}
+```
+
+---
+
+### CacheOptions
+
+Cache configuration options.
+
+```typescript
+interface CacheOptions {
+  ttl: number // Time to live in seconds
+}
+```
+
+---
+
+## Error Codes
+
+Database operations may throw errors with these codes:
+
+| Code                  | Description                      |
+| --------------------- | -------------------------------- |
+| `NOT_FOUND`           | Entity not found                 |
+| `ALREADY_EXISTS`      | Entity with ID already exists    |
+| `VALIDATION_ERROR`    | Invalid data provided            |
+| `UNAUTHORIZED`        | Authentication required          |
+| `FORBIDDEN`           | Permission denied                |
+| `CONFLICT`            | Concurrent modification detected |
+| `DATABASE_ERROR`      | Database operation failed        |
+| `TIMEOUT`             | Operation timed out              |
+| `RATE_LIMIT_EXCEEDED` | Too many requests                |
+
+**Example Error Handling**:
+
+```typescript
+try {
+  const business = await db.get($.Business, 'biz_123')
+} catch (error) {
+  switch (error.code) {
+    case 'NOT_FOUND':
+      console.error('Business not found')
+      break
+    case 'UNAUTHORIZED':
+      console.error('Authentication required')
+      break
+    default:
+      console.error('Unexpected error:', error.message)
+      throw error
+  }
+}
+```
+
+---
+
+## TypeScript Support
+
+Full TypeScript support with Schema.org types:
+
+```typescript
+import $, { db } from 'sdk.do'
+import type { Business, Person, Product } from 'schema.org.ai'
+
+// Type-safe operations
+const business: Business = await db.create($.Business, {
+  $type: 'Business',
+  name: 'Acme Corp',
+})
+
+const businesses: Business[] = await db.list($.Business)
+
+const person: Person = await db.get($.Person, 'person_123')
+```
+
+---
+
+## Best Practices
+
+1. **Always include `$type`** in create operations
+2. **Use type annotations** for type safety
+3. **Handle errors appropriately** with try/catch
+4. **Paginate large result sets** with limit/offset
+5. **Use indexes** for frequently queried fields
+6. **Select specific fields** when possible
+7. **Use transactions** for related operations
+8. **Cache query results** for repeated queries
+
+---
+
+## See Also
+
+- [Getting Started](../docs/getting-started) - Installation and setup
+- [Operations Reference](../docs/operations) - Detailed operation guides
+- [Query Patterns](../docs/querying) - Advanced query techniques
+- [Examples](../examples/basic-crud) - Practical examples
+
+---
+
+For questions or issues, see the [database.do documentation](https://database.do) or [GitHub repository](https://github.com/dot-do/platform).

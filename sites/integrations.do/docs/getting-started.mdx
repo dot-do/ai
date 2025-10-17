@@ -1,0 +1,574 @@
+---
+$id: https://integrations.do/docs/getting-started
+$type: TechArticle
+title: Getting Started with integrations.do
+description: Quick start guide for external service integrations in the .do platform
+keywords: [integrations, getting started, crm, payments, setup]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Getting Started
+
+Get started with external service integrations in the `.do` platform in under 5 minutes.
+
+## Installation
+
+Install the SDK in your project:
+
+```bash
+pnpm add sdk.do
+```
+
+Or use the CLI:
+
+```bash
+pnpm add -g cli.do
+```
+
+## Basic Usage
+
+### Initialize an Integration
+
+```typescript
+import { $, integrations } from 'sdk.do'
+
+// Initialize Salesforce
+const salesforce = await integrations.use($.Salesforce, {
+  clientId: process.env.SALESFORCE_CLIENT_ID,
+  clientSecret: process.env.SALESFORCE_CLIENT_SECRET,
+  instanceUrl: process.env.SALESFORCE_INSTANCE_URL,
+})
+
+// Or use OAuth flow
+const authUrl = await integrations.oauth($.Salesforce, {
+  clientId: process.env.SALESFORCE_CLIENT_ID,
+  redirectUri: 'https://example.com/oauth/callback',
+})
+```
+
+### Create Records
+
+```typescript
+import { $, integrations } from 'sdk.do'
+
+const salesforce = await integrations.use($.Salesforce)
+
+// Create a lead
+const lead = await salesforce.create($.Lead, {
+  $type: 'Lead',
+  firstName: 'John',
+  lastName: 'Smith',
+  company: 'Acme Corp',
+  email: 'john@acme.com',
+  status: 'Open',
+})
+
+console.log('Lead created:', lead.id)
+```
+
+### Query Records
+
+```typescript
+import { $, integrations } from 'sdk.do'
+
+const salesforce = await integrations.use($.Salesforce)
+
+// List all accounts
+const accounts = await salesforce.list($.Account, {
+  limit: 10,
+})
+
+// Get specific account
+const account = await salesforce.get($.Account, accountId)
+
+// Query with filters
+const leads = await salesforce.query($.Lead, {
+  where: {
+    status: 'Open',
+    rating: 'Hot',
+  },
+  orderBy: 'createdDate DESC',
+  limit: 20,
+})
+```
+
+### Update Records
+
+```typescript
+import { $, integrations } from 'sdk.do'
+
+const salesforce = await integrations.use($.Salesforce)
+
+// Update account
+await salesforce.update(accountId, {
+  industry: 'Technology',
+  employees: 500,
+})
+
+// Update with semantic type
+await salesforce.update($.Account, accountId, {
+  $type: 'Account',
+  name: 'Acme Corp Updated',
+  website: 'https://acme.com',
+})
+```
+
+### Delete Records
+
+```typescript
+import { $, integrations } from 'sdk.do'
+
+const salesforce = await integrations.use($.Salesforce)
+
+// Delete account
+await salesforce.delete($.Account, accountId)
+```
+
+## Available Integrations
+
+### CRM Systems
+
+**Salesforce**
+
+```typescript
+const salesforce = await integrations.use($.Salesforce, {
+  clientId: process.env.SALESFORCE_CLIENT_ID,
+  clientSecret: process.env.SALESFORCE_CLIENT_SECRET,
+  instanceUrl: process.env.SALESFORCE_INSTANCE_URL,
+})
+```
+
+**HubSpot**
+
+```typescript
+const hubspot = await integrations.use($.HubSpot, {
+  apiKey: process.env.HUBSPOT_API_KEY,
+})
+```
+
+**Pipedrive**
+
+```typescript
+const pipedrive = await integrations.use($.Pipedrive, {
+  apiToken: process.env.PIPEDRIVE_API_TOKEN,
+  domain: 'your-company.pipedrive.com',
+})
+```
+
+### Payment Processors
+
+**Stripe**
+
+```typescript
+const stripe = await integrations.use($.Stripe, {
+  apiKey: process.env.STRIPE_API_KEY,
+})
+```
+
+**PayPal**
+
+```typescript
+const paypal = await integrations.use($.PayPal, {
+  clientId: process.env.PAYPAL_CLIENT_ID,
+  clientSecret: process.env.PAYPAL_CLIENT_SECRET,
+  mode: 'sandbox', // or 'live'
+})
+```
+
+**Square**
+
+```typescript
+const square = await integrations.use($.Square, {
+  accessToken: process.env.SQUARE_ACCESS_TOKEN,
+  environment: 'sandbox', // or 'production'
+})
+```
+
+### Communication Platforms
+
+**Slack**
+
+```typescript
+const slack = await integrations.use($.Slack, {
+  botToken: process.env.SLACK_BOT_TOKEN,
+})
+```
+
+**SendGrid**
+
+```typescript
+const sendgrid = await integrations.use($.SendGrid, {
+  apiKey: process.env.SENDGRID_API_KEY,
+})
+```
+
+**Twilio**
+
+```typescript
+const twilio = await integrations.use($.Twilio, {
+  accountSid: process.env.TWILIO_ACCOUNT_SID,
+  authToken: process.env.TWILIO_AUTH_TOKEN,
+})
+```
+
+### Storage Services
+
+**Amazon S3**
+
+```typescript
+const s3 = await integrations.use($.AmazonS3, {
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  region: process.env.AWS_REGION,
+})
+```
+
+**Dropbox**
+
+```typescript
+const dropbox = await integrations.use($.Dropbox, {
+  accessToken: process.env.DROPBOX_ACCESS_TOKEN,
+})
+```
+
+**Google Drive**
+
+```typescript
+const drive = await integrations.use($.GoogleDrive, {
+  clientId: process.env.GOOGLE_CLIENT_ID,
+  clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  refreshToken: process.env.GOOGLE_REFRESH_TOKEN,
+})
+```
+
+## OAuth 2.0 Flow
+
+### Initiate OAuth
+
+```typescript
+import { integrations } from 'sdk.do'
+
+// Generate authorization URL
+const authUrl = await integrations.oauth($.Salesforce, {
+  clientId: process.env.SALESFORCE_CLIENT_ID,
+  redirectUri: 'https://example.com/oauth/callback',
+  scope: ['full', 'refresh_token'],
+  state: 'random-state-string',
+})
+
+// Redirect user to authUrl
+response.redirect(authUrl)
+```
+
+### Handle Callback
+
+```typescript
+import { integrations } from 'sdk.do'
+
+// Exchange authorization code for access token
+const salesforce = await integrations.callback($.Salesforce, {
+  code: request.query.code,
+  clientId: process.env.SALESFORCE_CLIENT_ID,
+  clientSecret: process.env.SALESFORCE_CLIENT_SECRET,
+  redirectUri: 'https://example.com/oauth/callback',
+})
+
+// Store tokens in session or database
+session.salesforce = {
+  accessToken: salesforce.accessToken,
+  refreshToken: salesforce.refreshToken,
+  instanceUrl: salesforce.instanceUrl,
+}
+
+// Use authenticated integration
+const accounts = await salesforce.list($.Account)
+```
+
+### Refresh Tokens
+
+```typescript
+import { integrations } from 'sdk.do'
+
+// Refresh expired access token
+const salesforce = await integrations.refresh($.Salesforce, {
+  refreshToken: session.salesforce.refreshToken,
+  clientId: process.env.SALESFORCE_CLIENT_ID,
+  clientSecret: process.env.SALESFORCE_CLIENT_SECRET,
+})
+
+// Update stored tokens
+session.salesforce.accessToken = salesforce.accessToken
+```
+
+## Schema.org Mapping
+
+### Automatic Mapping
+
+integrations.do automatically maps Schema.org types to service-specific types:
+
+```typescript
+import { $, integrations } from 'sdk.do'
+
+const salesforce = await integrations.use($.Salesforce)
+
+// Create Person → mapped to Salesforce Contact
+const contact = await salesforce.create($.Person, {
+  $type: 'Person',
+  name: 'John Smith',
+  email: 'john@example.com',
+  telephone: '+1-555-0100',
+  jobTitle: 'CEO',
+})
+// Automatically creates: Contact with Name, Email, Phone, Title fields
+
+// Create Organization → mapped to Salesforce Account
+const account = await salesforce.create($.Organization, {
+  $type: 'Organization',
+  name: 'Acme Corp',
+  url: 'https://acme.com',
+  industry: 'Technology',
+})
+// Automatically creates: Account with Name, Website, Industry fields
+```
+
+### Custom Mapping
+
+Define custom field mappings:
+
+```typescript
+import { $, integrations } from 'sdk.do'
+
+const salesforce = await integrations.use($.Salesforce)
+
+// Configure custom mapping
+await salesforce.configure({
+  fieldMapping: {
+    [$.Person]: {
+      name: 'Name',
+      email: 'Email',
+      telephone: 'Phone',
+      jobTitle: 'Title',
+      worksFor: 'AccountId',
+    },
+    [$.Organization]: {
+      name: 'Name',
+      url: 'Website',
+      industry: 'Industry',
+      numberOfEmployees: 'NumberOfEmployees',
+    },
+  },
+})
+
+// Create with custom mapping
+const contact = await salesforce.create($.Person, personData)
+```
+
+## Bi-Directional Sync
+
+### Sync Database to Integration
+
+```typescript
+import { $, integrations, db, on } from 'sdk.do'
+
+const salesforce = await integrations.use($.Salesforce)
+
+// Sync new organizations to Salesforce
+on($.Organization.created, async (event) => {
+  const org = event.data
+
+  const account = await salesforce.create($.Account, {
+    $type: 'Account',
+    name: org.name,
+    website: org.url,
+    industry: org.industry,
+  })
+
+  // Store Salesforce ID
+  await db.update(org.$id, {
+    salesforceAccountId: account.id,
+  })
+})
+
+// Sync updates
+on($.Organization.updated, async (event) => {
+  const org = event.data
+
+  if (org.salesforceAccountId) {
+    await salesforce.update(org.salesforceAccountId, {
+      name: org.name,
+      website: org.url,
+      industry: org.industry,
+    })
+  }
+})
+```
+
+### Sync Integration to Database
+
+```typescript
+import { $, integrations, db, on } from 'sdk.do'
+
+const salesforce = await integrations.use($.Salesforce)
+
+// Sync Salesforce updates to database
+on($.Account.updated, async (event) => {
+  const account = event.data
+
+  const org = await db.get($.Organization, {
+    where: { salesforceAccountId: account.id },
+  })
+
+  if (org) {
+    await db.update(org.$id, {
+      name: account.Name,
+      url: account.Website,
+      industry: account.Industry,
+    })
+  }
+})
+```
+
+### Bulk Sync
+
+```typescript
+import { $, integrations, db } from 'sdk.do'
+
+const salesforce = await integrations.use($.Salesforce)
+
+// Sync all organizations to Salesforce
+const organizations = await db.list($.Organization)
+
+for (const org of organizations) {
+  if (!org.salesforceAccountId) {
+    const account = await salesforce.create($.Account, {
+      $type: 'Account',
+      name: org.name,
+      website: org.url,
+      industry: org.industry,
+    })
+
+    await db.update(org.$id, {
+      salesforceAccountId: account.id,
+    })
+  }
+}
+```
+
+## Error Handling
+
+### Handle Integration Errors
+
+```typescript
+import { integrations } from 'sdk.do'
+
+const salesforce = await integrations.use($.Salesforce)
+
+try {
+  const account = await salesforce.create($.Account, accountData)
+} catch (error) {
+  if (error.code === 'DUPLICATE_VALUE') {
+    console.error('Account already exists')
+  } else if (error.code === 'REQUIRED_FIELD_MISSING') {
+    console.error('Missing required field:', error.fields)
+  } else if (error.code === 'AUTH_FAILED') {
+    console.error('Authentication failed, refresh token')
+  } else if (error.code === 'RATE_LIMIT_EXCEEDED') {
+    console.error('Rate limit exceeded, retry after:', error.retryAfter)
+  } else {
+    console.error('Integration error:', error.message)
+  }
+}
+```
+
+### Retry Logic
+
+```typescript
+import { integrations } from 'sdk.do'
+
+const salesforce = await integrations.use($.Salesforce)
+
+// Automatic retry on transient failures
+const account = await salesforce.create($.Account, accountData, {
+  retry: {
+    attempts: 3,
+    delay: 1000,
+    backoff: 'exponential',
+  },
+})
+```
+
+## Configuration
+
+### Environment Variables
+
+Create a `.env` file:
+
+```bash
+# Salesforce
+SALESFORCE_CLIENT_ID=your_client_id
+SALESFORCE_CLIENT_SECRET=your_client_secret
+SALESFORCE_INSTANCE_URL=https://your-instance.salesforce.com
+
+# HubSpot
+HUBSPOT_API_KEY=your_api_key
+
+# Stripe
+STRIPE_API_KEY=sk_live_...
+
+# PayPal
+PAYPAL_CLIENT_ID=your_client_id
+PAYPAL_CLIENT_SECRET=your_client_secret
+PAYPAL_MODE=sandbox
+
+# Slack
+SLACK_BOT_TOKEN=xoxb-...
+
+# SendGrid
+SENDGRID_API_KEY=SG...
+
+# Twilio
+TWILIO_ACCOUNT_SID=AC...
+TWILIO_AUTH_TOKEN=your_auth_token
+
+# AWS S3
+AWS_ACCESS_KEY_ID=AKIA...
+AWS_SECRET_ACCESS_KEY=your_secret_key
+AWS_REGION=us-east-1
+```
+
+### Global Configuration
+
+```typescript
+import { integrations } from 'sdk.do'
+
+integrations.config({
+  timeout: 30000,
+  retries: 3,
+  retryDelay: 1000,
+  cacheEnabled: true,
+  cacheTTL: 300000, // 5 minutes
+})
+```
+
+## Next Steps
+
+Now that you have integrations.do set up, explore more features:
+
+- [Architecture](./architecture) - Integration architecture and patterns
+- [Best Practices](./best-practices) - Recommended patterns and practices
+- [Troubleshooting](./troubleshooting) - Common issues and solutions
+
+## Examples
+
+Check out practical examples:
+
+- [Basic Usage](../examples/basic-usage) - Simple integration examples
+- [Advanced Patterns](../examples/advanced-patterns) - Complex integration patterns
+- [Integration](../examples/integration) - Full integration workflows
+- [Real-World Use Case](../examples/real-world-use-case) - Complete use case example
+
+## License
+
+MIT (Open Source)

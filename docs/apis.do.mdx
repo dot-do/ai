@@ -1,0 +1,1990 @@
+---
+title: apis.do
+description: Universal API integration service for accessing platform services and third-party APIs
+$type: Documentation
+$id: /ai/docs/apis.do
+---
+
+# apis.do - Universal API Integration
+
+**apis.do** is the unified API gateway for the `.do` platform, providing:
+
+- **Type-safe SDK** for all platform services
+- **150+ integrations** with third-party APIs (Stripe, GitHub, Twilio, etc.)
+- **Zapier registry** with 3,000+ triggers, actions, and searches
+- **Webhook handlers** for asynchronous events
+- **Automatic retries** and error handling
+- **Rate limiting** and quota management
+
+## Overview
+
+The apis.do service unifies access to:
+
+1. **Platform Primitives** - Core `.do` services (database, workflows, agents, AI)
+2. **Third-Party APIs** - Popular services via RPC (no client libraries needed)
+3. **Zapier Integration** - Access to 3,000+ Zapier integrations
+4. **Webhook Events** - Handle incoming events from any service
+5. **Custom Integrations** - Generic HTTP client for any API
+
+```typescript
+import { api } from 'sdk.do'
+
+// Platform primitives
+const products = await api.database.list($.Product)
+const workflow = await api.workflows.execute('order-fulfillment', { orderId: '123' })
+const response = await api.llm.chat([{ role: 'user', content: 'Hello!' }])
+
+// Third-party APIs (via RPC)
+const customer = await api.stripe.customers.create({ email: 'alice@example.com' })
+const issue = await api.github.issues.create('owner', 'repo', { title: 'Bug report' })
+const message = await api.twilio.messages.create({ to: '+1234567890', from: '+0987654321', body: 'Hello' })
+
+// Zapier integrations
+const integrations = await api.zapier.integrations()
+const triggers = await api.zapier.integration('slack').triggers()
+await api.zapier.action('slack', 'send_message').execute({ channel: '#general', text: 'Hello' })
+
+// Webhook event handlers
+api.on.stripe['payment_intent.succeeded'](async (event) =&gt; {
+  await processPayment(event.data.object)
+})
+```
+
+## Getting Started
+
+### Installation
+
+```bash
+npm install sdk.do
+# or
+pnpm add sdk.do
+```
+
+### Basic Usage
+
+```typescript
+import { api } from 'sdk.do'
+
+// Check API health
+const health = await api.health()
+console.log(health.api.status) // 'healthy'
+
+// Get user info with request metadata
+const user = await api.user()
+console.log({
+  ip: user.ip,
+  country: user.country,
+  authenticated: user.authenticated,
+})
+
+// Make API calls
+const response = await api.llm.generateText('Explain quantum computing in simple terms')
+console.log(response.text)
+```
+
+### Configuration
+
+```typescript
+import { createClient } from 'apis.do'
+
+const client = createClient({
+  baseUrl: 'https://apis.do', // API endpoint (default)
+  apiKey: process.env.API_KEY, // Optional API key
+  timeout: 30000, // Request timeout (default: 30s)
+})
+
+// Use configured client
+const health = await client.health()
+```
+
+## Core Platform APIs
+
+### Database Operations
+
+Type-safe database access with Schema.org types:
+
+```typescript
+import { api, $ } from 'sdk.do'
+
+// Create
+const product = await api.database.create($.Product, {
+  $id: 'product-123',
+  $type: $.Product,
+  name: 'Premium Widget',
+  price: 99.99,
+  sku: 'WIDGET-001',
+})
+
+// Read
+const retrieved = await api.database.get($.Product, 'product-123')
+
+// Update
+await api.database.update($.Product, 'product-123', {
+  price: 89.99,
+  availability: 'InStock',
+})
+
+// Delete
+await api.database.delete($.Product, 'product-123')
+
+// List with filters
+const products = await api.database.list($.Product, {
+  where: { price: { $lte: 100 }, availability: 'InStock' },
+  limit: 10,
+  orderBy: { name: 'asc' },
+})
+
+// Full-text search
+const results = await api.database.search($.Product, 'premium widget', {
+  fields: ['name', 'description'],
+  limit: 5,
+})
+
+// Relationships
+await api.database.relate($.Person, 'alice', $.Organization, 'acme-corp', $.worksFor)
+
+// Direct SQL query
+const rows = await api.database.query('SELECT * FROM products WHERE price &lt; $1 ORDER BY name', [100])
+```
+
+### Workflows
+
+Orchestrate multi-step processes:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Create workflow
+const workflow = await api.workflows.create({
+  name: 'order-fulfillment',
+  description: 'Process and fulfill customer orders',
+  steps: [
+    { id: 'validate', type: 'validate-order', params: {}, next: 'charge' },
+    { id: 'charge', type: 'charge-payment', params: {}, next: 'ship' },
+    { id: 'ship', type: 'ship-order', params: {}, next: 'notify' },
+    { id: 'notify', type: 'send-email', params: { template: 'order-shipped' } },
+  ],
+})
+
+// Execute workflow
+const execution = await api.workflows.execute(workflow.id, {
+  orderId: 'order-123',
+  customerId: 'customer-456',
+})
+
+// Check execution status
+const status = await api.workflows.getExecution(execution.id)
+console.log(status.status) // 'pending' | 'running' | 'completed' | 'failed'
+
+// Control execution
+await api.workflows.pause(execution.id)
+await api.workflows.resume(execution.id)
+await api.workflows.cancel(execution.id)
+
+// List workflows
+const workflows = await api.workflows.list({
+  limit: 10,
+  orderBy: { createdAt: 'desc' },
+})
+```
+
+### AI Agents
+
+Deploy and invoke AI agents:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Create agent
+const agent = await api.agents.create({
+  name: 'customer-support',
+  description: 'AI agent for customer support inquiries',
+  model: 'gpt-5',
+  instructions: 'You are a helpful customer support agent. Be professional and empathetic.',
+  tools: ['database', 'email', 'search'],
+})
+
+// Deploy agent
+const deployment = await api.agents.deploy(agent.id)
+console.log(deployment.url) // Agent endpoint URL
+
+// Invoke agent
+const response = await api.agents.invoke(agent.id, {
+  query: 'What is the status of order #12345?',
+  context: { customerId: 'customer-456' },
+})
+console.log(response.output)
+
+// Get agent logs
+const logs = await api.agents.getLogs(agent.id, {
+  limit: 100,
+  level: 'info',
+})
+
+// Stop agent
+await api.agents.stop(agent.id)
+```
+
+### LLM (Large Language Models)
+
+Generate text and embeddings:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Generate text
+const completion = await api.llm.generateText('Write a product description for a premium coffee maker', {
+  model: 'gpt-5',
+  temperature: 0.7,
+  maxTokens: 500,
+})
+console.log(completion.text)
+
+// Structured generation with schema
+interface ProductDescription {
+  headline: string
+  features: string[]
+  benefits: string[]
+  callToAction: string
+}
+
+const structured = (await api.llm.generate) & lt
+ProductDescription & gt
+;('Write a product description for a premium coffee maker',
+  {
+    schema: {
+      type: 'object',
+      properties: {
+        headline: { type: 'string' },
+        features: { type: 'array', items: { type: 'string' } },
+        benefits: { type: 'array', items: { type: 'string' } },
+        callToAction: { type: 'string' },
+      },
+    },
+  })
+
+// Chat completions
+const chatResponse = await api.llm.chat(
+  [
+    { role: 'system', content: 'You are a helpful assistant.' },
+    { role: 'user', content: 'Explain quantum computing' },
+  ],
+  {
+    model: 'gpt-5',
+    temperature: 0.7,
+  }
+)
+console.log(chatResponse.message.content)
+
+// Embeddings
+const embedding = await api.llm.embed('premium coffee maker')
+console.log(embedding) // number[]
+
+// Batch embeddings
+const embeddings = await api.llm.embed(['coffee maker', 'espresso machine', 'french press'])
+
+// List available models
+const models = await api.llm.models()
+for (const model of models) {
+  console.log(`${model.name} - ${model.provider} - $${model.pricing?.input}/1K tokens`)
+}
+```
+
+### Triggers, Actions &amp; Searches
+
+Create automation primitives:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Create trigger
+const trigger = await api.triggers.create({
+  integration: 'stripe',
+  name: 'new-payment',
+  key: 'payment_intent.succeeded',
+  type: 'webhook',
+  config: { events: ['payment_intent.succeeded'] },
+})
+
+// Enable trigger
+await api.triggers.enable(trigger.id)
+
+// Test trigger
+const testData = await api.triggers.test(trigger.id)
+
+// Create action
+const action = await api.actions.create({
+  integration: 'slack',
+  name: 'send-message',
+  key: 'send_message',
+  category: 'messaging',
+  config: { channel: '#general' },
+})
+
+// Execute action
+const result = await api.actions.execute(action.id, {
+  text: 'Payment received!',
+  attachments: [{ color: 'good', text: 'Order #12345' }],
+})
+
+// Create search
+const search = await api.searches.create({
+  integration: 'github',
+  name: 'find-issues',
+  key: 'search_issues',
+  config: { repo: 'owner/repo' },
+})
+
+// Execute search
+const issues = await api.searches.execute(search.id, {
+  q: 'is:open label:bug',
+  sort: 'created',
+  order: 'desc',
+})
+```
+
+### Analytics
+
+Track events and query analytics data:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Track event
+await api.analytics.track('page_view', {
+  page: '/products/premium-widget',
+  referrer: 'https://google.com',
+  userId: 'user-123',
+})
+
+// Identify user
+await api.analytics.identify('user-123', {
+  email: 'alice@example.com',
+  name: 'Alice Smith',
+  plan: 'premium',
+})
+
+// Query analytics
+const data = await api.analytics.query({
+  metric: 'page_views',
+  dimensions: ['page', 'country'],
+  filters: { page: { $startsWith: '/products' } },
+  dateRange: {
+    start: new Date('2025-01-01'),
+    end: new Date('2025-01-31'),
+  },
+})
+
+// Generate report
+const report = await api.analytics.report('monthly-revenue', {
+  format: 'csv',
+  email: 'reports@example.com',
+})
+```
+
+### Evaluations &amp; Experiments
+
+Test AI models and run A/B tests:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Create evaluation
+const eval = await api.evals.create({
+  name: 'customer-support-quality',
+  description: 'Evaluate customer support agent responses',
+  type: 'classification',
+  config: {
+    categories: ['helpful', 'neutral', 'unhelpful'],
+    threshold: 0.8,
+  },
+})
+
+// Run evaluation
+const result = await api.evals.run(eval.id, {
+  prompt: 'What is the status of order #12345?',
+  response: 'Your order has been shipped and should arrive tomorrow.',
+  expectedCategory: 'helpful',
+})
+console.log(result.passed) // true/false
+console.log(result.score) // 0.0-1.0
+
+// Get evaluation results
+const results = await api.evals.getResults(eval.id, {
+  limit: 100,
+})
+
+// Create experiment
+const experiment = await api.experiments.create({
+  name: 'pricing-page-cta',
+  description: 'Test different CTA buttons on pricing page',
+  variants: [
+    { id: 'control', name: 'Control', config: { cta: 'Get Started' }, weight: 0.5 },
+    { id: 'variant-a', name: 'Variant A', config: { cta: 'Start Free Trial' }, weight: 0.5 },
+  ],
+  metrics: ['conversion_rate', 'signup_rate'],
+})
+
+// Start experiment
+await api.experiments.start(experiment.id)
+
+// Get results
+const experimentResults = await api.experiments.getResults(experiment.id)
+console.log(experimentResults.winner) // 'variant-a'
+```
+
+### Integrations Management
+
+Install and configure integrations:
+
+```typescript
+import { api } from 'sdk.do'
+
+// List available integrations
+const integrations = await api.integrations.list({
+  category: 'payment',
+})
+
+// Get integration details
+const stripe = await api.integrations.get('stripe')
+console.log(stripe.authentication.type) // 'oauth2' | 'api_key'
+
+// Install integration
+const installation = await api.integrations.install('stripe', {
+  apiKey: process.env.STRIPE_SECRET_KEY,
+  webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+})
+
+// Configure integration
+await api.integrations.configure('stripe', {
+  currency: 'usd',
+  statementDescriptor: 'ACME Corp',
+})
+
+// Test integration
+const testResult = await api.integrations.test('stripe')
+console.log(testResult.success) // true/false
+
+// Uninstall integration
+await api.integrations.uninstall('stripe')
+```
+
+### Webhooks Management
+
+Register webhook endpoints:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Create webhook
+const webhook = await api.webhooks.create({
+  url: 'https://myapp.com/webhooks/stripe',
+  events: ['payment_intent.succeeded', 'charge.failed'],
+  secret: 'whsec_...',
+  headers: {
+    'X-Custom-Header': 'value',
+  },
+})
+
+// List webhooks
+const webhooks = await api.webhooks.list()
+
+// Test webhook
+const testResult = await api.webhooks.test(webhook.id, {
+  event: 'payment_intent.succeeded',
+  data: {
+    /* test payload */
+  },
+})
+
+// Get webhook logs
+const logs = await api.webhooks.getLogs(webhook.id, {
+  limit: 100,
+  since: new Date(Date.now() - 24 * 60 * 60 * 1000), // Last 24 hours
+})
+
+// Delete webhook
+await api.webhooks.delete(webhook.id)
+```
+
+### Email Service
+
+Send transactional emails:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Send email
+const result = await api.emails.send({
+  to: 'customer@example.com',
+  from: 'noreply@myapp.com',
+  subject: 'Your order has shipped!',
+  html: '&lt;p&gt;Your order #12345 has been shipped.&lt;/p&gt;',
+  attachments: [
+    {
+      filename: 'receipt.pdf',
+      content: Buffer.from(pdfData),
+      contentType: 'application/pdf',
+    },
+  ],
+})
+console.log(result.messageId)
+
+// Send template email
+await api.emails.sendTemplate('order-shipped', 'customer@example.com', {
+  orderNumber: '12345',
+  trackingUrl: 'https://track.com/12345',
+})
+
+// Verify email
+const verification = await api.emails.verify('customer@example.com')
+console.log(verification.valid) // true/false
+
+// Track email
+const tracking = await api.emails.track(result.messageId)
+console.log(tracking.status) // 'sent' | 'delivered' | 'opened' | 'clicked'
+```
+
+### Vector Embeddings &amp; Search
+
+Store and search vector embeddings:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Create embeddings
+const embedding = await api.embeddings.create('premium coffee maker', {
+  model: 'text-embedding-3-large',
+  dimensions: 1536,
+})
+
+// Upsert vectors
+await api.embeddings.upsert('products', [
+  {
+    id: 'product-123',
+    values: embedding,
+    metadata: { name: 'Premium Coffee Maker', price: 299.99 },
+  },
+])
+
+// Search vectors
+const results = await api.embeddings.search('coffee machine', 'products', {
+  topK: 5,
+  filter: { price: { $lte: 500 } },
+  includeMetadata: true,
+})
+
+for (const result of results) {
+  console.log(`${result.metadata.name} - Score: ${result.score}`)
+}
+
+// Delete vectors
+await api.embeddings.delete('products', ['product-123'])
+```
+
+### Web Scraping &amp; Extraction
+
+Extract data from web pages:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Extract text
+const textData = await api.extract.text('https://example.com')
+console.log(textData.text)
+
+// Extract HTML
+const htmlData = await api.extract.html('https://example.com')
+console.log(htmlData.html)
+
+// Extract structured data
+interface ProductInfo {
+  title: string
+  price: number
+  description: string
+  images: string[]
+}
+
+const product = (await api.extract.structured) & lt
+ProductInfo & gt
+;('https://shop.example.com/product/123',
+  {
+    type: 'object',
+    properties: {
+      title: { type: 'string', selector: 'h1.product-title' },
+      price: { type: 'number', selector: '.price' },
+      description: { type: 'string', selector: '.description' },
+      images: { type: 'array', items: { type: 'string' }, selector: 'img.product-image' },
+    },
+  })
+
+// Extract PDF text
+const pdfData = await api.extract.pdf('https://example.com/document.pdf')
+console.log(`${pdfData.pages} pages extracted`)
+```
+
+### Browser Automation
+
+Automate browser interactions:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Navigate to page
+const page = await api.browse.navigate('https://example.com')
+console.log(page.title)
+
+// Take screenshot
+const screenshot = await api.browse.screenshot('https://example.com', {
+  fullPage: true,
+  width: 1920,
+  height: 1080,
+  format: 'png',
+})
+console.log(screenshot.url) // Screenshot URL
+
+// Evaluate JavaScript
+const result = await api.browse.evaluate('https://example.com', 'document.querySelector("h1").textContent')
+console.log(result)
+
+// Fill form
+await api.browse.fill('https://form.example.com', '#email', 'user@example.com')
+
+// Click element
+await api.browse.click('https://example.com', 'button.submit')
+```
+
+### Queue Operations
+
+Send and receive queue messages:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Send message
+const sent = await api.queue.send(
+  'order-processing',
+  {
+    orderId: 'order-123',
+    customerId: 'customer-456',
+    items: [{ sku: 'WIDGET-001', quantity: 2 }],
+  },
+  {
+    delay: 60, // Delay 60 seconds
+    priority: 10, // Priority 0-10 (higher = more priority)
+    dedupe: true, // Deduplicate within window
+  }
+)
+console.log(sent.messageId)
+
+// Receive messages
+const messages = await api.queue.receive('order-processing', {
+  maxMessages: 10,
+  visibilityTimeout: 300, // 5 minutes
+  waitTime: 20, // Long polling
+})
+
+for (const message of messages) {
+  try {
+    // Process message
+    await processOrder(message.body)
+
+    // Delete message after processing
+    await api.queue.delete('order-processing', message.id)
+  } catch (error) {
+    console.error(`Failed to process message ${message.id}:`, error)
+    // Message will become visible again after timeout
+  }
+}
+
+// Peek messages (without removing)
+const peek = await api.queue.peek('order-processing', 5)
+
+// Get queue stats
+const stats = await api.queue.stats('order-processing')
+console.log(`Queue size: ${stats.size}, In-flight: ${stats.inFlight}`)
+```
+
+## Third-Party Integrations
+
+### Stripe (Payments)
+
+Process payments with Stripe:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Create customer
+const customer = await api.stripe.customers.create({
+  email: 'alice@example.com',
+  name: 'Alice Smith',
+  metadata: { userId: 'user-123' }
+})
+
+// Create payment intent
+const paymentIntent = await api.stripe.paymentIntents.create({
+  amount: 9999,
+  currency: 'usd',
+  customer: customer.id,
+  metadata: { orderId: 'order-123' }
+})
+
+// Confirm payment
+const confirmed = await api.stripe.paymentIntents.confirm(paymentIntent.id, {
+  payment_method: 'pm_card_visa'
+})
+
+// Create subscription
+const subscription = await api.stripe.subscriptions.create({
+  customer: customer.id,
+  items: [{ price: 'price_123' }],
+  trial_period_days: 14
+})
+
+// List charges
+const charges = await api.stripe.charges.list({
+  customer: customer.id,
+  limit: 10
+})
+
+// Handle webhooks
+api.on.stripe['payment_intent.succeeded'](async (event) =&gt; {
+  const paymentIntent = event.data.object
+  console.log(`Payment succeeded: ${paymentIntent.id}`)
+  await fulfillOrder(paymentIntent.metadata.orderId)
+})
+```
+
+### GitHub (Version Control)
+
+Interact with GitHub repositories:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Get repository
+const repo = await api.github.repos.get('owner', 'repo')
+console.log(repo.stargazers_count)
+
+// Create issue
+const issue = await api.github.issues.create('owner', 'repo', {
+  title: 'Bug: Login form not working',
+  body: 'Steps to reproduce...',
+  labels: ['bug', 'high-priority']
+})
+
+// Create pull request
+const pr = await api.github.pulls.create('owner', 'repo', {
+  title: 'Fix login form validation',
+  head: 'feature-branch',
+  base: 'main',
+  body: 'This PR fixes the login form validation issue.'
+})
+
+// Merge pull request
+await api.github.pulls.merge('owner', 'repo', pr.number, {
+  commit_title: 'Merge PR #42',
+  merge_method: 'squash'
+})
+
+// List repositories
+const repos = await api.github.repos.list({
+  type: 'owner',
+  sort: 'updated'
+})
+
+// Handle webhooks
+api.on.github.push(async (event) =&gt; {
+  console.log(`Push to ${event.repository.full_name}`)
+  await triggerCI(event.repository.name, event.after)
+})
+
+api.on.github.pull_request(async (event) =&gt; {
+  if (event.action === 'opened') {
+    console.log(`New PR: ${event.pull_request.title}`)
+    await runTests(event.pull_request.head.sha)
+  }
+})
+```
+
+### Twilio (SMS &amp; Voice)
+
+Send messages and make calls:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Send SMS
+const message = await api.twilio.messages.create({
+  to: '+1234567890',
+  from: '+0987654321',
+  body: 'Your verification code is: 123456'
+})
+console.log(message.sid)
+
+// Make phone call
+const call = await api.twilio.calls.create({
+  to: '+1234567890',
+  from: '+0987654321',
+  url: 'https://myapp.com/twiml/greeting'
+})
+
+// List messages
+const messages = await api.twilio.messages.list({
+  to: '+1234567890',
+  limit: 20
+})
+
+// Handle webhooks
+api.on.twilio['message.received'](async (event) =&gt; {
+  console.log(`Received SMS from ${event.From}: ${event.Body}`)
+  await processIncomingSMS(event)
+})
+```
+
+### SendGrid (Email)
+
+Send transactional emails:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Send email
+await api.sendgrid.send({
+  to: 'customer@example.com',
+  from: 'noreply@myapp.com',
+  subject: 'Welcome to our platform!',
+  html: '&lt;h1&gt;Welcome!&lt;/h1&gt;&lt;p&gt;Thanks for signing up.&lt;/p&gt;'
+})
+
+// Send to multiple recipients
+await api.sendgrid.sendMultiple({
+  to: ['user1@example.com', 'user2@example.com'],
+  from: 'newsletter@myapp.com',
+  subject: 'Monthly Newsletter',
+  html: '&lt;p&gt;Here are this month's updates...&lt;/p&gt;'
+})
+
+// Handle webhooks
+api.on.sendgrid['email.delivered'](async (event) =&gt; {
+  console.log(`Email delivered to ${event.email}`)
+})
+
+api.on.sendgrid['email.opened'](async (event) =&gt; {
+  console.log(`Email opened by ${event.email}`)
+  await trackEmailOpen(event.email, event.timestamp)
+})
+
+api.on.sendgrid['email.clicked'](async (event) =&gt; {
+  console.log(`Link clicked in email: ${event.url}`)
+  await trackLinkClick(event.email, event.url)
+})
+```
+
+### Slack (Team Communication)
+
+Post messages and interact with Slack:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Post message
+await api.slack.chat.postMessage({
+  channel: '#general',
+  text: 'New deployment completed successfully!',
+  blocks: [
+    {
+      type: 'section',
+      text: { type: 'mrkdwn', text: '*Deployment Status*' }
+    },
+    {
+      type: 'section',
+      fields: [
+        { type: 'mrkdwn', text: '*Status:*\n:white_check_mark: Success' },
+        { type: 'mrkdwn', text: '*Version:*\nv2.5.0' }
+      ]
+    }
+  ]
+})
+
+// Update message
+await api.slack.chat.update({
+  channel: '#general',
+  ts: '1234567890.123456',
+  text: 'Updated message'
+})
+
+// Get user info
+const user = await api.slack.users.info('U1234567890')
+console.log(user.real_name)
+
+// List users
+const users = await api.slack.users.list()
+
+// Handle webhooks
+api.on.slack.message(async (event) =&gt; {
+  if (event.text.includes('@bot')) {
+    await handleBotMention(event)
+  }
+})
+
+api.on.slack.reaction_added(async (event) =&gt; {
+  console.log(`${event.user} reacted with :${event.reaction}:`)
+})
+```
+
+### Google Sheets (Spreadsheets)
+
+Read and write spreadsheet data:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Get spreadsheet
+const sheet = await api.googleSheets.spreadsheets.get('spreadsheet-id')
+console.log(sheet.properties.title)
+
+// Read values
+const data = await api.googleSheets.spreadsheets.values.get(
+  'spreadsheet-id',
+  'Sheet1!A1:D10'
+)
+console.log(data.values)
+
+// Update values
+await api.googleSheets.spreadsheets.values.update(
+  'spreadsheet-id',
+  'Sheet1!A1:B2',
+  [
+    ['Name', 'Email'],
+    ['Alice', 'alice@example.com']
+  ]
+)
+
+// Append values
+await api.googleSheets.spreadsheets.values.append(
+  'spreadsheet-id',
+  'Sheet1!A:B',
+  [
+    ['Bob', 'bob@example.com'],
+    ['Charlie', 'charlie@example.com']
+  ]
+)
+
+// Handle webhooks
+api.on.googleSheets['row.created'](async (event) =&gt; {
+  console.log('New row added:', event.values)
+  await processNewRow(event)
+})
+```
+
+### Salesforce (CRM)
+
+Manage Salesforce records:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Create record
+const account = await api.salesforce.sobjects.create('Account', {
+  Name: 'Acme Corporation',
+  Industry: 'Technology',
+  AnnualRevenue: 1000000
+})
+
+// Retrieve record
+const retrieved = await api.salesforce.sobjects.retrieve('Account', account.id)
+
+// Update record
+await api.salesforce.sobjects.update('Account', account.id, {
+  AnnualRevenue: 1500000,
+  Status: 'Active'
+})
+
+// Delete record
+await api.salesforce.sobjects.delete('Account', account.id)
+
+// SOQL query
+const results = await api.salesforce.query(
+  "SELECT Id, Name, Industry FROM Account WHERE Industry = 'Technology' ORDER BY Name"
+)
+
+// SOSL search
+const searchResults = await api.salesforce.search(
+  'FIND {Acme*} IN ALL FIELDS RETURNING Account(Id, Name), Contact(Id, Name)'
+)
+
+// Handle webhooks
+api.on.salesforce['record.created'](async (event) =&gt; {
+  if (event.sobject === 'Lead') {
+    await notifySalesTeam(event.record)
+  }
+})
+```
+
+### HubSpot (Marketing &amp; Sales)
+
+Manage HubSpot contacts and deals:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Create contact
+const contact = await api.hubspot.contacts.create({
+  properties: {
+    email: 'alice@example.com',
+    firstname: 'Alice',
+    lastname: 'Smith',
+    phone: '555-1234'
+  }
+})
+
+// Create deal
+const deal = await api.hubspot.deals.create({
+  properties: {
+    dealname: 'New Website Project',
+    amount: 10000,
+    dealstage: 'presentationscheduled',
+    pipeline: 'default'
+  }
+})
+
+// Create company
+const company = await api.hubspot.companies.create({
+  properties: {
+    name: 'Acme Corp',
+    domain: 'acme.com',
+    industry: 'Technology'
+  }
+})
+
+// List contacts
+const contacts = await api.hubspot.contacts.list({
+  limit: 100
+})
+
+// Handle webhooks
+api.on.hubspot['contact.created'](async (event) =&gt; {
+  console.log('New contact created:', event.properties.email)
+  await sendWelcomeEmail(event.properties.email)
+})
+
+api.on.hubspot['deal.created'](async (event) =&gt; {
+  console.log('New deal created:', event.properties.dealname)
+  await notifySalesTeam(event)
+})
+```
+
+### Trello (Project Management)
+
+Manage Trello boards and cards:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Create card
+const card = await api.trello.cards.create({
+  name: 'Implement new feature',
+  desc: 'Add user authentication to the app',
+  idList: 'list-id-123'
+})
+
+// Update card
+await api.trello.cards.update(card.id, {
+  desc: 'Add OAuth authentication to the app',
+  labels: ['feature', 'high-priority']
+})
+
+// Get board
+const board = await api.trello.boards.get('board-id-123')
+console.log(board.name)
+
+// Create list
+const list = await api.trello.lists.create({
+  name: 'In Progress',
+  idBoard: 'board-id-123'
+})
+
+// Handle webhooks
+api.on.trello['card.created'](async (event) =&gt; {
+  console.log(`New card: ${event.data.card.name}`)
+  await notifyTeam(event.data.card)
+})
+
+api.on.trello['card.moved'](async (event) =&gt; {
+  if (event.data.listAfter.name === 'Done') {
+    await celebrateCompletion(event.data.card)
+  }
+})
+```
+
+### Asana (Task Management)
+
+Manage Asana tasks and projects:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Create task
+const task = await api.asana.tasks.create({
+  name: 'Design new landing page',
+  notes: 'Create a modern landing page for the product launch',
+  projects: ['project-id-123'],
+  due_on: '2025-02-15'
+})
+
+// Update task
+await api.asana.tasks.update(task.id, {
+  completed: true,
+  assignee: 'user-id-456'
+})
+
+// List tasks
+const tasks = await api.asana.tasks.list({
+  project: 'project-id-123',
+  completed_since: 'now'
+})
+
+// Create project
+const project = await api.asana.projects.create({
+  name: 'Q1 2025 Product Launch',
+  team: 'team-id-789'
+})
+
+// Handle webhooks
+api.on.asana['task.created'](async (event) =&gt; {
+  console.log(`New task: ${event.resource.name}`)
+  await assignToTeamMember(event.resource)
+})
+
+api.on.asana['task.completed'](async (event) =&gt; {
+  console.log(`Task completed: ${event.resource.name}`)
+  await updateProjectProgress(event.resource)
+})
+```
+
+### Mailchimp (Email Marketing)
+
+Manage Mailchimp lists and campaigns:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Add subscriber
+await api.mailchimp.lists.members.add('list-id-123', {
+  email_address: 'subscriber@example.com',
+  status: 'subscribed',
+  merge_fields: {
+    FNAME: 'John',
+    LNAME: 'Doe'
+  }
+})
+
+// Update subscriber
+await api.mailchimp.lists.members.update('list-id-123', 'subscriber@example.com', {
+  merge_fields: {
+    COMPANY: 'Acme Corp'
+  }
+})
+
+// Remove subscriber
+await api.mailchimp.lists.members.remove('list-id-123', 'subscriber@example.com')
+
+// Create campaign
+const campaign = await api.mailchimp.campaigns.create({
+  type: 'regular',
+  recipients: { list_id: 'list-id-123' },
+  settings: {
+    subject_line: 'Monthly Newsletter',
+    from_name: 'Acme Corp',
+    reply_to: 'newsletter@acme.com'
+  }
+})
+
+// Send campaign
+await api.mailchimp.campaigns.send(campaign.id)
+
+// Handle webhooks
+api.on.mailchimp['subscriber.added'](async (event) =&gt; {
+  console.log(`New subscriber: ${event.data.email}`)
+  await sendWelcomeEmail(event.data.email)
+})
+
+api.on.mailchimp['subscriber.unsubscribed'](async (event) =&gt; {
+  console.log(`Unsubscribed: ${event.data.email}`)
+  await processUnsubscribe(event.data.email)
+})
+```
+
+## Zapier Integration
+
+Access 3,000+ Zapier integrations:
+
+```typescript
+import { api } from 'sdk.do'
+
+// List all integrations
+const integrations = await api.zapier.integrations()
+console.log(`${integrations.length} integrations available`)
+
+// Get specific integration
+const slack = api.zapier.integration('slack')
+const info = await slack.info()
+console.log(info.name) // 'Slack'
+
+// List triggers
+const triggers = await slack.triggers()
+for (const trigger of triggers) {
+  console.log(`${trigger.name} - ${trigger.type}`)
+}
+
+// Subscribe to trigger
+const subscription = await slack.trigger('new_message').subscribe('https://myapp.com/webhooks/slack', {
+  channel: '#general',
+})
+
+// List actions
+const actions = await slack.actions()
+
+// Execute action
+const result = await slack.action('send_message').execute({
+  channel: '#general',
+  text: 'Hello from Zapier!',
+  username: 'MyBot',
+})
+
+// List searches
+const searches = await slack.searches()
+
+// Execute search
+const messages = await slack.search('find_message').execute({
+  channel: '#general',
+  query: 'deployment',
+})
+
+// Access any integration
+const github = api.zapier.integration('github')
+const issues = await github.search('find_issue').execute({
+  repo: 'owner/repo',
+  state: 'open',
+  labels: 'bug',
+})
+
+// Use generic access
+const trelloTrigger = api.zapier.trigger('trello', 'new_card')
+await trelloTrigger.test({ board: 'board-id', list: 'list-id' })
+```
+
+## Webhook Event Handlers
+
+Handle asynchronous events:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Platform events
+api.on['workflow.completed'](async (event) =&gt; {
+  console.log(`Workflow ${event.workflowId} completed`)
+  await notifyUser(event.userId, 'Your workflow has completed')
+})
+
+api.on['workflow.failed'](async (event) =&gt; {
+  console.error(`Workflow ${event.workflowId} failed: ${event.error}`)
+  await alertTeam(event)
+})
+
+api.on['agent.invoked'](async (event) =&gt; {
+  console.log(`Agent ${event.agentId} invoked with query: ${event.input.query}`)
+})
+
+api.on['database.record.created'](async (event) =&gt; {
+  if (event.type === 'Product') {
+    await indexProduct(event.record)
+  }
+})
+
+api.on['database.record.updated'](async (event) =&gt; {
+  if (event.type === 'Product') {
+    await reindexProduct(event.record)
+  }
+})
+
+// Third-party events
+api.on.stripe['payment_intent.succeeded'](async (event) =&gt; {
+  await fulfillOrder(event.data.object.metadata.orderId)
+})
+
+api.on.github.push(async (event) =&gt; {
+  await triggerCI(event.repository.name, event.after)
+})
+
+api.on.twilio['message.received'](async (event) =&gt; {
+  await processSMS(event.From, event.Body)
+})
+
+api.on.slack.message(async (event) =&gt; {
+  if (event.text.startsWith('!help')) {
+    await sendHelpMessage(event.channel)
+  }
+})
+
+// Generic event handler
+api.on['custom.event'](async (event) =&gt; {
+  console.log('Custom event received:', event)
+})
+```
+
+## Generic Integration Access
+
+For APIs not in the pre-built integrations:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Get custom integration
+const customApi = api.integration('my-custom-api')
+
+// GET request
+const data = await customApi.get('/users/123', {
+  page: 1,
+  limit: 10,
+})
+
+// POST request
+const created = await customApi.post('/users', {
+  name: 'Alice Smith',
+  email: 'alice@example.com',
+})
+
+// PUT request
+const updated = await customApi.put('/users/123', {
+  name: 'Alice Johnson',
+})
+
+// PATCH request
+const patched = await customApi.patch('/users/123', {
+  email: 'alice.johnson@example.com',
+})
+
+// DELETE request
+await customApi.delete('/users/123')
+
+// Custom request with full options
+const response = await customApi.request({
+  method: 'POST',
+  url: '/users/bulk',
+  headers: {
+    'X-Custom-Header': 'value',
+  },
+  params: {
+    async: 'true',
+  },
+  data: {
+    users: [
+      /* ... */
+    ],
+  },
+  timeout: 60000,
+})
+```
+
+## Authentication
+
+### API Keys
+
+Authenticate with API keys:
+
+```typescript
+import { createClient } from 'apis.do'
+
+const client = createClient({
+  apiKey: process.env.API_KEY,
+})
+
+// All requests will include Authorization header
+const user = await client.user()
+```
+
+### OAuth 2.0
+
+Authenticate with OAuth:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Initiate OAuth flow
+const authUrl = await api.oauth.authorize({
+  clientId: process.env.CLIENT_ID,
+  redirectUri: 'https://myapp.com/callback',
+  scope: ['read', 'write'],
+  state: crypto.randomUUID(),
+})
+
+// Redirect user to authUrl...
+
+// Exchange code for tokens
+const tokens = await api.oauth.exchangeCode({
+  code: authorizationCode,
+  clientId: process.env.CLIENT_ID,
+  clientSecret: process.env.CLIENT_SECRET,
+  redirectUri: 'https://myapp.com/callback',
+})
+
+// Use access token
+const client = createClient({
+  apiKey: tokens.accessToken,
+})
+```
+
+## Error Handling
+
+All API methods can throw `ApiError`:
+
+```typescript
+import { api, isApiError } from 'apis.do'
+
+try {
+  const product = await api.database.get($.Product, 'invalid-id')
+} catch (error) {
+  if (isApiError(error)) {
+    console.error(`API Error ${error.status}: ${error.statusText}`)
+    console.error('Response body:', error.body)
+
+    // Handle specific errors
+    switch (error.status) {
+      case 404:
+        console.log('Product not found')
+        break
+      case 429:
+        console.log('Rate limit exceeded')
+        break
+      case 500:
+        console.log('Server error')
+        break
+    }
+  } else {
+    console.error('Unexpected error:', error)
+  }
+}
+```
+
+### Automatic Retries
+
+Configure automatic retries for transient errors:
+
+```typescript
+import { createClient } from 'apis.do'
+
+const client = createClient({
+  timeout: 30000,
+  retries: 3, // Retry failed requests up to 3 times
+  retryDelay: 1000, // Wait 1s between retries
+  retryOn: [502, 503, 504, 'ECONNRESET'], // Retry on these errors
+})
+```
+
+## Rate Limiting
+
+The API enforces rate limits:
+
+- **Anonymous requests**: 10 req/min
+- **Authenticated requests**: 100 req/min
+- **Premium tier**: 1000 req/min
+
+```typescript
+import { api } from 'sdk.do'
+
+try {
+  await api.llm.generateText('Hello')
+} catch (error) {
+  if (isApiError(error) &amp;&amp; error.status === 429) {
+    // Rate limit exceeded
+    const retryAfter = error.body?.retryAfter // Seconds until reset
+    console.log(`Rate limited. Retry after ${retryAfter}s`)
+
+    await new Promise(resolve =&gt; setTimeout(resolve, retryAfter * 1000))
+
+    // Retry request
+    await api.llm.generateText('Hello')
+  }
+}
+```
+
+## Best Practices
+
+### Use Type-Safe APIs
+
+Leverage TypeScript types for compile-time safety:
+
+```typescript
+import { api, $ } from 'sdk.do'
+import type { Product } from '@dotdo/schema.org.ai'
+
+async function createProduct(data: Omit&lt;Product, '$id' | '$type'&gt;) {
+  return await api.database.create($.Product, {
+    $id: crypto.randomUUID(),
+    $type: $.Product,
+    ...data
+  })
+}
+```
+
+### Handle Errors Gracefully
+
+Always wrap API calls in try/catch:
+
+```typescript
+async function safeFetch&lt;T&gt;(fn: () =&gt; Promise&lt;T&gt;, fallback: T): Promise&lt;T&gt; {
+  try {
+    return await fn()
+  } catch (error) {
+    console.error('API call failed:', error)
+    return fallback
+  }
+}
+
+const products = await safeFetch(
+  () =&gt; api.database.list($.Product),
+  []
+)
+```
+
+### Use Webhooks for Long-Running Tasks
+
+Don't poll - use webhooks for asynchronous results:
+
+```typescript
+// ❌ Bad: Polling
+async function waitForWorkflow(id: string) {
+  while (true) {
+    const execution = await api.workflows.getExecution(id)
+    if (execution.status === 'completed') return execution
+    await new Promise(resolve =&gt; setTimeout(resolve, 1000))
+  }
+}
+
+// ✅ Good: Webhook
+api.on['workflow.completed'](async (event) =&gt; {
+  console.log(`Workflow ${event.workflowId} completed`)
+  await processResults(event.output)
+})
+
+const execution = await api.workflows.execute('my-workflow', { /* input */ })
+// Webhook will be called when complete
+```
+
+### Batch Operations
+
+Use batch operations to reduce API calls:
+
+```typescript
+// ❌ Bad: Multiple calls
+for (const id of productIds) {
+  await api.database.get($.Product, id)
+}
+
+// ✅ Good: Single batch call
+const products = await api.database.list($.Product, {
+  where: { $id: { $in: productIds } },
+})
+```
+
+### Cache Expensive Operations
+
+Cache results that don't change frequently:
+
+```typescript
+import { api } from 'sdk.do'
+
+const cache = new Map&lt;string, { data: any; expiry: number }&gt;()
+
+async function getCachedProducts(cacheKey: string, ttl = 60000) {
+  const cached = cache.get(cacheKey)
+  if (cached &amp;&amp; cached.expiry &gt; Date.now()) {
+    return cached.data
+  }
+
+  const products = await api.database.list($.Product)
+  cache.set(cacheKey, {
+    data: products,
+    expiry: Date.now() + ttl
+  })
+
+  return products
+}
+```
+
+## Real-World Examples
+
+### Example 1: E-Commerce Order Processing
+
+Complete order processing workflow:
+
+```typescript
+import { api, $, send } from 'sdk.do'
+
+interface OrderInput {
+  customerId: string
+  items: Array&lt;{ productId: string; quantity: number }&gt;
+  shippingAddress: Address
+  paymentMethodId: string
+}
+
+async function processOrder(input: OrderInput) {
+  // 1. Create order record
+  const order = await api.database.create($.Order, {
+    $id: crypto.randomUUID(),
+    $type: $.Order,
+    customerId: input.customerId,
+    items: input.items,
+    status: 'pending',
+    createdAt: new Date()
+  })
+
+  // 2. Calculate total
+  const products = await api.database.list($.Product, {
+    where: { $id: { $in: input.items.map(i =&gt; i.productId) } }
+  })
+
+  const total = input.items.reduce((sum, item) =&gt; {
+    const product = products.find(p =&gt; p.$id === item.productId)
+    return sum + (product?.price || 0) * item.quantity
+  }, 0)
+
+  // 3. Process payment
+  const paymentIntent = await api.stripe.paymentIntents.create({
+    amount: Math.round(total * 100),
+    currency: 'usd',
+    customer: input.customerId,
+    payment_method: input.paymentMethodId,
+    confirm: true,
+    metadata: { orderId: order.$id }
+  })
+
+  if (paymentIntent.status !== 'succeeded') {
+    await api.database.update($.Order, order.$id, { status: 'payment_failed' })
+    throw new Error('Payment failed')
+  }
+
+  // 4. Update inventory
+  for (const item of input.items) {
+    await api.database.update($.Product, item.productId, {
+      stock: { $dec: item.quantity }
+    })
+  }
+
+  // 5. Create shipment
+  await api.workflows.execute('create-shipment', {
+    orderId: order.$id,
+    address: input.shippingAddress
+  })
+
+  // 6. Send confirmation email
+  await api.emails.sendTemplate('order-confirmation', input.customerId, {
+    orderNumber: order.$id,
+    total,
+    items: input.items
+  })
+
+  // 7. Update order status
+  await api.database.update($.Order, order.$id, {
+    status: 'processing',
+    total,
+    paymentIntentId: paymentIntent.id
+  })
+
+  // 8. Publish event
+  await send($.Order.created, { orderId: order.$id })
+
+  return order
+}
+
+// Handle webhook events
+api.on.stripe['payment_intent.succeeded'](async (event) =&gt; {
+  const orderId = event.data.object.metadata.orderId
+  await api.database.update($.Order, orderId, { status: 'paid' })
+})
+
+api.on['workflow.completed'](async (event) =&gt; {
+  if (event.workflowId === 'create-shipment') {
+    const orderId = event.input.orderId
+    await api.database.update($.Order, orderId, { status: 'shipped' })
+
+    // Send shipping notification
+    const order = await api.database.get($.Order, orderId)
+    await api.emails.sendTemplate('order-shipped', order.customerId, {
+      orderNumber: orderId,
+      trackingNumber: event.output.trackingNumber
+    })
+  }
+})
+```
+
+### Example 2: Customer Support AI Agent
+
+AI-powered customer support system:
+
+```typescript
+import { api, $ } from 'sdk.do'
+
+// Create support agent
+const agent = await api.agents.create({
+  name: 'support-agent',
+  description: 'AI agent for customer support',
+  model: 'gpt-5',
+  instructions: `
+    You are a helpful customer support agent for an e-commerce platform.
+
+    You have access to:
+    - Order database: Check order status, tracking, and history
+    - Product catalog: Answer product questions
+    - Customer profiles: View purchase history and preferences
+    - Email system: Send follow-up emails
+
+    Be professional, empathetic, and helpful. Always verify the customer's identity
+    before accessing sensitive information.
+  `,
+  tools: ['database', 'email', 'search']
+})
+
+await api.agents.deploy(agent.id)
+
+// Handle customer inquiries
+async function handleSupportRequest(customerId: string, message: string) {
+  // Get customer context
+  const customer = await api.database.get($.Person, customerId)
+  const orders = await api.database.list($.Order, {
+    where: { customerId },
+    orderBy: { createdAt: 'desc' },
+    limit: 5
+  })
+
+  // Invoke agent with context
+  const response = await api.agents.invoke(agent.id, {
+    query: message,
+    context: {
+      customer: {
+        id: customer.$id,
+        name: customer.name,
+        email: customer.email
+      },
+      recentOrders: orders.map(o =&gt; ({
+        id: o.$id,
+        status: o.status,
+        total: o.total,
+        date: o.createdAt
+      }))
+    }
+  })
+
+  // Track interaction
+  await api.analytics.track('support_interaction', {
+    customerId,
+    agentId: agent.id,
+    query: message,
+    responseLength: response.output.length
+  })
+
+  return response.output
+}
+
+// Handle Slack mentions for internal support
+api.on.slack.message(async (event) =&gt; {
+  if (event.text.includes('@support-bot')) {
+    const query = event.text.replace(/@support-bot/g, '').trim()
+
+    const response = await api.agents.invoke(agent.id, {
+      query,
+      context: { channel: 'internal-slack' }
+    })
+
+    await api.slack.chat.postMessage({
+      channel: event.channel,
+      text: response.output,
+      thread_ts: event.ts
+    })
+  }
+})
+```
+
+### Example 3: Multi-Channel Marketing Automation
+
+Automated marketing across email, SMS, and social media:
+
+```typescript
+import { api, $, on } from 'sdk.do'
+
+// Campaign configuration
+interface Campaign {
+  id: string
+  name: string
+  channels: Array&lt;'email' | 'sms' | 'slack'&gt;
+  segmentQuery: any
+  messageTemplates: {
+    email?: { subject: string; body: string }
+    sms?: { body: string }
+    slack?: { channel: string; text: string }
+  }
+  schedule?: string // Cron expression
+  trigger?: string  // Event name
+}
+
+// Create campaign
+async function createCampaign(campaign: Campaign) {
+  // Store campaign
+  await api.database.create($.MarketingCampaign, {
+    $id: campaign.id,
+    $type: $.MarketingCampaign,
+    ...campaign
+  })
+
+  // Schedule if cron expression provided
+  if (campaign.schedule) {
+    await api.workflows.create({
+      name: `campaign-${campaign.id}`,
+      steps: [
+        {
+          id: 'execute-campaign',
+          type: 'execute-function',
+          params: { functionName: 'executeCampaign', campaignId: campaign.id }
+        }
+      ]
+    })
+  }
+
+  // Set up event trigger if provided
+  if (campaign.trigger) {
+    on(campaign.trigger as any, async (event) =&gt; {
+      await executeCampaign(campaign.id, event.userId)
+    })
+  }
+}
+
+// Execute campaign
+async function executeCampaign(campaignId: string, userId?: string) {
+  const campaign = await api.database.get($.MarketingCampaign, campaignId)
+
+  // Get target audience
+  let audience: string[]
+  if (userId) {
+    audience = [userId]
+  } else {
+    const users = await api.database.list($.Person, campaign.segmentQuery)
+    audience = users.map(u =&gt; u.$id)
+  }
+
+  // Send messages on each channel
+  for (const channel of campaign.channels) {
+    switch (channel) {
+      case 'email':
+        for (const userId of audience) {
+          const user = await api.database.get($.Person, userId)
+          await api.emails.send({
+            to: user.email,
+            from: 'marketing@myapp.com',
+            subject: campaign.messageTemplates.email!.subject,
+            html: campaign.messageTemplates.email!.body
+          })
+        }
+        break
+
+      case 'sms':
+        for (const userId of audience) {
+          const user = await api.database.get($.Person, userId)
+          if (user.telephone) {
+            await api.twilio.messages.create({
+              to: user.telephone,
+              from: process.env.TWILIO_FROM!,
+              body: campaign.messageTemplates.sms!.body
+            })
+          }
+        }
+        break
+
+      case 'slack':
+        await api.slack.chat.postMessage({
+          channel: campaign.messageTemplates.slack!.channel,
+          text: campaign.messageTemplates.slack!.text
+        })
+        break
+    }
+  }
+
+  // Track campaign execution
+  await api.analytics.track('campaign_executed', {
+    campaignId,
+    channels: campaign.channels,
+    audienceSize: audience.length
+  })
+}
+
+// Example: Welcome campaign for new users
+await createCampaign({
+  id: 'welcome-campaign',
+  name: 'New User Welcome',
+  channels: ['email', 'sms'],
+  segmentQuery: {},
+  messageTemplates: {
+    email: {
+      subject: 'Welcome to Our Platform!',
+      body: '&lt;h1&gt;Welcome!&lt;/h1&gt;&lt;p&gt;We're excited to have you.&lt;/p&gt;'
+    },
+    sms: {
+      body: 'Welcome to our platform! Reply HELP for support.'
+    }
+  },
+  trigger: 'user.created'
+})
+
+// Example: Weekly newsletter
+await createCampaign({
+  id: 'weekly-newsletter',
+  name: 'Weekly Newsletter',
+  channels: ['email'],
+  segmentQuery: {
+    where: { newsletter: true }
+  },
+  messageTemplates: {
+    email: {
+      subject: 'This Week in Tech',
+      body: '&lt;!-- Newsletter content --&gt;'
+    }
+  },
+  schedule: '0 9 * * 1' // Every Monday at 9am
+})
+
+// Handle unsubscribes
+api.on.sendgrid['email.clicked'](async (event) =&gt; {
+  if (event.url.includes('/unsubscribe')) {
+    await api.database.update($.Person, event.email, {
+      newsletter: false
+    })
+  }
+})
+```
+
+## See Also
+
+- [sdk.do](/ai/docs/sdk.do.mdx) - Complete SDK documentation
+- [database.do](/ai/docs/database.do.mdx) - Database operations
+- [oauth.do](/ai/docs/oauth.do.mdx) - OAuth authentication
+- [events.do](/ai/docs/events.do.mdx) - Event-driven architecture
+- [webhooks.do](/ai/docs/webhooks.do.mdx) - Webhook verification
+
+## API Reference
+
+**Base URL**: `https://apis.do`
+
+**Authentication**: Bearer token via `Authorization` header
+
+**Rate Limits**:
+
+- Anonymous: 10 req/min
+- Authenticated: 100 req/min
+- Premium: 1000 req/min
+
+**Health Check**: `GET /` - Returns API status and endpoints
+
+**User Info**: `GET /v1/user` - Returns request metadata and authentication status
+
+For complete API documentation, visit: https://apis.do/v1/docs

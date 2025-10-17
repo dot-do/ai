@@ -1,0 +1,562 @@
+---
+$id: https://auth.do/docs/getting-started
+$type: TechArticle
+title: Getting Started with auth.do
+description: Quick start guide for authentication in the .do platform
+keywords: [auth, getting started, authentication, jwt, setup]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Getting Started
+
+Get started with authentication in the `.do` platform in under 5 minutes.
+
+## Installation
+
+Install the SDK in your project:
+
+```bash
+pnpm add sdk.do
+```
+
+Or use the CLI:
+
+```bash
+pnpm add -g cli.do
+```
+
+## Basic Setup
+
+Import the auth service from the SDK:
+
+```typescript
+import { auth } from 'sdk.do'
+```
+
+## Configuration
+
+Create a `.env` file with your authentication configuration:
+
+```bash
+# JWT configuration
+JWT_SECRET=your-secret-key-at-least-32-characters-long
+JWT_ALGORITHM=HS256
+JWT_ACCESS_TOKEN_EXPIRY=15m
+JWT_REFRESH_TOKEN_EXPIRY=7d
+
+# Password hashing
+PASSWORD_HASH_ROUNDS=12
+
+# Session configuration
+SESSION_DURATION=86400000  # 24 hours
+```
+
+## Your First Authentication Flow
+
+### 1. Register a New User
+
+```typescript
+import { $, auth, db } from 'sdk.do'
+
+// Create user account
+const user = await db.create($.Person, {
+  email: 'user@example.com',
+  name: 'John Smith',
+})
+
+// Hash and store password
+const hashedPassword = await auth.hashPassword('secure-password')
+await db.create($.Credentials, {
+  userId: user.$id,
+  passwordHash: hashedPassword,
+})
+
+console.log('User registered:', user.$id)
+```
+
+### 2. Login
+
+```typescript
+import { auth } from 'sdk.do'
+
+// Authenticate user
+const session = await auth.login({
+  email: 'user@example.com',
+  password: 'secure-password',
+})
+
+console.log(session)
+// {
+//   token: "eyJhbGciOiJIUzI1NiIs...",
+//   userId: "user_123",
+//   expiresAt: "2025-10-11T12:00:00Z",
+//   refreshToken: "rt_abc123..."
+// }
+```
+
+### 3. Verify Token
+
+```typescript
+import { auth } from 'sdk.do'
+
+// Verify JWT token
+const payload = await auth.verifyToken(session.token)
+
+console.log(payload)
+// {
+//   userId: "user_123",
+//   email: "user@example.com",
+//   role: "user",
+//   iat: 1728475200,
+//   exp: 1728561600
+// }
+```
+
+### 4. Protect API Endpoint
+
+```typescript
+import { auth } from 'sdk.do'
+
+export async function protectedEndpoint(request: Request) {
+  // Extract token from Authorization header
+  const authHeader = request.headers.get('Authorization')
+  const token = authHeader?.replace('Bearer ', '')
+
+  if (!token) {
+    return new Response('Unauthorized', { status: 401 })
+  }
+
+  try {
+    // Verify token
+    const payload = await auth.verifyToken(token)
+
+    // Process authenticated request
+    return new Response(
+      JSON.stringify({
+        message: 'Success',
+        userId: payload.userId,
+      })
+    )
+  } catch (error) {
+    return new Response('Invalid token', { status: 401 })
+  }
+}
+```
+
+## Complete Registration & Login Example
+
+Here's a complete example showing user registration and login:
+
+```typescript
+import { $, auth, db } from 'sdk.do'
+
+// Register new user
+export async function register(data: { email: string; password: string; name: string }) {
+  // Check if email already exists
+  const existingUser = await db.list($.Person, {
+    where: { email: data.email },
+  })
+
+  if (existingUser.length > 0) {
+    throw new Error('Email already registered')
+  }
+
+  // Create user
+  const user = await db.create($.Person, {
+    email: data.email,
+    name: data.name,
+    emailVerified: false,
+  })
+
+  // Hash password
+  const hashedPassword = await auth.hashPassword(data.password)
+
+  // Store credentials
+  await db.create($.Credentials, {
+    userId: user.$id,
+    passwordHash: hashedPassword,
+  })
+
+  // Generate verification token
+  const verificationToken = await auth.createVerificationToken(user.$id)
+
+  return {
+    userId: user.$id,
+    verificationToken,
+    message: 'User registered successfully',
+  }
+}
+
+// Login user
+export async function login(data: { email: string; password: string }) {
+  // Get user by email
+  const users = await db.list($.Person, {
+    where: { email: data.email },
+  })
+
+  if (users.length === 0) {
+    throw new Error('Invalid credentials')
+  }
+
+  const user = users[0]
+
+  // Get credentials
+  const credentials = await db.list($.Credentials, {
+    where: { userId: user.$id },
+  })
+
+  if (credentials.length === 0) {
+    throw new Error('Invalid credentials')
+  }
+
+  // Verify password
+  const isValid = await auth.verifyPassword(data.password, credentials[0].passwordHash)
+
+  if (!isValid) {
+    throw new Error('Invalid credentials')
+  }
+
+  // Generate JWT token
+  const token = await auth.generateToken({
+    userId: user.$id,
+    email: user.email,
+    role: user.role || 'user',
+  })
+
+  // Generate refresh token
+  const refreshToken = await auth.generateRefreshToken(user.$id)
+
+  return {
+    token,
+    refreshToken,
+    userId: user.$id,
+    expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(), // 15 minutes
+  }
+}
+```
+
+## API Key Authentication
+
+Generate and use API keys for programmatic access:
+
+```typescript
+import { auth } from 'sdk.do'
+
+// Generate API key
+const apiKey = await auth.createApiKey({
+  userId: 'user_123',
+  name: 'Production API',
+  scopes: ['read:products', 'write:products'],
+})
+
+console.log(apiKey.key) // "sk_live_abc123..."
+
+// Authenticate with API key
+export async function apiKeyEndpoint(request: Request) {
+  const apiKey = request.headers.get('X-API-Key')
+
+  if (!apiKey) {
+    return new Response('API key required', { status: 401 })
+  }
+
+  try {
+    const keyData = await auth.authenticateApiKey(apiKey)
+    console.log('Authenticated:', keyData.userId)
+
+    // Process request
+    return new Response('Success')
+  } catch (error) {
+    return new Response('Invalid API key', { status: 401 })
+  }
+}
+```
+
+## Token Refresh
+
+Implement token refresh to extend sessions:
+
+```typescript
+import { auth } from 'sdk.do'
+
+export async function refreshSession(refreshToken: string) {
+  try {
+    // Verify refresh token
+    const payload = await auth.verifyRefreshToken(refreshToken)
+
+    // Generate new access token
+    const newToken = await auth.generateToken({
+      userId: payload.userId,
+      email: payload.email,
+      role: payload.role,
+    })
+
+    return {
+      token: newToken,
+      expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+    }
+  } catch (error) {
+    throw new Error('Invalid refresh token')
+  }
+}
+```
+
+## Multi-Factor Authentication
+
+Enable MFA for enhanced security:
+
+```typescript
+import { auth } from 'sdk.do'
+
+// Enable MFA for user
+export async function enableMFA(userId: string) {
+  const mfaSetup = await auth.enableMFA({
+    method: 'totp',
+    userId,
+  })
+
+  console.log(mfaSetup)
+  // {
+  //   secret: "JBSWY3DPEHPK3PXP",
+  //   qrCode: "data:image/png;base64,...",
+  //   backupCodes: ["123456", "789012", ...]
+  // }
+
+  return mfaSetup
+}
+
+// Login with MFA
+export async function loginWithMFA(email: string, password: string, mfaCode: string) {
+  const session = await auth.login({
+    email,
+    password,
+    mfaCode,
+  })
+
+  return session
+}
+
+// Verify MFA code
+export async function verifyMFACode(userId: string, code: string) {
+  const isValid = await auth.verifyMFA({
+    userId,
+    code,
+  })
+
+  return isValid
+}
+```
+
+## Permission Checking
+
+Check user permissions before performing actions:
+
+```typescript
+import { $, auth } from 'sdk.do'
+
+export async function checkPermissions(token: string) {
+  // Verify token
+  const payload = await auth.verifyToken(token)
+
+  // Check specific permission
+  const canEdit = await auth.authorize('edit', $.Product)
+  const canDelete = await auth.authorize('delete', $.Order)
+
+  console.log({ canEdit, canDelete })
+
+  // Check multiple permissions
+  const permissions = await auth.checkPermissions([
+    { action: 'read', resource: $.Product },
+    { action: 'write', resource: $.Product },
+    { action: 'delete', resource: $.Order },
+  ])
+
+  return permissions
+}
+```
+
+## Role-Based Access Control
+
+Define and assign roles:
+
+```typescript
+import { auth } from 'sdk.do'
+
+// Define roles
+export async function setupRoles() {
+  // Admin role with all permissions
+  await auth.defineRole({
+    name: 'admin',
+    permissions: ['*'],
+  })
+
+  // Editor role
+  await auth.defineRole({
+    name: 'editor',
+    permissions: ['create:Product', 'read:Product', 'update:Product', 'read:Order'],
+  })
+
+  // Viewer role
+  await auth.defineRole({
+    name: 'viewer',
+    permissions: ['read:Product', 'read:Order'],
+  })
+}
+
+// Assign role to user
+export async function assignUserRole(userId: string, role: string) {
+  await auth.assignRole(userId, role)
+  console.log(`Role '${role}' assigned to user ${userId}`)
+}
+
+// Check if user has role
+export async function checkRole(userId: string, role: string) {
+  const hasRole = await auth.hasRole(userId, role)
+  return hasRole
+}
+```
+
+## Common Patterns
+
+### Protected Route Middleware
+
+```typescript
+import { auth } from 'sdk.do'
+
+export function requireAuth(handler: Function) {
+  return async (request: Request) => {
+    const token = request.headers.get('Authorization')?.replace('Bearer ', '')
+
+    if (!token) {
+      return new Response('Unauthorized', { status: 401 })
+    }
+
+    try {
+      const payload = await auth.verifyToken(token)
+      return handler(request, payload)
+    } catch (error) {
+      return new Response('Invalid token', { status: 401 })
+    }
+  }
+}
+
+// Use middleware
+export const getProfile = requireAuth(async (request, payload) => {
+  const user = await db.get($.Person, payload.userId)
+  return new Response(JSON.stringify(user))
+})
+```
+
+### Permission-Based Route Protection
+
+```typescript
+import { $, auth } from 'sdk.do'
+
+export function requirePermission(action: string, resource: any) {
+  return async (handler: Function) => {
+    return async (request: Request) => {
+      const token = request.headers.get('Authorization')?.replace('Bearer ', '')
+
+      if (!token) {
+        return new Response('Unauthorized', { status: 401 })
+      }
+
+      const payload = await auth.verifyToken(token)
+
+      const canAccess = await auth.authorize(action, resource)
+      if (!canAccess) {
+        return new Response('Forbidden', { status: 403 })
+      }
+
+      return handler(request, payload)
+    }
+  }
+}
+
+// Use permission middleware
+export const deleteProduct = requirePermission(
+  'delete',
+  $.Product
+)(async (request, payload) => {
+  const { productId } = await request.json()
+  await db.delete($.Product, productId)
+  return new Response('Product deleted')
+})
+```
+
+## Error Handling
+
+Handle authentication errors gracefully:
+
+```typescript
+import { auth } from 'sdk.do'
+
+export async function safeLogin(email: string, password: string) {
+  try {
+    const session = await auth.login({ email, password })
+    return { success: true, session }
+  } catch (error) {
+    // Handle specific error codes
+    if (error.code === 'INVALID_CREDENTIALS') {
+      return { success: false, error: 'Invalid email or password' }
+    }
+
+    if (error.code === 'ACCOUNT_LOCKED') {
+      return { success: false, error: 'Account locked. Contact support.' }
+    }
+
+    if (error.code === 'MFA_REQUIRED') {
+      return { success: false, error: 'MFA code required', mfaRequired: true }
+    }
+
+    return { success: false, error: 'Login failed. Please try again.' }
+  }
+}
+
+export async function safeVerifyToken(token: string) {
+  try {
+    const payload = await auth.verifyToken(token)
+    return { valid: true, payload }
+  } catch (error) {
+    if (error.code === 'TOKEN_EXPIRED') {
+      return { valid: false, error: 'Token expired' }
+    }
+
+    if (error.code === 'INVALID_TOKEN') {
+      return { valid: false, error: 'Invalid token' }
+    }
+
+    return { valid: false, error: 'Token verification failed' }
+  }
+}
+```
+
+## Next Steps
+
+Now that you have auth.do set up, explore more features:
+
+- [Architecture](./architecture) - Understanding auth architecture
+- [Best Practices](./best-practices) - Security best practices
+- [Troubleshooting](./troubleshooting) - Common issues
+- [API Reference](../api/) - Complete API documentation
+
+## Examples
+
+Check out practical examples:
+
+- [Basic Usage](../examples/basic-usage) - Simple auth flow
+- [Advanced Patterns](../examples/advanced-patterns) - Complex scenarios
+- [Integration](../examples/integration) - Integration examples
+- [Real-World Use Case](../examples/real-world-use-case) - Production setup
+
+## Support
+
+- [API Reference](../api/) - Complete API documentation
+- [Examples](../examples/) - Code examples
+- [GitHub Issues](https://github.com/dot-do/ai/issues) - Report bugs
+- [Discord Community](https://discord.gg/dotdo) - Get help
+
+## License
+
+CC-BY-4.0 (Open Source)

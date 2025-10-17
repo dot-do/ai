@@ -1,0 +1,643 @@
+---
+$id: https://every.do/docs/getting-started
+$type: TechArticle
+title: Getting Started with every.do
+description: Quick start guide for scheduled workflows in the .do platform
+keywords: [scheduler, getting started, cron, setup, configuration]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Getting Started
+
+Get started with scheduled workflows in the `.do` platform in under 5 minutes.
+
+## Installation
+
+Install the SDK in your project:
+
+```bash
+pnpm add sdk.do
+```
+
+Or use the CLI:
+
+```bash
+pnpm add -g cli.do
+```
+
+## Basic Usage
+
+### Semantic Schedules
+
+Use human-readable semantic schedules:
+
+```typescript
+import { $, every } from 'sdk.do'
+
+// Run daily at midnight UTC
+every($.Daily, async () => {
+  console.log('Running daily task at:', new Date())
+  await generateDailyReport()
+})
+
+// Run every hour
+every($.Hourly, async () => {
+  console.log('Running hourly task')
+  await syncData()
+})
+
+// Run every 15 minutes
+every($.Every15Minutes, async () => {
+  console.log('Running frequent task')
+  await checkStatus()
+})
+```
+
+### Cron Patterns
+
+Use traditional cron syntax for precise scheduling:
+
+```typescript
+import { every } from 'sdk.do'
+
+// Run at 2:30am every day
+every('30 2 * * *', async () => {
+  await backupDatabase()
+})
+
+// Run every 6 hours
+every('0 */6 * * *', async () => {
+  await syncExternalData()
+})
+
+// Run weekdays at 9am
+every('0 9 * * 1-5', async () => {
+  await sendMorningReport()
+})
+```
+
+## Common Patterns
+
+### Daily Reports
+
+Generate and send reports daily:
+
+```typescript
+import { $, every, db, send } from 'sdk.do'
+
+every($.Daily, async () => {
+  // Get yesterday's orders
+  const orders = await db.list($.Order, {
+    where: {
+      createdAt: {
+        gte: startOfYesterday(),
+        lt: startOfToday(),
+      },
+    },
+  })
+
+  // Calculate metrics
+  const totalRevenue = orders.reduce((sum, order) => sum + order.total, 0)
+
+  // Send report event
+  await send('Report.generated', {
+    type: 'daily-sales',
+    date: new Date(),
+    orderCount: orders.length,
+    revenue: totalRevenue,
+  })
+})
+```
+
+### Hourly Data Sync
+
+Synchronize data with external systems:
+
+```typescript
+import { $, every, db, api } from 'sdk.do'
+
+every($.Hourly, async () => {
+  // Fetch data from external API
+  const inventory = await api.fetch('https://warehouse.example.com/api/inventory')
+
+  // Update local database
+  for (const item of inventory) {
+    const product = await db.get($.Product, item.sku)
+
+    if (product) {
+      await db.update(product.$id, {
+        stockQuantity: item.quantity,
+        lastSynced: new Date(),
+      })
+    }
+  }
+
+  console.log(`Synced ${inventory.length} items`)
+})
+```
+
+### Weekly Cleanup
+
+Clean up old data weekly:
+
+```typescript
+import { $, every, db } from 'sdk.do'
+
+every($.Weekly, async () => {
+  // Delete old sessions
+  const oldSessions = await db.list($.Session, {
+    where: {
+      expiresAt: { lt: new Date() },
+    },
+  })
+
+  await db.delete(oldSessions.map((s) => s.$id))
+
+  console.log(`Deleted ${oldSessions.length} expired sessions`)
+})
+```
+
+## Configuration
+
+### Timezone Support
+
+Schedule tasks in specific timezones:
+
+```typescript
+import { $, every } from 'sdk.do'
+
+// Run at 9am New York time
+every(
+  $.Daily,
+  async () => {
+    await generateReport()
+  },
+  {
+    timezone: 'America/New_York',
+  }
+)
+
+// Run at 6pm Tokyo time
+every(
+  '0 18 * * 1-5',
+  async () => {
+    await closeDay()
+  },
+  {
+    timezone: 'Asia/Tokyo',
+  }
+)
+```
+
+### Error Handling
+
+Configure retry behavior:
+
+```typescript
+import { $, every } from 'sdk.do'
+
+every(
+  $.Hourly,
+  async () => {
+    await riskyOperation()
+  },
+  {
+    retry: {
+      attempts: 3,
+      delay: 60000, // 1 minute
+      backoff: 'exponential',
+    },
+  }
+)
+```
+
+### Execution Constraints
+
+Control task execution:
+
+```typescript
+import { every } from 'sdk.do'
+
+every(
+  '0 2 * * *',
+  async () => {
+    await longRunningBackup()
+  },
+  {
+    timeout: 3600000, // 1 hour timeout
+    maxConcurrent: 1, // Don't run if previous still executing
+  }
+)
+```
+
+## Environment Variables
+
+Configure scheduler behavior via environment variables:
+
+```bash
+# .env file
+
+# Timezone (optional, defaults to UTC)
+SCHEDULE_TIMEZONE=America/New_York
+
+# Retry configuration (optional)
+SCHEDULE_RETRY_ATTEMPTS=3
+SCHEDULE_RETRY_DELAY=60000
+
+# Logging (optional)
+SCHEDULE_LOG_LEVEL=info
+```
+
+## Available Semantic Schedules
+
+every.do provides semantic schedules for common frequencies:
+
+### Time-Based
+
+```typescript
+import { $, every } from 'sdk.do'
+
+every($.Minutely, handler) // Every minute
+every($.Every5Minutes, handler) // Every 5 minutes
+every($.Every15Minutes, handler) // Every 15 minutes
+every($.Every30Minutes, handler) // Every 30 minutes
+every($.Hourly, handler) // Every hour at :00
+every($.Every2Hours, handler) // Every 2 hours
+every($.Every6Hours, handler) // Every 6 hours
+every($.Daily, handler) // Every day at midnight
+every($.Weekly, handler) // Every Monday at midnight
+every($.BiWeekly, handler) // Every other Monday
+every($.Monthly, handler) // First of month at midnight
+every($.Quarterly, handler) // First of quarter at midnight
+every($.Yearly, handler) // January 1st at midnight
+```
+
+### Business-Oriented
+
+```typescript
+import { $, every } from 'sdk.do'
+
+every($.BusinessDay, handler) // Mon-Fri at 9am
+every($.Weekend, handler) // Sat-Sun at 9am
+every($.EndOfMonth, handler) // Last day of month at 11pm
+every($.EndOfQuarter, handler) // Last day of quarter at 11pm
+every($.EndOfYear, handler) // December 31st at 11pm
+```
+
+## Integration with Platform
+
+### With Database Operations
+
+```typescript
+import { $, every, db } from 'sdk.do'
+
+every($.Daily, async () => {
+  // Query database
+  const customers = await db.list($.Customer, {
+    where: { status: 'active' },
+  })
+
+  // Update records
+  for (const customer of customers) {
+    await db.update(customer.$id, {
+      lastChecked: new Date(),
+    })
+  }
+})
+```
+
+### With AI Services
+
+```typescript
+import { $, every, db, ai } from 'sdk.do'
+
+every($.Hourly, async () => {
+  // Get products without descriptions
+  const products = await db.list($.Product, {
+    where: { description: null },
+    limit: 50,
+  })
+
+  // Generate descriptions with AI
+  for (const product of products) {
+    const description = await ai.generate(`Generate product description for ${product.name}`, {
+      schema: $.Product,
+      context: product,
+    })
+
+    await db.update(product.$id, { description })
+  }
+})
+```
+
+### With Event System
+
+```typescript
+import { $, every, send } from 'sdk.do'
+
+every($.Daily, async () => {
+  const report = await generateReport()
+
+  // Publish event when task completes
+  await send('Report.generated', {
+    type: 'daily-report',
+    timestamp: new Date(),
+    report,
+  })
+})
+```
+
+## Cron Syntax Reference
+
+Standard cron syntax with five fields:
+
+```
+ ┌───────────── minute (0 - 59)
+ │ ┌───────────── hour (0 - 23)
+ │ │ ┌───────────── day of month (1 - 31)
+ │ │ │ ┌───────────── month (1 - 12)
+ │ │ │ │ ┌───────────── day of week (0 - 6) (Sunday to Saturday)
+ │ │ │ │ │
+ * * * * *
+```
+
+### Special Characters
+
+- `*` - Any value
+- `,` - Value list separator (e.g., `1,3,5`)
+- `-` - Range of values (e.g., `1-5`)
+- `/` - Step values (e.g., `*/15` for every 15)
+
+### Common Patterns
+
+```typescript
+// Every minute
+every('* * * * *', handler)
+
+// Every 5 minutes
+every('*/5 * * * *', handler)
+
+// Every hour at :30
+every('30 * * * *', handler)
+
+// Every day at 2:30am
+every('30 2 * * *', handler)
+
+// Weekdays at 9am
+every('0 9 * * 1-5', handler)
+
+// First day of month at midnight
+every('0 0 1 * *', handler)
+
+// Every Sunday at noon
+every('0 12 * * 0', handler)
+```
+
+## Error Handling
+
+Always implement error handling in scheduled tasks:
+
+```typescript
+import { $, every, send } from 'sdk.do'
+
+every($.Hourly, async () => {
+  try {
+    await performTask()
+
+    // Report success
+    await send('Task.completed', {
+      task: 'hourly-sync',
+      timestamp: new Date(),
+      status: 'success',
+    })
+  } catch (error) {
+    console.error('Task failed:', error)
+
+    // Report failure
+    await send('Task.failed', {
+      task: 'hourly-sync',
+      timestamp: new Date(),
+      error: error.message,
+      status: 'failed',
+    })
+  }
+})
+```
+
+## Monitoring and Observability
+
+Track scheduled task execution:
+
+```typescript
+import { $, every, db, send } from 'sdk.do'
+
+every($.Daily, async () => {
+  const startTime = Date.now()
+
+  try {
+    const result = await generateReport()
+
+    // Log successful execution
+    await db.create($.ExecutionLog, {
+      task: 'daily-report',
+      status: 'success',
+      duration: Date.now() - startTime,
+      timestamp: new Date(),
+      result,
+    })
+
+    await send('Task.completed', {
+      task: 'daily-report',
+      duration: Date.now() - startTime,
+    })
+  } catch (error) {
+    // Log failed execution
+    await db.create($.ExecutionLog, {
+      task: 'daily-report',
+      status: 'failed',
+      duration: Date.now() - startTime,
+      timestamp: new Date(),
+      error: error.message,
+    })
+
+    await send('Task.failed', {
+      task: 'daily-report',
+      error: error.message,
+    })
+  }
+})
+```
+
+## Best Practices
+
+### 1. Use Semantic Schedules
+
+Prefer semantic schedules for readability:
+
+```typescript
+// Good
+every($.Daily, handler)
+every($.BusinessDay, handler)
+
+// Less clear
+every('0 0 * * *', handler)
+every('0 9 * * 1-5', handler)
+```
+
+### 2. Keep Tasks Idempotent
+
+Ensure tasks can safely run multiple times:
+
+```typescript
+every($.Hourly, async () => {
+  // Use upsert instead of create
+  await db.upsert($.Report, {
+    date: getCurrentDate(),
+    data: reportData,
+  })
+})
+```
+
+### 3. Set Timeouts
+
+Prevent tasks from running indefinitely:
+
+```typescript
+every(
+  $.Daily,
+  async () => {
+    await longTask()
+  },
+  {
+    timeout: 3600000, // 1 hour
+  }
+)
+```
+
+### 4. Limit Concurrency
+
+Prevent overlapping executions:
+
+```typescript
+every(
+  $.Hourly,
+  async () => {
+    await heavyTask()
+  },
+  {
+    maxConcurrent: 1,
+  }
+)
+```
+
+### 5. Publish Events
+
+Make tasks observable:
+
+```typescript
+every($.Daily, async () => {
+  const result = await task()
+  await send('Task.completed', result)
+})
+```
+
+## Next Steps
+
+Now that you have every.do set up, explore more features:
+
+- [Schedules](./schedules) - Learn about all schedule types
+- [Patterns](./patterns) - Common scheduling patterns
+- [API Reference](../api/) - Complete API documentation
+- [Examples](../examples/) - Practical examples
+
+## Common Use Cases
+
+### Automated Backups
+
+```typescript
+import { $, every, db } from 'sdk.do'
+
+every('0 2 * * *', async () => {
+  const data = await db.export()
+  await backupToStorage(data)
+})
+```
+
+### Data Synchronization
+
+```typescript
+import { $, every } from 'sdk.do'
+
+every($.Hourly, async () => {
+  await syncWithExternalSystem()
+})
+```
+
+### Periodic Cleanup
+
+```typescript
+import { $, every, db } from 'sdk.do'
+
+every($.Daily, async () => {
+  await db.delete($.Session, {
+    where: { expiresAt: { lt: new Date() } },
+  })
+})
+```
+
+### Report Generation
+
+```typescript
+import { $, every, send } from 'sdk.do'
+
+every($.Daily, async () => {
+  const report = await generateReport()
+  await send('Report.generated', report)
+})
+```
+
+## Troubleshooting
+
+### Task Not Running
+
+Check timezone configuration:
+
+```typescript
+// Explicitly set timezone
+every($.Daily, handler, {
+  timezone: 'UTC',
+})
+```
+
+### Task Running Multiple Times
+
+Use maxConcurrent to prevent overlaps:
+
+```typescript
+every($.Hourly, handler, {
+  maxConcurrent: 1,
+})
+```
+
+### Task Timing Out
+
+Increase timeout or break into smaller tasks:
+
+```typescript
+every($.Daily, handler, {
+  timeout: 7200000, // 2 hours
+})
+```
+
+## Support
+
+- [API Reference](../api/) - Complete API documentation
+- [Examples](../examples/) - Code examples
+- [GitHub Issues](https://github.com/dot-do/ai/issues) - Report bugs
+- [Discord Community](https://discord.gg/dotdo) - Get help
+
+## License
+
+MIT (Open Source)

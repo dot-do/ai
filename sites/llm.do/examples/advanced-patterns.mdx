@@ -1,0 +1,588 @@
+---
+$id: https://llm.do/examples/advanced-patterns
+$type: HowTo
+title: Advanced LLM Gateway Patterns
+description: Advanced patterns for routing, failover, optimization, and production use
+keywords: [llm, advanced, routing, failover, optimization, production]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Advanced Patterns
+
+Advanced patterns for production use of llm.do.
+
+## Pattern 1: Intelligent Routing
+
+Automatically route requests based on task characteristics:
+
+```typescript
+import { llm } from 'sdk.do'
+
+// Route based on task complexity
+async function generateWithIntelligentRouting(prompt: string, complexity: 'simple' | 'standard' | 'complex') {
+  const routingConfig = {
+    simple: { model: 'gpt-5-nano', optimize: 'cost' as const },
+    standard: { model: 'gpt-5-mini', optimize: 'cost' as const },
+    complex: { model: 'gpt-5', optimize: 'quality' as const },
+  }
+
+  const config = routingConfig[complexity]
+
+  return await llm.generate(prompt, {
+    model: config.model,
+    routing: { optimize: config.optimize },
+  })
+}
+
+// Usage
+const simple = await generateWithIntelligentRouting('Extract category', 'simple')
+const complex = await generateWithIntelligentRouting('Write market analysis', 'complex')
+```
+
+## Pattern 2: Multi-Provider Failover
+
+Implement robust failover across multiple providers:
+
+```typescript
+import { llm } from 'sdk.do'
+
+async function generateWithFailover(prompt: string, options = {}) {
+  const providers = ['openai', 'anthropic']
+  let lastError: Error
+
+  for (const provider of providers) {
+    try {
+      return await llm.generate(prompt, {
+        ...options,
+        provider,
+        timeout: 30000,
+      })
+    } catch (error) {
+      console.warn(`Provider ${provider} failed:`, error.message)
+      lastError = error
+      continue
+    }
+  }
+
+  throw new Error(`All providers failed. Last error: ${lastError.message}`)
+}
+
+// Usage
+const response = await generateWithFailover('Generate content')
+```
+
+## Pattern 3: Response Caching with Smart Invalidation
+
+Implement intelligent caching with automatic invalidation:
+
+```typescript
+import { llm, db } from 'sdk.do'
+
+class SmartCache {
+  async generate(prompt: string, context: any = {}) {
+    // Create cache key from prompt + context
+    const cacheKey = this.createCacheKey(prompt, context)
+
+    // Check cache
+    const cached = await db.get(cacheKey)
+    if (cached && !this.isStale(cached)) {
+      return cached.response
+    }
+
+    // Generate new response
+    const response = await llm.generate(prompt, {
+      context,
+      cache: { enabled: false }, // Don't use built-in cache
+    })
+
+    // Store with metadata
+    await db.create({
+      $id: cacheKey,
+      $type: 'CachedResponse',
+      prompt,
+      context,
+      response,
+      createdAt: new Date(),
+      expiresAt: this.getExpiryDate(prompt),
+    })
+
+    return response
+  }
+
+  private createCacheKey(prompt: string, context: any): string {
+    const hash = require('crypto').createHash('sha256').update(JSON.stringify({ prompt, context })).digest('hex')
+    return `cache:llm:${hash}`
+  }
+
+  private isStale(cached: any): boolean {
+    return new Date() > new Date(cached.expiresAt)
+  }
+
+  private getExpiryDate(prompt: string): Date {
+    // Dynamic TTL based on prompt type
+    const ttl = prompt.includes('current') ? 300 : 3600 // 5 min vs 1 hour
+    return new Date(Date.now() + ttl * 1000)
+  }
+}
+
+// Usage
+const cache = new SmartCache()
+const response = await cache.generate('Generate product description', { product })
+```
+
+## Pattern 4: Cost-Optimized Batch Processing
+
+Optimize costs with intelligent batching:
+
+```typescript
+import { $, llm, db } from 'sdk.do'
+
+async function batchProcessWithOptimization(items: any[]) {
+  // Group by complexity
+  const simple = items.filter((item) => item.description?.length < 50)
+  const complex = items.filter((item) => item.description?.length >= 50)
+
+  // Process simple items with cheap model
+  const simpleBatch = await llm.batch.create(
+    simple.map((item) => ({
+      custom_id: item.$id,
+      prompt: `Enhance: ${item.description}`,
+      maxTokens: 100,
+    })),
+    {
+      model: 'gpt-5-nano',
+      priority: 'low',
+    }
+  )
+
+  // Process complex items with better model
+  const complexBatch = await llm.batch.create(
+    complex.map((item) => ({
+      custom_id: item.$id,
+      prompt: `Generate comprehensive description for ${item.name}`,
+      schema: $.Product,
+      context: item,
+    })),
+    {
+      model: 'gpt-5-mini',
+      priority: 'normal',
+    }
+  )
+
+  // Wait for both batches
+  const [simpleResults, complexResults] = await Promise.all([this.waitForBatch(simpleBatch.id), this.waitForBatch(complexBatch.id)])
+
+  return [...simpleResults, ...complexResults]
+}
+
+async function waitForBatch(batchId: string, maxWaitTime = 3600000) {
+  const startTime = Date.now()
+  const pollInterval = 60000 // 1 minute
+
+  while (Date.now() - startTime < maxWaitTime) {
+    const status = await llm.batch.status(batchId)
+
+    if (status.status === 'completed') {
+      return await llm.batch.results(batchId)
+    }
+
+    if (status.status === 'failed') {
+      throw new Error(`Batch failed: ${status.error || 'Unknown error'}`)
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, pollInterval))
+  }
+
+  throw new Error(`Batch timeout: exceeded ${maxWaitTime}ms`)
+}
+```
+
+## Pattern 5: Streaming with Progressive Enhancement
+
+Stream responses with progressive enhancement:
+
+```typescript
+import { llm } from 'sdk.do'
+
+async function streamWithEnhancement(prompt: string) {
+  let fullResponse = ''
+  let currentSection = ''
+
+  const stream = llm.stream(prompt, {
+    onChunk: (chunk) => {
+      fullResponse += chunk
+      currentSection += chunk
+
+      // Detect section boundaries
+      if (chunk.includes('\n\n')) {
+        // Process completed section
+        this.processSection(currentSection)
+        currentSection = ''
+      }
+
+      // Display chunk
+      process.stdout.write(chunk)
+    },
+    onComplete: () => {
+      // Process final section
+      if (currentSection) {
+        this.processSection(currentSection)
+      }
+
+      // Enhance full response
+      this.enhanceResponse(fullResponse)
+    },
+  })
+
+  await stream.complete()
+  return fullResponse
+}
+
+function processSection(section: string) {
+  // Extract structured data from section
+  // Update UI progressively
+  // Store intermediate results
+}
+
+function enhanceResponse(response: string) {
+  // Add metadata
+  // Generate embeddings
+  // Create related content
+}
+```
+
+## Pattern 6: Multi-Model Ensemble
+
+Combine multiple models for better results:
+
+```typescript
+import { llm } from 'sdk.do'
+
+async function ensembleGenerate(prompt: string) {
+  // Generate with multiple models in parallel
+  const [gptResponse, claudeResponse, miniResponse] = await Promise.all([
+    llm.generate(prompt, {
+      provider: 'openai',
+      model: 'gpt-5',
+      temperature: 0.7,
+    }),
+    llm.generate(prompt, {
+      provider: 'anthropic',
+      model: 'claude-sonnet-4.5',
+      temperature: 0.7,
+    }),
+    llm.generate(prompt, {
+      provider: 'openai',
+      model: 'gpt-5-mini',
+      temperature: 0.7,
+    }),
+  ])
+
+  // Combine responses (voting, averaging, or LLM-based selection)
+  return await this.selectBestResponse(prompt, [gptResponse, claudeResponse, miniResponse])
+}
+
+async function selectBestResponse(prompt: string, responses: string[]) {
+  // Use another LLM to select best response
+  const selection = await llm.generate(
+    `Given the prompt "${prompt}", which response is best?\n\n${responses.map((r, i) => `Response ${i + 1}: ${r}`).join('\n\n')}\n\nReturn just the number (1, 2, or 3).`,
+    {
+      model: 'gpt-5-nano',
+      maxTokens: 5,
+    }
+  )
+
+  const index = parseInt(selection.trim()) - 1
+  return responses[index] || responses[0]
+}
+```
+
+## Pattern 7: Adaptive Rate Limiting
+
+Implement adaptive rate limiting based on usage:
+
+```typescript
+import { llm } from 'sdk.do'
+
+class AdaptiveRateLimiter {
+  private requests: number[] = []
+  private maxRequestsPerMinute = 60
+
+  async generate(prompt: string, options = {}) {
+    // Check rate limit
+    await this.checkRateLimit()
+
+    try {
+      const response = await llm.generate(prompt, options)
+
+      // Success: maintain current limit
+      this.recordRequest(true)
+
+      return response
+    } catch (error) {
+      if (error.code === 'RATE_LIMIT_EXCEEDED') {
+        // Reduce limit
+        this.maxRequestsPerMinute = Math.max(10, this.maxRequestsPerMinute * 0.8)
+        console.log(`Reduced rate limit to ${this.maxRequestsPerMinute} req/min`)
+
+        // Retry after delay
+        await new Promise((resolve) => setTimeout(resolve, 60000 / this.maxRequestsPerMinute))
+        return this.generate(prompt, options)
+      }
+
+      this.recordRequest(false)
+      throw error
+    }
+  }
+
+  private async checkRateLimit() {
+    const now = Date.now()
+    const oneMinuteAgo = now - 60000
+
+    // Remove old requests
+    this.requests = this.requests.filter((time) => time > oneMinuteAgo)
+
+    // Check limit
+    if (this.requests.length >= this.maxRequestsPerMinute) {
+      const oldestRequest = this.requests[0]
+      const waitTime = 60000 - (now - oldestRequest)
+      await new Promise((resolve) => setTimeout(resolve, waitTime))
+    }
+  }
+
+  private recordRequest(success: boolean) {
+    this.requests.push(Date.now())
+
+    // Gradually increase limit if successful
+    if (success && this.requests.length < this.maxRequestsPerMinute * 0.8) {
+      this.maxRequestsPerMinute = Math.min(100, this.maxRequestsPerMinute * 1.1)
+    }
+  }
+}
+```
+
+## Pattern 8: Cost Monitoring and Alerts
+
+Monitor costs and implement automatic controls:
+
+```typescript
+import { llm } from 'sdk.do'
+
+class CostMonitor {
+  private budget = {
+    daily: 100,
+    monthly: 2000,
+  }
+
+  async generateWithBudget(prompt: string, options = {}) {
+    // Check budget before generating
+    await this.checkBudget()
+
+    const response = await llm.generate(prompt, {
+      ...options,
+      returnMetadata: true,
+    })
+
+    // Track cost
+    await this.trackCost(response.metadata.cost)
+
+    return response.content
+  }
+
+  private async checkBudget() {
+    const stats = await llm.analytics.usage({ period: 'today' })
+
+    if (stats.totalCost > this.budget.daily * 0.9) {
+      console.warn(`Approaching daily budget: $${stats.totalCost}`)
+
+      // Switch to cheaper models
+      llm.config({
+        defaultModel: 'gpt-5-nano',
+        routing: { optimize: 'cost' },
+      })
+    }
+
+    if (stats.totalCost >= this.budget.daily) {
+      throw new Error('Daily budget exceeded')
+    }
+  }
+
+  private async trackCost(cost: number) {
+    // Log cost
+    await db.create({
+      $type: 'CostEvent',
+      cost,
+      timestamp: new Date(),
+    })
+
+    // Check monthly budget
+    const monthlyStats = await llm.analytics.usage({ period: 'this_month' })
+
+    if (monthlyStats.totalCost >= this.budget.monthly) {
+      await this.sendAlert('Monthly budget exceeded!')
+    }
+  }
+}
+```
+
+## Pattern 9: Semantic Search with Hybrid Retrieval
+
+Combine embeddings with keyword search:
+
+```typescript
+import { llm, db } from 'sdk.do'
+
+async function hybridSearch(query: string) {
+  // Generate embedding
+  const embedding = await llm.embed(query)
+
+  // Vector search
+  const vectorResults = await db.similaritySearch(embedding, {
+    limit: 20,
+    threshold: 0.7,
+  })
+
+  // Keyword search
+  const keywordResults = await db.list($.Product, {
+    where: {
+      $or: [{ name: { $contains: query } }, { description: { $contains: query } }],
+    },
+    limit: 20,
+  })
+
+  // Combine and re-rank
+  const combined = this.combineResults(vectorResults, keywordResults)
+  const reranked = await this.rerankResults(query, combined)
+
+  return reranked.slice(0, 10)
+}
+
+function combineResults(vector: any[], keyword: any[]) {
+  const seen = new Set()
+  const combined = []
+
+  for (const result of [...vector, ...keyword]) {
+    if (!seen.has(result.$id)) {
+      seen.add(result.$id)
+      combined.push(result)
+    }
+  }
+
+  return combined
+}
+
+async function rerankResults(query: string, results: any[]) {
+  // Use LLM to re-rank results
+  const prompt = `Rank these results by relevance to "${query}":\n\n${results.map((r, i) => `${i + 1}. ${r.name}: ${r.description}`).join('\n')}\n\nReturn just the numbers in order.`
+
+  const ranking = await llm.generate(prompt, {
+    model: 'gpt-5-nano',
+    maxTokens: 50,
+  })
+
+  const order = ranking.split(/\D+/).filter(Boolean).map(Number)
+  return order.map((i) => results[i - 1]).filter(Boolean)
+}
+```
+
+## Pattern 10: A/B Testing Different Models
+
+Test different models to optimize for quality and cost:
+
+```typescript
+import { llm } from 'sdk.do'
+
+class ModelTester {
+  private experiments = new Map<string, { model: string; weight: number }>()
+
+  constructor() {
+    // Initialize A/B test variants
+    this.experiments.set('control', { model: 'gpt-5', weight: 0.5 })
+    this.experiments.set('variant', { model: 'gpt-5-mini', weight: 0.5 })
+  }
+
+  async generate(prompt: string, options = {}) {
+    // Select variant based on weights
+    const variant = this.selectVariant()
+
+    const response = await llm.generate(prompt, {
+      ...options,
+      model: variant.model,
+      returnMetadata: true,
+    })
+
+    // Track metrics
+    await this.trackMetrics(variant.name, {
+      prompt,
+      model: variant.model,
+      latency: response.metadata.latency,
+      cost: response.metadata.cost,
+      quality: await this.assessQuality(response.content),
+    })
+
+    return response.content
+  }
+
+  private selectVariant() {
+    const random = Math.random()
+    let cumulative = 0
+
+    for (const [name, config] of this.experiments) {
+      cumulative += config.weight
+      if (random < cumulative) {
+        return { name, ...config }
+      }
+    }
+
+    return { name: 'control', ...this.experiments.get('control')! }
+  }
+
+  private async assessQuality(content: string): Promise<number> {
+    // Use LLM to assess quality
+    const assessment = await llm.generate(`Rate the quality of this content from 1-10:\n\n${content}`, {
+      model: 'gpt-5-nano',
+      maxTokens: 5,
+    })
+
+    return parseInt(assessment) || 5
+  }
+
+  async getResults() {
+    // Analyze A/B test results
+    const metrics = await db.list($.Metric, {
+      where: { $type: 'ModelTestMetric' },
+    })
+
+    // Calculate statistics for each variant
+    const stats = {}
+    for (const [name] of this.experiments) {
+      const variantMetrics = metrics.filter((m) => m.variant === name)
+      stats[name] = {
+        avgLatency: this.avg(variantMetrics.map((m) => m.latency)),
+        avgCost: this.avg(variantMetrics.map((m) => m.cost)),
+        avgQuality: this.avg(variantMetrics.map((m) => m.quality)),
+        count: variantMetrics.length,
+      }
+    }
+
+    return stats
+  }
+
+  private avg(numbers: number[]): number {
+    return numbers.reduce((a, b) => a + b, 0) / numbers.length
+  }
+}
+```
+
+## Next Steps
+
+- [Integration](./integration) - Integration with other `.do` services
+- [Real-World Use Case](./real-world-use-case) - Production implementation
+- [API Reference](../api/reference) - Complete API documentation
+- [Best Practices](../docs/best-practices) - Optimization tips
+
+## License
+
+MIT (Open Source)

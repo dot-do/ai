@@ -1,0 +1,145 @@
+# GitHub Actions CI/CD Example using cli.do
+
+name: Deploy with CLI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  DO_BASE_URL: https://rpc.do
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Install CLI
+        run: pnpm add -g cli.do
+
+      - name: Run tests
+        env:
+          DO_API_KEY: ${{ secrets.DO_API_KEY_DEV }}
+        run: |
+          # Execute test workflow
+          do workflows run runTests '{"branch": "${{ github.ref_name }}", "commit": "${{ github.sha }}"}'
+
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Install CLI
+        run: pnpm add -g cli.do
+
+      - name: Create deployment record
+        env:
+          DO_API_KEY: ${{ secrets.DO_API_KEY }}
+        run: |
+          DEPLOYMENT_ID="deploy-${{ github.sha }}"
+          do db create Deployment "{
+            \"id\": \"$DEPLOYMENT_ID\",
+            \"commit\": \"${{ github.sha }}\",
+            \"branch\": \"${{ github.ref_name }}\",
+            \"actor\": \"${{ github.actor }}\",
+            \"status\": \"in_progress\",
+            \"startedAt\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
+          }"
+
+      - name: Execute deployment workflow
+        env:
+          DO_API_KEY: ${{ secrets.DO_API_KEY }}
+        run: |
+          # Run deployment workflow
+          RESULT=$(do workflows run deployToProduction "{
+            \"version\": \"${{ github.sha }}\",
+            \"environment\": \"production\",
+            \"deploymentId\": \"deploy-${{ github.sha }}\"
+          }" --json)
+
+          echo "Deployment result:"
+          echo "$RESULT" | jq '.'
+
+          # Check if deployment succeeded
+          STATUS=$(echo "$RESULT" | jq -r '.status')
+          if [ "$STATUS" != "completed" ]; then
+            echo "Deployment failed with status: $STATUS"
+            exit 1
+          fi
+
+      - name: Update deployment status
+        if: always()
+        env:
+          DO_API_KEY: ${{ secrets.DO_API_KEY }}
+        run: |
+          STATUS="success"
+          if [ "${{ job.status }}" != "success" ]; then
+            STATUS="failed"
+          fi
+
+          do db update Deployment "deploy-${{ github.sha }}" "{
+            \"status\": \"$STATUS\",
+            \"completedAt\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
+          }"
+
+      - name: Send notification
+        if: always()
+        env:
+          DO_API_KEY: ${{ secrets.DO_API_KEY }}
+        run: |
+          STATUS="${{ job.status }}"
+          do send Deployment.completed "{
+            \"deploymentId\": \"deploy-${{ github.sha }}\",
+            \"commit\": \"${{ github.sha }}\",
+            \"status\": \"$STATUS\",
+            \"actor\": \"${{ github.actor }}\",
+            \"url\": \"${{ github.event.head_commit.url }}\"
+          }"
+
+  analytics:
+    name: Track Analytics
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: always()
+    steps:
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Install CLI
+        run: pnpm add -g cli.do
+
+      - name: Track deployment metrics
+        env:
+          DO_API_KEY: ${{ secrets.DO_API_KEY }}
+        run: |
+          do functions execute fn_track_deployment_metrics "{
+            \"commit\": \"${{ github.sha }}\",
+            \"branch\": \"${{ github.ref_name }}\",
+            \"status\": \"${{ needs.deploy.result }}\",
+            \"duration\": ${{ github.event.workflow.duration }},
+            \"actor\": \"${{ github.actor }}\"
+          }"

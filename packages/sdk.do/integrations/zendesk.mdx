@@ -1,0 +1,589 @@
+---
+$id: https://integrations.do/zendesk
+$type: Integration
+name: Zendesk
+service: zendesk
+description: Customer support and ticketing platform
+category: support
+sdkBased: true
+sdkPackage: 'node-zendesk'
+sdkVersion: ^5.0.0
+sdkImport: createClient
+
+auth:
+  type: api-key
+  location: header
+  headerName: Authorization
+  scheme: Basic
+
+resources:
+  - name: Ticket
+    plural: Tickets
+    description: Manage support tickets
+    operations:
+      - name: create
+        method: POST
+        path: /tickets
+        params:
+          - name: subject
+            type: string
+            required: true
+            description: Ticket subject
+          - name: comment
+            type: object
+            required: true
+            description: Initial comment with body
+          - name: priority
+            type: string
+            required: false
+            description: Ticket priority (low, normal, high, urgent)
+          - name: status
+            type: string
+            required: false
+            description: Ticket status (new, open, pending, hold, solved, closed)
+          - name: type
+            type: string
+            required: false
+            description: Ticket type (problem, incident, question, task)
+          - name: tags
+            type: array
+            required: false
+            description: Ticket tags
+          - name: requester_id
+            type: number
+            required: false
+            description: Requester user ID
+          - name: assignee_id
+            type: number
+            required: false
+            description: Assignee user ID
+          - name: group_id
+            type: number
+            required: false
+            description: Group ID
+        returns: Ticket
+
+      - name: get
+        method: GET
+        path: /tickets/{id}
+        params:
+          - name: id
+            type: number
+            required: true
+            description: Ticket ID
+        returns: Ticket
+
+      - name: update
+        method: PUT
+        path: /tickets/{id}
+        params:
+          - name: id
+            type: number
+            required: true
+            description: Ticket ID
+          - name: subject
+            type: string
+            required: false
+            description: Updated subject
+          - name: comment
+            type: object
+            required: false
+            description: Add comment
+          - name: status
+            type: string
+            required: false
+            description: Updated status
+          - name: priority
+            type: string
+            required: false
+            description: Updated priority
+        returns: Ticket
+
+      - name: delete
+        method: DELETE
+        path: /tickets/{id}
+        params:
+          - name: id
+            type: number
+            required: true
+            description: Ticket ID
+        returns: boolean
+
+      - name: list
+        method: GET
+        path: /tickets
+        params:
+          - name: page
+            type: number
+            required: false
+            description: Page number
+          - name: per_page
+            type: number
+            required: false
+            description: Results per page
+        returns: Ticket[]
+        pagination:
+          type: page
+          pageField: page
+          limitField: per_page
+          defaultLimit: 100
+          maxLimit: 100
+
+  - name: User
+    plural: Users
+    description: Manage users (customers, agents, admins)
+    operations:
+      - name: create
+        method: POST
+        path: /users
+        params:
+          - name: name
+            type: string
+            required: true
+            description: User name
+          - name: email
+            type: string
+            required: true
+            description: User email
+          - name: role
+            type: string
+            required: false
+            description: User role (end-user, agent, admin)
+          - name: organization_id
+            type: number
+            required: false
+            description: Organization ID
+        returns: User
+
+      - name: get
+        method: GET
+        path: /users/{id}
+        params:
+          - name: id
+            type: number
+            required: true
+            description: User ID
+        returns: User
+
+      - name: update
+        method: PUT
+        path: /users/{id}
+        params:
+          - name: id
+            type: number
+            required: true
+            description: User ID
+          - name: name
+            type: string
+            required: false
+            description: Updated name
+          - name: email
+            type: string
+            required: false
+            description: Updated email
+        returns: User
+
+      - name: list
+        method: GET
+        path: /users
+        params:
+          - name: role
+            type: string
+            required: false
+            description: Filter by role
+          - name: page
+            type: number
+            required: false
+            description: Page number
+        returns: User[]
+        pagination:
+          type: page
+          pageField: page
+          limitField: per_page
+          defaultLimit: 100
+
+  - name: Organization
+    plural: Organizations
+    description: Manage customer organizations
+    operations:
+      - name: create
+        method: POST
+        path: /organizations
+        params:
+          - name: name
+            type: string
+            required: true
+            description: Organization name
+          - name: domain_names
+            type: array
+            required: false
+            description: Domain names for auto-assignment
+          - name: details
+            type: string
+            required: false
+            description: Organization details
+        returns: Organization
+
+      - name: get
+        method: GET
+        path: /organizations/{id}
+        params:
+          - name: id
+            type: number
+            required: true
+            description: Organization ID
+        returns: Organization
+
+      - name: update
+        method: PUT
+        path: /organizations/{id}
+        params:
+          - name: id
+            type: number
+            required: true
+            description: Organization ID
+          - name: name
+            type: string
+            required: false
+            description: Updated name
+        returns: Organization
+
+      - name: list
+        method: GET
+        path: /organizations
+        params:
+          - name: page
+            type: number
+            required: false
+            description: Page number
+        returns: Organization[]
+        pagination:
+          type: page
+          pageField: page
+          limitField: per_page
+          defaultLimit: 100
+
+  - name: Comment
+    plural: Comments
+    description: Manage ticket comments
+    operations:
+      - name: list
+        method: GET
+        path: /tickets/{ticket_id}/comments
+        params:
+          - name: ticket_id
+            type: number
+            required: true
+            description: Ticket ID
+        returns: Comment[]
+
+webhooks:
+  enabled: true
+  signatureHeader: X-Zendesk-Webhook-Signature
+  signatureAlgorithm: sha256
+  verificationMethod: signature
+  events:
+    - name: ticket.created
+      type: zen:event-type:ticket.created
+      description: Ticket was created
+    - name: ticket.updated
+      type: zen:event-type:ticket.updated
+      description: Ticket was updated
+    - name: ticket.solved
+      type: zen:event-type:ticket.solved
+      description: Ticket was solved
+    - name: ticket.comment.created
+      type: zen:event-type:ticket.comment.created
+      description: Comment was added to ticket
+    - name: user.created
+      type: zen:event-type:user.created
+      description: User was created
+    - name: organization.created
+      type: zen:event-type:organization.created
+      description: Organization was created
+
+errors:
+  mapping:
+    - code: invalid_token
+      type: authentication
+      statusCode: 401
+      message: Invalid or expired API token
+      retryable: false
+    - code: forbidden
+      type: authorization
+      statusCode: 403
+      message: Insufficient permissions
+      retryable: false
+    - code: not_found
+      type: not_found
+      statusCode: 404
+      message: Resource not found
+      retryable: false
+    - code: unprocessable_entity
+      type: validation
+      statusCode: 422
+      message: Validation error
+      retryable: false
+    - code: too_many_requests
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+    - code: internal_server_error
+      type: server
+      statusCode: 500
+      message: Internal server error
+      retryable: true
+  retryable: [too_many_requests, internal_server_error, 429, 500, 503]
+  nonRetryable: [invalid_token, forbidden, not_found, unprocessable_entity, 401, 403, 404, 422]
+
+tests:
+  enabled: true
+  cleanup: true
+  scenarios:
+    - name: Ticket Management
+      description: Test ticket CRUD operations
+      steps:
+        - action: create
+          resource: Ticket
+        - action: retrieve
+          resource: Ticket
+        - action: update
+          resource: Ticket
+        - action: list
+          resource: Ticket
+        - action: delete
+          resource: Ticket
+
+    - name: User Management
+      description: Test user operations
+      steps:
+        - action: create
+          resource: User
+        - action: retrieve
+          resource: User
+        - action: update
+          resource: User
+        - action: list
+          resource: User
+
+    - name: Organization Management
+      description: Test organization operations
+      steps:
+        - action: create
+          resource: Organization
+        - action: retrieve
+          resource: Organization
+        - action: update
+          resource: Organization
+        - action: list
+          resource: Organization
+
+    - name: Comment Operations
+      description: Test ticket comments
+      steps:
+        - action: list
+          resource: Comment
+
+    - name: Webhook Verification
+      description: Test webhook signature verification
+      steps:
+        - action: assert
+          expects:
+            status: 200
+
+docs:
+  homepage: https://www.zendesk.com
+  apiDocs: https://developer.zendesk.com/api-reference/
+  sdkDocs: https://github.com/blakmatrix/node-zendesk
+  guides:
+    quickstart: https://developer.zendesk.com/documentation/ticketing/getting-started/zendesk-api-quick-start/
+    webhooks: https://developer.zendesk.com/documentation/webhooks/verifying/
+    authentication: https://developer.zendesk.com/documentation/ticketing/getting-started/making-requests-to-the-zendesk-api/
+---
+
+# Zendesk Integration
+
+Zendesk is a leading customer support and ticketing platform that helps businesses manage customer service operations.
+
+## Features
+
+- **Tickets**: Create and manage support tickets
+- **Users**: Manage customers, agents, and admins
+- **Organizations**: Segment customers into organizations
+- **Comments**: Add comments and notes to tickets
+- **API Key Auth**: Simple authentication with API tokens
+- **Webhooks**: Real-time event notifications with signature verification
+
+## Quick Start
+
+```typescript
+import { ZendeskClient } from '@dotdo/sdk.do/integrations/zendesk'
+
+const zendesk = new ZendeskClient({
+  apiKey: process.env.ZENDESK_API_TOKEN,
+  subdomain: 'your-subdomain', // your-subdomain.zendesk.com
+})
+
+// Create a ticket
+const ticket = await zendesk.ticket.create({
+  subject: 'Need help with billing',
+  comment: {
+    body: 'Customer inquiry about billing',
+  },
+  priority: 'normal',
+  status: 'new',
+})
+
+// Update ticket
+await zendesk.ticket.update({
+  id: ticket.id,
+  status: 'open',
+  comment: {
+    body: 'Working on this issue',
+  },
+})
+```
+
+## Authentication
+
+Zendesk uses API token authentication:
+
+```bash
+export ZENDESK_API_TOKEN=your_api_token
+export ZENDESK_SUBDOMAIN=your-subdomain
+```
+
+## Resources
+
+### Tickets
+
+Manage support tickets:
+
+```typescript
+// Create ticket
+const ticket = await zendesk.ticket.create({
+  subject: 'Order issue',
+  comment: {
+    body: 'Customer needs help with order #1234',
+  },
+  priority: 'high',
+  tags: ['order', 'urgent'],
+})
+
+// Get ticket
+const ticket = await zendesk.ticket.get({ id: 123 })
+
+// Update ticket
+await zendesk.ticket.update({
+  id: 123,
+  status: 'solved',
+  comment: {
+    body: 'Issue resolved',
+  },
+})
+
+// List tickets
+const tickets = await zendesk.ticket.list({ per_page: 50 })
+```
+
+### Users
+
+Manage users:
+
+```typescript
+// Create user
+const user = await zendesk.user.create({
+  name: 'John Doe',
+  email: 'john@example.com',
+  role: 'end-user',
+})
+
+// Get user
+const user = await zendesk.user.get({ id: 456 })
+
+// List agents
+const agents = await zendesk.user.list({ role: 'agent' })
+```
+
+### Organizations
+
+Manage organizations:
+
+```typescript
+// Create organization
+const org = await zendesk.organization.create({
+  name: 'Acme Inc',
+  domain_names: ['acme.com'],
+  details: 'Enterprise customer',
+})
+
+// Get organization
+const org = await zendesk.organization.get({ id: 789 })
+
+// List organizations
+const orgs = await zendesk.organization.list()
+```
+
+### Comments
+
+View ticket comments:
+
+```typescript
+// List comments
+const comments = await zendesk.comment.list({ ticket_id: 123 })
+```
+
+## Webhooks
+
+Zendesk supports webhooks with HMAC SHA256 signature verification:
+
+```typescript
+import { ZendeskWebhookHandler, WebhookEventRouter } from '@dotdo/sdk.do/integrations/zendesk'
+
+const handler = new ZendeskWebhookHandler(process.env.ZENDESK_WEBHOOK_SECRET)
+const event = await handler.handleRequest(request)
+
+const router = new WebhookEventRouter()
+router.onTicketCreated(async (event) => {
+  console.log('New ticket:', event.data)
+})
+
+await router.route(event)
+```
+
+## Error Handling
+
+```typescript
+import { ZendeskError } from '@dotdo/sdk.do/integrations/zendesk'
+
+try {
+  await zendesk.ticket.create({
+    /* ... */
+  })
+} catch (error) {
+  if (error instanceof ZendeskError) {
+    console.error('Zendesk Error:', error.code, error.message)
+    if (error.isRetriable()) {
+      // Retry logic
+    }
+  }
+}
+```
+
+## Best Practices
+
+1. **Rate Limits**: Zendesk enforces rate limits (varies by plan)
+2. **Pagination**: Use pagination for large datasets (max 100 per page)
+3. **Ticket Status**: Follow status flow: new → open → pending → solved → closed
+4. **Organization**: Use organizations to segment customers
+5. **Tags**: Use tags for categorization and automation
+6. **Webhooks**: Verify webhook signatures for security
+
+## API Reference
+
+Full API documentation: https://developer.zendesk.com/api-reference/
+
+## License
+
+MIT

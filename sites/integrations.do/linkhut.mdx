@@ -1,0 +1,99 @@
+---
+$id: https://integrations.do/linkhut
+$type: Integration
+name: Linkhut
+service: linkhut
+description: LinkHut manages bookmarked links in a minimalistic, shareable interface, helping teams organize URLs and track references in one place
+category: productivity
+sdkBased: false
+baseUrl: https://api.linkhut.com
+
+auth:
+  type: oauth2
+  authorizationUrl: https://ln.ht/_/oauth/authorize
+  tokenUrl: https://api.ln.ht/v1/oauth/token
+  scopes:
+    - posts:read
+    - posts:write
+    - tags:read
+    - tags:write
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Linkhut actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: false
+  events: []
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://linkhut.org/
+  apiDocs: https://linkhut.org/
+---
+
+# Linkhut Integration
+
+LinkHut manages bookmarked links in a minimalistic, shareable interface, helping teams organize URLs and track references in one place
+
+## Quick Start
+
+```typescript
+import { LinkhutClient } from '@dotdo/sdk.do/integrations/linkhut'
+
+const linkhut = new LinkhutClient({
+  apiKey: process.env.LINKHUT_API_KEY,
+})
+
+const result = await linkhut.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Linkhut provides 5 actions through the Composio API.
+
+## License
+
+MIT

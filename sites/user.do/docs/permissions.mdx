@@ -1,0 +1,781 @@
+---
+$id: https://user.do/docs/permissions
+$type: TechArticle
+title: Permission Checking
+description: Fine-grained authorization and permission checking with user.can()
+keywords: [permissions, authorization, rbac, abac, access-control, user.can]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Permissions
+
+Learn how to implement fine-grained authorization and permission checking in your Business-as-Code applications.
+
+## Overview
+
+The `user.can()` function provides a simple, semantic API for checking user permissions. It supports both role-based access control (RBAC) and attribute-based access control (ABAC) patterns.
+
+## Basic Permission Checking
+
+### Check Action on Type
+
+Check if a user can perform an action on an entity type:
+
+```typescript
+import { $, user } from 'sdk.do'
+
+// Check if user can edit products
+const canEdit = await user.can('edit', $.Product)
+
+if (canEdit) {
+  console.log('User can edit products')
+} else {
+  console.log('User cannot edit products')
+}
+```
+
+### Check Action on Instance
+
+Check if a user can perform an action on a specific entity:
+
+```typescript
+import { $, db, user } from 'sdk.do'
+
+// Get specific product
+const product = await db.get($.Product, 'prod_123')
+
+// Check if user can edit this specific product
+const canEdit = await user.can('edit', product)
+
+if (canEdit) {
+  console.log('User can edit this product')
+} else {
+  console.log('User cannot edit this product')
+}
+```
+
+## Permission Syntax
+
+### Action + Resource
+
+The `user.can()` function takes two parameters:
+
+```typescript
+await user.can(action, resource)
+```
+
+**Action**: The action to perform (string)
+
+- `'create'` - Create new entities
+- `'read'` - View/access entities
+- `'edit'` or `'update'` - Modify entities
+- `'delete'` - Remove entities
+- `'publish'` - Publish content
+- `'manage'` - Full management access
+- Custom actions: `'approve'`, `'archive'`, etc.
+
+**Resource**: The resource to check (type or instance)
+
+- Schema.org type: `$.Product`, `$.Order`, `$.Business`
+- Entity instance: `product`, `order`, `business`
+
+## Common Permission Patterns
+
+### CRUD Permissions
+
+Standard create, read, update, delete permissions:
+
+```typescript
+import { $, user } from 'sdk.do'
+
+// Create permission
+const canCreate = await user.can('create', $.Product)
+
+// Read permission
+const canRead = await user.can('read', $.Product)
+
+// Update permission
+const canUpdate = await user.can('edit', $.Product)
+
+// Delete permission
+const canDelete = await user.can('delete', $.Product)
+
+console.log({
+  canCreate,
+  canRead,
+  canUpdate,
+  canDelete,
+})
+```
+
+### Protect Database Operations
+
+Check permissions before database operations:
+
+```typescript
+import { $, db, user } from 'sdk.do'
+
+// Protected create
+export async function createProduct(data: any) {
+  if (!(await user.can('create', $.Product))) {
+    throw new Error('Unauthorized: Cannot create products')
+  }
+
+  return await db.create($.Product, data)
+}
+
+// Protected update
+export async function updateProduct(id: string, data: any) {
+  if (!(await user.can('edit', $.Product))) {
+    throw new Error('Unauthorized: Cannot edit products')
+  }
+
+  const product = await db.get($.Product, id)
+
+  if (!(await user.can('edit', product))) {
+    throw new Error('Unauthorized: Cannot edit this product')
+  }
+
+  return await db.update($.Product, id, data)
+}
+
+// Protected delete
+export async function deleteProduct(id: string) {
+  if (!(await user.can('delete', $.Product))) {
+    throw new Error('Unauthorized: Cannot delete products')
+  }
+
+  const product = await db.get($.Product, id)
+
+  if (!(await user.can('delete', product))) {
+    throw new Error('Unauthorized: Cannot delete this product')
+  }
+
+  return await db.delete($.Product, id)
+}
+```
+
+### Protect API Endpoints
+
+Add permission checks to API routes:
+
+```typescript
+import { $, user } from 'sdk.do'
+
+// GET /api/products/:id
+export async function getProduct(request: Request) {
+  const id = getProductId(request)
+
+  if (!(await user.can('read', $.Product))) {
+    return new Response('Forbidden', { status: 403 })
+  }
+
+  const product = await db.get($.Product, id)
+  return Response.json(product)
+}
+
+// POST /api/products
+export async function createProduct(request: Request) {
+  if (!(await user.can('create', $.Product))) {
+    return new Response('Forbidden', { status: 403 })
+  }
+
+  const data = await request.json()
+  const product = await db.create($.Product, data)
+  return Response.json(product, { status: 201 })
+}
+
+// PUT /api/products/:id
+export async function updateProduct(request: Request) {
+  const id = getProductId(request)
+
+  if (!(await user.can('edit', $.Product))) {
+    return new Response('Forbidden', { status: 403 })
+  }
+
+  const product = await db.get($.Product, id)
+
+  if (!(await user.can('edit', product))) {
+    return new Response('Forbidden', { status: 403 })
+  }
+
+  const data = await request.json()
+  const updated = await db.update($.Product, id, data)
+  return Response.json(updated)
+}
+
+// DELETE /api/products/:id
+export async function deleteProduct(request: Request) {
+  const id = getProductId(request)
+
+  if (!(await user.can('delete', $.Product))) {
+    return new Response('Forbidden', { status: 403 })
+  }
+
+  const product = await db.get($.Product, id)
+
+  if (!(await user.can('delete', product))) {
+    return new Response('Forbidden', { status: 403 })
+  }
+
+  await db.delete($.Product, id)
+  return new Response(null, { status: 204 })
+}
+```
+
+## Batch Permission Checks
+
+Check multiple permissions at once for efficiency:
+
+```typescript
+import { $, user } from 'sdk.do'
+
+// Check multiple permissions
+const permissions = await user.permissions([
+  { action: 'create', resource: $.Product },
+  { action: 'edit', resource: $.Product },
+  { action: 'delete', resource: $.Product },
+  { action: 'create', resource: $.Order },
+  { action: 'edit', resource: $.Order },
+])
+
+console.log(permissions)
+// {
+//   'create:Product': true,
+//   'edit:Product': true,
+//   'delete:Product': false,
+//   'create:Order': true,
+//   'edit:Order': false
+// }
+
+// Use in conditional logic
+if (permissions['create:Product']) {
+  // Show "Create Product" button
+}
+
+if (permissions['delete:Product']) {
+  // Show "Delete" button
+}
+```
+
+## Role-Based Access Control (RBAC)
+
+### Define Roles
+
+Define roles with associated permissions:
+
+```typescript
+// roles.ts
+export const roles = {
+  admin: {
+    permissions: ['*'], // All permissions
+  },
+  editor: {
+    permissions: ['create:Product', 'read:Product', 'edit:Product', 'create:Article', 'read:Article', 'edit:Article', 'publish:Article'],
+  },
+  viewer: {
+    permissions: ['read:Product', 'read:Article', 'read:Order'],
+  },
+  customer: {
+    permissions: [
+      'create:Order',
+      'read:Order', // Own orders only
+      'edit:Order', // Own orders only
+    ],
+  },
+}
+```
+
+### Check Role Permissions
+
+```typescript
+import { user } from 'sdk.do'
+import { roles } from './roles'
+
+export async function can(action: string, resource: any): Promise<boolean> {
+  const currentUser = await user.current()
+  const role = roles[currentUser.role]
+
+  if (!role) {
+    return false
+  }
+
+  // Admin has all permissions
+  if (role.permissions.includes('*')) {
+    return true
+  }
+
+  // Build permission string
+  const resourceType = typeof resource === 'string' ? resource : resource.$type
+  const permission = `${action}:${resourceType}`
+
+  // Check if role has permission
+  return role.permissions.includes(permission)
+}
+```
+
+### Role Checking
+
+Check if user has specific role:
+
+```typescript
+import { user } from 'sdk.do'
+
+// Check if user is admin
+if (await user.hasRole('admin')) {
+  console.log('User is an administrator')
+}
+
+// Check if user is editor
+if (await user.hasRole('editor')) {
+  console.log('User is an editor')
+}
+
+// Check multiple roles
+if (await user.hasAnyRole(['admin', 'editor'])) {
+  console.log('User can edit content')
+}
+```
+
+## Attribute-Based Access Control (ABAC)
+
+### Ownership Checks
+
+Check if user owns an entity:
+
+```typescript
+import { $, db, user } from 'sdk.do'
+
+export async function canEditProduct(productId: string): Promise<boolean> {
+  const currentUser = await user.current()
+  const product = await db.get($.Product, productId)
+
+  // User can edit if they own the product
+  if (product.owner?.$id === currentUser.$id) {
+    return true
+  }
+
+  // Or if they are admin
+  if (await user.hasRole('admin')) {
+    return true
+  }
+
+  return false
+}
+```
+
+### Organization Checks
+
+Check if user belongs to same organization as entity:
+
+```typescript
+import { $, db, user } from 'sdk.do'
+
+export async function canAccessProduct(productId: string): Promise<boolean> {
+  const currentUser = await user.current()
+  const product = await db.get($.Product, productId)
+
+  // User can access if product belongs to their organization
+  if (product.organization?.$id === currentUser.organization?.$id) {
+    return true
+  }
+
+  return false
+}
+```
+
+### Complex Attribute Checks
+
+Implement complex permission logic based on multiple attributes:
+
+```typescript
+import { $, db, user } from 'sdk.do'
+
+export async function canApproveOrder(orderId: string): Promise<boolean> {
+  const currentUser = await user.current()
+  const order = await db.get($.Order, orderId)
+
+  // Must be in same organization
+  if (order.organization?.$id !== currentUser.organization?.$id) {
+    return false
+  }
+
+  // Must have manager role
+  if (!(await user.hasRole('manager'))) {
+    return false
+  }
+
+  // Order total must be under approval limit
+  if (order.total > currentUser.approvalLimit) {
+    return false
+  }
+
+  // Order must be in pending status
+  if (order.status !== 'pending') {
+    return false
+  }
+
+  return true
+}
+```
+
+## Permission Middleware
+
+### Express-Style Middleware
+
+```typescript
+import { $, user } from 'sdk.do'
+
+// Require specific permission
+export function requirePermission(action: string, resourceType: any) {
+  return async (request: Request, next: Function) => {
+    if (!(await user.can(action, resourceType))) {
+      return new Response('Forbidden', { status: 403 })
+    }
+
+    return await next(request)
+  }
+}
+
+// Usage in routes
+export const routes = {
+  'POST /products': [requirePermission('create', $.Product), createProduct],
+  'PUT /products/:id': [requirePermission('edit', $.Product), updateProduct],
+  'DELETE /products/:id': [requirePermission('delete', $.Product), deleteProduct],
+}
+```
+
+### Decorator Pattern
+
+```typescript
+import { $, user } from 'sdk.do'
+
+// Permission decorator
+function RequirePermission(action: string, resourceType: any) {
+  return function (target: any, propertyKey: string, descriptor: PropertyDescriptor) {
+    const originalMethod = descriptor.value
+
+    descriptor.value = async function (...args: any[]) {
+      if (!(await user.can(action, resourceType))) {
+        throw new Error('Forbidden')
+      }
+
+      return await originalMethod.apply(this, args)
+    }
+
+    return descriptor
+  }
+}
+
+// Usage
+class ProductController {
+  @RequirePermission('create', $.Product)
+  async create(data: any) {
+    return await db.create($.Product, data)
+  }
+
+  @RequirePermission('edit', $.Product)
+  async update(id: string, data: any) {
+    return await db.update($.Product, id, data)
+  }
+
+  @RequirePermission('delete', $.Product)
+  async delete(id: string) {
+    return await db.delete($.Product, id)
+  }
+}
+```
+
+## Multi-Tenant Permissions
+
+### Automatic Organization Filtering
+
+Filter data automatically based on user's organization:
+
+```typescript
+import { $, db, user } from 'sdk.do'
+
+// Get products in user's organization
+export async function getOrganizationProducts() {
+  const currentUser = await user.current()
+
+  // Automatically filter by organization
+  const products = await db.list($.Product, {
+    where: {
+      organization: currentUser.organization.$id,
+    },
+  })
+
+  return products
+}
+
+// Prevent cross-organization access
+export async function verifyOrganizationAccess(entityId: string) {
+  const currentUser = await user.current()
+  const entity = await db.get(entityId)
+
+  if (entity.organization?.$id !== currentUser.organization?.$id) {
+    throw new Error('Forbidden: Cannot access entity from different organization')
+  }
+
+  return entity
+}
+```
+
+### Organization-Level Permissions
+
+```typescript
+import { user } from 'sdk.do'
+
+// Check organization-level permission
+export async function canManageOrganization(): Promise<boolean> {
+  const currentUser = await user.current()
+
+  // Must have org-admin role
+  if (!(await user.hasRole('org-admin'))) {
+    return false
+  }
+
+  return true
+}
+
+// Check if user can invite members to organization
+export async function canInviteMembers(): Promise<boolean> {
+  if (!(await user.hasRole('org-admin'))) {
+    return false
+  }
+
+  const currentUser = await user.current()
+  const org = await db.get($.Organization, currentUser.organization.$id)
+
+  // Check if organization has available seats
+  if (org.memberCount >= org.maxMembers) {
+    return false
+  }
+
+  return true
+}
+```
+
+## Custom Permission Logic
+
+### Define Custom Permissions
+
+Implement custom permission logic for your domain:
+
+```typescript
+import { $, db, user } from 'sdk.do'
+
+export const customPermissions = {
+  // Check if user can publish article
+  async canPublishArticle(articleId: string): Promise<boolean> {
+    const currentUser = await user.current()
+    const article = await db.get($.Article, articleId)
+
+    // Must be author or editor
+    if (article.author?.$id === currentUser.$id) {
+      return true
+    }
+
+    if (await user.hasRole('editor')) {
+      return true
+    }
+
+    return false
+  },
+
+  // Check if user can approve purchase order
+  async canApprovePurchaseOrder(orderId: string): Promise<boolean> {
+    const currentUser = await user.current()
+    const order = await db.get($.Order, orderId)
+
+    // Must be manager
+    if (!(await user.hasRole('manager'))) {
+      return false
+    }
+
+    // Order amount must be within approval limit
+    if (order.total > currentUser.approvalLimit) {
+      return false
+    }
+
+    // Must be in same department
+    if (order.department !== currentUser.department) {
+      return false
+    }
+
+    return true
+  },
+
+  // Check if user can view financial reports
+  async canViewFinancials(): Promise<boolean> {
+    return await user.hasAnyRole(['admin', 'finance', 'executive'])
+  },
+}
+```
+
+## Permission Caching
+
+Cache permission checks for performance:
+
+```typescript
+import { user } from 'sdk.do'
+
+// Permission cache
+const permissionCache = new Map<string, boolean>()
+
+export async function canWithCache(
+  action: string,
+  resource: any,
+  ttl: number = 60000 // 1 minute
+): Promise<boolean> {
+  const currentUser = await user.current()
+  const resourceId = typeof resource === 'string' ? resource : resource.$id
+  const cacheKey = `${currentUser.$id}:${action}:${resourceId}`
+
+  // Check cache
+  if (permissionCache.has(cacheKey)) {
+    return permissionCache.get(cacheKey)!
+  }
+
+  // Check permission
+  const result = await user.can(action, resource)
+
+  // Cache result
+  permissionCache.set(cacheKey, result)
+
+  // Clear cache after TTL
+  setTimeout(() => {
+    permissionCache.delete(cacheKey)
+  }, ttl)
+
+  return result
+}
+```
+
+## Permission Debugging
+
+Debug permission checks in development:
+
+```typescript
+import { user } from 'sdk.do'
+
+export async function debugPermission(action: string, resource: any) {
+  const currentUser = await user.current()
+  const result = await user.can(action, resource)
+
+  console.log('Permission Check:', {
+    user: currentUser.name,
+    userId: currentUser.$id,
+    role: currentUser.role,
+    action,
+    resource: typeof resource === 'string' ? resource : resource.$type,
+    resourceId: typeof resource === 'string' ? null : resource.$id,
+    result: result ? 'ALLOWED' : 'DENIED',
+  })
+
+  return result
+}
+```
+
+## Best Practices
+
+### 1. Always Check Permissions
+
+Never assume a user has permission:
+
+```typescript
+// Good: Check permission
+if (await user.can('delete', product)) {
+  await db.delete(product.$id)
+}
+
+// Bad: No permission check
+await db.delete(product.$id)
+```
+
+### 2. Use Specific Actions
+
+Be specific about what action is being checked:
+
+```typescript
+// Good: Specific actions
+await user.can('create', $.Product)
+await user.can('edit', $.Product)
+await user.can('delete', $.Product)
+
+// Bad: Generic action
+await user.can('access', $.Product)
+```
+
+### 3. Check Type and Instance
+
+Check both type-level and instance-level permissions:
+
+```typescript
+// Check type-level permission
+if (!(await user.can('edit', $.Product))) {
+  throw new Error('Cannot edit products')
+}
+
+// Check instance-level permission
+const product = await db.get($.Product, id)
+if (!(await user.can('edit', product))) {
+  throw new Error('Cannot edit this product')
+}
+```
+
+### 4. Handle Permission Errors
+
+Provide clear error messages:
+
+```typescript
+try {
+  if (!(await user.can('delete', product))) {
+    throw new Error('FORBIDDEN')
+  }
+  await db.delete(product.$id)
+} catch (error) {
+  if (error.message === 'FORBIDDEN') {
+    return Response.json({ error: 'You do not have permission to delete this product' }, { status: 403 })
+  }
+  throw error
+}
+```
+
+### 5. Cache Permission Checks
+
+Cache frequently checked permissions:
+
+```typescript
+const currentUser = await user.current()
+
+// Cache permission results
+const canCreate = await user.can('create', $.Product)
+const canEdit = await user.can('edit', $.Product)
+const canDelete = await user.can('delete', $.Product)
+
+// Use cached results
+if (canCreate) {
+  // Show create button
+}
+if (canEdit) {
+  // Show edit button
+}
+if (canDelete) {
+  // Show delete button
+}
+```
+
+## See Also
+
+- [Getting Started](./getting-started) - Setup and basic usage
+- [Authentication](./authentication) - User authentication patterns
+- [API Reference](../api/) - Complete API documentation
+- [Permission Examples](../examples/permissions) - Permission patterns
+
+## License
+
+CC-BY-4.0 (Open Source)

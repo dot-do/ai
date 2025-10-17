@@ -1,0 +1,791 @@
+---
+$id: https://database.do/examples/queries
+$type: HowTo
+title: Advanced Query Examples
+description: Practical examples of advanced query patterns for filtering, sorting, and searching
+keywords: [queries, filtering, sorting, search, aggregation, examples]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Advanced Query Examples
+
+Practical examples of advanced query patterns for filtering, sorting, searching, and aggregating data in database.do.
+
+## Overview
+
+This guide provides real-world examples of advanced queries that demonstrate the full power of database.do's query capabilities.
+
+## Setup
+
+```typescript
+import $, { db } from 'sdk.do'
+import type { Business, Person, Product, Order } from 'schema.org.ai'
+```
+
+## Filtering Examples
+
+### Multiple Conditions
+
+```typescript
+// Find active technology businesses in San Francisco
+const businesses = await db.list($.Business, {
+  where: {
+    status: 'active',
+    industry: 'Technology',
+    address: {
+      addressLocality: 'San Francisco',
+      addressRegion: 'CA',
+    },
+  },
+})
+
+console.log(`Found ${businesses.length} active tech businesses in SF`)
+```
+
+### Range Queries
+
+```typescript
+// Find businesses founded between 2020 and 2024
+const recentBusinesses = await db.list($.Business, {
+  where: {
+    foundingDate: {
+      $gte: '2020-01-01',
+      $lt: '2025-01-01',
+    },
+  },
+  orderBy: {
+    foundingDate: 'desc',
+  },
+})
+
+console.log(`Found ${recentBusinesses.length} businesses founded 2020-2024`)
+
+// Find businesses with 10-50 employees
+const mediumBusinesses = await db.list($.Business, {
+  where: {
+    numberOfEmployees: {
+      $gte: 10,
+      $lte: 50,
+    },
+  },
+})
+```
+
+### OR Conditions
+
+```typescript
+// Find businesses in Technology OR Software industries
+const techBusinesses = await db.list($.Business, {
+  where: {
+    $or: [{ industry: 'Technology' }, { industry: 'Software' }, { industry: 'Hardware' }],
+  },
+})
+
+// Complex OR with nested conditions
+const targetBusinesses = await db.list($.Business, {
+  where: {
+    status: 'active',
+    $or: [
+      {
+        industry: 'Technology',
+        numberOfEmployees: { $gte: 100 },
+      },
+      {
+        industry: 'Software',
+        revenue: { $gte: 1000000 },
+      },
+    ],
+  },
+})
+```
+
+### Text Matching
+
+```typescript
+// Find businesses with "tech" in the name
+const techNamedBusinesses = await db.list($.Business, {
+  where: {
+    name: { $contains: 'Tech' },
+  },
+})
+
+// Find businesses starting with "Acme"
+const acmeBusinesses = await db.list($.Business, {
+  where: {
+    name: { $startsWith: 'Acme' },
+  },
+})
+
+// Case-insensitive search
+const businesses = await db.list($.Business, {
+  where: {
+    name: { $icontains: 'technology' },
+  },
+})
+
+// Find emails from specific domain
+const persons = await db.list($.Person, {
+  where: {
+    email: { $endsWith: '@acme.com' },
+  },
+})
+```
+
+### Array Operators
+
+```typescript
+// Find businesses in specific industries
+const businesses = await db.list($.Business, {
+  where: {
+    industry: {
+      $in: ['Technology', 'Software', 'Hardware', 'Internet'],
+    },
+  },
+})
+
+// Exclude certain statuses
+const activeBusinesses = await db.list($.Business, {
+  where: {
+    status: {
+      $nin: ['inactive', 'suspended', 'deleted'],
+    },
+  },
+})
+```
+
+### Null Checks
+
+```typescript
+// Find unverified businesses
+const unverifiedBusinesses = await db.list($.Business, {
+  where: {
+    verifiedAt: { $null: true },
+  },
+})
+
+// Find verified businesses
+const verifiedBusinesses = await db.list($.Business, {
+  where: {
+    verifiedAt: { $null: false },
+  },
+})
+
+// Find businesses with addresses
+const businessesWithAddress = await db.list($.Business, {
+  where: {
+    address: { $null: false },
+  },
+})
+```
+
+## Sorting Examples
+
+### Single Field Sorting
+
+```typescript
+// Sort businesses by name A-Z
+const businesses = await db.list($.Business, {
+  orderBy: {
+    name: 'asc',
+  },
+})
+
+// Sort businesses by founding date (newest first)
+const recentBusinesses = await db.list($.Business, {
+  orderBy: {
+    foundingDate: 'desc',
+  },
+})
+
+// Sort employees by hire date (oldest first)
+const employees = await db.list($.Person, {
+  where: {
+    jobTitle: { $null: false },
+  },
+  orderBy: {
+    dateHired: 'asc',
+  },
+})
+```
+
+### Multi-Field Sorting
+
+```typescript
+// Sort by industry, then by name
+const businesses = await db.list($.Business, {
+  orderBy: {
+    industry: 'asc',
+    name: 'asc',
+  },
+})
+
+// Sort by status, then revenue (highest first), then name
+const sortedBusinesses = await db.list($.Business, {
+  orderBy: {
+    status: 'asc',
+    revenue: 'desc',
+    name: 'asc',
+  },
+})
+
+// Sort employees by department, then job title, then hire date
+const employees = await db.list($.Person, {
+  where: {
+    worksFor: { $null: false },
+  },
+  orderBy: {
+    department: 'asc',
+    jobTitle: 'asc',
+    dateHired: 'asc',
+  },
+})
+```
+
+### Nested Field Sorting
+
+```typescript
+// Sort businesses by city
+const businesses = await db.list($.Business, {
+  where: {
+    address: { $null: false },
+  },
+  orderBy: {
+    'address.addressLocality': 'asc',
+    name: 'asc',
+  },
+})
+
+// Sort by postal code
+const businessesByZip = await db.list($.Business, {
+  orderBy: {
+    'address.postalCode': 'asc',
+  },
+})
+```
+
+## Pagination Examples
+
+### Basic Pagination
+
+```typescript
+// Page 1: First 50 businesses
+const page1 = await db.list($.Business, {
+  limit: 50,
+  offset: 0,
+  orderBy: { name: 'asc' },
+})
+
+// Page 2: Next 50 businesses
+const page2 = await db.list($.Business, {
+  limit: 50,
+  offset: 50,
+  orderBy: { name: 'asc' },
+})
+
+console.log(`Page 1: ${page1.length} businesses`)
+console.log(`Page 2: ${page2.length} businesses`)
+```
+
+### Pagination with Total Count
+
+```typescript
+// Get page with total count
+const result = await db.list($.Business, {
+  limit: 50,
+  offset: 0,
+  count: true,
+  orderBy: { name: 'asc' },
+})
+
+const currentPage = Math.floor(result.offset / result.limit) + 1
+const totalPages = Math.ceil(result.total / result.limit)
+
+console.log(`Page ${currentPage} of ${totalPages}`)
+console.log(`Showing ${result.items.length} of ${result.total} businesses`)
+```
+
+### Cursor-Based Pagination
+
+```typescript
+// First page
+const page1 = await db.list($.Business, {
+  limit: 50,
+  orderBy: { $id: 'asc' },
+})
+
+console.log(`Page 1: ${page1.length} businesses`)
+
+// Next page using last ID as cursor
+if (page1.length > 0) {
+  const lastId = page1[page1.length - 1].$id
+
+  const page2 = await db.list($.Business, {
+    where: {
+      $id: { $gt: lastId },
+    },
+    limit: 50,
+    orderBy: { $id: 'asc' },
+  })
+
+  console.log(`Page 2: ${page2.length} businesses`)
+}
+```
+
+### Dynamic Pagination
+
+```typescript
+async function getPage(pageNumber: number, pageSize: number = 50) {
+  const offset = (pageNumber - 1) * pageSize
+
+  const result = await db.list($.Business, {
+    limit: pageSize,
+    offset,
+    count: true,
+    orderBy: { name: 'asc' },
+  })
+
+  return {
+    items: result.items,
+    page: pageNumber,
+    pageSize,
+    total: result.total,
+    totalPages: Math.ceil(result.total / pageSize),
+    hasNext: offset + pageSize < result.total,
+    hasPrev: pageNumber > 1,
+  }
+}
+
+// Usage
+const page1 = await getPage(1, 50)
+console.log(`Page ${page1.page} of ${page1.totalPages}`)
+console.log(`Has next: ${page1.hasNext}`)
+```
+
+## Search Examples
+
+### Basic Text Search
+
+```typescript
+// Search businesses by text
+const results = await db.search($.Business, 'technology innovation', {
+  fields: ['name', 'description'],
+  limit: 20,
+})
+
+console.log(`Found ${results.length} matching businesses`)
+
+results.forEach((business) => {
+  console.log(`- ${business.name}`)
+})
+```
+
+### Search with Filters
+
+```typescript
+// Search within specific criteria
+const results = await db.search($.Business, 'cloud platform', {
+  fields: ['name', 'description', 'industry'],
+  where: {
+    status: 'active',
+    industry: 'Technology',
+  },
+  limit: 20,
+})
+
+console.log(`Found ${results.length} active tech businesses matching "cloud platform"`)
+```
+
+### Search with Relevance Sorting
+
+```typescript
+// Sort by relevance score
+const results = await db.search($.Business, 'enterprise software solutions', {
+  fields: ['name', 'description', 'keywords'],
+  orderBy: {
+    _score: 'desc', // Sort by relevance
+    name: 'asc', // Then by name
+  },
+  limit: 50,
+})
+
+results.forEach((business, i) => {
+  console.log(`${i + 1}. ${business.name} (score: ${business._score})`)
+})
+```
+
+### Fuzzy Search
+
+```typescript
+// Allow typos and misspellings
+const results = await db.search(
+  $.Business,
+  'tecnology~2', // Allow 2 character differences
+  {
+    fields: ['name', 'industry'],
+    limit: 20,
+  }
+)
+
+console.log('Results with fuzzy matching:')
+results.forEach((business) => {
+  console.log(`- ${business.name} (${business.industry})`)
+})
+```
+
+## Aggregation Examples
+
+### Count by Category
+
+```typescript
+// Count businesses by industry
+const groups = await db.aggregate($.Business, {
+  groupBy: 'industry',
+  count: true,
+  orderBy: {
+    count: 'desc',
+  },
+})
+
+console.log('Businesses by industry:')
+groups.forEach((group) => {
+  console.log(`${group.industry}: ${group.count}`)
+})
+```
+
+### Sum and Average
+
+```typescript
+// Total and average revenue by industry
+const stats = await db.aggregate($.Business, {
+  groupBy: 'industry',
+  aggregations: {
+    count: true,
+    sum: 'revenue',
+    avg: 'revenue',
+  },
+})
+
+console.log('Revenue stats by industry:')
+stats.forEach((stat) => {
+  console.log(`${stat.industry}:`)
+  console.log(`  Count: ${stat.count}`)
+  console.log(`  Total: $${stat.sum.toLocaleString()}`)
+  console.log(`  Average: $${stat.avg.toLocaleString()}`)
+})
+```
+
+### Min and Max
+
+```typescript
+// Find earliest and latest founding dates by industry
+const dateRanges = await db.aggregate($.Business, {
+  groupBy: 'industry',
+  aggregations: {
+    min: 'foundingDate',
+    max: 'foundingDate',
+    count: true,
+  },
+})
+
+console.log('Founding date ranges by industry:')
+dateRanges.forEach((range) => {
+  console.log(`${range.industry}:`)
+  console.log(`  Oldest: ${range.min}`)
+  console.log(`  Newest: ${range.max}`)
+  console.log(`  Count: ${range.count}`)
+})
+```
+
+### Multiple Group By
+
+```typescript
+// Count by industry and status
+const groups = await db.aggregate($.Business, {
+  groupBy: ['industry', 'status'],
+  count: true,
+  orderBy: {
+    industry: 'asc',
+    status: 'asc',
+  },
+})
+
+console.log('Businesses by industry and status:')
+groups.forEach((group) => {
+  console.log(`${group.industry} / ${group.status}: ${group.count}`)
+})
+```
+
+## Complex Query Examples
+
+### E-Commerce: Recent High-Value Orders
+
+```typescript
+// Find recent orders over $500 from verified customers
+const highValueOrders = await db.list($.Order, {
+  where: {
+    orderDate: {
+      $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+    acceptedOffer: {
+      price: { $gte: '500' },
+    },
+    customer: {
+      verified: true,
+    },
+  },
+  include: ['customer', 'orderedItem'],
+  orderBy: {
+    orderDate: 'desc',
+  },
+  limit: 100,
+})
+
+console.log(`Found ${highValueOrders.length} high-value orders`)
+
+highValueOrders.forEach((order) => {
+  console.log(`Order ${order.orderNumber}: $${order.acceptedOffer.price}`)
+})
+```
+
+### HR: Find Senior Engineers in SF
+
+```typescript
+// Find senior engineers in San Francisco hired in last year
+const engineers = await db.list($.Person, {
+  where: {
+    jobTitle: { $contains: 'Senior' },
+    department: 'Engineering',
+    dateHired: {
+      $gte: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+    address: {
+      addressLocality: 'San Francisco',
+      addressRegion: 'CA',
+    },
+  },
+  include: ['worksFor'],
+  orderBy: {
+    dateHired: 'desc',
+  },
+})
+
+console.log(`Found ${engineers.length} senior engineers`)
+
+engineers.forEach((engineer) => {
+  console.log(`${engineer.givenName} ${engineer.familyName} - ${engineer.jobTitle}`)
+  console.log(`  Hired: ${engineer.dateHired}`)
+  console.log(`  Works for: ${engineer.worksFor.name}`)
+})
+```
+
+### Marketing: Active Customers in Target Market
+
+```typescript
+// Find active customers in target demographic
+const targetCustomers = await db.list($.Person, {
+  where: {
+    $or: [
+      {
+        totalPurchases: { $gte: 1000 },
+        lastPurchaseDate: {
+          $gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
+        },
+      },
+      {
+        subscriptionStatus: 'active',
+        subscriptionTier: { $in: ['premium', 'enterprise'] },
+      },
+    ],
+    address: {
+      addressCountry: 'US',
+      addressRegion: {
+        $in: ['CA', 'NY', 'TX', 'FL'],
+      },
+    },
+  },
+  orderBy: {
+    totalPurchases: 'desc',
+  },
+  limit: 500,
+})
+
+console.log(`Found ${targetCustomers.length} target customers`)
+
+// Group by state
+const byState: Record<string, number> = {}
+targetCustomers.forEach((customer) => {
+  const state = customer.address.addressRegion
+  byState[state] = (byState[state] || 0) + 1
+})
+
+console.log('\nCustomers by state:')
+Object.entries(byState).forEach(([state, count]) => {
+  console.log(`${state}: ${count}`)
+})
+```
+
+### Sales: Product Performance Analysis
+
+```typescript
+// Find best-selling products in last quarter
+const topProducts = await db.list($.Product, {
+  where: {
+    dateCreated: {
+      $gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+    offers: {
+      availability: 'https://schema.org/InStock',
+    },
+  },
+  include: ['brand', 'manufacturer', 'aggregateRating'],
+  orderBy: {
+    'aggregateRating.ratingValue': 'desc',
+    totalSales: 'desc',
+  },
+  limit: 50,
+})
+
+console.log(`Top ${topProducts.length} products:`)
+
+topProducts.forEach((product, i) => {
+  console.log(`${i + 1}. ${product.name}`)
+  console.log(`   Brand: ${product.brand.name}`)
+  console.log(`   Rating: ${product.aggregateRating.ratingValue}/5`)
+  console.log(`   Sales: ${product.totalSales}`)
+})
+```
+
+### Analytics: Business Growth Metrics
+
+```typescript
+// Analyze business growth over time
+const quarters = [
+  { start: '2024-01-01', end: '2024-04-01', label: 'Q1 2024' },
+  { start: '2024-04-01', end: '2024-07-01', label: 'Q2 2024' },
+  { start: '2024-07-01', end: '2024-10-01', label: 'Q3 2024' },
+  { start: '2024-10-01', end: '2025-01-01', label: 'Q4 2024' },
+]
+
+for (const quarter of quarters) {
+  const businesses = await db.list($.Business, {
+    where: {
+      foundingDate: {
+        $gte: quarter.start,
+        $lt: quarter.end,
+      },
+    },
+  })
+
+  const byIndustry = await db.aggregate($.Business, {
+    where: {
+      foundingDate: {
+        $gte: quarter.start,
+        $lt: quarter.end,
+      },
+    },
+    groupBy: 'industry',
+    count: true,
+    orderBy: { count: 'desc' },
+  })
+
+  console.log(`\n${quarter.label}:`)
+  console.log(`Total new businesses: ${businesses.length}`)
+  console.log('Top industries:')
+  byIndustry.slice(0, 5).forEach((ind) => {
+    console.log(`  ${ind.industry}: ${ind.count}`)
+  })
+}
+```
+
+## Field Selection Examples
+
+### Select Specific Fields
+
+```typescript
+// Only fetch name and industry
+const businesses = await db.list($.Business, {
+  select: ['name', 'industry', 'foundingDate'],
+  where: {
+    industry: 'Technology',
+  },
+})
+
+// Smaller payload, faster queries
+businesses.forEach((business) => {
+  console.log(`${business.name} - ${business.industry}`)
+  // business.description is undefined
+})
+```
+
+### Exclude Sensitive Fields
+
+```typescript
+// Exclude internal/private fields
+const businesses = await db.list($.Business, {
+  exclude: ['internalNotes', 'privateMetrics', 'accessToken'],
+  where: {
+    status: 'active',
+  },
+})
+
+// Safe to return to clients
+return businesses
+```
+
+## Performance Optimization Examples
+
+### Batch Loading
+
+```typescript
+// Load multiple entities efficiently
+const businessIds = ['biz_1', 'biz_2', 'biz_3', 'biz_4', 'biz_5']
+const businesses = await db.getMany($.Business, businessIds)
+
+console.log(`Loaded ${businesses.length} businesses in one query`)
+```
+
+### Query with Caching
+
+```typescript
+// Cache results for 5 minutes
+const businesses = await db.list($.Business, {
+  where: {
+    industry: 'Technology',
+    status: 'active',
+  },
+  cache: {
+    ttl: 300, // 5 minutes
+  },
+})
+
+// Subsequent calls within 5 minutes use cache
+```
+
+### Index Usage
+
+```typescript
+// Create index for common queries
+await db.createIndex($.Business, ['industry', 'status', 'foundingDate'])
+
+// Query uses index automatically
+const businesses = await db.list($.Business, {
+  where: {
+    industry: 'Technology',
+    status: 'active',
+    foundingDate: { $gte: '2020-01-01' },
+  },
+})
+```
+
+## See Also
+
+- [Querying Patterns](../docs/querying) - Complete query reference
+- [Operations Reference](../docs/operations) - CRUD operations
+- [Relationships](./relationships) - Working with semantic relationships
+- [API Reference](../api/) - Full API documentation
+
+---
+
+These examples demonstrate the full power of database.do's query capabilities for building sophisticated Business-as-Code applications.

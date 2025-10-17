@@ -1,0 +1,843 @@
+---
+$id: https://analytics.do/docs/best-practices
+$type: TechArticle
+title: analytics.do Best Practices
+description: Recommended patterns and practices for production analytics implementations
+keywords: [best practices, production, optimization, patterns, recommendations]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# analytics.do Best Practices
+
+Recommended patterns for production-ready analytics implementations.
+
+## Event Tracking
+
+### 1. Use Semantic Patterns
+
+Always use semantic `$.Subject.predicate.Object` names:
+
+```typescript
+// ✓ Good: Semantic patterns
+await analytics.track($.Order.created, data)
+await analytics.track($.Lead.qualified, data)
+await analytics.track($.Agent.completed.Task, data)
+
+// ✗ Avoid: Generic or unclear names
+await analytics.track('event', data)
+await analytics.track('order_created', data)
+await analytics.track('action1', data)
+```
+
+### 2. Include Rich Context
+
+Provide comprehensive context in events:
+
+```typescript
+// ✓ Good: Rich context
+await analytics.track($.Order.created, {
+  orderId: 'order-123',
+  amount: 1299.99,
+  currency: 'USD',
+  items: 2,
+  userId: 'user-456',
+  customerSegment: 'enterprise',
+  source: 'website',
+  campaign: 'spring-2025',
+  referrer: 'google',
+  timestamp: new Date(),
+})
+
+// ✗ Avoid: Minimal context
+await analytics.track($.Order.created, {
+  orderId: 'order-123',
+})
+```
+
+### 3. Validate Before Tracking
+
+Validate data before sending:
+
+```typescript
+// ✓ Good: Validated data
+const trackOrder = async (order: Order) => {
+  if (!order.id || !order.amount || order.amount <= 0) {
+    console.error('Invalid order data:', order)
+    return
+  }
+
+  await analytics.track($.Order.created, {
+    orderId: order.id,
+    amount: order.amount,
+    timestamp: new Date(),
+  })
+}
+
+// ✗ Avoid: No validation
+await analytics.track($.Order.created, unvalidatedData)
+```
+
+### 4. Handle Errors Gracefully
+
+Don't let analytics failures break your application:
+
+```typescript
+// ✓ Good: Error handling
+try {
+  await analytics.track($.Order.created, data)
+} catch (error) {
+  console.error('Analytics tracking failed:', error)
+  // Application continues normally
+}
+
+// ✓ Better: Background tracking
+analytics.track($.Order.created, data).catch((error) => {
+  console.error('Analytics tracking failed:', error)
+})
+
+// Continue with main application logic
+```
+
+### 5. Batch Events
+
+Use batching for high-volume tracking:
+
+```typescript
+// ✓ Good: Batched tracking
+const events = []
+for (const item of items) {
+  events.push({
+    type: $.Item.processed,
+    data: { itemId: item.id, timestamp: new Date() },
+  })
+}
+await analytics.trackBatch(events)
+
+// ✗ Avoid: Individual tracking in loops
+for (const item of items) {
+  await analytics.track($.Item.processed, { itemId: item.id })
+}
+```
+
+## Metric Recording
+
+### 1. Choose the Right Metric Type
+
+Use appropriate metric types:
+
+```typescript
+// Counter: Cumulative counts
+await analytics.counter($.Orders, 1)
+await analytics.counter($.PageViews, 1)
+
+// Gauge: Current values
+await analytics.gauge($.ActiveUsers, 142)
+await analytics.gauge($.QueueDepth, 25)
+
+// Histogram: Value distributions
+await analytics.histogram($.ResponseTime, duration)
+
+// Summary: Statistical summaries
+await analytics.summary($.RequestDuration, duration)
+```
+
+### 2. Add Dimensions for Slicing
+
+Include relevant dimensions:
+
+```typescript
+// ✓ Good: Multiple dimensions
+await analytics.metric($.Revenue, {
+  value: 1299.99,
+  dimensions: {
+    product: 'enterprise',
+    region: 'us-west',
+    channel: 'direct',
+    customerType: 'new',
+    agent: 'agent-sarah',
+  },
+})
+
+// ✗ Avoid: No dimensions
+await analytics.metric($.Revenue, { value: 1299.99 })
+```
+
+### 3. Use Consistent Dimension Names
+
+Standardize dimension naming:
+
+```typescript
+// ✓ Good: Consistent naming
+const dimensions = {
+  product: 'enterprise', // Always 'product'
+  region: 'us-west', // Always 'region'
+  channel: 'direct', // Always 'channel'
+}
+
+// ✗ Avoid: Inconsistent naming
+const dimensions = {
+  product_id: 'enterprise', // Sometimes 'product', sometimes 'product_id'
+  location: 'us-west', // Sometimes 'region', sometimes 'location'
+  source: 'direct', // Sometimes 'channel', sometimes 'source'
+}
+```
+
+### 4. Don't Create High-Cardinality Dimensions
+
+Avoid dimensions with too many unique values:
+
+```typescript
+// ✗ Avoid: High cardinality (unique IDs)
+await analytics.metric($.Revenue, {
+  value: 1299.99,
+  dimensions: {
+    orderId: 'order-12345678', // Unique per order
+    userId: 'user-87654321', // Unique per user
+  },
+})
+
+// ✓ Good: Low cardinality (segments)
+await analytics.metric($.Revenue, {
+  value: 1299.99,
+  dimensions: {
+    orderSize: 'large', // Limited values: small/medium/large
+    customerSegment: 'enterprise', // Limited values: startup/smb/enterprise
+  },
+})
+```
+
+### 5. Aggregate at Multiple Levels
+
+Record metrics at different granularities:
+
+```typescript
+// Record at multiple levels
+await Promise.all([
+  // Overall
+  analytics.metric($.Revenue, { value: 1299.99 }),
+
+  // By product
+  analytics.metric($.Revenue, {
+    value: 1299.99,
+    dimensions: { product: 'enterprise' },
+  }),
+
+  // By product and region
+  analytics.metric($.Revenue, {
+    value: 1299.99,
+    dimensions: { product: 'enterprise', region: 'us-west' },
+  }),
+])
+```
+
+## Querying
+
+### 1. Use Time Bounds
+
+Always specify time bounds:
+
+```typescript
+// ✓ Good: Bounded queries
+const revenue = await analytics.query({
+  metric: $.Revenue,
+  timeframe: 'last_30_days',
+  aggregation: 'sum',
+})
+
+// ✗ Avoid: Unbounded queries
+const revenue = await analytics.query({
+  metric: $.Revenue,
+  aggregation: 'sum',
+}) // Queries all data
+```
+
+### 2. Filter Early
+
+Apply filters to reduce data volume:
+
+```typescript
+// ✓ Good: Filtered query
+const revenue = await analytics.query({
+  metric: $.Revenue,
+  timeframe: 'last_30_days',
+  where: {
+    product: 'enterprise',
+    region: { in: ['us-west', 'us-east'] },
+  },
+  aggregation: 'sum',
+})
+
+// ✗ Avoid: Query then filter
+const allRevenue = await analytics.query({
+  metric: $.Revenue,
+  timeframe: 'last_30_days',
+  aggregation: 'sum',
+})
+const filtered = allRevenue.filter((r) => r.product === 'enterprise')
+```
+
+### 3. Leverage Caching
+
+Cache frequently accessed queries:
+
+```typescript
+// ✓ Good: Cached query
+const getCachedRevenue = async () => {
+  const cacheKey = 'revenue_last_30_days'
+  const cached = cache.get(cacheKey)
+  if (cached) return cached
+
+  const revenue = await analytics.query({
+    metric: $.Revenue,
+    timeframe: 'last_30_days',
+    aggregation: 'sum',
+  })
+
+  cache.set(cacheKey, revenue, '5m') // Cache for 5 minutes
+  return revenue
+}
+```
+
+### 4. Use Appropriate Aggregations
+
+Choose the right aggregation for your use case:
+
+```typescript
+// Sum for totals
+const totalRevenue = await analytics.query({
+  metric: $.Revenue,
+  aggregation: 'sum',
+})
+
+// Average for rates
+const avgResponseTime = await analytics.query({
+  metric: $.ResponseTime,
+  aggregation: 'avg',
+})
+
+// Percentiles for SLAs
+const p95ResponseTime = await analytics.query({
+  metric: $.ResponseTime,
+  aggregation: 'p95',
+})
+
+// Count for quantities
+const orderCount = await analytics.query({
+  metric: $.Orders,
+  aggregation: 'count',
+})
+```
+
+### 5. Paginate Large Results
+
+Use pagination for large result sets:
+
+```typescript
+// ✓ Good: Paginated results
+const getRevenueByProduct = async (page = 0, pageSize = 100) => {
+  return await analytics.query({
+    metric: $.Revenue,
+    timeframe: 'last_30_days',
+    groupBy: ['product'],
+    aggregation: 'sum',
+    orderBy: { value: 'desc' },
+    limit: pageSize,
+    offset: page * pageSize,
+  })
+}
+
+// ✗ Avoid: Query all results
+const allResults = await analytics.query({
+  metric: $.Revenue,
+  groupBy: ['product'],
+}) // Could return millions of rows
+```
+
+## Dashboards
+
+### 1. Design for Your Audience
+
+Create dashboards for specific roles:
+
+```typescript
+// Executive dashboard: High-level KPIs
+const executiveDashboard = await analytics.dashboard({
+  name: 'Executive Dashboard',
+  widgets: [
+    { type: 'counter', metric: $.Revenue, title: 'Total Revenue' },
+    { type: 'counter', metric: $.Customers, title: 'Active Customers' },
+    { type: 'gauge', metric: $.GrowthRate, title: 'Growth Rate' },
+  ],
+})
+
+// Operations dashboard: Detailed metrics
+const opsDashboard = await analytics.dashboard({
+  name: 'Operations Dashboard',
+  widgets: [
+    { type: 'timeseries', metric: $.ResponseTime, title: 'Response Time' },
+    { type: 'timeseries', metric: $.ErrorRate, title: 'Error Rate' },
+    { type: 'table', query: { groupBy: ['service'] }, title: 'Service Health' },
+  ],
+})
+```
+
+### 2. Optimize Refresh Intervals
+
+Use appropriate refresh rates:
+
+```typescript
+// ✓ Good: Appropriate intervals
+const realtimeDashboard = await analytics.dashboard({
+  name: 'Real-time Monitoring',
+  refresh_interval: 5000, // 5 seconds for real-time
+  widgets: [...]
+})
+
+const executiveDashboard = await analytics.dashboard({
+  name: 'Executive Dashboard',
+  refresh_interval: 300000, // 5 minutes for executives
+  widgets: [...]
+})
+
+// ✗ Avoid: Excessive refresh
+const dashboard = await analytics.dashboard({
+  refresh_interval: 1000, // 1 second refresh for static data
+  widgets: [...]
+})
+```
+
+### 3. Use Widget Types Effectively
+
+Choose appropriate visualizations:
+
+```typescript
+// Counters for single values
+{ type: 'counter', metric: $.Revenue }
+
+// Time-series for trends
+{ type: 'timeseries', metric: $.Revenue, interval: 'day' }
+
+// Gauges for current status
+{ type: 'gauge', metric: $.ErrorRate, min: 0, max: 1 }
+
+// Funnels for conversion
+{ type: 'funnel', stages: conversionStages }
+
+// Tables for detailed data
+{ type: 'table', query: { groupBy: ['product'] } }
+
+// Pie charts for proportions
+{ type: 'pie', metric: $.Revenue, groupBy: 'region' }
+```
+
+### 4. Add Context with Comparisons
+
+Include time-based comparisons:
+
+```typescript
+const widget = {
+  type: 'counter',
+  metric: $.Revenue,
+  timeframe: 'last_30_days',
+  comparison: {
+    type: 'previous_period',
+    label: 'vs Previous 30 Days',
+  },
+}
+// Shows: $85,000 (+12.5% vs previous period)
+```
+
+### 5. Organize with Sections
+
+Group related widgets:
+
+```typescript
+const dashboard = await analytics.dashboard({
+  name: 'Sales Dashboard',
+  sections: [
+    {
+      title: 'Overview',
+      widgets: [
+        { type: 'counter', metric: $.Revenue },
+        { type: 'counter', metric: $.Orders },
+        { type: 'counter', metric: $.Customers },
+      ],
+    },
+    {
+      title: 'Trends',
+      widgets: [
+        { type: 'timeseries', metric: $.Revenue },
+        { type: 'timeseries', metric: $.Orders },
+      ],
+    },
+    {
+      title: 'Breakdown',
+      widgets: [
+        { type: 'pie', metric: $.Revenue, groupBy: 'product' },
+        { type: 'table', query: { groupBy: ['region'] } },
+      ],
+    },
+  ],
+})
+```
+
+## Alerting
+
+### 1. Set Meaningful Thresholds
+
+Use business-relevant thresholds:
+
+```typescript
+// ✓ Good: Business-relevant threshold
+await analytics.alert({
+  name: 'Revenue Drop',
+  metric: $.Revenue,
+  condition: { decrease: 0.2 }, // 20% drop matters
+  severity: 'high',
+})
+
+// ✗ Avoid: Arbitrary threshold
+await analytics.alert({
+  name: 'Some Alert',
+  metric: $.Metric,
+  condition: { gt: 100 }, // Why 100?
+  severity: 'critical',
+})
+```
+
+### 2. Configure Appropriate Severity
+
+Match severity to impact:
+
+```typescript
+// Critical: Requires immediate action
+await analytics.alert({
+  name: 'System Down',
+  metric: $.ErrorRate,
+  condition: { gt: 0.5 }, // >50% errors
+  severity: 'critical',
+  notifications: ['pagerduty'],
+})
+
+// High: Requires prompt attention
+await analytics.alert({
+  name: 'High Error Rate',
+  metric: $.ErrorRate,
+  condition: { gt: 0.1 }, // >10% errors
+  severity: 'high',
+  notifications: ['slack', 'email'],
+})
+
+// Medium: Should investigate
+await analytics.alert({
+  name: 'Increased Errors',
+  metric: $.ErrorRate,
+  condition: { gt: 0.05 }, // >5% errors
+  severity: 'medium',
+  notifications: ['slack'],
+})
+
+// Low: Informational
+await analytics.alert({
+  name: 'Unusual Traffic',
+  metric: $.Traffic,
+  condition: { increase: 0.5 }, // 50% increase
+  severity: 'low',
+  notifications: ['slack'],
+})
+```
+
+### 3. Avoid Alert Fatigue
+
+Don't over-alert:
+
+```typescript
+// ✓ Good: Aggregated alert
+await analytics.alert({
+  name: 'Multiple Errors',
+  metric: $.ErrorCount,
+  timeframe: 'last_5_minutes',
+  condition: { gt: 10 }, // >10 errors in 5 minutes
+  notifications: ['slack'],
+})
+
+// ✗ Avoid: Alert on every occurrence
+await analytics.alert({
+  name: 'Single Error',
+  metric: $.ErrorCount,
+  condition: { gt: 0 }, // Alert on every single error
+  notifications: ['slack'],
+})
+```
+
+### 4. Include Runbooks
+
+Add context for responders:
+
+```typescript
+await analytics.alert({
+  name: 'High Response Time',
+  metric: $.ResponseTime,
+  condition: { p95: { gt: 1000 } },
+  severity: 'high',
+  notifications: ['pagerduty'],
+  runbook: {
+    title: 'Response Time Alert',
+    steps: ['Check service health dashboard', 'Review recent deployments', 'Check database query performance', 'Scale up if needed'],
+    links: [
+      { title: 'Dashboard', url: 'https://analytics.do/dashboard/123' },
+      { title: 'Runbook', url: 'https://docs.company.com/runbooks/response-time' },
+    ],
+  },
+})
+```
+
+### 5. Test Alerts
+
+Verify alerts work correctly:
+
+```typescript
+// Test alert configuration
+const testAlert = await analytics.testAlert({
+  name: 'Test Alert',
+  metric: $.Revenue,
+  condition: { gt: 0 },
+  notifications: ['slack'],
+})
+
+console.log('Alert test:', testAlert.success)
+console.log('Notifications sent:', testAlert.notificationsSent)
+```
+
+## Performance
+
+### 1. Batch Operations
+
+Reduce API calls with batching:
+
+```typescript
+// ✓ Good: Batched operations
+const metrics = [
+  { metric: $.Revenue, value: 1299.99 },
+  { metric: $.Orders, value: 1 },
+  { metric: $.Items, value: 2 },
+]
+await analytics.recordBatch(metrics)
+
+// ✗ Avoid: Individual operations
+await analytics.metric($.Revenue, { value: 1299.99 })
+await analytics.counter($.Orders, 1)
+await analytics.counter($.Items, 2)
+```
+
+### 2. Use Async Operations
+
+Don't block on analytics:
+
+```typescript
+// ✓ Good: Async tracking
+const processOrder = async (order: Order) => {
+  // Save order
+  await db.create($.Order, order)
+
+  // Track analytics asynchronously
+  analytics.track($.Order.created, order).catch(console.error)
+
+  // Continue processing
+  return order
+}
+
+// ✗ Avoid: Blocking on analytics
+const processOrder = async (order: Order) => {
+  await db.create($.Order, order)
+  await analytics.track($.Order.created, order) // Blocks order processing
+  return order
+}
+```
+
+### 3. Implement Circuit Breakers
+
+Protect against analytics failures:
+
+```typescript
+const circuitBreaker = {
+  failureThreshold: 5,
+  timeout: 30000, // 30 seconds
+  resetTimeout: 60000, // 1 minute
+}
+
+const trackWithCircuitBreaker = async (event, data) => {
+  if (circuitBreaker.isOpen()) {
+    console.log('Circuit breaker open, skipping analytics')
+    return
+  }
+
+  try {
+    await analytics.track(event, data)
+    circuitBreaker.recordSuccess()
+  } catch (error) {
+    circuitBreaker.recordFailure()
+    throw error
+  }
+}
+```
+
+### 4. Monitor Analytics Performance
+
+Track analytics system health:
+
+```typescript
+// Monitor ingestion
+await analytics.metric($.Analytics.EventsTracked, { value: 1 })
+await analytics.metric($.Analytics.IngestionLatency, { value: latency })
+
+// Monitor queries
+await analytics.metric($.Analytics.QueriesExecuted, { value: 1 })
+await analytics.metric($.Analytics.QueryLatency, { value: latency })
+
+// Alert on analytics issues
+await analytics.alert({
+  name: 'Analytics Ingestion Lag',
+  metric: $.Analytics.IngestionLatency,
+  condition: { p95: { gt: 5000 } }, // >5s p95 latency
+  severity: 'high',
+})
+```
+
+### 5. Optimize Storage
+
+Use appropriate retention policies:
+
+```typescript
+const retentionPolicy = {
+  // Raw events
+  events: {
+    hot: '30_days', // Keep in hot storage
+    cold: '2_years', // Archive to cold storage
+  },
+
+  // Aggregated metrics
+  metrics: {
+    '1m': '30_days', // 1-minute aggregates
+    '1h': '90_days', // 1-hour aggregates
+    '1d': '2_years', // 1-day aggregates
+    '1w': '5_years', // 1-week aggregates
+  },
+}
+```
+
+## Security
+
+### 1. Protect Sensitive Data
+
+Don't track PII unnecessarily:
+
+```typescript
+// ✓ Good: Hash sensitive data
+await analytics.track($.User.signed_up, {
+  userId: hash(user.email),
+  segment: user.segment,
+})
+
+// ✗ Avoid: Tracking PII
+await analytics.track($.User.signed_up, {
+  email: user.email, // PII
+  phone: user.phone, // PII
+  ssn: user.ssn, // Sensitive PII
+})
+```
+
+### 2. Use Environment-Specific Keys
+
+Separate keys per environment:
+
+```typescript
+const analytics = createAnalytics({
+  apiKey: process.env.NODE_ENV === 'production' ? process.env.ANALYTICS_API_KEY_PROD : process.env.ANALYTICS_API_KEY_DEV,
+})
+```
+
+### 3. Implement Access Control
+
+Restrict dashboard access:
+
+```typescript
+const dashboard = await analytics.dashboard({
+  name: 'Revenue Dashboard',
+  access: {
+    roles: ['executive', 'finance'],
+    permissions: ['view', 'export']
+  },
+  widgets: [...]
+})
+```
+
+## Testing
+
+### 1. Test in Development
+
+Use test mode for development:
+
+```typescript
+const analytics = createAnalytics({
+  apiKey: process.env.ANALYTICS_API_KEY,
+  testMode: process.env.NODE_ENV !== 'production',
+})
+```
+
+### 2. Verify Event Tracking
+
+Test event tracking:
+
+```typescript
+import { test, expect } from 'vitest'
+
+test('tracks order creation', async () => {
+  const trackSpy = vi.spyOn(analytics, 'track')
+
+  await createOrder(orderData)
+
+  expect(trackSpy).toHaveBeenCalledWith(
+    $.Order.created,
+    expect.objectContaining({
+      orderId: expect.any(String),
+      amount: expect.any(Number),
+    })
+  )
+})
+```
+
+### 3. Validate Metric Recording
+
+Test metric recording:
+
+```typescript
+test('records revenue metric', async () => {
+  const metricSpy = vi.spyOn(analytics, 'metric')
+
+  await recordSale(saleData)
+
+  expect(metricSpy).toHaveBeenCalledWith(
+    $.Revenue,
+    expect.objectContaining({
+      value: 1299.99,
+      dimensions: expect.objectContaining({
+        product: 'enterprise',
+      }),
+    })
+  )
+})
+```
+
+## Related Documentation
+
+- [Getting Started](./getting-started.mdx) - Setup and basics
+- [Architecture](./architecture.mdx) - System design
+- [API Reference](../api/reference.mdx) - Complete API
+- [Examples](../examples/) - Real-world examples
+
+---
+
+Following these best practices ensures reliable, performant, and maintainable analytics implementations. Next, learn how to resolve common issues in [Troubleshooting](./troubleshooting.mdx).

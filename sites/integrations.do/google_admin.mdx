@@ -1,0 +1,107 @@
+---
+$id: https://integrations.do/google_admin
+$type: Integration
+name: Google Admin
+service: google_admin
+description: Google Admin Console for managing Google Workspace users, groups, and organizational units.
+category: productivity
+sdkBased: false
+baseUrl: https://api.google_admin.com
+
+auth:
+  type: oauth2
+  authorizationUrl: https://accounts.google.com/o/oauth2/v2/auth
+  tokenUrl: https://oauth2.googleapis.com/token
+  scopes:
+    - https://www.googleapis.com/auth/admin.directory.user
+    - https://www.googleapis.com/auth/admin.directory.user.readonly
+    - https://www.googleapis.com/auth/admin.directory.user.alias
+    - https://www.googleapis.com/auth/admin.directory.user.alias.readonly
+    - https://www.googleapis.com/auth/admin.directory.group
+    - https://www.googleapis.com/auth/admin.directory.group.readonly
+    - https://www.googleapis.com/auth/admin.directory.group.member
+    - https://www.googleapis.com/auth/admin.directory.group.member.readonly
+    - https://www.googleapis.com/auth/admin.directory.orgunit
+    - https://www.googleapis.com/auth/admin.directory.orgunit.readonly
+    - https://www.googleapis.com/auth/admin.directory.domain
+    - https://www.googleapis.com/auth/admin.directory.domain.readonly
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Google Admin actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: false
+  events: []
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://admin.google.com/
+  apiDocs: https://admin.google.com/
+---
+
+# Google Admin Integration
+
+Google Admin Console for managing Google Workspace users, groups, and organizational units.
+
+## Quick Start
+
+```typescript
+import { GoogleAdminClient } from '@dotdo/sdk.do/integrations/google_admin'
+
+const google_admin = new GoogleAdminClient({
+  apiKey: process.env.GOOGLE_ADMIN_API_KEY,
+})
+
+const result = await google_admin.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Google Admin provides 14 actions through the Composio API.
+
+## License
+
+MIT

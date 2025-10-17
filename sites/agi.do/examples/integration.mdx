@@ -1,0 +1,478 @@
+---
+$id: https://agi.do/examples/integration
+$type: HowTo
+title: AGI Agent Integration Examples
+description: Integrate agi.do with other .do platform services
+keywords: [agi, integration, sdk, db, events, workflows]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Integration Examples
+
+Integrate agi.do with other `.do` platform services for powerful autonomous workflows.
+
+## Integration with db.do
+
+Store and retrieve AGI analysis results:
+
+```typescript
+import { $, agent, db } from 'sdk.do'
+
+// Create AGI agent
+const analyst = await agent.create({
+  $role: $.AGIAgent.Analyst,
+  capabilities: ['advanced_reasoning', 'strategic_thinking'],
+})
+
+// Analyze and store results
+async function analyzeAndStore(topic: string) {
+  // Perform analysis
+  const analysis = await analyst.analyze({
+    topic: topic,
+    depth: 'comprehensive',
+  })
+
+  // Store in database with semantic type
+  const record = await db.create({
+    $type: 'StrategicAnalysis',
+    topic: topic,
+    analysis: analysis,
+    reasoning: analysis.reasoning_chain,
+    confidence: analysis.confidence,
+    created_at: new Date(),
+  })
+
+  // Build relationships in knowledge graph
+  if (analysis.related_topics) {
+    for (const relatedTopic of analysis.related_topics) {
+      await db.relate(record.$id, '$.relates_to', relatedTopic.$id)
+    }
+  }
+
+  return record
+}
+
+// Query previous analyses
+const previousAnalyses = await db.list($.StrategicAnalysis, {
+  where: {
+    topic: { $contains: 'market' },
+    confidence: { $gte: 0.8 },
+  },
+  orderBy: { created_at: 'desc' },
+  limit: 10,
+})
+
+// Use previous analyses as context for new analysis
+const newAnalysis = await analyst.analyze({
+  topic: 'Q4 market strategy',
+  context: {
+    previous_analyses: previousAnalyses,
+  },
+})
+```
+
+## Integration with on.do and send.do
+
+Create event-driven AGI workflows:
+
+```typescript
+import { $, agent, on, send, db } from 'sdk.do'
+
+// Create AGI agent
+const agi = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['advanced_reasoning', 'strategic_thinking', 'research_synthesis'],
+})
+
+// React to business events with AGI analysis
+on($.Order.created, async (event) => {
+  const order = event.data
+
+  // High-value orders trigger strategic analysis
+  if (order.total > 100000) {
+    const analysis = await agi.analyze({
+      event: 'high_value_order',
+      context: order,
+      analyze: ['customer_behavior_patterns', 'revenue_opportunities', 'risk_factors'],
+    })
+
+    // Store analysis
+    await db.create({
+      $type: 'OrderAnalysis',
+      order_id: order.$id,
+      analysis: analysis,
+      created_at: new Date(),
+    })
+
+    // Send strategic recommendations
+    await send($.Strategy.recommended, {
+      order_id: order.$id,
+      recommendations: analysis.recommendations,
+      priority: analysis.priority,
+    })
+  }
+})
+
+// Continuous learning from outcomes
+on($.Order.completed, async (event) => {
+  const order = event.data
+
+  // Get previous analysis
+  const analysis = await db.get({
+    $type: 'OrderAnalysis',
+    where: { order_id: order.$id },
+  })
+
+  if (analysis) {
+    // Provide feedback for learning
+    await agi.feedback({
+      analysis_id: analysis.$id,
+      outcome: 'success',
+      actual_revenue: order.final_total,
+      predicted_revenue: analysis.predictions?.revenue,
+      accuracy: calculateAccuracy(analysis, order),
+    })
+  }
+})
+
+// Market intelligence automation
+on($.CompetitorAction.detected, async (event) => {
+  const action = event.data
+
+  // Analyze competitive implications
+  const intelligence = await agi.analyze({
+    event: 'competitor_action',
+    context: action,
+    synthesize: ['market_impact', 'strategic_response_options', 'risk_assessment'],
+  })
+
+  await send($.Intelligence.gathered, intelligence)
+})
+```
+
+## Integration with every.do
+
+Schedule periodic AGI tasks and reviews:
+
+```typescript
+import { $, agent, db, every, send } from 'sdk.do'
+
+const strategist = await agent.create({
+  $role: $.AGIAgent.Strategist,
+  capabilities: ['strategic_thinking', 'research_synthesis', 'advanced_reasoning'],
+})
+
+// Daily market intelligence
+every($.Daily, async () => {
+  const intelligence = await strategist.research({
+    topic: 'Market trends and competitor movements',
+    sources: ['news', 'social_media', 'industry_reports'],
+    synthesize: true,
+  })
+
+  await db.create({
+    $type: 'DailyIntelligence',
+    date: new Date(),
+    intelligence: intelligence,
+    key_insights: intelligence.key_findings,
+  })
+
+  // Alert on significant changes
+  if (intelligence.significance > 0.8) {
+    await send($.Alert.created, {
+      type: 'market_intelligence',
+      priority: 'high',
+      message: intelligence.summary,
+    })
+  }
+})
+
+// Weekly strategic review
+every($.Weekly, async () => {
+  // Gather performance data
+  const metrics = await db.list($.Metric, {
+    where: {
+      created_at: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
+    },
+  })
+
+  // Strategic analysis
+  const review = await strategist.analyze({
+    type: 'weekly_review',
+    metrics: metrics,
+    analyze: ['performance_trends', 'goal_progress', 'strategic_adjustments', 'risk_factors'],
+  })
+
+  await db.create({
+    $type: 'StrategicReview',
+    week: new Date(),
+    review: review,
+    recommendations: review.recommendations,
+  })
+})
+
+// Monthly learning consolidation
+every($.Monthly, async () => {
+  // Consolidate learning from all agents
+  const agents = await db.list($.Agent, {
+    where: { $role: $.AGIAgent },
+  })
+
+  for (const agent of agents) {
+    await agent.consolidate({
+      period: 'monthly',
+      optimize: ['quality', 'efficiency'],
+    })
+  }
+
+  // Generate learning report
+  const report = await strategist.synthesize({
+    topic: 'Monthly learning progress',
+    data: agents.map((a) => a.learning_metrics),
+  })
+
+  await db.create({
+    $type: 'LearningReport',
+    month: new Date(),
+    report: report,
+  })
+})
+```
+
+## Integration with llm.do
+
+Use AGI agents with intelligent LLM routing:
+
+```typescript
+import { $, agent, llm } from 'sdk.do'
+
+const agi = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['advanced_reasoning', 'multi_domain_expertise'],
+  llm: {
+    routing: 'intelligent', // AGI decides which LLM to use
+    models: {
+      reasoning: 'claude-sonnet-4.5', // Best for complex reasoning
+      creative: 'gpt-5', // Best for creative tasks
+      fast: 'gpt-5-mini', // Best for quick tasks
+    },
+  },
+})
+
+// AGI automatically selects appropriate LLM
+const complexReasoning = await agi.reason({
+  problem: 'Design distributed consensus algorithm',
+  // Uses claude-sonnet-4.5 automatically
+})
+
+const creativeContent = await agi.execute({
+  task: 'Generate marketing copy',
+  // Uses gpt-5 automatically
+})
+
+const quickClassification = await agi.execute({
+  task: 'Classify customer support ticket',
+  // Uses gpt-5-mini automatically
+})
+
+// Custom LLM usage within AGI reasoning
+const hybridAnalysis = await agi.analyze({
+  problem: 'Complex business problem',
+  llm_strategy: {
+    research: { model: 'claude-sonnet-4.5', temperature: 0.3 },
+    brainstorming: { model: 'gpt-5', temperature: 0.9 },
+    synthesis: { model: 'claude-sonnet-4.5', temperature: 0.5 },
+  },
+})
+```
+
+## Integration with api.do
+
+AGI agents that interact with external APIs:
+
+```typescript
+import { $, agent, api } from 'sdk.do'
+
+const apiAgent = await agent.create({
+  $role: $.AGIAgent,
+  capabilities: ['research_synthesis', 'multi_domain_expertise'],
+  tools: {
+    github: api.get('https://api.github.com'),
+    crunchbase: api.get('https://api.crunchbase.com'),
+    news: api.get('https://newsapi.org'),
+  },
+})
+
+// Research using external APIs
+const competitiveIntel = await apiAgent.research({
+  topic: 'Competitor technical capabilities',
+  sources: {
+    github: {
+      query: 'language:typescript ai',
+      analyze: ['commit_frequency', 'contributor_growth', 'technology_stack'],
+    },
+    crunchbase: {
+      query: 'AI infrastructure companies',
+      analyze: ['funding', 'growth', 'team_size'],
+    },
+    news: {
+      query: 'AI infrastructure news',
+      analyze: ['sentiment', 'trends', 'announcements'],
+    },
+  },
+})
+
+console.log(competitiveIntel)
+// AGI synthesizes data from all sources into coherent analysis
+```
+
+## Integration with user.do
+
+Personalized AGI agents for each user:
+
+```typescript
+import { $, agent, user } from 'sdk.do'
+
+async function createPersonalizedAgent(userId: string) {
+  const userData = await user.get(userId)
+
+  const personalAgent = await agent.create({
+    $role: $.AGIAgent,
+    user_id: userId,
+    capabilities: ['advanced_reasoning', 'strategic_thinking'],
+    personalization: {
+      preferences: userData.preferences,
+      history: userData.interaction_history,
+      learning_style: userData.learning_style,
+    },
+    learning: {
+      enabled: true,
+      personalized: true,
+    },
+  })
+
+  return personalAgent
+}
+
+// Each user gets a personalized AGI agent
+const currentUser = await user.current()
+const myAgent = await createPersonalizedAgent(currentUser.$id)
+
+// Agent adapts to user over time
+const result = await myAgent.execute({
+  task: 'Analyze quarterly results',
+  personalized: true, // Uses user's preferred format, depth, focus areas
+})
+```
+
+## Complete Autonomous Workflow Example
+
+Full integration example for autonomous business intelligence:
+
+```typescript
+import { $, agent, db, on, send, every, llm, api } from 'sdk.do'
+
+// Create AGI orchestrator
+const orchestrator = await agent.create({
+  $role: $.AGIAgent.Orchestrator,
+  capabilities: ['strategic_thinking', 'research_synthesis', 'advanced_reasoning', 'multi_domain_expertise'],
+  tools: {
+    web_search: api.get('search-api'),
+    market_data: api.get('market-data-api'),
+  },
+})
+
+// Event-driven analysis
+on($.CustomerFeedback.received, async (event) => {
+  const feedback = event.data
+
+  // Analyze feedback with AGI
+  const analysis = await orchestrator.analyze({
+    type: 'customer_feedback',
+    data: feedback,
+    context: {
+      product_roadmap: await db.get('product_roadmap'),
+      recent_changes: await db.list($.ProductChange, { limit: 10 }),
+    },
+  })
+
+  // Store analysis
+  await db.create({
+    $type: 'FeedbackAnalysis',
+    feedback_id: feedback.$id,
+    analysis: analysis,
+    sentiment: analysis.sentiment,
+    priority: analysis.priority,
+  })
+
+  // High-priority issues trigger immediate action
+  if (analysis.priority === 'critical') {
+    await send($.Issue.created, {
+      type: 'critical_feedback',
+      analysis: analysis,
+      suggested_actions: analysis.recommendations,
+    })
+  }
+})
+
+// Scheduled intelligence gathering
+every($.Daily, async () => {
+  // Autonomous market research
+  const research = await orchestrator.research({
+    topic: 'Competitive landscape and market trends',
+    sources: ['web_search', 'market_data', 'news'],
+    depth: 'comprehensive',
+  })
+
+  // Store findings
+  const report = await db.create({
+    $type: 'MarketIntelligence',
+    date: new Date(),
+    findings: research.key_findings,
+    trends: research.trends,
+    recommendations: research.strategic_recommendations,
+  })
+
+  // Significant changes trigger alerts
+  if (research.significance > 0.7) {
+    await send($.Strategy.reviewRequired, {
+      report_id: report.$id,
+      urgency: 'high',
+      summary: research.executive_summary,
+    })
+  }
+})
+
+// Continuous learning from outcomes
+on($.Project.completed, async (event) => {
+  const project = event.data
+
+  // Analyze project outcomes
+  const postMortem = await orchestrator.analyze({
+    type: 'project_retrospective',
+    project: project,
+    analyze: ['success_factors', 'challenges', 'lessons_learned', 'process_improvements'],
+  })
+
+  // Store learnings
+  await db.create({
+    $type: 'ProjectLearning',
+    project_id: project.$id,
+    analysis: postMortem,
+    lessons: postMortem.lessons_learned,
+  })
+
+  // Feedback to AGI for continuous improvement
+  await orchestrator.feedback({
+    context: 'project_execution',
+    outcome: project.status,
+    learnings: postMortem.lessons_learned,
+  })
+})
+```
+
+## License
+
+MIT (Open Source)

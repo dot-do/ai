@@ -1,0 +1,116 @@
+---
+$id: https://resources.do/examples/basic-usage
+$type: HowTo
+title: Basic Usage Examples
+description: Simple examples of working with data records and resources
+keywords: [examples, basic, crud, data, resources]
+---
+
+# Basic Usage Examples
+
+## Creating Resources
+
+```typescript
+import $, { db } from 'sdk.do'
+
+// Create person
+const person = await db.create($.Person, {
+  $type: 'Person',
+  name: 'Jane Smith',
+  email: 'jane@example.com',
+  jobTitle: 'Software Engineer',
+})
+
+// Create organization
+const org = await db.create($.Organization, {
+  $type: 'Organization',
+  name: 'Acme Corporation',
+  industry: 'Technology',
+})
+
+// Create product
+const product = await db.create($.Product, {
+  $type: 'Product',
+  name: 'Widget',
+  price: 99.99,
+  priceCurrency: 'USD',
+})
+```
+
+## Reading Resources
+
+```typescript
+// Get by ID
+const person = await db.get($.Person, 'person-123')
+
+// List all
+const people = await db.list($.Person)
+
+// Filter
+const engineers = await db.list($.Person, {
+  where: { jobTitle: { $contains: 'Engineer' } },
+})
+
+// With pagination
+const page = await db.list($.Person, {
+  limit: 10,
+  offset: 20,
+})
+
+// Count
+const total = await db.count($.Person)
+```
+
+## Updating Resources
+
+```typescript
+// Update properties
+await db.update(person, {
+  jobTitle: 'Senior Engineer',
+  email: 'jane.smith@newco.com',
+})
+
+// Update by ID
+await db.update($.Person, 'person-123', {
+  jobTitle: 'Lead Engineer',
+})
+```
+
+## Deleting Resources
+
+```typescript
+// Delete resource
+await db.delete(person)
+
+// Delete by ID
+await db.delete($.Person, 'person-123')
+
+// Soft delete (archive)
+await db.update(person, {
+  status: 'Archived',
+  archivedAt: new Date(),
+})
+```
+
+## Relationships
+
+```typescript
+// Create relationship
+await db.relate(person, $.worksFor, org)
+
+// Query relationships
+const employer = await db.related(person, $.worksFor, $.Organization)
+const employees = await db.related(org, $.employs, $.Person)
+```
+
+## Batch Operations
+
+```typescript
+// Create multiple
+const people = await Promise.all([db.create($.Person, { name: 'Alice' }), db.create($.Person, { name: 'Bob' }), db.create($.Person, { name: 'Carol' })])
+
+// Update multiple
+await Promise.all(people.map((p) => db.update(p, { status: 'Active' })))
+```
+
+See [Advanced Patterns](./advanced-patterns) for more complex examples.

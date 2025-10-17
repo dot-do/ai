@@ -1,0 +1,734 @@
+---
+$id: https://functions.do/docs/scheduling
+$type: TechArticle
+title: Function Scheduling Guide
+description: Learn how to schedule function execution with cron patterns and semantic intervals
+keywords: [scheduling, cron, intervals, automation, workflows]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Function Scheduling Guide
+
+Learn how to schedule automatic function execution using cron patterns, semantic intervals, and the SDK's `every` primitive.
+
+## Overview
+
+functions.do integrates with the SDK's `every` primitive to enable scheduled function execution:
+
+- **Cron Patterns** - Traditional cron syntax for precise scheduling
+- **Semantic Intervals** - Human-readable intervals like `$.Daily`, `$.Hourly`
+- **One-Time Scheduling** - Schedule for specific dates/times
+- **Conditional Execution** - Execute based on conditions
+
+## Quick Start
+
+```typescript
+import $, { every, fn } from 'sdk.do'
+
+// Define a function
+const generateDailyReport = fn($.GenerateDailyReport, async () => {
+  // Generate and send report
+  return { status: 'Report generated' }
+})
+
+// Schedule it to run daily at 9 AM
+every('0 9 * * *', generateDailyReport)
+```
+
+## Cron Patterns
+
+### Basic Cron Syntax
+
+```
+┌───────────── minute (0 - 59)
+│ ┌───────────── hour (0 - 23)
+│ │ ┌───────────── day of month (1 - 31)
+│ │ │ ┌───────────── month (1 - 12)
+│ │ │ │ ┌───────────── day of week (0 - 7, 0 and 7 are Sunday)
+│ │ │ │ │
+│ │ │ │ │
+* * * * *
+```
+
+### Common Patterns
+
+```typescript
+import { every, fn } from 'sdk.do'
+
+// Every minute
+every('* * * * *', myFunction)
+
+// Every hour at minute 0
+every('0 * * * *', myFunction)
+
+// Every day at 9:00 AM
+every('0 9 * * *', myFunction)
+
+// Every Monday at 9:00 AM
+every('0 9 * * 1', myFunction)
+
+// First day of every month at midnight
+every('0 0 1 * *', myFunction)
+
+// Every 15 minutes
+every('*/15 * * * *', myFunction)
+
+// Weekdays at 6 PM
+every('0 18 * * 1-5', myFunction)
+
+// Every 6 hours
+every('0 */6 * * *', myFunction)
+```
+
+### Cron Examples
+
+#### Daily Reports
+
+```typescript
+import $, { every, fn, ai, send } from 'sdk.do'
+
+const generateDailyReport = fn($.GenerateDailyReport, async () => {
+  // Query data from last 24 hours
+  const data = await db.list($.Order, {
+    where: {
+      createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+    },
+  })
+
+  // Generate report
+  const report = await ai.generate({
+    prompt: `Generate a daily sales report for ${data.length} orders`,
+    schema: $.Report,
+  })
+
+  // Send to team
+  await send($.Report.generated, report)
+
+  return report
+})
+
+// Run every day at 8 AM
+every('0 8 * * *', generateDailyReport)
+```
+
+#### Hourly Cleanup
+
+```typescript
+const cleanupExpiredSessions = fn($.CleanupSessions, async () => {
+  const expired = await db.list($.Session, {
+    where: {
+      expiresAt: { $lt: new Date() },
+    },
+  })
+
+  for (const session of expired) {
+    await db.delete($.Session, session.id)
+  }
+
+  return { deletedCount: expired.length }
+})
+
+// Run every hour at minute 0
+every('0 * * * *', cleanupExpiredSessions)
+```
+
+#### Weekly Summary
+
+```typescript
+const sendWeeklySummary = fn($.SendWeeklySummary, async () => {
+  const summary = await generateWeeklySummary()
+
+  await send($.Email.send, {
+    to: 'team@example.com',
+    subject: 'Weekly Summary',
+    body: summary,
+  })
+
+  return { sent: true }
+})
+
+// Every Monday at 9 AM
+every('0 9 * * 1', sendWeeklySummary)
+```
+
+#### Monthly Billing
+
+```typescript
+const processMonthlyBilling = fn($.ProcessBilling, async () => {
+  const customers = await db.list($.Customer, {
+    where: { subscription: { $ne: null } },
+  })
+
+  for (const customer of customers) {
+    await processSubscription(customer)
+  }
+
+  return { processedCount: customers.length }
+})
+
+// First day of month at midnight
+every('0 0 1 * *', processMonthlyBilling)
+```
+
+## Semantic Intervals
+
+### Built-in Intervals
+
+Use semantic intervals for better readability:
+
+```typescript
+import $, { every, fn } from 'sdk.do'
+
+// Every minute
+every($.EveryMinute, myFunction)
+
+// Every 5 minutes
+every($.Every5Minutes, myFunction)
+
+// Every hour
+every($.Hourly, myFunction)
+
+// Every day at midnight
+every($.Daily, myFunction)
+
+// Every week on Monday
+every($.Weekly, myFunction)
+
+// Every month on the 1st
+every($.Monthly, myFunction)
+```
+
+### Custom Semantic Intervals
+
+Define your own semantic intervals:
+
+```typescript
+// Define custom interval
+$.Every10Minutes = '*/10 * * * *'
+$.Biweekly = '0 0 1,15 * *'
+$.Quarterly = '0 0 1 1,4,7,10 *'
+
+// Use custom intervals
+every($.Every10Minutes, processQueue)
+every($.Biweekly, sendNewsletter)
+every($.Quarterly, generateQuarterlyReport)
+```
+
+### Semantic Examples
+
+#### Real-Time Processing
+
+```typescript
+const processRealtimeEvents = fn($.ProcessEvents, async () => {
+  const events = await fetchPendingEvents()
+  await processEvents(events)
+  return { processed: events.length }
+})
+
+// Process every minute
+every($.EveryMinute, processRealtimeEvents)
+```
+
+#### Hourly Aggregation
+
+```typescript
+const aggregateHourlyMetrics = fn($.AggregateMetrics, async () => {
+  const metrics = await calculateMetrics()
+  await storeAggregatedMetrics(metrics)
+  return metrics
+})
+
+// Aggregate every hour
+every($.Hourly, aggregateHourlyMetrics)
+```
+
+#### Daily Maintenance
+
+```typescript
+const performDailyMaintenance = fn($.DailyMaintenance, async () => {
+  await optimizeDatabase()
+  await cleanupOldLogs()
+  await updateCache()
+  return { status: 'complete' }
+})
+
+// Run daily at 2 AM (off-peak)
+every('0 2 * * *', performDailyMaintenance)
+```
+
+## One-Time Scheduling
+
+### Schedule for Specific Time
+
+Schedule a function to run once at a specific time:
+
+```typescript
+import { scheduleOnce, fn } from 'sdk.do'
+
+const sendReminder = fn($.SendReminder, async (params) => {
+  await send($.Email.send, {
+    to: params.email,
+    subject: 'Reminder',
+    body: params.message,
+  })
+})
+
+// Schedule for specific date
+const tomorrow9AM = new Date()
+tomorrow9AM.setDate(tomorrow9AM.getDate() + 1)
+tomorrow9AM.setHours(9, 0, 0, 0)
+
+scheduleOnce(tomorrow9AM, sendReminder, {
+  email: 'user@example.com',
+  message: 'Your appointment is tomorrow',
+})
+```
+
+### Delay Execution
+
+Delay execution by a duration:
+
+```typescript
+import { scheduleAfter, fn } from 'sdk.do'
+
+const followUpEmail = fn($.FollowUp, async (params) => {
+  await send($.Email.send, params)
+})
+
+// Send follow-up 3 days after signup
+scheduleAfter('3 days', followUpEmail, {
+  email: newUser.email,
+  subject: 'How are things going?',
+})
+```
+
+## Conditional Scheduling
+
+### Execute Based on Conditions
+
+```typescript
+import $, { every, fn, db } from 'sdk.do'
+
+const processIfNeeded = fn($.ConditionalProcess, async () => {
+  // Check if processing is needed
+  const pendingCount = await db.count($.Task, {
+    where: { status: 'pending' },
+  })
+
+  if (pendingCount === 0) {
+    return { skipped: true, reason: 'No pending tasks' }
+  }
+
+  // Process tasks
+  const tasks = await db.list($.Task, {
+    where: { status: 'pending' },
+  })
+
+  for (const task of tasks) {
+    await processTask(task)
+  }
+
+  return { processed: tasks.length }
+})
+
+// Check every 5 minutes, process only if needed
+every($.Every5Minutes, processIfNeeded)
+```
+
+### Business Hours Only
+
+```typescript
+const processBusinessHours = fn($.ProcessBusinessHours, async () => {
+  const now = new Date()
+  const hour = now.getHours()
+  const day = now.getDay()
+
+  // Skip outside business hours (9 AM - 5 PM, Mon-Fri)
+  if (hour < 9 || hour >= 17 || day === 0 || day === 6) {
+    return { skipped: true, reason: 'Outside business hours' }
+  }
+
+  // Process
+  return await performBusinessHourTask()
+})
+
+// Check every hour
+every($.Hourly, processBusinessHours)
+```
+
+## Advanced Patterns
+
+### Chain Scheduled Functions
+
+Execute functions in sequence:
+
+```typescript
+const step1 = fn($.Step1, async () => {
+  const data = await fetchData()
+  await db.create($.ProcessedData, data)
+  return data
+})
+
+const step2 = fn($.Step2, async () => {
+  const data = await db.list($.ProcessedData)
+  const result = await transform(data)
+  return result
+})
+
+const step3 = fn($.Step3, async () => {
+  const results = await getResults()
+  await send($.Report.generated, results)
+})
+
+// Run in sequence daily
+every($.Daily, async () => {
+  await step1()
+  await step2()
+  await step3()
+})
+```
+
+### Parallel Scheduled Tasks
+
+Run multiple tasks in parallel:
+
+```typescript
+const task1 = fn($.Task1, async () => {
+  /* ... */
+})
+const task2 = fn($.Task2, async () => {
+  /* ... */
+})
+const task3 = fn($.Task3, async () => {
+  /* ... */
+})
+
+every($.Hourly, async () => {
+  await Promise.all([task1(), task2(), task3()])
+})
+```
+
+### Dynamic Scheduling
+
+Adjust schedule based on load:
+
+```typescript
+const adaptiveProcessor = fn($.AdaptiveProcess, async () => {
+  const queueSize = await getQueueSize()
+
+  // Process more frequently if queue is large
+  if (queueSize > 1000) {
+    return { interval: $.EveryMinute, processed: await process() }
+  } else if (queueSize > 100) {
+    return { interval: $.Every5Minutes, processed: await process() }
+  } else {
+    return { interval: $.Every15Minutes, processed: await process() }
+  }
+})
+
+every($.Every5Minutes, adaptiveProcessor)
+```
+
+### Retry on Failure
+
+Implement retry logic for scheduled tasks:
+
+```typescript
+const reliableTask = fn($.ReliableTask, async () => {
+  let retries = 0
+  const maxRetries = 3
+
+  while (retries < maxRetries) {
+    try {
+      return await performTask()
+    } catch (error) {
+      retries++
+      if (retries === maxRetries) throw error
+      await new Promise((resolve) => setTimeout(resolve, 1000 * retries))
+    }
+  }
+})
+
+every($.Daily, reliableTask)
+```
+
+## Error Handling
+
+### Catch and Log Errors
+
+```typescript
+const safeScheduledTask = fn($.SafeTask, async () => {
+  try {
+    return await performTask()
+  } catch (error) {
+    console.error('Scheduled task error:', error)
+
+    // Send alert
+    await send($.Alert.send, {
+      severity: 'error',
+      message: `Task failed: ${error.message}`,
+    })
+
+    return { error: error.message }
+  }
+})
+
+every($.Hourly, safeScheduledTask)
+```
+
+### Dead Letter Queue
+
+Move failed tasks to a dead letter queue:
+
+```typescript
+const processWithDLQ = fn($.ProcessWithDLQ, async () => {
+  const tasks = await db.list($.Task, { where: { status: 'pending' } })
+
+  for (const task of tasks) {
+    try {
+      await processTask(task)
+      await db.update($.Task, task.id, { status: 'completed' })
+    } catch (error) {
+      // Move to dead letter queue
+      await db.create($.FailedTask, {
+        originalTask: task,
+        error: error.message,
+        failedAt: new Date(),
+      })
+      await db.update($.Task, task.id, { status: 'failed' })
+    }
+  }
+})
+
+every($.Every5Minutes, processWithDLQ)
+```
+
+## Monitoring Scheduled Functions
+
+### Track Execution
+
+```typescript
+const monitoredTask = fn($.MonitoredTask, async () => {
+  const startTime = Date.now()
+
+  try {
+    const result = await performTask()
+
+    // Log successful execution
+    await db.create($.ExecutionLog, {
+      functionId: 'monitored-task',
+      status: 'success',
+      duration: Date.now() - startTime,
+      result,
+    })
+
+    return result
+  } catch (error) {
+    // Log failed execution
+    await db.create($.ExecutionLog, {
+      functionId: 'monitored-task',
+      status: 'failed',
+      duration: Date.now() - startTime,
+      error: error.message,
+    })
+
+    throw error
+  }
+})
+
+every($.Hourly, monitoredTask)
+```
+
+### Health Checks
+
+```typescript
+const healthCheck = fn($.HealthCheck, async () => {
+  const lastRun = await db.get($.LastRun, 'critical-task')
+
+  if (!lastRun || Date.now() - lastRun.timestamp > 60 * 60 * 1000) {
+    // Task hasn't run in over an hour
+    await send($.Alert.send, {
+      severity: 'critical',
+      message: 'Critical task has not run in over an hour',
+    })
+  }
+
+  return { healthy: true }
+})
+
+// Check every 15 minutes
+every($.Every15Minutes, healthCheck)
+```
+
+## Best Practices
+
+### 1. Use Semantic Names
+
+```typescript
+// Good - Clear purpose
+const generateDailyReport = fn($.GenerateDailyReport, async () => {
+  /* ... */
+})
+
+// Bad - Unclear
+const task1 = fn($.Task1, async () => {
+  /* ... */
+})
+```
+
+### 2. Handle Errors Gracefully
+
+```typescript
+// Good - Error handling
+every($.Daily, async () => {
+  try {
+    await performTask()
+  } catch (error) {
+    console.error(error)
+    await notifyTeam(error)
+  }
+})
+
+// Bad - No error handling
+every($.Daily, async () => {
+  await performTask() // May crash scheduler
+})
+```
+
+### 3. Avoid Overlapping Executions
+
+```typescript
+let isRunning = false
+
+const nonOverlapping = fn($.NonOverlapping, async () => {
+  if (isRunning) {
+    return { skipped: true, reason: 'Already running' }
+  }
+
+  isRunning = true
+  try {
+    return await performLongTask()
+  } finally {
+    isRunning = false
+  }
+})
+
+every($.Every5Minutes, nonOverlapping)
+```
+
+### 4. Log Execution
+
+```typescript
+every($.Daily, async () => {
+  console.log('[Scheduler] Starting daily report generation')
+  const result = await generateReport()
+  console.log('[Scheduler] Daily report completed:', result)
+})
+```
+
+### 5. Use Idempotency
+
+```typescript
+const idempotentTask = fn($.IdempotentTask, async () => {
+  // Check if already processed today
+  const today = new Date().toISOString().split('T')[0]
+  const existing = await db.get($.DailyReport, today)
+
+  if (existing) {
+    return { skipped: true, reason: 'Already processed' }
+  }
+
+  // Process and store
+  const report = await generateReport()
+  await db.create($.DailyReport, { id: today, ...report })
+
+  return report
+})
+
+every($.Daily, idempotentTask)
+```
+
+## Testing Scheduled Functions
+
+### Manual Execution
+
+Test without waiting for schedule:
+
+```typescript
+import { describe, it, expect } from 'vitest'
+
+describe('Scheduled Tasks', () => {
+  it('should generate daily report', async () => {
+    // Execute function directly
+    const result = await generateDailyReport()
+
+    expect(result).toBeDefined()
+    expect(result.status).toBe('complete')
+  })
+})
+```
+
+### Mock Scheduling
+
+Test scheduling logic without actual delays:
+
+```typescript
+import { vi } from 'vitest'
+
+it('should schedule correctly', () => {
+  const mockEvery = vi.fn()
+
+  // Test scheduling setup
+  mockEvery($.Daily, generateReport)
+
+  expect(mockEvery).toHaveBeenCalledWith($.Daily, expect.any(Function))
+})
+```
+
+## Troubleshooting
+
+### Schedule Not Running
+
+```typescript
+// Verify cron syntax
+const cron = '0 9 * * *'
+const isValid = validateCronPattern(cron)
+console.log('Valid:', isValid)
+
+// Check function is registered
+const func = await getFunction('my-scheduled-function')
+console.log('Registered:', !!func)
+```
+
+### Wrong Timezone
+
+```typescript
+// Specify timezone explicitly
+every('0 9 * * *', myFunction, {
+  timezone: 'America/New_York',
+})
+```
+
+### Missed Executions
+
+```typescript
+// Track last execution
+const lastRun = await db.get($.LastRun, 'task-id')
+console.log('Last ran:', lastRun?.timestamp)
+
+// Check for gaps
+const now = Date.now()
+const expectedInterval = 60 * 60 * 1000 // 1 hour
+if (lastRun && now - lastRun.timestamp > expectedInterval * 1.5) {
+  console.warn('Execution missed or delayed')
+}
+```
+
+## Next Steps
+
+- [Monitoring](./monitoring) - Monitor scheduled function execution
+- [Integration](./integration) - Integrate with other SDK features
+- [Best Practices](./best-practices) - Production scheduling patterns
+- [API Reference](./api-reference) - Complete API documentation

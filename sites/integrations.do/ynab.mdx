@@ -1,0 +1,96 @@
+---
+$id: https://integrations.do/ynab
+$type: Integration
+name: Ynab
+service: ynab
+description: YNAB (You Need A Budget) is a budgeting tool helping users track expenses, plan finances, and gain control over spending to reduce debt
+category: accounting
+sdkBased: false
+baseUrl: https://api.ynab.com
+
+auth:
+  type: oauth2
+  authorizationUrl: https://app.ynab.com/oauth/authorize
+  tokenUrl: https://app.ynab.com/oauth/token
+  scopes:
+    - read-only
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Ynab actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: false
+  events: []
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://www.ynab.com
+  apiDocs: https://www.ynab.com
+---
+
+# Ynab Integration
+
+YNAB (You Need A Budget) is a budgeting tool helping users track expenses, plan finances, and gain control over spending to reduce debt
+
+## Quick Start
+
+```typescript
+import { YnabClient } from '@dotdo/sdk.do/integrations/ynab'
+
+const ynab = new YnabClient({
+  apiKey: process.env.YNAB_API_KEY,
+})
+
+const result = await ynab.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Ynab provides 0 actions through the Composio API.
+
+## License
+
+MIT

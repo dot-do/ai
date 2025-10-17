@@ -1,0 +1,104 @@
+---
+$id: https://integrations.do/todoist
+$type: Integration
+name: Todoist
+service: todoist
+description: Todoist is a task management tool allowing users to create to-do lists, set deadlines, and collaborate on projects with reminders and cross-platform syncing
+category: productivity
+sdkBased: false
+baseUrl: https://api.todoist.com
+
+auth:
+  type: oauth2
+  authorizationUrl: https://todoist.com/oauth/authorize
+  tokenUrl: https://todoist.com/oauth/access_token
+  scopes:
+    - data:read_write
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Todoist actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: true
+  verificationMethod: none
+  events:
+    - name: generic_trigger
+      type: trigger
+      description: Generic webhook trigger
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://www.todoist.com/
+  apiDocs: https://www.todoist.com/
+---
+
+# Todoist Integration
+
+Todoist is a task management tool allowing users to create to-do lists, set deadlines, and collaborate on projects with reminders and cross-platform syncing
+
+## Quick Start
+
+```typescript
+import { TodoistClient } from '@dotdo/sdk.do/integrations/todoist'
+
+const todoist = new TodoistClient({
+  apiKey: process.env.TODOIST_API_KEY,
+})
+
+const result = await todoist.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Todoist provides 30 actions through the Composio API.
+
+## Webhooks
+
+Todoist supports 1 webhook triggers for real-time event notifications.
+
+## License
+
+MIT

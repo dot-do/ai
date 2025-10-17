@@ -1,0 +1,766 @@
+---
+$id: https://graphdl.do/api
+$type: APIReference
+title: graphdl API Reference
+description: Complete API reference for graphdl semantic graph library
+keywords: [graphdl, api, reference, documentation, typescript]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# graphdl API Reference
+
+Complete API reference for the graphdl semantic graph library.
+
+## Core Exports
+
+### `$` - Semantic Proxy
+
+The primary semantic context proxy for creating `$.Subject.predicate.Object` patterns.
+
+**Type**: `PathProxy`
+
+**Usage**:
+
+```typescript
+import $ from 'graphdl'
+
+const path = $.Person.worksFor.Organization
+String(path) // "$.Person.worksFor.Organization"
+```
+
+**Methods**:
+
+- `toString(): string` - Convert path to string representation
+- `valueOf(): string` - Get string value of path
+- `[key: string]: PathProxy` - Property access for chaining
+
+**Examples**:
+
+```typescript
+// Create paths
+$.Person.worksFor.Organization
+$.Product.locatedAt.Warehouse
+$.John.hasSkill.TypeScript
+
+// Convert to string
+String($.Person.worksFor.Organization)
+path.toString()
+path.valueOf()
+// Use in template literals
+`Path: ${$.Person.worksFor.Organization}`
+```
+
+---
+
+## Triple Functions
+
+### `createTriple()`
+
+Create a semantic triple (Subject-Predicate-Object statement).
+
+**Signature**:
+
+```typescript
+function createTriple<S = any, P extends string = string, O = any>(
+  subject: S,
+  predicate: P,
+  object: O,
+  options?: {
+    context?: string
+    metadata?: TripleMetadata
+  }
+): Triple<S, P, O>
+```
+
+**Parameters**:
+
+- `subject` - The subject entity (can be any type)
+- `predicate` - The relationship/property name
+- `object` - The object entity (can be any type)
+- `options.context` - Optional context URL (e.g., 'https://schema.org')
+- `options.metadata` - Optional metadata object
+
+**Returns**: `Triple<S, P, O>` - A triple object
+
+**Example**:
+
+```typescript
+import { createTriple } from 'graphdl'
+
+const triple = createTriple('Person:john', 'worksFor', 'Organization:acme', {
+  context: 'https://schema.org',
+  metadata: {
+    startDate: '2023-01-01',
+    confidence: 0.95,
+  },
+})
+```
+
+---
+
+### `triple()`
+
+Create a triple using the builder pattern.
+
+**Signature**:
+
+```typescript
+function triple<S = any, P extends string = string, O = any>(subject?: S): TripleBuilder<S, P, O>
+```
+
+**Parameters**:
+
+- `subject` - Optional initial subject value
+
+**Returns**: `TripleBuilder<S, P, O>` - A triple builder
+
+**Builder Methods**:
+
+- `subject(value: S): this` - Set the subject
+- `predicate(value: P): this` - Set the predicate
+- `object(value: O): this` - Set the object
+- `context(value: string): this` - Set the context
+- `metadata(value: TripleMetadata): this` - Set metadata
+- `build(): Triple<S, P, O>` - Build the triple
+
+**Example**:
+
+```typescript
+import { triple } from 'graphdl'
+
+const t = triple('Person:john').predicate('worksFor').object('Organization:acme').context('https://schema.org').metadata({ startDate: '2023-01-01' }).build()
+```
+
+---
+
+### `path()`
+
+Create a semantic path string from components.
+
+**Signature**:
+
+```typescript
+function path<S = string, P extends Predicate = Predicate, O = string>(subject: S, predicate: P, object: O): string
+```
+
+**Parameters**:
+
+- `subject` - The subject component
+- `predicate` - The predicate component
+- `object` - The object component
+
+**Returns**: `string` - Formatted as `$.Subject.predicate.Object`
+
+**Example**:
+
+```typescript
+import { path } from 'graphdl'
+
+const semanticPath = path('Person', 'worksFor', 'Organization')
+console.log(semanticPath) // "$.Person.worksFor.Organization"
+```
+
+---
+
+### `parsePath()`
+
+Parse a semantic path string into components.
+
+**Signature**:
+
+```typescript
+function parsePath(pathString: string): {
+  subject: string
+  predicate: string
+  object: string
+} | null
+```
+
+**Parameters**:
+
+- `pathString` - A semantic path string (e.g., "$.Person.worksFor.Organization")
+
+**Returns**: Object with `subject`, `predicate`, `object` properties, or `null` if invalid
+
+**Example**:
+
+```typescript
+import { parsePath } from 'graphdl'
+
+const parsed = parsePath('$.Person.worksFor.Organization')
+// { subject: 'Person', predicate: 'worksFor', object: 'Organization' }
+```
+
+---
+
+## Graph Functions
+
+### `graph()`
+
+Create a graph builder for constructing semantic graphs.
+
+**Signature**:
+
+```typescript
+function graph(): GraphBuilder
+```
+
+**Returns**: `GraphBuilder` - A graph builder instance
+
+**Builder Methods**:
+
+- `context(value: string | Record<string, any>): this` - Set graph context
+- `metadata(value: GraphMetadata): this` - Set graph metadata
+- `node(node: Node): this` - Add a node
+- `nodes(nodes: Node[]): this` - Add multiple nodes
+- `edge(edge: Edge): this` - Add an edge
+- `edges(edges: Edge[]): this` - Add multiple edges
+- `triple(triple: Triple): this` - Add a triple (creates node and edge)
+- `triples(triples: Triple[]): this` - Add multiple triples
+- `build(): Graph` - Build the graph
+- `toJSONLD(): Record<string, any>` - Export as JSON-LD
+
+**Example**:
+
+```typescript
+import { graph } from 'graphdl'
+
+const g = graph()
+  .context('https://schema.org')
+  .node(node('john', 'Person', { name: 'John' }))
+  .node(node('acme', 'Organization', { name: 'Acme' }))
+  .edge(edge('john', 'worksFor', 'acme'))
+  .metadata({ created: new Date().toISOString() })
+  .build()
+```
+
+---
+
+### `node()`
+
+Create a graph node.
+
+**Signature**:
+
+```typescript
+function node(id: string, type: string | string[], properties?: Record<string, any>): Node
+```
+
+**Parameters**:
+
+- `id` - Unique identifier for the node
+- `type` - Node type(s) - can be string or array of strings
+- `properties` - Optional properties object
+
+**Returns**: `Node` - A node object
+
+**Example**:
+
+```typescript
+import { node } from 'graphdl'
+
+const person = node('john', 'Person', {
+  name: 'John Doe',
+  email: 'john@example.com',
+  jobTitle: 'Engineer',
+})
+```
+
+---
+
+### `edge()`
+
+Create a graph edge (relationship).
+
+**Signature**:
+
+```typescript
+function edge(source: string, predicate: string, target: string, properties?: Record<string, any>): Edge
+```
+
+**Parameters**:
+
+- `source` - Source node ID
+- `predicate` - Relationship/property name
+- `target` - Target node ID
+- `properties` - Optional edge properties
+
+**Returns**: `Edge` - An edge object
+
+**Example**:
+
+```typescript
+import { edge } from 'graphdl'
+
+const employment = edge('john', 'worksFor', 'acme', {
+  startDate: '2023-01-01',
+  role: 'Engineer',
+  department: 'Engineering',
+})
+```
+
+---
+
+## Semantic Naming Functions
+
+### `toPlural()`
+
+Convert a word to plural form.
+
+**Signature**:
+
+```typescript
+function toPlural(word: string): string
+```
+
+**Parameters**:
+
+- `word` - A singular word (non-empty string)
+
+**Returns**: `string` - The plural form
+
+**Throws**: `Error` if word is empty or whitespace
+
+**Example**:
+
+```typescript
+import { toPlural } from 'graphdl'
+
+toPlural('order') // 'orders'
+toPlural('person') // 'people'
+toPlural('category') // 'categories'
+toPlural('box') // 'boxes'
+```
+
+**Features**:
+
+- Handles irregular plurals (person → people, child → children)
+- Follows English pluralization rules (y → ies, s/x/ch → es, etc.)
+- Preserves case (Order → Orders, ORDER → ORDERS)
+
+---
+
+### `toAction()`
+
+Convert a verb to action form (infinitive/base form).
+
+**Signature**:
+
+```typescript
+function toAction(verb: string): string
+```
+
+**Parameters**:
+
+- `verb` - A verb (non-empty string)
+
+**Returns**: `string` - The action form (same as input for infinitives)
+
+**Throws**: `Error` if verb is empty or whitespace
+
+**Example**:
+
+```typescript
+import { toAction } from 'graphdl'
+
+toAction('create') // 'create'
+toAction('send') // 'send'
+toAction('update') // 'update'
+```
+
+---
+
+### `toActivity()`
+
+Convert a verb to activity form (present continuous).
+
+**Signature**:
+
+```typescript
+function toActivity(verb: string): string
+```
+
+**Parameters**:
+
+- `verb` - A verb (non-empty string)
+
+**Returns**: `string` - The activity form (verb + 'ing')
+
+**Throws**: `Error` if verb is empty or whitespace
+
+**Example**:
+
+```typescript
+import { toActivity } from 'graphdl'
+
+toActivity('create') // 'creating'
+toActivity('send') // 'sending'
+toActivity('run') // 'running' (doubles final consonant)
+toActivity('make') // 'making' (drops 'e')
+```
+
+**Features**:
+
+- Handles CVC pattern doubling (run → running)
+- Drops silent 'e' (make → making)
+- Handles 'ie' → 'ying' (lie → lying)
+
+---
+
+### `toEvent()`
+
+Convert a verb to event form (past tense).
+
+**Signature**:
+
+```typescript
+function toEvent(verb: string): string
+```
+
+**Parameters**:
+
+- `verb` - A verb (non-empty string)
+
+**Returns**: `string` - The event form (past tense)
+
+**Throws**: `Error` if verb is empty or whitespace
+
+**Example**:
+
+```typescript
+import { toEvent } from 'graphdl'
+
+toEvent('create') // 'created'
+toEvent('send') // 'sent' (irregular)
+toEvent('go') // 'went' (irregular)
+toEvent('run') // 'ran' (irregular)
+```
+
+**Features**:
+
+- Handles irregular past tense (send → sent, go → went)
+- Follows regular rules (create → created)
+- Preserves case (Create → Created, SEND → SENT)
+
+---
+
+## Types
+
+### `Triple<S, P, O>`
+
+Represents a semantic triple (Subject-Predicate-Object).
+
+```typescript
+interface Triple<S = any, P extends string = string, O = any> {
+  subject: S
+  predicate: P
+  object: O
+  context?: string
+  metadata?: TripleMetadata
+}
+```
+
+**Properties**:
+
+- `subject` - The subject entity
+- `predicate` - The relationship/property
+- `object` - The object entity
+- `context` - Optional context URL
+- `metadata` - Optional metadata
+
+---
+
+### `TripleMetadata`
+
+Metadata for triples.
+
+```typescript
+interface TripleMetadata {
+  source?: string
+  confidence?: number
+  timestamp?: string
+  provenance?: string
+  [key: string]: any
+}
+```
+
+---
+
+### `Graph`
+
+Represents a semantic graph.
+
+```typescript
+interface Graph {
+  $context?: string | Record<string, any>
+  nodes: Node[]
+  edges: Edge[]
+  metadata?: GraphMetadata
+}
+```
+
+**Properties**:
+
+- `$context` - Context URL or object (e.g., 'https://schema.org')
+- `nodes` - Array of nodes
+- `edges` - Array of edges
+- `metadata` - Optional graph metadata
+
+---
+
+### `Node`
+
+Represents a graph node.
+
+```typescript
+interface Node {
+  id: string
+  type: string | string[]
+  properties: Record<string, any>
+}
+```
+
+**Properties**:
+
+- `id` - Unique identifier
+- `type` - Node type(s)
+- `properties` - Node properties
+
+---
+
+### `Edge`
+
+Represents a graph edge.
+
+```typescript
+interface Edge {
+  id?: string
+  source: string
+  target: string
+  predicate: string
+  properties?: Record<string, any>
+}
+```
+
+**Properties**:
+
+- `id` - Optional edge ID
+- `source` - Source node ID
+- `target` - Target node ID
+- `predicate` - Relationship name
+- `properties` - Optional edge properties
+
+---
+
+### `GraphMetadata`
+
+Metadata for graphs.
+
+```typescript
+interface GraphMetadata {
+  created?: string
+  modified?: string
+  source?: string
+  description?: string
+  [key: string]: any
+}
+```
+
+---
+
+### `Collection<T>`
+
+Represents a collection of items.
+
+```typescript
+type Collection<T> = T[]
+```
+
+**Usage**: `$.Orders` - Collection<Order>
+
+---
+
+### `Item<T>`
+
+Represents a single item.
+
+```typescript
+type Item<T> = T
+```
+
+**Usage**: `$.Order` - Item<Order>
+
+---
+
+### `Action<TInput, TOutput>`
+
+Represents an action function.
+
+```typescript
+type Action<TInput, TOutput> = (input: TInput) => Promise<TOutput>
+```
+
+**Usage**: `$.Order.create` - Action<OrderInput, Order>
+
+---
+
+### `Activity<T>`
+
+Represents an ongoing activity.
+
+```typescript
+type Activity<T> = {
+  state: ActivityState
+  data: T
+  startedAt?: string
+  completedAt?: string
+  progress?: number
+  error?: string
+}
+```
+
+**ActivityState**: `'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled'`
+
+**Usage**: `$.Order.creating` - Activity<Order>
+
+---
+
+### `Event<T>`
+
+Represents a completed event.
+
+```typescript
+type Event<T> = {
+  timestamp: string
+  data: T
+  metadata?: Record<string, unknown>
+}
+```
+
+**Usage**: `$.Order.created` - Event<Order>
+
+---
+
+## Constants
+
+### Predicate Constants
+
+Built-in predicates from various vocabularies:
+
+#### Schema.org Predicates
+
+- `worksFor`, `employs`, `memberOf`
+- `author`, `publisher`, `creator`
+- `owns`, `partOf`, `hasPart`
+- And 50+ more...
+
+#### GS1/EPCIS Predicates
+
+- `locatedAt`, `containedIn`, `transformedFrom`
+- `inTransit`, `inProgress`, `active`
+- `receiving`, `shipping`, `commissioning`
+- And 20+ more...
+
+#### O\*NET Predicates
+
+- `hasOccupation`, `requiresSkill`, `requiresAbility`
+- `performsActivity`, `hasAbility`, `hasSkill`
+- And 10+ more...
+
+#### Universal Predicates
+
+- `is`, `has`, `relatedTo`
+- `precedes`, `follows`, `during`
+- `near`, `contains`, `within`
+
+See [Semantic Patterns](../docs/semantic-patterns) for complete list.
+
+---
+
+## Utility Interfaces
+
+### `QueryPattern`
+
+Pattern for querying graphs.
+
+```typescript
+interface QueryPattern {
+  subject?: string | PatternConstraint
+  predicate?: string | PatternConstraint
+  object?: string | PatternConstraint
+  context?: string
+}
+```
+
+---
+
+### `PathPattern`
+
+Pattern for graph traversal.
+
+```typescript
+interface PathPattern {
+  start: string | PatternConstraint
+  path: string[]
+  end?: string | PatternConstraint
+  maxDepth?: number
+}
+```
+
+---
+
+### `QueryResult<T>`
+
+Result from a graph query.
+
+```typescript
+interface QueryResult<T = any> {
+  results: T[]
+  count: number
+  metadata?: {
+    executionTime?: number
+    [key: string]: any
+  }
+}
+```
+
+---
+
+## Usage with TypeScript
+
+graphdl is fully typed and provides excellent TypeScript support:
+
+```typescript
+import $ from 'graphdl'
+import type { Triple, Graph, Node, Edge } from 'graphdl'
+import type { Person, Organization } from 'schema.org.ai'
+
+// Type-safe triple
+const triple: Triple<string, string, string> = createTriple('Person:john', 'worksFor', 'Organization:acme')
+
+// Type-safe graph
+const graph: Graph = graph()
+  .node(node('john', 'Person', { name: 'John' }))
+  .build()
+
+// Use with Schema.org types
+const person: Person = {
+  $type: 'Person',
+  name: 'John Doe',
+}
+```
+
+---
+
+## See Also
+
+- [Getting Started](../docs/getting-started) - Installation and basic usage
+- [Semantic Patterns](../docs/semantic-patterns) - Understanding patterns
+- [Relationships](../docs/relationships) - Working with relationships
+- [Examples](../examples/) - Code examples
+
+---
+
+Part of the [`.do` platform](https://github.com/dot-do/platform) open-source ecosystem.

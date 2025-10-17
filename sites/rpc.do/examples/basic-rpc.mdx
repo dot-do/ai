@@ -1,0 +1,509 @@
+---
+$id: https://rpc.do/examples/basic-rpc
+$type: HowTo
+title: Basic RPC Example
+description: Simple worker-to-worker RPC communication example
+keywords: [rpc, example, basic, worker-communication, service-bindings]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Basic RPC Example
+
+Learn how to set up basic worker-to-worker RPC communication with rpc.do.
+
+## Overview
+
+This example demonstrates:
+
+- Creating an RPC server worker
+- Defining RPC methods and types
+- Creating an RPC client worker
+- Making type-safe RPC calls
+
+## RPC Server Worker
+
+### Define RPC Types
+
+```typescript
+// workers/data-worker/src/rpc-types.ts
+export namespace DataWorkerRPC {
+  export interface GetUserParams {
+    id: string
+  }
+
+  export interface GetUserResponse {
+    id: string
+    name: string
+    email: string
+    role: string
+  }
+
+  export interface ListUsersParams {
+    role?: string
+    limit?: number
+  }
+
+  export interface ListUsersResponse {
+    users: Array<{
+      id: string
+      name: string
+      email: string
+      role: string
+    }>
+    total: number
+  }
+
+  export interface CreateUserParams {
+    name: string
+    email: string
+    role: string
+  }
+
+  export interface CreateUserResponse {
+    id: string
+    name: string
+    email: string
+    role: string
+    createdAt: string
+  }
+
+  export type Methods = {
+    getUser: {
+      params: GetUserParams
+      response: GetUserResponse
+    }
+    listUsers: {
+      params: ListUsersParams
+      response: ListUsersResponse
+    }
+    createUser: {
+      params: CreateUserParams
+      response: CreateUserResponse
+    }
+  }
+}
+```
+
+### Implement RPC Server
+
+```typescript
+// workers/data-worker/src/index.ts
+import type { RpcRequest, RpcResponse } from '../../rpc-types'
+import type { DataWorkerRPC } from './rpc-types'
+
+interface Env {
+  USERS_KV: KVNamespace
+}
+
+// Mock user database
+const users = new Map([
+  ['user-1', { id: 'user-1', name: 'Alice', email: 'alice@example.com', role: 'admin' }],
+  ['user-2', { id: 'user-2', name: 'Bob', email: 'bob@example.com', role: 'user' }],
+  ['user-3', { id: 'user-3', name: 'Charlie', email: 'charlie@example.com', role: 'user' }],
+])
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const url = new URL(request.url)
+
+    // Handle RPC endpoints
+    if (url.pathname.startsWith('/rpc/')) {
+      const method = url.pathname.replace('/rpc/', '')
+
+      try {
+        const body = (await request.json()) as RpcRequest
+
+        // Route to appropriate handler
+        if (method === 'getUser') {
+          return handleGetUser(body.params as DataWorkerRPC.GetUserParams)
+        }
+
+        if (method === 'listUsers') {
+          return handleListUsers(body.params as DataWorkerRPC.ListUsersParams)
+        }
+
+        if (method === 'createUser') {
+          return handleCreateUser(body.params as DataWorkerRPC.CreateUserParams)
+        }
+
+        return Response.json({ success: false, error: `Method not found: ${method}` } as RpcResponse, { status: 404 })
+      } catch (error) {
+        return Response.json(
+          {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          } as RpcResponse,
+          { status: 500 }
+        )
+      }
+    }
+
+    return Response.json({ message: 'Data Worker API', version: '1.0.0' })
+  },
+}
+
+async function handleGetUser(params: DataWorkerRPC.GetUserParams): Promise<Response> {
+  const user = users.get(params.id)
+
+  if (!user) {
+    return Response.json({ success: false, error: 'User not found' } as RpcResponse, { status: 404 })
+  }
+
+  return Response.json({
+    success: true,
+    data: user,
+  } as RpcResponse<DataWorkerRPC.GetUserResponse>)
+}
+
+async function handleListUsers(params: DataWorkerRPC.ListUsersParams): Promise<Response> {
+  let filteredUsers = Array.from(users.values())
+
+  // Filter by role if specified
+  if (params.role) {
+    filteredUsers = filteredUsers.filter((u) => u.role === params.role)
+  }
+
+  // Apply limit
+  const limit = params.limit || 10
+  const limitedUsers = filteredUsers.slice(0, limit)
+
+  return Response.json({
+    success: true,
+    data: {
+      users: limitedUsers,
+      total: filteredUsers.length,
+    },
+  } as RpcResponse<DataWorkerRPC.ListUsersResponse>)
+}
+
+async function handleCreateUser(params: DataWorkerRPC.CreateUserParams): Promise<Response> {
+  const newUser = {
+    id: `user-${Date.now()}`,
+    name: params.name,
+    email: params.email,
+    role: params.role,
+    createdAt: new Date().toISOString(),
+  }
+
+  users.set(newUser.id, newUser)
+
+  return Response.json({
+    success: true,
+    data: newUser,
+  } as RpcResponse<DataWorkerRPC.CreateUserResponse>)
+}
+```
+
+### Configure wrangler.jsonc
+
+```jsonc
+// workers/data-worker/wrangler.jsonc
+{
+  "name": "data-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-03-07",
+  "compatibility_flags": ["nodejs_compat"],
+  "kv_namespaces": [
+    {
+      "binding": "USERS_KV",
+      "id": "your-kv-namespace-id",
+    },
+  ],
+}
+```
+
+## RPC Client Worker
+
+### Import RPC Types
+
+```typescript
+// workers/api-worker/src/index.ts
+import { createRpcClient } from '../../rpc-types'
+import type { WorkerServiceBindings } from '../../rpc-types'
+import type { DataWorkerRPC } from '../../data-worker/src/rpc-types'
+
+interface Env extends WorkerServiceBindings {
+  DATA_SERVICE: Fetcher
+}
+```
+
+### Create Typed Client
+
+```typescript
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const url = new URL(request.url)
+
+    // Create typed RPC client
+    const dataClient = createRpcClient<DataWorkerRPC.Methods>(env.DATA_SERVICE)
+
+    try {
+      // Route API requests
+      if (url.pathname === '/api/users/:id') {
+        const userId = url.pathname.split('/').pop()!
+
+        // Make type-safe RPC call
+        const user = await dataClient.call('getUser', { id: userId })
+
+        return Response.json(user)
+      }
+
+      if (url.pathname === '/api/users') {
+        const role = url.searchParams.get('role') || undefined
+        const limit = parseInt(url.searchParams.get('limit') || '10')
+
+        // Make type-safe RPC call
+        const result = await dataClient.call('listUsers', { role, limit })
+
+        return Response.json(result)
+      }
+
+      if (url.pathname === '/api/users/create' && request.method === 'POST') {
+        const body = await request.json()
+
+        // Make type-safe RPC call
+        const newUser = await dataClient.call('createUser', {
+          name: body.name,
+          email: body.email,
+          role: body.role || 'user',
+        })
+
+        return Response.json(newUser, { status: 201 })
+      }
+
+      return Response.json({ error: 'Not found' }, { status: 404 })
+    } catch (error) {
+      console.error('RPC call failed:', error)
+
+      return Response.json(
+        {
+          error: 'Internal server error',
+          message: error instanceof Error ? error.message : String(error),
+        },
+        { status: 500 }
+      )
+    }
+  },
+}
+```
+
+### Configure wrangler.jsonc
+
+```jsonc
+// workers/api-worker/wrangler.jsonc
+{
+  "name": "api-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-03-07",
+  "compatibility_flags": ["nodejs_compat"],
+  "services": [
+    {
+      "binding": "DATA_SERVICE",
+      "service": "data-worker",
+      "environment": "production",
+    },
+  ],
+}
+```
+
+## Testing the RPC Setup
+
+### 1. Deploy Workers
+
+```bash
+# Deploy data worker
+cd workers/data-worker
+pnpm run deploy
+
+# Deploy api worker
+cd ../api-worker
+pnpm run deploy
+```
+
+### 2. Test Endpoints
+
+```bash
+# Get a specific user
+curl https://api-worker.your-domain.com/api/users/user-1
+
+# List all users
+curl https://api-worker.your-domain.com/api/users
+
+# List users by role
+curl https://api-worker.your-domain.com/api/users?role=admin
+
+# Create a new user
+curl -X POST https://api-worker.your-domain.com/api/users/create \
+  -H "Content-Type: application/json" \
+  -d '{"name":"David","email":"david@example.com","role":"user"}'
+```
+
+### 3. Expected Responses
+
+**Get User**:
+
+```json
+{
+  "id": "user-1",
+  "name": "Alice",
+  "email": "alice@example.com",
+  "role": "admin"
+}
+```
+
+**List Users**:
+
+```json
+{
+  "users": [
+    {
+      "id": "user-1",
+      "name": "Alice",
+      "email": "alice@example.com",
+      "role": "admin"
+    },
+    {
+      "id": "user-2",
+      "name": "Bob",
+      "email": "bob@example.com",
+      "role": "user"
+    }
+  ],
+  "total": 3
+}
+```
+
+**Create User**:
+
+```json
+{
+  "id": "user-1234567890",
+  "name": "David",
+  "email": "david@example.com",
+  "role": "user",
+  "createdAt": "2025-01-15T10:30:00.000Z"
+}
+```
+
+## Error Handling
+
+The example includes comprehensive error handling:
+
+```typescript
+try {
+  const user = await dataClient.call('getUser', { id: userId })
+  return Response.json(user)
+} catch (error) {
+  // Handle RPC errors
+  if (error instanceof Error) {
+    if (error.message.includes('404')) {
+      return Response.json({ error: 'User not found' }, { status: 404 })
+    }
+
+    if (error.message.includes('500')) {
+      return Response.json({ error: 'Service unavailable' }, { status: 503 })
+    }
+  }
+
+  // Generic error response
+  return Response.json({ error: 'Internal server error' }, { status: 500 })
+}
+```
+
+## Adding More Methods
+
+To add new RPC methods:
+
+### 1. Add to RPC Types
+
+```typescript
+export namespace DataWorkerRPC {
+  // ... existing types
+
+  export interface UpdateUserParams {
+    id: string
+    name?: string
+    email?: string
+    role?: string
+  }
+
+  export interface UpdateUserResponse {
+    id: string
+    name: string
+    email: string
+    role: string
+    updatedAt: string
+  }
+
+  export type Methods = {
+    // ... existing methods
+    updateUser: {
+      params: UpdateUserParams
+      response: UpdateUserResponse
+    }
+  }
+}
+```
+
+### 2. Implement Handler
+
+```typescript
+if (method === 'updateUser') {
+  return handleUpdateUser(body.params as DataWorkerRPC.UpdateUserParams)
+}
+
+async function handleUpdateUser(params: DataWorkerRPC.UpdateUserParams): Promise<Response> {
+  const user = users.get(params.id)
+
+  if (!user) {
+    return Response.json({ success: false, error: 'User not found' }, { status: 404 })
+  }
+
+  const updatedUser = {
+    ...user,
+    ...(params.name && { name: params.name }),
+    ...(params.email && { email: params.email }),
+    ...(params.role && { role: params.role }),
+    updatedAt: new Date().toISOString(),
+  }
+
+  users.set(params.id, updatedUser)
+
+  return Response.json({
+    success: true,
+    data: updatedUser,
+  })
+}
+```
+
+### 3. Use in Client
+
+```typescript
+const updatedUser = await dataClient.call('updateUser', {
+  id: 'user-1',
+  name: 'Alice Smith',
+  role: 'super-admin',
+})
+```
+
+## Key Takeaways
+
+1. **Type Safety**: RPC types ensure compile-time safety
+2. **Service Bindings**: No network overhead for worker-to-worker calls
+3. **Error Handling**: Proper error propagation from server to client
+4. **Scalability**: Both workers can scale independently
+5. **Maintainability**: Clear separation of concerns
+
+## Next Steps
+
+- Explore [Worker Communication](./worker-communication) for multi-worker patterns
+- Learn about [Durable Objects RPC](../docs/service-objects) for stateful services
+- Review [RPC Patterns](../docs/rpc-patterns) for advanced communication strategies
+
+## See Also
+
+- [Getting Started](../docs/getting-started) - Complete setup guide
+- [API Reference](../api/) - Full API documentation
+- [Service Objects](../docs/service-objects) - Stateful RPC with Durable Objects

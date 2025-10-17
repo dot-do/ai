@@ -1,0 +1,574 @@
+---
+$id: https://analytics.do/examples/real-world-use-case
+$type: HowTo
+title: Real-World Use Case - analytics.do
+description: Complete SaaS analytics implementation with event tracking, metrics, dashboards, and alerts
+keywords: [real-world, saas, complete example, production, implementation]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Real-World Use Case: SaaS Analytics
+
+Complete analytics implementation for a SaaS platform.
+
+## Overview
+
+This example implements comprehensive analytics for a B2B SaaS platform, tracking:
+
+- User sign-ups and onboarding
+- Feature usage and engagement
+- Subscriptions and revenue
+- Service health and performance
+- Sales funnel and conversion
+
+## Implementation
+
+```typescript
+import $, { analytics, db, on, every, agent } from 'sdk.do'
+
+// ========================================
+// 1. Event Tracking Setup
+// ========================================
+
+// User lifecycle events
+on($.User.signed_up, async (user) => {
+  await analytics.track($.User.signed_up, {
+    userId: user.id,
+    email: hash(user.email),
+    plan: user.plan,
+    source: user.source,
+    timestamp: new Date(),
+  })
+
+  await analytics.counter($.Users, 1)
+  await analytics.metric($.Users.new, {
+    value: 1,
+    dimensions: {
+      plan: user.plan,
+      source: user.source,
+    },
+  })
+})
+
+on($.User.activated, async (user) => {
+  await analytics.track($.User.activated, {
+    userId: user.id,
+    timestamp: new Date(),
+  })
+
+  const signupTime = await db.get($.User, user.id).then((u) => u.createdAt)
+  const activationTime = Date.now() - signupTime.getTime()
+
+  await analytics.metric($.TimeToActivation, {
+    value: activationTime,
+    dimensions: {
+      plan: user.plan,
+    },
+  })
+})
+
+// Feature usage tracking
+on($.Feature.used, async (event) => {
+  await analytics.track($.Feature.used, {
+    userId: event.userId,
+    feature: event.feature,
+    timestamp: new Date(),
+  })
+
+  await analytics.counter(`$.Feature.${event.feature}.used`, 1)
+  await analytics.metric($.FeatureUsage, {
+    value: 1,
+    dimensions: {
+      feature: event.feature,
+      plan: event.userPlan,
+    },
+  })
+})
+
+// Subscription events
+on($.Subscription.created, async (subscription) => {
+  await analytics.track($.Subscription.created, {
+    subscriptionId: subscription.id,
+    userId: subscription.userId,
+    plan: subscription.plan,
+    amount: subscription.amount,
+    timestamp: new Date(),
+  })
+
+  await analytics.metric($.MRR, {
+    value: subscription.amount,
+    dimensions: {
+      plan: subscription.plan,
+    },
+  })
+
+  await analytics.metric($.Revenue, {
+    value: subscription.amount,
+    dimensions: {
+      type: 'subscription',
+      plan: subscription.plan,
+    },
+  })
+})
+
+on($.Subscription.cancelled, async (subscription) => {
+  await analytics.track($.Subscription.cancelled, {
+    subscriptionId: subscription.id,
+    userId: subscription.userId,
+    reason: subscription.cancelReason,
+    timestamp: new Date(),
+  })
+
+  await analytics.counter($.Churn, 1)
+  await analytics.metric($.ChurnRate, {
+    value: 1,
+    dimensions: {
+      plan: subscription.plan,
+      reason: subscription.cancelReason,
+    },
+  })
+})
+
+// Service health monitoring
+on($.Request.completed, async (request) => {
+  await analytics.metric($.ResponseTime, {
+    value: request.duration,
+    dimensions: {
+      endpoint: request.path,
+      method: request.method,
+      status: request.status.toString(),
+    },
+  })
+
+  await analytics.counter($.Requests, 1)
+
+  if (request.status >= 400) {
+    await analytics.counter($.Errors, 1)
+    await analytics.track($.Error.occurred, {
+      endpoint: request.path,
+      status: request.status,
+      error: request.error,
+      timestamp: new Date(),
+    })
+  }
+})
+
+// ========================================
+// 2. Calculated Metrics
+// ========================================
+
+// Calculate engagement score
+const calculateEngagementScore = async (userId: string) => {
+  const [logins, features, sessions] = await Promise.all([
+    analytics.query({
+      metric: $.User.logged_in,
+      timeframe: 'last_30_days',
+      where: { userId },
+      aggregation: 'count',
+    }),
+    analytics.query({
+      metric: $.Feature.used,
+      timeframe: 'last_30_days',
+      where: { userId },
+      aggregation: 'count',
+    }),
+    analytics.query({
+      metric: $.Session.started,
+      timeframe: 'last_30_days',
+      where: { userId },
+      aggregation: 'count',
+    }),
+  ])
+
+  const score = logins.value * 0.3 + features.value * 0.5 + sessions.value * 0.2
+
+  await analytics.metric($.EngagementScore, {
+    value: score,
+    dimensions: { userId },
+  })
+
+  return score
+}
+
+// Update engagement scores daily
+await every($.Daily, async () => {
+  const activeUsers = await db.list($.User, {
+    where: { status: 'active' },
+  })
+
+  for (const user of activeUsers) {
+    await calculateEngagementScore(user.id)
+  }
+})
+
+// ========================================
+// 3. Dashboards
+// ========================================
+
+// Executive Dashboard
+const executiveDashboard = await analytics.dashboard({
+  $type: 'Dashboard',
+  name: 'Executive Dashboard',
+  description: 'High-level business metrics',
+  refresh_interval: 300000, // 5 minutes
+
+  sections: [
+    {
+      title: 'Revenue',
+      widgets: [
+        {
+          type: 'counter',
+          title: 'MRR',
+          metric: $.MRR,
+          aggregation: 'sum',
+          format: 'currency',
+          comparison: { type: 'previous_month' },
+        },
+        {
+          type: 'counter',
+          title: 'ARR',
+          metric: $.ARR,
+          aggregation: 'sum',
+          format: 'currency',
+          comparison: { type: 'previous_year' },
+        },
+        {
+          type: 'timeseries',
+          title: 'Monthly Revenue',
+          metric: $.Revenue,
+          timeframe: 'last_12_months',
+          interval: 'month',
+          aggregation: 'sum',
+        },
+      ],
+    },
+    {
+      title: 'Growth',
+      widgets: [
+        {
+          type: 'counter',
+          title: 'Active Users',
+          metric: $.Users.active,
+          comparison: { type: 'previous_month' },
+        },
+        {
+          type: 'counter',
+          title: 'New Sign-ups',
+          metric: $.Users.new,
+          timeframe: 'this_month',
+          aggregation: 'count',
+        },
+        {
+          type: 'gauge',
+          title: 'Churn Rate',
+          metric: $.ChurnRate,
+          timeframe: 'this_month',
+          aggregation: 'avg',
+          min: 0,
+          max: 0.1,
+          thresholds: [
+            { value: 0.03, color: 'green' },
+            { value: 0.05, color: 'yellow' },
+            { value: 0.07, color: 'red' },
+          ],
+        },
+      ],
+    },
+  ],
+})
+
+// Product Dashboard
+const productDashboard = await analytics.dashboard({
+  name: 'Product Analytics',
+  description: 'Feature usage and engagement',
+
+  widgets: [
+    {
+      type: 'table',
+      title: 'Feature Usage',
+      query: {
+        metric: $.Feature.used,
+        timeframe: 'last_30_days',
+        groupBy: ['feature'],
+        aggregation: 'count',
+        orderBy: { value: 'desc' },
+      },
+    },
+    {
+      type: 'funnel',
+      title: 'Onboarding Funnel',
+      stages: [
+        { name: 'Sign-up', metric: $.User.signed_up.count },
+        { name: 'Email Verified', metric: $.User.email.verified.count },
+        { name: 'Profile Completed', metric: $.User.profile.completed.count },
+        { name: 'First Feature Used', metric: $.Feature.first.used.count },
+        { name: 'Activated', metric: $.User.activated.count },
+      ],
+      timeframe: 'last_30_days',
+    },
+    {
+      type: 'heatmap',
+      title: 'Feature Usage by Plan',
+      metric: $.Feature.used,
+      groupBy: ['feature', 'plan'],
+      timeframe: 'last_30_days',
+    },
+  ],
+})
+
+// Operations Dashboard
+const opsDashboard = await analytics.dashboard({
+  name: 'Operations',
+  description: 'Service health and performance',
+  refresh_interval: 30000, // 30 seconds
+
+  widgets: [
+    {
+      type: 'gauge',
+      title: 'Error Rate',
+      metric: $.ErrorRate,
+      aggregation: 'avg',
+      min: 0,
+      max: 0.05,
+      thresholds: [
+        { value: 0.01, color: 'green' },
+        { value: 0.03, color: 'yellow' },
+        { value: 0.05, color: 'red' },
+      ],
+    },
+    {
+      type: 'timeseries',
+      title: 'Response Time (p95)',
+      metric: $.ResponseTime,
+      timeframe: 'last_24_hours',
+      interval: '5m',
+      aggregation: 'p95',
+    },
+    {
+      type: 'counter',
+      title: 'Requests/min',
+      metric: $.Requests,
+      timeframe: 'last_5_minutes',
+      aggregation: 'count',
+      transform: (value) => value / 5,
+    },
+    {
+      type: 'table',
+      title: 'Slowest Endpoints',
+      query: {
+        metric: $.ResponseTime,
+        timeframe: 'last_hour',
+        groupBy: ['endpoint'],
+        aggregation: 'p95',
+        orderBy: { value: 'desc' },
+        limit: 10,
+      },
+    },
+  ],
+})
+
+// ========================================
+// 4. Alerts
+// ========================================
+
+// Revenue alerts
+await analytics.alert({
+  name: 'MRR Drop',
+  metric: $.MRR,
+  timeframe: 'today',
+  compare: 'yesterday',
+  condition: { decrease: 0.1 }, // 10% drop
+  severity: 'critical',
+  notifications: {
+    email: ['exec-team@company.com'],
+    slack: { channel: '#alerts-revenue', mentions: ['@cfo'] },
+  },
+})
+
+// Churn alert
+await analytics.alert({
+  name: 'High Churn Rate',
+  metric: $.ChurnRate,
+  timeframe: 'this_month',
+  condition: { gt: 0.05 }, // >5%
+  severity: 'high',
+  notifications: ['email', 'slack'],
+})
+
+// Service health alerts
+await analytics.alert({
+  name: 'High Error Rate',
+  metric: $.ErrorRate,
+  timeframe: 'last_5_minutes',
+  condition: { gt: 0.05 }, // >5%
+  severity: 'critical',
+  notifications: ['pagerduty', 'slack'],
+  runbook: {
+    title: 'High Error Rate Runbook',
+    steps: ['Check service health dashboard', 'Review recent deployments', 'Check error logs', 'Rollback if needed'],
+  },
+})
+
+await analytics.alert({
+  name: 'Slow Response Time',
+  metric: $.ResponseTime,
+  timeframe: 'last_15_minutes',
+  condition: { p95: { gt: 1000 } }, // p95 > 1s
+  severity: 'high',
+  notifications: ['slack'],
+})
+
+// Engagement alert
+await analytics.alert({
+  name: 'Low Engagement',
+  metric: $.EngagementScore,
+  timeframe: 'last_7_days',
+  condition: { avg: { lt: 10 } },
+  severity: 'medium',
+  notifications: ['slack'],
+})
+
+// ========================================
+// 5. Reporting
+// ========================================
+
+// Weekly business review
+const weeklyReport = await analytics.report({
+  name: 'Weekly Business Review',
+  description: 'Comprehensive weekly metrics',
+
+  sections: [
+    {
+      title: 'Executive Summary',
+      type: 'summary',
+      metrics: [
+        { name: 'MRR', metric: $.MRR, aggregation: 'sum' },
+        { name: 'Active Users', metric: $.Users.active, aggregation: 'count' },
+        { name: 'New Sign-ups', metric: $.Users.new, aggregation: 'count' },
+        { name: 'Churn Rate', metric: $.ChurnRate, aggregation: 'avg' },
+      ],
+      comparison: 'previous_week',
+    },
+    {
+      title: 'Revenue Breakdown',
+      type: 'table',
+      query: {
+        metric: $.Revenue,
+        groupBy: ['plan', 'source'],
+        aggregation: 'sum',
+        orderBy: { value: 'desc' },
+      },
+    },
+    {
+      title: 'Feature Adoption',
+      type: 'chart',
+      metric: $.Feature.used,
+      groupBy: ['feature'],
+      aggregation: 'count',
+      chartType: 'bar',
+    },
+    {
+      title: 'Key Insights',
+      type: 'insights',
+      analyze: [$.Revenue, $.Users.active, $.EngagementScore, $.ChurnRate],
+      detect: ['trends', 'anomalies', 'opportunities', 'risks'],
+    },
+  ],
+
+  format: 'pdf',
+  delivery: {
+    email: ['leadership@company.com'],
+    slack: '#weekly-review',
+  },
+})
+
+// Schedule weekly report
+await every($.Weekly.Monday.at('9:00'), async () => {
+  const report = await analytics.generateReport(weeklyReport.id, {
+    timeframe: 'last_7_days',
+  })
+
+  await analytics.deliverReport(report)
+})
+
+// Monthly board report
+await every($.Monthly.firstDay.at('8:00'), async () => {
+  const boardReport = await analytics.generateReport('monthly-board-report', {
+    timeframe: 'last_month',
+  })
+
+  await analytics.deliverReport(boardReport, {
+    email: ['board@company.com'],
+  })
+})
+
+// ========================================
+// 6. Agent Performance Analytics
+// ========================================
+
+// Track sales agent performance
+const salesAgent = await agent.create({
+  name: 'Sales Agent',
+  role: 'SDR',
+  onTaskComplete: async (task, result) => {
+    await analytics.track($.Agent.completed.Task, {
+      agent: 'Sales Agent',
+      task: task.name,
+      duration: result.duration,
+      success: result.success,
+    })
+
+    await analytics.metric($.Agent.Performance, {
+      value: result.success ? 1 : 0,
+      dimensions: {
+        agent: 'Sales Agent',
+        task: task.name,
+      },
+    })
+  },
+})
+
+// Sales agent dashboard
+const agentDashboard = await analytics.dashboard({
+  name: 'Sales Agent Performance',
+  widgets: [
+    {
+      type: 'table',
+      title: 'Task Completion',
+      query: {
+        metrics: [$.Agent.Tasks.completed.count, $.Agent.TaskSuccessRate, $.Agent.AverageTaskDuration],
+        groupBy: ['task'],
+        timeframe: 'last_7_days',
+      },
+    },
+  ],
+})
+
+console.log('✓ Analytics setup complete')
+console.log('Dashboards:')
+console.log('- Executive:', await analytics.getDashboardUrl(executiveDashboard.id))
+console.log('- Product:', await analytics.getDashboardUrl(productDashboard.id))
+console.log('- Operations:', await analytics.getDashboardUrl(opsDashboard.id))
+```
+
+## Results
+
+This implementation provides:
+
+1. **Comprehensive event tracking** across user lifecycle, features, subscriptions, and service health
+2. **Real-time dashboards** for executives, product, and operations teams
+3. **Proactive alerts** for revenue drops, churn, errors, and performance issues
+4. **Automated reporting** with weekly and monthly schedules
+5. **Agent performance tracking** for autonomous digital workers
+
+## See Also
+
+- [Basic Usage](./basic-usage.mdx) - Simple examples
+- [Advanced Patterns](./advanced-patterns.mdx) - Complex scenarios
+- [Integration](./integration.mdx) - Integration patterns
+
+---
+
+This real-world example demonstrates production-ready analytics.do implementation. Adapt it to your specific use case.

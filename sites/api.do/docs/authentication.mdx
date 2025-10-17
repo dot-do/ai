@@ -1,0 +1,762 @@
+---
+$id: https://api.do/docs/authentication
+$type: TechArticle
+title: API Authentication Patterns
+description: Complete guide to authentication methods and patterns with api.do
+keywords: [api, authentication, oauth, bearer, api-key, basic-auth, jwt]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# API Authentication
+
+Complete guide to authentication methods and patterns with api.do.
+
+## Overview
+
+api.do supports multiple authentication methods to integrate with any external API:
+
+- **Bearer Token** - JWT, OAuth access tokens
+- **API Key** - Header or query parameter-based
+- **OAuth 2.0** - Full OAuth flow support
+- **Basic Auth** - Username and password
+- **Custom Auth** - Custom authentication headers
+- **JWT** - JSON Web Tokens with automatic refresh
+
+## Bearer Token Authentication
+
+Use bearer tokens for API authentication (most common for modern APIs).
+
+### Simple Bearer Token
+
+```typescript
+import { api } from 'sdk.do'
+
+const data = await api.get('https://api.example.com/data', {
+  auth: {
+    type: 'bearer',
+    token: 'your-access-token-here',
+  },
+})
+```
+
+### Bearer Token from Environment
+
+```typescript
+import { api } from 'sdk.do'
+
+const data = await api.get('https://api.github.com/user', {
+  auth: {
+    type: 'bearer',
+    token: process.env.GITHUB_TOKEN,
+  },
+})
+```
+
+### JWT Bearer Token
+
+```typescript
+import { api } from 'sdk.do'
+
+const jwt = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+
+const data = await api.get('https://api.example.com/protected', {
+  auth: {
+    type: 'bearer',
+    token: jwt,
+  },
+})
+```
+
+## API Key Authentication
+
+API keys can be sent in headers or query parameters.
+
+### API Key in Header
+
+```typescript
+import { api } from 'sdk.do'
+
+const data = await api.get('https://api.example.com/data', {
+  auth: {
+    type: 'apiKey',
+    key: process.env.API_KEY,
+    header: 'X-API-Key',
+  },
+})
+// Sends: X-API-Key: your-api-key
+```
+
+### API Key in Query Parameter
+
+```typescript
+import { api } from 'sdk.do'
+
+const data = await api.get('https://api.example.com/data', {
+  auth: {
+    type: 'apiKey',
+    key: process.env.API_KEY,
+    param: 'api_key',
+  },
+})
+// Sends: https://api.example.com/data?api_key=your-api-key
+```
+
+### Multiple API Keys
+
+Some APIs require multiple keys:
+
+```typescript
+import { api } from 'sdk.do'
+
+const data = await api.get('https://api.example.com/data', {
+  headers: {
+    'X-API-Key': process.env.API_KEY,
+    'X-API-Secret': process.env.API_SECRET,
+  },
+})
+```
+
+## OAuth 2.0 Authentication
+
+Full OAuth 2.0 flow support with automatic token refresh.
+
+### OAuth with Access Token
+
+```typescript
+import { api } from 'sdk.do'
+
+const data = await api.get('https://api.example.com/data', {
+  auth: {
+    type: 'oauth2',
+    accessToken: process.env.ACCESS_TOKEN,
+  },
+})
+```
+
+### OAuth with Refresh Token
+
+Automatically refresh expired tokens:
+
+```typescript
+import { api } from 'sdk.do'
+
+const data = await api.get('https://api.example.com/data', {
+  auth: {
+    type: 'oauth2',
+    accessToken: process.env.ACCESS_TOKEN,
+    refreshToken: process.env.REFRESH_TOKEN,
+    clientId: process.env.CLIENT_ID,
+    clientSecret: process.env.CLIENT_SECRET,
+    tokenEndpoint: 'https://oauth.example.com/token',
+  },
+})
+// Automatically refreshes token if expired
+```
+
+### OAuth Authorization Code Flow
+
+```typescript
+import { api } from 'sdk.do'
+
+// Step 1: Get authorization URL
+const authUrl = api.oauth.getAuthorizationUrl({
+  clientId: process.env.CLIENT_ID,
+  redirectUri: 'https://yourapp.com/callback',
+  scope: 'read write',
+  authEndpoint: 'https://oauth.example.com/authorize',
+})
+
+console.log('Visit:', authUrl)
+
+// Step 2: Exchange code for token (in callback handler)
+const tokens = await api.oauth.exchangeCodeForToken({
+  code: authorizationCode,
+  clientId: process.env.CLIENT_ID,
+  clientSecret: process.env.CLIENT_SECRET,
+  redirectUri: 'https://yourapp.com/callback',
+  tokenEndpoint: 'https://oauth.example.com/token',
+})
+
+console.log(tokens.accessToken)
+console.log(tokens.refreshToken)
+
+// Step 3: Use access token
+const data = await api.get('https://api.example.com/data', {
+  auth: {
+    type: 'oauth2',
+    accessToken: tokens.accessToken,
+  },
+})
+```
+
+### OAuth Client Credentials Flow
+
+For server-to-server authentication:
+
+```typescript
+import { api } from 'sdk.do'
+
+const tokens = await api.oauth.clientCredentials({
+  clientId: process.env.CLIENT_ID,
+  clientSecret: process.env.CLIENT_SECRET,
+  tokenEndpoint: 'https://oauth.example.com/token',
+  scope: 'api.read api.write',
+})
+
+const data = await api.get('https://api.example.com/data', {
+  auth: {
+    type: 'oauth2',
+    accessToken: tokens.accessToken,
+  },
+})
+```
+
+## Basic Authentication
+
+Username and password authentication.
+
+### Simple Basic Auth
+
+```typescript
+import { api } from 'sdk.do'
+
+const data = await api.get('https://api.example.com/data', {
+  auth: {
+    type: 'basic',
+    username: 'john@example.com',
+    password: 'secret123',
+  },
+})
+// Sends: Authorization: Basic base64(username:password)
+```
+
+### Basic Auth from Environment
+
+```typescript
+import { api } from 'sdk.do'
+
+const data = await api.get('https://api.example.com/data', {
+  auth: {
+    type: 'basic',
+    username: process.env.API_USERNAME,
+    password: process.env.API_PASSWORD,
+  },
+})
+```
+
+## Custom Authentication
+
+Implement custom authentication patterns.
+
+### Custom Header
+
+```typescript
+import { api } from 'sdk.do'
+
+const data = await api.get('https://api.example.com/data', {
+  auth: {
+    type: 'custom',
+    header: 'X-Custom-Auth',
+    value: 'custom-auth-value',
+  },
+})
+```
+
+### Multiple Custom Headers
+
+```typescript
+import { api } from 'sdk.do'
+
+const data = await api.get('https://api.example.com/data', {
+  headers: {
+    'X-Auth-Token': process.env.AUTH_TOKEN,
+    'X-Auth-Signature': generateSignature(),
+    'X-Auth-Timestamp': Date.now().toString(),
+  },
+})
+```
+
+### HMAC Signature
+
+```typescript
+import { api } from 'sdk.do'
+import { createHmac } from 'crypto'
+
+function generateHmacSignature(method: string, url: string, body: any) {
+  const timestamp = Date.now().toString()
+  const message = `${method}${url}${JSON.stringify(body)}${timestamp}`
+
+  const signature = createHmac('sha256', process.env.API_SECRET).update(message).digest('hex')
+
+  return { signature, timestamp }
+}
+
+const body = { name: 'John Smith' }
+const { signature, timestamp } = generateHmacSignature('POST', '/users', body)
+
+const user = await api.post('https://api.example.com/users', body, {
+  headers: {
+    'X-API-Key': process.env.API_KEY,
+    'X-Signature': signature,
+    'X-Timestamp': timestamp,
+  },
+})
+```
+
+## JWT Authentication
+
+JSON Web Token authentication with automatic refresh.
+
+### Simple JWT
+
+```typescript
+import { api } from 'sdk.do'
+
+const data = await api.get('https://api.example.com/data', {
+  auth: {
+    type: 'jwt',
+    token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+  },
+})
+```
+
+### JWT with Auto Refresh
+
+```typescript
+import { api } from 'sdk.do'
+
+const data = await api.get('https://api.example.com/data', {
+  auth: {
+    type: 'jwt',
+    token: process.env.JWT_TOKEN,
+    refreshToken: process.env.REFRESH_TOKEN,
+    refreshEndpoint: 'https://api.example.com/auth/refresh',
+  },
+})
+// Automatically refreshes JWT if expired
+```
+
+### Generate JWT
+
+```typescript
+import { api } from 'sdk.do'
+
+const jwt = await api.jwt.generate({
+  payload: {
+    userId: '123',
+    email: 'john@example.com',
+  },
+  secret: process.env.JWT_SECRET,
+  expiresIn: '1h',
+})
+
+console.log(jwt)
+```
+
+## Authentication Patterns
+
+### Global Authentication
+
+Set authentication for all requests:
+
+```typescript
+import { api } from 'sdk.do'
+
+api.config({
+  auth: {
+    type: 'bearer',
+    token: process.env.API_TOKEN,
+  },
+})
+
+// All requests now use this auth
+const users = await api.get('https://api.example.com/users')
+const posts = await api.get('https://api.example.com/posts')
+```
+
+### Per-Request Authentication
+
+Override global auth for specific requests:
+
+```typescript
+import { api } from 'sdk.do'
+
+// Global auth
+api.config({
+  auth: {
+    type: 'bearer',
+    token: process.env.DEFAULT_TOKEN,
+  },
+})
+
+// Override for this request
+const data = await api.get('https://api.example.com/admin', {
+  auth: {
+    type: 'bearer',
+    token: process.env.ADMIN_TOKEN,
+  },
+})
+```
+
+### Multiple Services
+
+Manage auth for multiple services:
+
+```typescript
+import { api } from 'sdk.do'
+
+const github = api.create({
+  baseURL: 'https://api.github.com',
+  auth: {
+    type: 'bearer',
+    token: process.env.GITHUB_TOKEN,
+  },
+})
+
+const stripe = api.create({
+  baseURL: 'https://api.stripe.com/v1',
+  auth: {
+    type: 'bearer',
+    token: process.env.STRIPE_API_KEY,
+  },
+})
+
+const [repos, customers] = await Promise.all([github.get('/user/repos'), stripe.get('/customers')])
+```
+
+### Token Refresh
+
+Automatically refresh expired tokens:
+
+```typescript
+import { api } from 'sdk.do'
+
+let accessToken = process.env.ACCESS_TOKEN
+let refreshToken = process.env.REFRESH_TOKEN
+
+async function refreshAccessToken() {
+  const tokens = await api.post('https://oauth.example.com/token', {
+    grant_type: 'refresh_token',
+    refresh_token: refreshToken,
+    client_id: process.env.CLIENT_ID,
+    client_secret: process.env.CLIENT_SECRET,
+  })
+
+  accessToken = tokens.access_token
+  refreshToken = tokens.refresh_token
+
+  return accessToken
+}
+
+// Use with auto-refresh
+const data = await api.get('https://api.example.com/data', {
+  auth: {
+    type: 'bearer',
+    token: accessToken,
+    onTokenExpired: refreshAccessToken,
+  },
+})
+```
+
+## Real-World Examples
+
+### GitHub API
+
+```typescript
+import { api } from 'sdk.do'
+
+const repos = await api.get('https://api.github.com/user/repos', {
+  auth: {
+    type: 'bearer',
+    token: process.env.GITHUB_TOKEN,
+  },
+  params: {
+    sort: 'updated',
+    per_page: 10,
+  },
+})
+
+console.log(repos.map((r) => r.name))
+```
+
+### Stripe API
+
+```typescript
+import { api } from 'sdk.do'
+
+const customer = await api.post(
+  'https://api.stripe.com/v1/customers',
+  {
+    email: 'customer@example.com',
+    name: 'John Smith',
+  },
+  {
+    auth: {
+      type: 'bearer',
+      token: process.env.STRIPE_API_KEY,
+    },
+  }
+)
+
+console.log(customer.id)
+```
+
+### AWS API
+
+```typescript
+import { api } from 'sdk.do'
+import { createHmac } from 'crypto'
+
+// AWS Signature Version 4
+function generateAwsSignature(region: string, service: string, method: string, url: string, body: string) {
+  const accessKey = process.env.AWS_ACCESS_KEY_ID
+  const secretKey = process.env.AWS_SECRET_ACCESS_KEY
+  const timestamp = new Date().toISOString().replace(/[:-]|\.\d{3}/g, '')
+  const date = timestamp.substr(0, 8)
+
+  // Create canonical request
+  const canonicalRequest = `${method}\n${url}\n\ncontent-type:application/json\nhost:${service}.${region}.amazonaws.com\nx-amz-date:${timestamp}\n\ncontent-type;host;x-amz-date\n${hash(body)}`
+
+  // Create string to sign
+  const credentialScope = `${date}/${region}/${service}/aws4_request`
+  const stringToSign = `AWS4-HMAC-SHA256\n${timestamp}\n${credentialScope}\n${hash(canonicalRequest)}`
+
+  // Calculate signature
+  const signingKey = getSignatureKey(secretKey, date, region, service)
+  const signature = createHmac('sha256', signingKey).update(stringToSign).digest('hex')
+
+  return {
+    authorization: `AWS4-HMAC-SHA256 Credential=${accessKey}/${credentialScope}, SignedHeaders=content-type;host;x-amz-date, Signature=${signature}`,
+    timestamp,
+  }
+}
+
+const { authorization, timestamp } = generateAwsSignature('us-east-1', 's3', 'GET', '/bucket/key', '')
+
+const data = await api.get('https://s3.us-east-1.amazonaws.com/bucket/key', {
+  headers: {
+    Authorization: authorization,
+    'X-Amz-Date': timestamp,
+  },
+})
+```
+
+### SendGrid API
+
+```typescript
+import { api } from 'sdk.do'
+
+await api.post(
+  'https://api.sendgrid.com/v3/mail/send',
+  {
+    personalizations: [
+      {
+        to: [{ email: 'recipient@example.com' }],
+      },
+    ],
+    from: { email: 'sender@example.com' },
+    subject: 'Test Email',
+    content: [
+      {
+        type: 'text/plain',
+        value: 'Hello from api.do!',
+      },
+    ],
+  },
+  {
+    auth: {
+      type: 'bearer',
+      token: process.env.SENDGRID_API_KEY,
+    },
+  }
+)
+```
+
+### Twilio API
+
+```typescript
+import { api } from 'sdk.do'
+
+const message = await api.post(
+  `https://api.twilio.com/2010-04-01/Accounts/${process.env.TWILIO_ACCOUNT_SID}/Messages.json`,
+  new URLSearchParams({
+    From: process.env.TWILIO_PHONE_NUMBER,
+    To: '+15555555555',
+    Body: 'Hello from api.do!',
+  }),
+  {
+    auth: {
+      type: 'basic',
+      username: process.env.TWILIO_ACCOUNT_SID,
+      password: process.env.TWILIO_AUTH_TOKEN,
+    },
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+  }
+)
+
+console.log(message.sid)
+```
+
+## Security Best Practices
+
+### 1. Store Credentials Securely
+
+Never hardcode credentials:
+
+```typescript
+// Good
+const token = process.env.API_TOKEN
+
+// Bad
+const token = 'sk-1234567890abcdef'
+```
+
+### 2. Use Environment Variables
+
+Store all credentials in environment variables:
+
+```bash
+# .env file
+GITHUB_TOKEN=ghp_...
+STRIPE_API_KEY=sk_live_...
+SENDGRID_API_KEY=SG....
+TWILIO_ACCOUNT_SID=AC...
+TWILIO_AUTH_TOKEN=...
+```
+
+### 3. Rotate Tokens Regularly
+
+Implement token rotation:
+
+```typescript
+import { api } from 'sdk.do'
+
+async function rotateToken() {
+  const newToken = await api.post('https://api.example.com/auth/rotate', {
+    oldToken: process.env.API_TOKEN,
+  })
+
+  // Update environment variable or secret store
+  await updateSecretStore('API_TOKEN', newToken.token)
+
+  return newToken.token
+}
+```
+
+### 4. Implement Token Expiration
+
+Use tokens with expiration:
+
+```typescript
+import { api } from 'sdk.do'
+
+const jwt = await api.jwt.generate({
+  payload: { userId: '123' },
+  secret: process.env.JWT_SECRET,
+  expiresIn: '1h', // Token expires in 1 hour
+})
+```
+
+### 5. Use HTTPS Only
+
+Always use HTTPS for API calls:
+
+```typescript
+// Good
+await api.get('https://api.example.com/data')
+
+// Bad
+await api.get('http://api.example.com/data')
+```
+
+### 6. Validate Tokens
+
+Validate tokens before use:
+
+```typescript
+import { api } from 'sdk.do'
+
+function isTokenValid(token: string): boolean {
+  try {
+    const decoded = api.jwt.decode(token)
+    return decoded.exp > Date.now() / 1000
+  } catch {
+    return false
+  }
+}
+
+if (!isTokenValid(process.env.API_TOKEN)) {
+  console.error('Token expired, refresh needed')
+}
+```
+
+### 7. Limit Token Scope
+
+Use least privilege principle:
+
+```typescript
+// Good - limited scope
+const token = await api.oauth.clientCredentials({
+  scope: 'read:users', // Only read users
+})
+
+// Avoid - too broad
+const token = await api.oauth.clientCredentials({
+  scope: 'admin', // Full admin access
+})
+```
+
+## Troubleshooting
+
+### Invalid Token Error
+
+Check token validity:
+
+```bash
+echo $API_TOKEN
+```
+
+Verify token hasn't expired:
+
+```typescript
+const decoded = api.jwt.decode(process.env.API_TOKEN)
+console.log('Expires:', new Date(decoded.exp * 1000))
+```
+
+### Authentication Failed Error
+
+Verify credentials are correct:
+
+```typescript
+console.log('API Key:', process.env.API_KEY ? 'Set' : 'Missing')
+console.log('Username:', process.env.API_USERNAME ? 'Set' : 'Missing')
+```
+
+### Rate Limit with Auth
+
+Some APIs have different rate limits per auth method. Use appropriate authentication:
+
+```typescript
+// Authenticated requests often have higher rate limits
+await api.get('https://api.example.com/data', {
+  auth: {
+    type: 'bearer',
+    token: process.env.API_TOKEN,
+  },
+})
+```
+
+## See Also
+
+- [Getting Started](./getting-started) - Basic setup and usage
+- [Making Requests](./making-requests) - HTTP methods and patterns
+- [API Reference](../api/) - Complete API documentation
+- [REST API Example](../examples/rest-api) - REST integration example
+
+## License
+
+MIT (Open Source)

@@ -1,0 +1,607 @@
+---
+$id: https://ai.do/examples/embeddings
+$type: HowTo
+title: Vector Embeddings Examples
+description: Practical examples of using embeddings for semantic search and similarity
+keywords: [ai, examples, embeddings, semantic search, similarity, vectors]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Vector Embeddings Examples
+
+Practical examples demonstrating vector embeddings for semantic search and content similarity.
+
+## Basic Embedding Generation
+
+Generate embedding for a single text:
+
+```typescript
+import { ai } from 'sdk.do'
+
+const embedding = await ai.embed('artificial intelligence and machine learning')
+
+console.log(`Embedding dimensions: ${embedding.length}`)
+// Output: 1536 (OpenAI) or 1024 (Anthropic)
+
+console.log(`First 5 values:`, embedding.slice(0, 5))
+// Output: [0.0234, -0.0156, 0.0423, -0.0089, 0.0312]
+```
+
+## Batch Embeddings
+
+Generate embeddings for multiple texts:
+
+```typescript
+import { ai } from 'sdk.do'
+
+const texts = ['smartphone with great camera', 'laptop for programming', 'wireless headphones', 'tablet for reading']
+
+const embeddings = await ai.embed(texts)
+
+console.log(`Generated ${embeddings.length} embeddings`)
+// Output: Generated 4 embeddings
+
+for (let i = 0; i < texts.length; i++) {
+  console.log(`"${texts[i]}" → [${embeddings[i].slice(0, 3).join(', ')}...]`)
+}
+```
+
+## Semantic Similarity
+
+Calculate similarity between texts:
+
+```typescript
+import { ai } from 'sdk.do'
+
+// Cosine similarity function
+function cosineSimilarity(a: number[], b: number[]): number {
+  const dotProduct = a.reduce((sum, val, i) => sum + val * b[i], 0)
+  const magnitudeA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0))
+  const magnitudeB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0))
+  return dotProduct / (magnitudeA * magnitudeB)
+}
+
+// Compare similar texts
+const embed1 = await ai.embed('machine learning and AI')
+const embed2 = await ai.embed('artificial intelligence and ML')
+const embed3 = await ai.embed('cooking recipes')
+
+console.log('ML vs AI:', cosineSimilarity(embed1, embed2))
+// Output: 0.89 (high similarity)
+
+console.log('ML vs Cooking:', cosineSimilarity(embed1, embed3))
+// Output: 0.12 (low similarity)
+```
+
+## Product Search
+
+Build semantic product search:
+
+```typescript
+import { $, ai, db } from 'sdk.do'
+
+// Index products with embeddings
+async function indexProducts() {
+  const products = await db.list($.Product)
+
+  for (const product of products) {
+    // Create embedding from product data
+    const text = [product.name, product.description, product.category, product.brand?.name].filter(Boolean).join(' ')
+
+    const embedding = await ai.embed(text)
+
+    // Store embedding with product
+    await db.update(product.$id, { embedding })
+  }
+
+  console.log(`Indexed ${products.length} products`)
+}
+
+// Search products
+async function searchProducts(query: string, limit = 10) {
+  // Create query embedding
+  const queryEmbedding = await ai.embed(query)
+
+  // Get all products
+  const products = await db.list($.Product)
+
+  // Calculate similarity scores
+  const results = products
+    .map((product) => ({
+      product,
+      similarity: cosineSimilarity(queryEmbedding, product.embedding),
+    }))
+    .sort((a, b) => b.similarity - a.similarity)
+    .slice(0, limit)
+
+  return results
+}
+
+// Usage
+await indexProducts()
+
+const results = await searchProducts('affordable laptop for students')
+
+for (const { product, similarity } of results) {
+  console.log(`${product.name} (${(similarity * 100).toFixed(1)}% match)`)
+}
+// Output:
+// Budget Laptop Pro (92.3% match)
+// Student Notebook (89.7% match)
+// Entry-Level Workstation (85.4% match)
+```
+
+## Article Recommendation
+
+Recommend similar articles:
+
+```typescript
+import { $, ai, db } from 'sdk.do'
+
+async function recommendArticles(articleId: string, limit = 5) {
+  // Get the reference article
+  const article = await db.get(articleId, $.Article)
+
+  if (!article.embedding) {
+    // Generate embedding if missing
+    const text = `${article.headline} ${article.articleBody}`
+    article.embedding = await ai.embed(text)
+    await db.update(article.$id, { embedding: article.embedding })
+  }
+
+  // Get all other articles
+  const allArticles = await db.list($.Article)
+
+  // Find similar articles
+  const recommendations = allArticles
+    .filter((a) => a.$id !== articleId)
+    .map((a) => ({
+      article: a,
+      similarity: cosineSimilarity(article.embedding, a.embedding),
+    }))
+    .sort((a, b) => b.similarity - a.similarity)
+    .slice(0, limit)
+
+  return recommendations
+}
+
+// Usage
+const similar = await recommendArticles('article-123')
+
+console.log('Similar articles:')
+for (const { article, similarity } of similar) {
+  console.log(`- ${article.headline} (${(similarity * 100).toFixed(1)}%)`)
+}
+```
+
+## Duplicate Detection
+
+Find duplicate or near-duplicate content:
+
+```typescript
+import { $, ai, db } from 'sdk.do'
+
+async function findDuplicates(threshold = 0.95) {
+  const articles = await db.list($.Article)
+
+  // Generate embeddings for articles without them
+  for (const article of articles) {
+    if (!article.embedding) {
+      const text = `${article.headline} ${article.articleBody}`
+      article.embedding = await ai.embed(text)
+    }
+  }
+
+  const duplicates: Array<{
+    article1: any
+    article2: any
+    similarity: number
+  }> = []
+
+  // Compare all pairs
+  for (let i = 0; i < articles.length; i++) {
+    for (let j = i + 1; j < articles.length; j++) {
+      const similarity = cosineSimilarity(articles[i].embedding, articles[j].embedding)
+
+      if (similarity > threshold) {
+        duplicates.push({
+          article1: articles[i],
+          article2: articles[j],
+          similarity,
+        })
+      }
+    }
+  }
+
+  return duplicates
+}
+
+// Find potential duplicates
+const dupes = await findDuplicates(0.95)
+
+console.log(`Found ${dupes.length} potential duplicates:`)
+for (const { article1, article2, similarity } of dupes) {
+  console.log(`- "${article1.headline}" vs "${article2.headline}"`)
+  console.log(`  Similarity: ${(similarity * 100).toFixed(2)}%`)
+}
+```
+
+## Content Clustering
+
+Group similar content:
+
+```typescript
+import { $, ai, db } from 'sdk.do'
+
+async function clusterArticles(similarityThreshold = 0.8) {
+  const articles = await db.list($.Article)
+
+  // Ensure all have embeddings
+  for (const article of articles) {
+    if (!article.embedding) {
+      const text = `${article.headline} ${article.articleBody}`
+      article.embedding = await ai.embed(text)
+    }
+  }
+
+  const clusters: any[][] = []
+  const used = new Set<string>()
+
+  for (const article of articles) {
+    if (used.has(article.$id)) continue
+
+    // Start new cluster
+    const cluster = [article]
+    used.add(article.$id)
+
+    // Find similar articles
+    for (const other of articles) {
+      if (used.has(other.$id)) continue
+
+      const similarity = cosineSimilarity(article.embedding, other.embedding)
+
+      if (similarity > similarityThreshold) {
+        cluster.push(other)
+        used.add(other.$id)
+      }
+    }
+
+    clusters.push(cluster)
+  }
+
+  return clusters
+}
+
+// Cluster articles
+const clusters = await clusterArticles(0.85)
+
+console.log(`Created ${clusters.length} clusters:`)
+clusters.forEach((cluster, i) => {
+  console.log(`\nCluster ${i + 1} (${cluster.length} articles):`)
+  cluster.forEach((article) => {
+    console.log(`  - ${article.headline}`)
+  })
+})
+```
+
+## Multi-language Search
+
+Search across languages:
+
+```typescript
+import { ai } from 'sdk.do'
+
+const texts = [
+  'Hello world', // English
+  'Bonjour le monde', // French
+  'Hola mundo', // Spanish
+  'Hallo Welt', // German
+  'こんにちは世界', // Japanese
+]
+
+const embeddings = await ai.embed(texts)
+
+// All "hello world" phrases are semantically similar
+for (let i = 0; i < texts.length; i++) {
+  for (let j = i + 1; j < texts.length; j++) {
+    const similarity = cosineSimilarity(embeddings[i], embeddings[j])
+    console.log(`${texts[i]} ↔ ${texts[j]}: ${(similarity * 100).toFixed(1)}%`)
+  }
+}
+
+// Output shows high similarity despite different languages:
+// Hello world ↔ Bonjour le monde: 87.3%
+// Hello world ↔ Hola mundo: 89.1%
+// Bonjour le monde ↔ Hola mundo: 91.2%
+```
+
+## FAQ Matching
+
+Match questions to FAQs:
+
+```typescript
+import { ai } from 'sdk.do'
+
+const faqs = [
+  {
+    question: 'How do I reset my password?',
+    answer: 'Click on Forgot Password on the login page...',
+  },
+  {
+    question: 'What payment methods do you accept?',
+    answer: 'We accept credit cards, PayPal, and bank transfers...',
+  },
+  {
+    question: 'How can I track my order?',
+    answer: 'You can track your order in the Orders section...',
+  },
+]
+
+// Create embeddings for FAQs
+const faqEmbeddings = await ai.embed(faqs.map((faq) => faq.question))
+
+// Match user question
+async function findMatchingFAQ(userQuestion: string) {
+  const queryEmbedding = await ai.embed(userQuestion)
+
+  const matches = faqEmbeddings.map((embedding, i) => ({
+    faq: faqs[i],
+    similarity: cosineSimilarity(queryEmbedding, embedding),
+  }))
+
+  const best = matches.sort((a, b) => b.similarity - a.similarity)[0]
+
+  if (best.similarity > 0.75) {
+    return best.faq
+  }
+
+  return null
+}
+
+// Usage
+const match = await findMatchingFAQ('I forgot my password, what should I do?')
+
+if (match) {
+  console.log('Q:', match.question)
+  console.log('A:', match.answer)
+}
+```
+
+## Semantic Deduplication
+
+Remove semantically duplicate texts:
+
+```typescript
+import { ai } from 'sdk.do'
+
+async function deduplicateTexts(texts: string[], threshold = 0.9): Promise<string[]> {
+  const embeddings = await ai.embed(texts)
+
+  const unique: string[] = []
+  const uniqueEmbeddings: number[][] = []
+
+  for (let i = 0; i < texts.length; i++) {
+    let isDuplicate = false
+
+    for (const uniqueEmbed of uniqueEmbeddings) {
+      const similarity = cosineSimilarity(embeddings[i], uniqueEmbed)
+
+      if (similarity > threshold) {
+        isDuplicate = true
+        break
+      }
+    }
+
+    if (!isDuplicate) {
+      unique.push(texts[i])
+      uniqueEmbeddings.push(embeddings[i])
+    }
+  }
+
+  return unique
+}
+
+// Remove duplicates
+const texts = [
+  'AI is transforming technology',
+  'Artificial intelligence is changing tech', // Similar to first
+  'Machine learning in healthcare',
+  'AI is revolutionizing technology', // Similar to first
+  'Cooking recipes for beginners',
+]
+
+const unique = await deduplicateTexts(texts, 0.85)
+
+console.log(`Original: ${texts.length} texts`)
+console.log(`Unique: ${unique.length} texts`)
+console.log('Unique texts:', unique)
+// Output: 3 unique texts (removed 2 duplicates)
+```
+
+## User Preference Matching
+
+Match content to user preferences:
+
+```typescript
+import { $, ai, db } from 'sdk.do'
+
+async function getUserPreferenceEmbedding(userId: string) {
+  // Get user's interaction history
+  const interactions = await db.list($.UserInteraction, {
+    where: { user: userId },
+  })
+
+  // Combine titles/descriptions of items user liked
+  const likedContent = interactions
+    .filter((i) => i.rating >= 4)
+    .map((i) => i.item.name + ' ' + i.item.description)
+    .join(' ')
+
+  // Create preference embedding
+  return await ai.embed(likedContent)
+}
+
+async function recommendForUser(userId: string) {
+  const preferenceEmbed = await getUserPreferenceEmbedding(userId)
+
+  // Get all available products
+  const products = await db.list($.Product)
+
+  // Rank by preference match
+  const recommendations = products
+    .map((product) => ({
+      product,
+      score: cosineSimilarity(preferenceEmbed, product.embedding),
+    }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 10)
+
+  return recommendations
+}
+
+// Get recommendations
+const recs = await recommendForUser('user-123')
+
+console.log('Personalized recommendations:')
+for (const { product, score } of recs) {
+  console.log(`${product.name} (${(score * 100).toFixed(1)}% match)`)
+}
+```
+
+## Hierarchical Clustering
+
+Create topic hierarchies:
+
+```typescript
+import { ai } from 'sdk.do'
+
+async function createTopicHierarchy(articles: any[]) {
+  // Generate embeddings
+  const embeddings = await ai.embed(articles.map((a) => `${a.headline} ${a.articleBody}`))
+
+  // Simple hierarchical clustering
+  const clusters: any = {
+    name: 'All Articles',
+    children: [],
+  }
+
+  // First level: High-level topics (threshold 0.6)
+  const level1Threshold = 0.6
+  const used = new Set<number>()
+
+  for (let i = 0; i < articles.length; i++) {
+    if (used.has(i)) continue
+
+    const cluster = {
+      name: articles[i].headline,
+      articles: [articles[i]],
+      children: [],
+    }
+
+    for (let j = i + 1; j < articles.length; j++) {
+      if (used.has(j)) continue
+
+      const sim = cosineSimilarity(embeddings[i], embeddings[j])
+
+      if (sim > level1Threshold) {
+        cluster.articles.push(articles[j])
+        used.add(j)
+      }
+    }
+
+    used.add(i)
+    clusters.children.push(cluster)
+  }
+
+  return clusters
+}
+```
+
+## Caching Embeddings
+
+Cache embeddings to avoid regeneration:
+
+```typescript
+import { $, ai, db } from 'sdk.do'
+
+async function getOrCreateEmbedding(text: string): Promise<number[]> {
+  // Create cache key
+  const cacheKey = `embedding:${hashText(text)}`
+
+  // Check cache
+  const cached = await db.get(cacheKey, $.Thing)
+
+  if (cached?.embedding) {
+    return cached.embedding
+  }
+
+  // Generate new embedding
+  const embedding = await ai.embed(text)
+
+  // Store in cache
+  await db.create($.Thing, {
+    $id: cacheKey,
+    embedding,
+    createdAt: new Date().toISOString(),
+  })
+
+  return embedding
+}
+
+function hashText(text: string): string {
+  // Simple hash (use crypto hash in production)
+  return text
+    .split('')
+    .reduce((a, b) => ((a << 5) - a + b.charCodeAt(0)) | 0, 0)
+    .toString(36)
+}
+```
+
+## Performance Comparison
+
+Compare different similarity metrics:
+
+```typescript
+import { ai } from 'sdk.do'
+
+function cosineSimilarity(a: number[], b: number[]): number {
+  const dot = a.reduce((sum, val, i) => sum + val * b[i], 0)
+  const magA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0))
+  const magB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0))
+  return dot / (magA * magB)
+}
+
+function euclideanDistance(a: number[], b: number[]): number {
+  return Math.sqrt(a.reduce((sum, val, i) => sum + Math.pow(val - b[i], 2), 0))
+}
+
+function manhattanDistance(a: number[], b: number[]): number {
+  return a.reduce((sum, val, i) => sum + Math.abs(val - b[i]), 0)
+}
+
+// Compare metrics
+const embed1 = await ai.embed('machine learning')
+const embed2 = await ai.embed('deep learning')
+
+console.log('Cosine Similarity:', cosineSimilarity(embed1, embed2))
+console.log('Euclidean Distance:', euclideanDistance(embed1, embed2))
+console.log('Manhattan Distance:', manhattanDistance(embed1, embed2))
+```
+
+## See Also
+
+- [Basic Generation Example](./basic-generation) - Text generation
+- [Structured Output Example](./structured-output) - Schema-based generation
+- [Embeddings Guide](../docs/embeddings) - Detailed documentation
+
+## Next Steps
+
+- [Batch Processing](../docs/batch-processing) - Process embeddings at scale
+- [Database Integration](https://db.do) - Store embeddings
+- [API Reference](../api/) - Complete API documentation
+
+## License
+
+MIT (Open Source)

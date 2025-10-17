@@ -1,0 +1,97 @@
+---
+$id: https://integrations.do/share_point
+$type: Integration
+name: Share point
+service: share_point
+description: SharePoint is a Microsoft platform for document management and intranets, enabling teams to collaborate, store, and organize content securely and effectively
+category: communication
+sdkBased: false
+baseUrl: https://api.share_point.com
+
+auth:
+  type: oauth2
+  authorizationUrl: https://login.microsoftonline.com/common/oauth2/v2.0/authorize
+  tokenUrl: https://login.microsoftonline.com/common/oauth2/v2.0/token
+  scopes:
+    - https://{{subdomain}}.sharepoint.com/.default
+    - offline_access
+
+resources:
+  - name: Action
+    plural: Actions
+    description: Execute Share point actions
+    operations:
+      - name: execute
+        method: POST
+        path: /
+        params:
+          - name: action
+            type: string
+            required: true
+            description: Action name to execute
+          - name: parameters
+            type: object
+            required: false
+            description: Action parameters
+        returns: object
+
+webhooks:
+  enabled: false
+  events: []
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+  retryable: [429, 500]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: false
+  scenarios:
+    - name: Basic Action Execution
+      description: Test basic action execution
+      steps:
+        - action: custom
+          resource: Action
+
+docs:
+  homepage: https://www.microsoft.com/en-in/microsoft-365/sharepoint/collaboration/
+  apiDocs: https://www.microsoft.com/en-in/microsoft-365/sharepoint/collaboration/
+---
+
+# Share point Integration
+
+SharePoint is a Microsoft platform for document management and intranets, enabling teams to collaborate, store, and organize content securely and effectively
+
+## Quick Start
+
+```typescript
+import { SharepointClient } from '@dotdo/sdk.do/integrations/share_point'
+
+const share_point = new SharepointClient({
+  apiKey: process.env.SHARE_POINT_API_KEY,
+})
+
+const result = await share_point.action.execute({
+  action: 'example_action',
+  parameters: {},
+})
+```
+
+## Actions
+
+Share point provides 6 actions through the Composio API.
+
+## License
+
+MIT

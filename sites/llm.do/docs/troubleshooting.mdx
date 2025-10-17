@@ -1,0 +1,735 @@
+---
+$id: https://llm.do/docs/troubleshooting
+$type: TechArticle
+title: LLM Gateway Troubleshooting
+description: Common issues and solutions when using llm.do
+keywords: [llm, gateway, troubleshooting, errors, debugging, solutions]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Troubleshooting
+
+Common issues and solutions when working with llm.do.
+
+## Authentication Errors
+
+### "Invalid API key" Error
+
+**Problem**: API key is not recognized by the provider.
+
+**Solutions**:
+
+```bash
+# 1. Check if API key is set
+echo $OPENAI_API_KEY
+echo $ANTHROPIC_API_KEY
+
+# 2. Verify key format
+# OpenAI keys start with: sk-
+# Anthropic keys start with: sk-ant-
+
+# 3. Regenerate key if necessary
+# OpenAI: https://platform.openai.com/api-keys
+# Anthropic: https://console.anthropic.com/settings/keys
+
+# 4. Update environment variable
+export OPENAI_API_KEY=sk-new-key-here
+```
+
+**Code Solution**:
+
+```typescript
+import { llm } from 'sdk.do'
+
+// Verify API keys are set
+if (!process.env.OPENAI_API_KEY) {
+  throw new Error('OPENAI_API_KEY not set')
+}
+
+if (!process.env.ANTHROPIC_API_KEY) {
+  throw new Error('ANTHROPIC_API_KEY not set')
+}
+
+// Test connection
+try {
+  await llm.generate('test', { provider: 'openai', maxTokens: 5 })
+  console.log('OpenAI connection successful')
+} catch (error) {
+  console.error('OpenAI connection failed:', error.message)
+}
+```
+
+### "Insufficient quota" Error
+
+**Problem**: Provider account has insufficient credits or has exceeded quota.
+
+**Solutions**:
+
+```typescript
+// 1. Check your usage and billing
+const usage = await llm.analytics.usage({ period: 'last_30_days' })
+console.log(`Current usage: $${usage.totalCost}`)
+
+// 2. Add credits to your provider account
+// OpenAI: https://platform.openai.com/account/billing
+// Anthropic: https://console.anthropic.com/settings/billing
+
+// 3. Switch to alternative provider
+await llm.generate('prompt', {
+  provider: 'openai',
+  routing: {
+    fallback: 'anthropic', // Fallback if quota exceeded
+  },
+})
+```
+
+## Rate Limiting
+
+### "Rate limit exceeded" Error
+
+**Problem**: Too many requests sent to provider in short time period.
+
+**Solutions**:
+
+```typescript
+// 1. Implement retry with exponential backoff
+async function generateWithRetry(prompt: string, maxRetries = 5) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await llm.generate(prompt)
+    } catch (error) {
+      if (error.code === 'RATE_LIMIT_EXCEEDED') {
+        const delay = Math.pow(2, attempt) * 1000
+        console.log(`Rate limited, retrying in ${delay}ms...`)
+        await new Promise((resolve) => setTimeout(resolve, delay))
+        continue
+      }
+      throw error
+    }
+  }
+  throw new Error('Max retries exceeded')
+}
+
+// 2. Use batch processing for large datasets
+const requests = items.map((item) => ({ prompt: generatePrompt(item) }))
+const batch = await llm.batch.create(requests)
+// Batch API has higher rate limits
+
+// 3. Implement rate limiting in your application
+import { RateLimiter } from 'limiter'
+
+const limiter = new RateLimiter({
+  tokensPerInterval: 60,
+  interval: 'minute',
+})
+
+await limiter.removeTokens(1)
+const response = await llm.generate(prompt)
+
+// 4. Use multiple API keys (if allowed by provider)
+llm.config({
+  providers: {
+    openai: {
+      apiKeys: [process.env.OPENAI_API_KEY_1, process.env.OPENAI_API_KEY_2, process.env.OPENAI_API_KEY_3],
+      loadBalance: 'round-robin',
+    },
+  },
+})
+```
+
+### Gateway Rate Limiting
+
+**Problem**: llm.do gateway is rate limiting your requests.
+
+**Solutions**:
+
+```typescript
+// 1. Check your rate limit configuration
+const config = await llm.getConfig()
+console.log(`Rate limit: ${config.rateLimit.requestsPerMinute} req/min`)
+
+// 2. Upgrade your plan for higher limits
+// Contact support: support@do
+
+// 3. Implement client-side throttling
+import pLimit from 'p-limit'
+
+const limit = pLimit(10) // Max 10 concurrent requests
+
+const results = await Promise.all(items.map((item) => limit(() => llm.generate(prompt(item)))))
+```
+
+## Timeout Errors
+
+### "Request timeout" Error
+
+**Problem**: Request took too long to complete.
+
+**Solutions**:
+
+```typescript
+// 1. Increase timeout
+const response = await llm.generate('complex prompt', {
+  timeout: 60000, // 60 seconds
+})
+
+// 2. Break into smaller chunks
+// Instead of one large request:
+const longResponse = await llm.generate('Write 50 page document')
+
+// Break into chunks:
+const chapters = []
+for (let i = 0; i < 10; i++) {
+  const chapter = await llm.generate(`Write chapter ${i + 1}`, {
+    timeout: 30000,
+  })
+  chapters.push(chapter)
+}
+
+// 3. Use streaming for long responses
+const stream = llm.stream('Write comprehensive guide', {
+  timeout: 5000, // 5s timeout per chunk
+})
+
+for await (const chunk of stream) {
+  process.stdout.write(chunk)
+}
+
+// 4. Switch to faster model
+const response = await llm.generate('prompt', {
+  model: 'gpt-5-mini', // Faster than gpt-5
+  routing: { optimize: 'speed' },
+})
+```
+
+## Provider Availability
+
+### "Provider unavailable" Error
+
+**Problem**: AI provider is experiencing downtime or issues.
+
+**Solutions**:
+
+```typescript
+// 1. Check provider status
+const health = await llm.analytics.providerHealth()
+
+console.log(health)
+// {
+//   openai: { available: false, lastError: '503 Service Unavailable' },
+//   anthropic: { available: true, latency: 1200 }
+// }
+
+// 2. Configure automatic failover
+const response = await llm.generate('prompt', {
+  provider: 'openai',
+  routing: {
+    fallback: 'anthropic', // Automatic failover
+    retries: 3,
+  },
+})
+
+// 3. Monitor provider status
+// Subscribe to status pages:
+// OpenAI: https://status.openai.com
+// Anthropic: https://status.anthropic.com
+
+// 4. Implement circuit breaker
+llm.config({
+  circuitBreaker: {
+    enabled: true,
+    threshold: 5, // Open after 5 failures
+    timeout: 60000, // Try again after 1 minute
+  },
+})
+```
+
+## Response Quality Issues
+
+### Generated Content is Low Quality
+
+**Problem**: LLM produces poor or incorrect results.
+
+**Solutions**:
+
+```typescript
+// 1. Use a more capable model
+const response = await llm.generate('complex task', {
+  model: 'gpt-5', // or 'claude-sonnet-4.5'
+  routing: { optimize: 'quality' },
+})
+
+// 2. Provide more context
+const response = await llm.generate('Write product description', {
+  context: {
+    product: productData,
+    brand: brandInfo,
+    competitors: competitorData,
+    targetAudience: 'professionals',
+  },
+})
+
+// 3. Use structured output with schema
+const product = await llm.generate('Create product', {
+  schema: $.Product,
+  structured: true, // Enforces structure
+})
+
+// 4. Adjust temperature
+const creative = await llm.generate('Write story', {
+  temperature: 0.9, // Higher = more creative
+})
+
+const factual = await llm.generate('Extract data', {
+  temperature: 0.1, // Lower = more deterministic
+})
+
+// 5. Add examples (few-shot learning)
+const response = await llm.generate(prompt, {
+  examples: [
+    { input: 'example 1', output: 'result 1' },
+    { input: 'example 2', output: 'result 2' },
+  ],
+})
+```
+
+### Inconsistent Output Format
+
+**Problem**: LLM returns data in different formats.
+
+**Solutions**:
+
+```typescript
+// 1. Always use structured output
+import { $, llm } from 'sdk.do'
+
+const product = await llm.generate('Create product', {
+  schema: $.Product,
+  structured: true, // Guarantees consistent format
+})
+
+// 2. Validate output
+function validateProduct(product: any): Product {
+  if (!product.name || !product.description) {
+    throw new Error('Invalid product format')
+  }
+  return product
+}
+
+const product = validateProduct(await llm.generate('Create product', { schema: $.Product, structured: true }))
+
+// 3. Use JSON mode explicitly
+const response = await llm.generate('Create JSON', {
+  responseFormat: { type: 'json_object' },
+  provider: 'openai', // OpenAI has native JSON mode
+})
+```
+
+## Cost Issues
+
+### Unexpectedly High Costs
+
+**Problem**: LLM usage is more expensive than anticipated.
+
+**Solutions**:
+
+```typescript
+// 1. Analyze cost breakdown
+const costs = await llm.analytics.costs({
+  period: 'last_7_days',
+  groupBy: ['model', 'operation'],
+})
+
+console.log(costs)
+// Identify which models/operations are most expensive
+
+// 2. Enable cost optimization
+llm.config({
+  routing: { optimize: 'cost' },
+  defaultModel: 'gpt-5-mini', // Cheaper default
+})
+
+// 3. Enable caching
+llm.config({
+  caching: {
+    enabled: true,
+    ttl: 3600,
+  },
+})
+
+const stats = await llm.analytics.usage()
+console.log(`Cache hit rate: ${stats.cacheHitRate}`)
+// 30-40% hit rate = 30-40% cost savings
+
+// 4. Use batch processing
+const batch = await llm.batch.create(requests)
+// 50% cost savings vs individual requests
+
+// 5. Set cost limits
+llm.config({
+  costLimit: {
+    daily: 100, // $100/day max
+    monthly: 2000, // $2000/month max
+    action: 'block', // 'block' or 'downgrade' or 'alert'
+  },
+})
+
+// 6. Monitor and alert
+const dailyCost = await llm.analytics.usage({ period: 'today' })
+
+if (dailyCost.totalCost > BUDGET_DAILY * 0.8) {
+  await sendAlert(`Approaching daily budget: $${dailyCost.totalCost}`)
+}
+```
+
+### Unexpected Token Usage
+
+**Problem**: Requests use more tokens than expected.
+
+**Solutions**:
+
+```typescript
+// 1. Check actual token usage
+const response = await llm.generate('prompt', {
+  returnMetadata: true,
+})
+
+console.log(`Tokens used: ${response.usage.totalTokens}`)
+console.log(`- Prompt: ${response.usage.promptTokens}`)
+console.log(`- Completion: ${response.usage.completionTokens}`)
+
+// 2. Limit response length
+await llm.generate('prompt', {
+  maxTokens: 150, // Prevent long responses
+})
+
+// 3. Optimize prompt length
+// Avoid:
+const verbose = await llm.generate(`${longSystemPrompt}\n${examples}\n${instructions}\n${context}`)
+
+// Better:
+const concise = await llm.generate('Generate description', {
+  context: { product },
+  maxTokens: 150,
+})
+
+// 4. Use prompt caching (for repeated prompts)
+await llm.generate(prompt, {
+  cache: { enabled: true },
+})
+```
+
+## Caching Issues
+
+### Cache Not Working
+
+**Problem**: Responses are not being cached.
+
+**Solutions**:
+
+```typescript
+// 1. Verify caching is enabled
+llm.config({
+  caching: {
+    enabled: true,
+    ttl: 3600,
+  },
+})
+
+// 2. Check cache key generation
+// Cache keys are based on:
+// - Provider + Model
+// - Prompt/Messages
+// - Temperature
+// - Schema
+// - Other parameters
+
+// These will have different cache keys:
+await llm.generate('prompt', { temperature: 0.7 })
+await llm.generate('prompt', { temperature: 0.8 }) // Different!
+
+// 3. Monitor cache effectiveness
+const stats = await llm.analytics.cache()
+
+console.log(`Cache hit rate: ${stats.hitRate}`)
+console.log(`Cache size: ${stats.size}`)
+console.log(`Oldest entry: ${stats.oldestEntry}`)
+
+// 4. Increase cache TTL if needed
+llm.config({
+  caching: {
+    enabled: true,
+    ttl: 86400, // 24 hours
+  },
+})
+```
+
+## Streaming Issues
+
+### Stream Disconnects
+
+**Problem**: Streaming connection drops before completion.
+
+**Solutions**:
+
+```typescript
+// 1. Implement reconnection logic
+async function streamWithReconnect(prompt: string, maxRetries = 3) {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const stream = llm.stream(prompt)
+      let buffer = ''
+
+      for await (const chunk of stream) {
+        buffer += chunk
+        process.stdout.write(chunk)
+      }
+
+      return buffer
+    } catch (error) {
+      if (attempt < maxRetries - 1) {
+        console.log('Stream disconnected, reconnecting...')
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+        continue
+      }
+      throw error
+    }
+  }
+}
+
+// 2. Handle connection timeouts
+const stream = llm.stream('prompt', {
+  timeout: 30000, // 30s total timeout
+  keepAlive: true,
+})
+
+// 3. Add error handlers
+const stream = llm.stream('prompt', {
+  onError: (error) => {
+    console.error('Stream error:', error)
+    // Implement fallback
+  },
+})
+```
+
+## Integration Issues
+
+### Cannot Import from sdk.do
+
+**Problem**: Import errors when using llm.do.
+
+**Solutions**:
+
+```bash
+# 1. Verify installation
+pnpm list sdk.do
+
+# 2. Reinstall if necessary
+pnpm add sdk.do
+
+# 3. Check package.json
+cat package.json | grep sdk.do
+
+# 4. Clear cache and reinstall
+rm -rf node_modules pnpm-lock.yaml
+pnpm install
+```
+
+```typescript
+// 5. Use correct import syntax
+// Good:
+import { llm } from 'sdk.do'
+import { $, llm } from 'sdk.do'
+
+// Avoid:
+import llm from 'sdk.do' // Wrong
+import { llm } from 'sdk.do/llm' // Wrong
+```
+
+### TypeScript Errors
+
+**Problem**: TypeScript compilation errors.
+
+**Solutions**:
+
+```typescript
+// 1. Install type definitions
+pnpm add -D @types/node
+
+// 2. Configure tsconfig.json
+{
+  "compilerOptions": {
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "strict": true
+  }
+}
+
+// 3. Use type assertions if needed
+const response = await llm.generate('prompt') as string
+
+// 4. Import types
+import type { LLMResponse, GenerateOptions } from 'sdk.do'
+
+const options: GenerateOptions = {
+  model: 'gpt-5',
+  temperature: 0.7
+}
+```
+
+## Performance Issues
+
+### Slow Response Times
+
+**Problem**: LLM requests are taking too long.
+
+**Solutions**:
+
+```typescript
+// 1. Use faster models
+await llm.generate('prompt', {
+  model: 'gpt-5-mini', // Faster than gpt-5
+  routing: { optimize: 'speed' },
+})
+
+// 2. Reduce max tokens
+await llm.generate('prompt', {
+  maxTokens: 150, // Shorter = faster
+})
+
+// 3. Use streaming
+const stream = llm.stream('prompt')
+// First tokens arrive in ~500ms
+
+// 4. Check provider latency
+const health = await llm.analytics.providerHealth()
+console.log(`OpenAI latency: ${health.openai.latency}ms`)
+console.log(`Anthropic latency: ${health.anthropic.latency}ms`)
+
+// 5. Parallelize independent requests
+await Promise.all([llm.generate('prompt 1'), llm.generate('prompt 2'), llm.generate('prompt 3')])
+
+// 6. Implement connection pooling
+llm.config({
+  connectionPool: {
+    maxSockets: 50,
+    keepAlive: true,
+  },
+})
+```
+
+## Debugging
+
+### Enable Debug Logging
+
+Get detailed logs for debugging:
+
+```typescript
+import { llm } from 'sdk.do'
+
+// Enable debug logging
+llm.config({
+  logging: {
+    enabled: true,
+    level: 'debug',
+    format: 'pretty',
+    includeRequest: true,
+    includeResponse: true,
+  },
+})
+
+// Logs will show:
+// - Request details
+// - Provider selection
+// - Response time
+// - Token usage
+// - Errors
+```
+
+### Test Connection
+
+Test provider connections:
+
+```typescript
+import { llm } from 'sdk.do'
+
+async function testProviders() {
+  // Test OpenAI
+  try {
+    await llm.generate('test', {
+      provider: 'openai',
+      model: 'gpt-5-nano',
+      maxTokens: 5,
+    })
+    console.log('✓ OpenAI connection successful')
+  } catch (error) {
+    console.error('✗ OpenAI connection failed:', error.message)
+  }
+
+  // Test Anthropic
+  try {
+    await llm.generate('test', {
+      provider: 'anthropic',
+      model: 'claude-haiku-4',
+      maxTokens: 5,
+    })
+    console.log('✓ Anthropic connection successful')
+  } catch (error) {
+    console.error('✗ Anthropic connection failed:', error.message)
+  }
+}
+
+testProviders()
+```
+
+## Getting Help
+
+Still having issues? Here's how to get help:
+
+### 1. Check Documentation
+
+- [Getting Started](./getting-started) - Setup and configuration
+- [Architecture](./architecture) - How the gateway works
+- [Best Practices](./best-practices) - Optimization tips
+- [API Reference](../api/reference) - Complete API docs
+
+### 2. Search GitHub Issues
+
+Search existing issues: [github.com/dot-do/ai/issues](https://github.com/dot-do/ai/issues)
+
+### 3. Create GitHub Issue
+
+Include:
+
+- Error message
+- Code snippet
+- Provider and model
+- Expected vs actual behavior
+- llm.do version
+
+### 4. Join Discord Community
+
+Get help from the community: [discord.gg/dotdo](https://discord.gg/dotdo)
+
+### 5. Contact Support
+
+For urgent issues: support@do
+
+## Common Error Codes
+
+| Code                      | Meaning                  | Solution                             |
+| ------------------------- | ------------------------ | ------------------------------------ |
+| `INVALID_API_KEY`         | API key invalid          | Check API key format and regenerate  |
+| `RATE_LIMIT_EXCEEDED`     | Too many requests        | Implement retry with backoff         |
+| `INSUFFICIENT_QUOTA`      | No credits remaining     | Add credits to provider account      |
+| `PROVIDER_UNAVAILABLE`    | Provider is down         | Use automatic failover               |
+| `TIMEOUT`                 | Request timed out        | Increase timeout or use faster model |
+| `INVALID_MODEL`           | Model doesn't exist      | Check model name spelling            |
+| `INVALID_SCHEMA`          | Schema validation failed | Use valid Schema.org type            |
+| `CONTEXT_LENGTH_EXCEEDED` | Prompt too long          | Reduce prompt length                 |
+
+## License
+
+MIT (Open Source)

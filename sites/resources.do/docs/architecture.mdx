@@ -1,0 +1,209 @@
+---
+$id: https://resources.do/docs/architecture
+$type: TechArticle
+title: resources.do Architecture
+description: System design and architecture for data record management
+keywords: [architecture, design, storage, querying, indexing]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# resources.do Architecture
+
+Technical architecture of the data record and resource management system.
+
+## System Overview
+
+```
+┌────────────────────────────────────┐
+│     Application Layer               │
+└────────────┬───────────────────────┘
+             │
+┌────────────▼───────────────────────┐
+│     resources.do (Data Layer)       │
+│  Resource Storage & Retrieval       │
+└────────────┬───────────────────────┘
+             │
+┌────────────▼───────────────────────┐
+│     Database Layer                  │
+│  • Resource Storage                 │
+│  • Indexing                         │
+│  • Query Optimization               │
+│  • Relationship Management          │
+└────────────────────────────────────┘
+```
+
+## Core Components
+
+### 1. Resource Store
+
+Manages resource storage and retrieval:
+
+```typescript
+class ResourceStore {
+  async create<T>(type: TypeReference, data: T): Promise<T> {
+    const id = generateId()
+    const resource = { $id: id, $type: type.$type, ...data }
+    await this.storage.save(resource)
+    return resource
+  }
+
+  async get<T>(type: TypeReference, id: string): Promise<T> {
+    return await this.storage.load(id)
+  }
+
+  async list<T>(type: TypeReference, options: QueryOptions): Promise<T[]> {
+    return await this.storage.query(type.$type, options)
+  }
+}
+```
+
+### 2. Query Engine
+
+Optimizes and executes queries:
+
+```typescript
+class QueryEngine {
+  buildQuery(type: string, options: QueryOptions): Query {
+    const query = {
+      type,
+      where: this.buildWhereClause(options.where),
+      limit: options.limit || 100,
+      offset: options.offset || 0,
+      orderBy: this.buildOrderBy(options.orderBy),
+    }
+    return query
+  }
+
+  async execute<T>(query: Query): Promise<T[]> {
+    return await this.storage.execute(query)
+  }
+}
+```
+
+### 3. Relationship Manager
+
+Manages relationships between resources:
+
+```typescript
+class RelationshipManager {
+  async relate(subject: any, predicate: string, object: any): Promise<void> {
+    await this.storage.createRelationship({
+      subject: subject.$id,
+      predicate,
+      object: object.$id,
+    })
+  }
+
+  async related(subject: any, predicate: string, type?: TypeReference): Promise<any[]> {
+    const relationships = await this.storage.getRelationships(subject.$id, predicate)
+    const objectIds = relationships.map((r) => r.object)
+    return await this.storage.loadMany(objectIds, type?.$type)
+  }
+}
+```
+
+## Storage Schema
+
+```sql
+-- Resources table
+CREATE TABLE resources (
+  id UUID PRIMARY KEY,
+  type VARCHAR(255) NOT NULL,
+  data JSONB NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Indexes
+CREATE INDEX idx_resources_type ON resources(type);
+CREATE INDEX idx_resources_data ON resources USING GIN(data);
+
+-- Relationships table
+CREATE TABLE relationships (
+  subject_id UUID NOT NULL,
+  predicate VARCHAR(255) NOT NULL,
+  object_id UUID NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW(),
+  PRIMARY KEY (subject_id, predicate, object_id)
+);
+
+CREATE INDEX idx_relationships_subject ON relationships(subject_id);
+CREATE INDEX idx_relationships_object ON relationships(object_id);
+```
+
+## Performance Optimizations
+
+### Indexing Strategy
+
+```typescript
+// Type-specific indexes
+const indexes = {
+  Person: ['email', 'jobTitle', 'status'],
+  Organization: ['industry', 'taxID'],
+  Product: ['sku', 'category', 'brand'],
+}
+
+// Create indexes
+for (const [type, fields] of Object.entries(indexes)) {
+  for (const field of fields) {
+    await db.query(`
+      CREATE INDEX idx_${type}_${field}
+      ON resources((data->>'${field}'))
+      WHERE type = '${type}'
+    `)
+  }
+}
+```
+
+### Caching Layer
+
+```typescript
+class ResourceCache {
+  private cache = new Map<string, { value: any; expires: number }>()
+  private ttl = 60000 // 1 minute
+
+  async get(id: string): Promise<any | null> {
+    const cached = this.cache.get(id)
+    if (cached && Date.now() < cached.expires) {
+      return cached.value
+    }
+    return null
+  }
+
+  set(id: string, value: any): void {
+    this.cache.set(id, {
+      value,
+      expires: Date.now() + this.ttl,
+    })
+  }
+}
+```
+
+### Query Optimization
+
+```typescript
+class QueryOptimizer {
+  optimize(query: Query): Query {
+    // Add indexes for common filters
+    if (query.where) {
+      const fields = Object.keys(query.where)
+      this.ensureIndexes(query.type, fields)
+    }
+
+    // Rewrite inefficient queries
+    if (query.limit > 1000) {
+      query.limit = 1000 // Cap at 1000
+    }
+
+    return query
+  }
+}
+```
+
+## Related Documentation
+
+- [Getting Started](./getting-started)
+- [Best Practices](./best-practices)
+- [API Reference](../api/reference)

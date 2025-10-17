@@ -1,0 +1,517 @@
+---
+$id: https://workflows.do/docs/getting-started
+$type: TechArticle
+title: Getting Started with workflows.do
+description: Learn how to install and create your first declarative workflow with workflows.do
+keywords: [workflows, getting started, installation, tutorial, sdk.do]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Getting Started
+
+Get up and running with workflows.do in minutes. This guide will walk you through installation, basic concepts, and creating your first workflow.
+
+## Installation
+
+workflows.do is part of the `sdk.do` package:
+
+```bash
+pnpm add sdk.do
+```
+
+Or with npm:
+
+```bash
+npm install sdk.do
+```
+
+## Prerequisites
+
+- Node.js 18+ or Bun 1.0+
+- TypeScript 5.0+ (optional but recommended)
+- Basic understanding of async/await and Promises
+
+## Your First Workflow
+
+Let's create a simple workflow that processes customer orders:
+
+### Step 1: Import the SDK
+
+```typescript
+import { $, workflow } from 'sdk.do'
+```
+
+### Step 2: Define Workflow Steps
+
+Define the individual steps that make up your workflow:
+
+```typescript
+// Define step actions
+const validateOrder = async (order) => {
+  if (!order.customerId || !order.items?.length) {
+    throw new Error('Invalid order')
+  }
+  return { ...order, validated: true }
+}
+
+const processPayment = async (order) => {
+  // Simulate payment processing
+  await new Promise((resolve) => setTimeout(resolve, 1000))
+  return { ...order, paymentStatus: 'completed' }
+}
+
+const fulfillOrder = async (order) => {
+  // Simulate order fulfillment
+  return { ...order, status: 'fulfilled' }
+}
+```
+
+### Step 3: Create the Workflow
+
+```typescript
+const orderWorkflow = workflow({
+  name: 'OrderProcessing',
+  description: 'Process customer orders from validation to fulfillment',
+  steps: [
+    {
+      name: 'ValidateOrder',
+      action: validateOrder,
+      onSuccess: 'ProcessPayment',
+      onFailure: 'NotifyCustomer',
+    },
+    {
+      name: 'ProcessPayment',
+      action: processPayment,
+      onSuccess: 'FulfillOrder',
+      onFailure: 'CancelOrder',
+    },
+    {
+      name: 'FulfillOrder',
+      action: fulfillOrder,
+    },
+  ],
+})
+```
+
+### Step 4: Execute the Workflow
+
+```typescript
+const result = await orderWorkflow.execute({
+  orderId: '12345',
+  customerId: 'cust_123',
+  items: [
+    { productId: 'prod_1', quantity: 2, price: 29.99 },
+    { productId: 'prod_2', quantity: 1, price: 49.99 },
+  ],
+})
+
+console.log('Workflow result:', result)
+```
+
+## Complete Example
+
+Here's the full example in one file:
+
+```typescript
+import { $, workflow } from 'sdk.do'
+
+// Define step actions
+const validateOrder = async (order) => {
+  if (!order.customerId || !order.items?.length) {
+    throw new Error('Invalid order')
+  }
+  return { ...order, validated: true }
+}
+
+const processPayment = async (order) => {
+  await new Promise((resolve) => setTimeout(resolve, 1000))
+  return { ...order, paymentStatus: 'completed' }
+}
+
+const fulfillOrder = async (order) => {
+  return { ...order, status: 'fulfilled' }
+}
+
+// Create workflow
+const orderWorkflow = workflow({
+  name: 'OrderProcessing',
+  description: 'Process customer orders',
+  steps: [
+    {
+      name: 'ValidateOrder',
+      action: validateOrder,
+      onSuccess: 'ProcessPayment',
+    },
+    {
+      name: 'ProcessPayment',
+      action: processPayment,
+      onSuccess: 'FulfillOrder',
+    },
+    {
+      name: 'FulfillOrder',
+      action: fulfillOrder,
+    },
+  ],
+})
+
+// Execute workflow
+const result = await orderWorkflow.execute({
+  orderId: '12345',
+  customerId: 'cust_123',
+  items: [{ productId: 'prod_1', quantity: 2, price: 29.99 }],
+})
+
+console.log('Order processed:', result)
+```
+
+## Using Semantic Patterns
+
+workflows.do supports semantic `$.Subject.predicate.Object` patterns for cleaner, more expressive code:
+
+```typescript
+import { $, workflow } from 'sdk.do'
+
+// Define workflow with semantic patterns
+const orderWorkflow = workflow({
+  name: 'OrderProcessing',
+  trigger: $.Order.created,
+  steps: [$.Order.validate, $.Payment.process, $.Order.fulfill, $.Customer.notify],
+})
+
+// Execute workflow when order is created
+await orderWorkflow.execute({ orderId: '12345' })
+```
+
+## Adding Error Handling
+
+Make your workflows resilient with error handling:
+
+```typescript
+const resilientWorkflow = workflow({
+  name: 'ResilientOrderProcessing',
+  steps: [
+    {
+      name: 'ValidateOrder',
+      action: $.Order.validate,
+      retryPolicy: {
+        maxAttempts: 3,
+        backoff: 'exponential',
+      },
+      onFailure: 'NotifySupport',
+    },
+    {
+      name: 'ProcessPayment',
+      action: $.Payment.process,
+      timeout: 30000, // 30 seconds
+      onFailure: 'RefundAndCancel',
+    },
+  ],
+  errorHandling: {
+    strategy: 'compensate',
+    compensationSteps: [$.Payment.refund, $.Order.cancel, $.Customer.notify],
+  },
+})
+```
+
+## Event-Driven Workflows
+
+Trigger workflows based on events:
+
+```typescript
+import { $, workflow, on } from 'sdk.do'
+
+// Define workflow
+const orderWorkflow = workflow({
+  name: 'OrderProcessing',
+  steps: [$.Order.validate, $.Payment.process, $.Order.fulfill],
+})
+
+// Trigger workflow when order is created
+on($.Order.created, async (order) => {
+  await orderWorkflow.execute(order)
+})
+```
+
+## Monitoring Workflow Execution
+
+Track workflow progress in real-time:
+
+```typescript
+const workflow = workflow({
+  name: 'MonitoredWorkflow',
+  steps: [$.Step1, $.Step2, $.Step3],
+})
+
+// Add event listeners
+workflow.on('step.started', (step) => {
+  console.log(`Started: ${step.name}`)
+})
+
+workflow.on('step.completed', (step, result) => {
+  console.log(`Completed: ${step.name}`, result)
+})
+
+workflow.on('error', (error) => {
+  console.error('Workflow error:', error)
+})
+
+// Execute workflow
+await workflow.execute({ input: 'data' })
+```
+
+## Workflow State
+
+Access and manage workflow state:
+
+```typescript
+// Get current workflow state
+const state = await workflow.getState()
+
+// Update workflow state
+await workflow.setState({
+  customData: 'value',
+  progress: 50,
+})
+
+// Subscribe to state changes
+workflow.onStateChange((newState) => {
+  console.log('State updated:', newState)
+})
+```
+
+## Using with Database
+
+Persist workflow state to a database:
+
+```typescript
+import { $, workflow, db } from 'sdk.do'
+
+const persistentWorkflow = workflow({
+  name: 'PersistentWorkflow',
+  steps: [
+    async (input) => {
+      // Save workflow state to database
+      await db.create($.WorkflowExecution, {
+        workflowId: input.workflowId,
+        status: 'running',
+        startedAt: new Date(),
+      })
+      return input
+    },
+    $.Process.execute,
+    async (result) => {
+      // Update workflow state
+      await db.update($.WorkflowExecution, {
+        where: { workflowId: result.workflowId },
+        data: {
+          status: 'completed',
+          completedAt: new Date(),
+          result,
+        },
+      })
+      return result
+    },
+  ],
+})
+```
+
+## Parallel Execution
+
+Run multiple steps in parallel:
+
+```typescript
+const parallelWorkflow = workflow({
+  name: 'ParallelProcessing',
+  steps: [
+    $.Data.fetch,
+    {
+      $type: 'ParallelStep',
+      name: 'ProcessInParallel',
+      branches: [$.Data.validate, $.Data.enrich, $.Data.analyze],
+    },
+    $.Data.aggregate,
+    $.Results.save,
+  ],
+})
+```
+
+## Conditional Execution
+
+Execute steps based on conditions:
+
+```typescript
+const conditionalWorkflow = workflow({
+  name: 'ConditionalProcessing',
+  steps: [
+    $.Order.fetch,
+    {
+      name: 'CheckOrderValue',
+      action: (order) => order.total > 1000,
+      onSuccess: 'ApplyDiscount',
+      onFailure: 'ProcessNormally',
+    },
+    {
+      name: 'ApplyDiscount',
+      condition: 'orderValue > 1000',
+      action: $.Discount.apply,
+    },
+    {
+      name: 'ProcessNormally',
+      condition: 'orderValue <= 1000',
+      action: $.Order.process,
+    },
+  ],
+})
+```
+
+## Scheduled Workflows
+
+Run workflows on a schedule:
+
+```typescript
+import { $, workflow, every } from 'sdk.do'
+
+// Define workflow
+const reportWorkflow = workflow({
+  name: 'DailyReport',
+  steps: [$.Data.collect, $.Report.generate, $.Email.send],
+})
+
+// Schedule workflow to run daily at 9 AM
+every($.Daily, { hour: 9 }, async () => {
+  await reportWorkflow.execute()
+})
+
+// Or use cron syntax
+every('0 9 * * *', async () => {
+  await reportWorkflow.execute()
+})
+```
+
+## Human-in-the-Loop
+
+Add approval steps to workflows:
+
+```typescript
+const approvalWorkflow = workflow({
+  name: 'ExpenseApproval',
+  steps: [
+    $.Expense.validate,
+    {
+      $type: 'ApprovalStep',
+      name: 'ManagerApproval',
+      approver: $.Manager,
+      timeout: '24h',
+      onApprove: 'ProcessExpense',
+      onReject: 'NotifyEmployee',
+      notificationTemplate: {
+        subject: 'Expense Approval Required',
+        body: 'Please review expense: {{expenseId}}',
+      },
+    },
+    {
+      name: 'ProcessExpense',
+      condition: 'approved === true',
+      action: $.Expense.process,
+    },
+  ],
+})
+```
+
+## Next Steps
+
+Now that you've created your first workflow, explore these topics:
+
+- [Workflow Patterns](./workflow-patterns.mdx) - Learn common workflow patterns and best practices
+- [Orchestration](./orchestration.mdx) - Advanced orchestration strategies
+- [API Reference](../api/index.mdx) - Complete API documentation
+- [Examples](../examples/basic-workflow.mdx) - More workflow examples
+
+## Common Issues
+
+### Workflow Doesn't Execute
+
+Make sure you're awaiting the workflow execution:
+
+```typescript
+// ❌ Wrong - workflow won't execute
+workflow.execute({ input })
+
+// ✅ Correct - await the execution
+await workflow.execute({ input })
+```
+
+### Steps Not Running in Order
+
+Sequential steps need to be linked properly:
+
+```typescript
+// ❌ Wrong - steps are independent
+steps: [
+  { name: 'Step1', action: $.Action1 },
+  { name: 'Step2', action: $.Action2 },
+]
+
+// ✅ Correct - steps are linked
+steps: [
+  {
+    name: 'Step1',
+    action: $.Action1,
+    onSuccess: 'Step2',
+  },
+  {
+    name: 'Step2',
+    action: $.Action2,
+  },
+]
+```
+
+### Workflow Hangs Indefinitely
+
+Always set timeouts for steps that might hang:
+
+```typescript
+steps: [
+  {
+    name: 'ExternalAPI',
+    action: $.API.call,
+    timeout: 30000, // 30 seconds
+    retryPolicy: {
+      maxAttempts: 3,
+    },
+  },
+]
+```
+
+## Best Practices
+
+1. **Name workflows and steps clearly**: Use descriptive names that indicate business intent
+2. **Handle errors explicitly**: Always define error handling strategies
+3. **Set appropriate timeouts**: Prevent workflows from hanging
+4. **Use semantic patterns**: Leverage `$.Subject.predicate.Object` for clarity
+5. **Make steps idempotent**: Steps should be safe to retry
+6. **Monitor execution**: Add event listeners to track progress
+7. **Persist important state**: Save workflow state to database
+8. **Test workflows thoroughly**: Write unit and integration tests
+9. **Document complex logic**: Add comments for conditional and branching logic
+10. **Keep workflows focused**: Break large workflows into smaller, composable workflows
+
+## Resources
+
+- [workflows.do](https://workflows.do) - Main documentation
+- [sdk.do](https://sdk.do) - Core SDK documentation
+- [actions.org.ai](https://actions.org.ai) - Actions and triggers
+- [GitHub Examples](https://github.com/dot-do/platform/tree/main/ai/sites/workflows.do/examples)
+
+## Getting Help
+
+- **Documentation**: [https://workflows.do](https://workflows.do)
+- **GitHub Issues**: [https://github.com/dot-do/platform/issues](https://github.com/dot-do/platform/issues)
+- **Discord Community**: Join our Discord for support
+- **Examples**: Check the [examples](../examples/) folder
+
+---
+
+**Next**: [Workflow Patterns](./workflow-patterns.mdx) - Learn common workflow patterns and best practices

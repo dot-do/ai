@@ -1,0 +1,721 @@
+---
+$id: https://functions.do/docs/monitoring
+$type: TechArticle
+title: Function Monitoring and Logging
+description: Learn how to monitor function execution, debug issues, and track performance
+keywords: [monitoring, logging, debugging, performance, observability]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Function Monitoring and Logging
+
+Learn how to monitor function execution, track performance metrics, debug issues, and implement comprehensive observability for your functions.
+
+## Overview
+
+Effective monitoring covers:
+
+- **Execution Tracking** - Monitor function invocations and results
+- **Performance Metrics** - Track duration, memory usage, success rates
+- **Error Logging** - Capture and analyze errors
+- **Debugging** - Tools and techniques for troubleshooting
+- **Alerting** - Automated notifications for issues
+
+## Execution Tracking
+
+### Basic Execution Metadata
+
+Every function execution returns detailed metadata:
+
+```typescript
+import { executeFunction } from 'ai-functions'
+
+const result = await executeFunction('process-order', {
+  params: { orderId: '123' },
+})
+
+// Execution metadata always available
+console.log('Execution ID:', result.execution.executionId)
+console.log('Function ID:', result.execution.functionId)
+console.log('Started at:', result.execution.startedAt)
+console.log('Completed at:', result.execution.completedAt)
+console.log('Duration:', result.execution.duration, 'ms')
+console.log('Memory used:', result.execution.memory, 'MB')
+```
+
+### Track All Executions
+
+Store execution history for analysis:
+
+```typescript
+import { executeFunction, db } from 'ai-functions'
+
+async function executeAndTrack(functionId: string, input: any) {
+  const result = await executeFunction(functionId, input)
+
+  // Store execution record
+  await db.create($.FunctionExecution, {
+    executionId: result.execution.executionId,
+    functionId: result.execution.functionId,
+    startedAt: result.execution.startedAt,
+    completedAt: result.execution.completedAt,
+    duration: result.execution.duration,
+    memory: result.execution.memory,
+    success: result.success,
+    error: result.error?.message,
+  })
+
+  return result
+}
+
+const result = await executeAndTrack('process-order', { params: { orderId: '123' } })
+```
+
+### Query Execution History
+
+Analyze past executions:
+
+```typescript
+// Get recent executions for a function
+const executions = await db.list($.FunctionExecution, {
+  where: {
+    functionId: 'process-order',
+    startedAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+  },
+  orderBy: { startedAt: 'desc' },
+  limit: 100,
+})
+
+// Calculate success rate
+const successCount = executions.filter((e) => e.success).length
+const successRate = (successCount / executions.length) * 100
+console.log(`Success rate: ${successRate.toFixed(2)}%`)
+
+// Calculate average duration
+const avgDuration = executions.reduce((sum, e) => sum + e.duration, 0) / executions.length
+console.log(`Average duration: ${avgDuration.toFixed(2)}ms`)
+```
+
+## Performance Metrics
+
+### Duration Tracking
+
+Monitor function execution time:
+
+```typescript
+const result = await executeFunction('slow-function', {
+  params: { data: 'process' },
+})
+
+if (result.execution.duration > 5000) {
+  console.warn(`Function took ${result.execution.duration}ms - exceeds 5s threshold`)
+
+  // Send alert
+  await send($.Alert.send, {
+    severity: 'warning',
+    message: `Function ${result.execution.functionId} is slow`,
+    duration: result.execution.duration,
+  })
+}
+```
+
+### Memory Usage
+
+Track memory consumption:
+
+```typescript
+const result = await executeFunction('memory-intensive', {
+  params: { largeDataset },
+})
+
+console.log(`Memory used: ${result.execution.memory}MB`)
+
+// Alert if approaching limit
+const memoryLimit = 512
+const memoryPercent = (result.execution.memory / memoryLimit) * 100
+
+if (memoryPercent > 80) {
+  console.warn(`Function using ${memoryPercent.toFixed(1)}% of memory limit`)
+}
+```
+
+### Success Rate Monitoring
+
+Track function reliability:
+
+```typescript
+async function trackSuccessRate(functionId: string, window = 1000) {
+  const executions = await db.list($.FunctionExecution, {
+    where: { functionId },
+    limit: window,
+    orderBy: { startedAt: 'desc' },
+  })
+
+  const successful = executions.filter((e) => e.success).length
+  const rate = (successful / executions.length) * 100
+
+  if (rate < 95) {
+    await send($.Alert.send, {
+      severity: 'error',
+      message: `Success rate for ${functionId} is ${rate.toFixed(2)}%`,
+    })
+  }
+
+  return rate
+}
+
+await trackSuccessRate('critical-function')
+```
+
+### Throughput Metrics
+
+Monitor function throughput:
+
+```typescript
+async function calculateThroughput(functionId: string, minutes = 60) {
+  const since = new Date(Date.now() - minutes * 60 * 1000)
+
+  const count = await db.count($.FunctionExecution, {
+    where: {
+      functionId,
+      startedAt: { $gte: since },
+    },
+  })
+
+  const throughput = count / minutes
+  console.log(`Throughput: ${throughput.toFixed(2)} executions/minute`)
+
+  return throughput
+}
+
+await calculateThroughput('high-volume-function')
+```
+
+## Error Logging
+
+### Capture Errors
+
+Log all execution errors:
+
+```typescript
+const result = await executeFunction('may-fail', {
+  params: { data: 'test' },
+})
+
+if (!result.success && result.error) {
+  await db.create($.ErrorLog, {
+    executionId: result.execution.executionId,
+    functionId: result.execution.functionId,
+    timestamp: new Date(),
+    errorMessage: result.error.message,
+    errorCode: result.error.code,
+    errorStack: result.error.stack,
+  })
+}
+```
+
+### Error Analysis
+
+Analyze error patterns:
+
+```typescript
+// Get recent errors
+const errors = await db.list($.ErrorLog, {
+  where: {
+    timestamp: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+  },
+})
+
+// Group by error message
+const errorCounts = errors.reduce(
+  (acc, error) => {
+    const key = error.errorMessage
+    acc[key] = (acc[key] || 0) + 1
+    return acc
+  },
+  {} as Record<string, number>
+)
+
+// Find most common errors
+const topErrors = Object.entries(errorCounts)
+  .sort(([, a], [, b]) => b - a)
+  .slice(0, 5)
+
+console.log('Top 5 errors:')
+topErrors.forEach(([message, count]) => {
+  console.log(`  ${count}x: ${message}`)
+})
+```
+
+### Error Rate Alerts
+
+Monitor error rates:
+
+```typescript
+async function checkErrorRate(functionId: string) {
+  const executions = await db.list($.FunctionExecution, {
+    where: {
+      functionId,
+      startedAt: { $gte: new Date(Date.now() - 60 * 60 * 1000) },
+    },
+  })
+
+  const errorCount = executions.filter((e) => !e.success).length
+  const errorRate = (errorCount / executions.length) * 100
+
+  if (errorRate > 5) {
+    await send($.Alert.send, {
+      severity: 'critical',
+      message: `Error rate for ${functionId} is ${errorRate.toFixed(2)}%`,
+      errorCount,
+      totalExecutions: executions.length,
+    })
+  }
+
+  return errorRate
+}
+
+// Check every 15 minutes
+every($.Every15Minutes, async () => {
+  await checkErrorRate('critical-function')
+})
+```
+
+## Function Logs
+
+### Capture Logs
+
+Access function execution logs:
+
+```typescript
+const result = await executeFunction('logged-function', {
+  params: { data: 'test' },
+})
+
+if (result.logs) {
+  console.log('Function logs:')
+  result.logs.forEach((log) => {
+    console.log('  ', log)
+  })
+}
+```
+
+### Structured Logging
+
+Implement structured logging in functions:
+
+```typescript
+const func = registerFunction({
+  metadata: {
+    id: 'structured-logging',
+    name: 'Structured Logging',
+    version: '1.0.0',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  source: {
+    code: `
+      export default async function handler(input) {
+        const logger = {
+          info: (msg, meta) => console.log(JSON.stringify({ level: 'info', msg, meta })),
+          warn: (msg, meta) => console.log(JSON.stringify({ level: 'warn', msg, meta })),
+          error: (msg, meta) => console.log(JSON.stringify({ level: 'error', msg, meta })),
+        }
+
+        logger.info('Processing started', { orderId: input.params.orderId })
+
+        try {
+          const result = await processOrder(input.params.orderId)
+          logger.info('Processing completed', { orderId: input.params.orderId, result })
+          return result
+        } catch (error) {
+          logger.error('Processing failed', { orderId: input.params.orderId, error: error.message })
+          throw error
+        }
+      }
+    `,
+    language: 'typescript',
+  },
+})
+```
+
+### Log Aggregation
+
+Aggregate and search logs:
+
+```typescript
+async function searchLogs(functionId: string, query: string) {
+  const executions = await db.list($.FunctionExecution, {
+    where: { functionId },
+    limit: 100,
+  })
+
+  const matchingLogs = []
+  for (const execution of executions) {
+    const result = await getExecutionStatus(execution.executionId)
+    if (result?.logs) {
+      const matches = result.logs.filter((log) => log.includes(query))
+      if (matches.length > 0) {
+        matchingLogs.push({
+          executionId: execution.executionId,
+          timestamp: execution.startedAt,
+          logs: matches,
+        })
+      }
+    }
+  }
+
+  return matchingLogs
+}
+
+const logs = await searchLogs('process-order', 'ERROR')
+console.log(`Found ${logs.length} executions with errors`)
+```
+
+## Debugging
+
+### Enable Debug Mode
+
+Add debug logging to functions:
+
+```typescript
+const DEBUG = process.env.DEBUG === 'true'
+
+const result = await executeFunction('my-function', {
+  params: { data: 'test' },
+  context: {
+    env: {
+      DEBUG: 'true',
+    },
+  },
+})
+```
+
+### Execution Replay
+
+Replay failed executions for debugging:
+
+```typescript
+async function replayExecution(executionId: string) {
+  // Get original execution details
+  const execution = await db.get($.FunctionExecution, executionId)
+
+  if (!execution) {
+    throw new Error('Execution not found')
+  }
+
+  // Replay with same parameters
+  console.log('Replaying execution:', executionId)
+  const result = await executeFunction(execution.functionId, {
+    params: execution.params,
+    context: execution.context,
+  })
+
+  console.log('Replay result:', result.success ? 'Success' : 'Failed')
+  return result
+}
+
+await replayExecution('exec-abc123')
+```
+
+### Step-Through Debugging
+
+Add breakpoints via logging:
+
+```typescript
+const debugFunction = registerFunction({
+  metadata: {
+    id: 'debug-function',
+    name: 'Debug Function',
+    version: '1.0.0',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  },
+  source: {
+    code: `
+      export default async function handler(input) {
+        console.log('[DEBUG] Step 1: Validate input', input)
+        const validated = validateInput(input)
+
+        console.log('[DEBUG] Step 2: Fetch data')
+        const data = await fetchData(validated)
+
+        console.log('[DEBUG] Step 3: Process data', { dataLength: data.length })
+        const result = processData(data)
+
+        console.log('[DEBUG] Step 4: Return result')
+        return result
+      }
+    `,
+    language: 'typescript',
+  },
+})
+```
+
+### Compare Executions
+
+Compare successful vs failed executions:
+
+```typescript
+async function compareExecutions(successId: string, failureId: string) {
+  const [success, failure] = await Promise.all([db.get($.FunctionExecution, successId), db.get($.FunctionExecution, failureId)])
+
+  console.log('Comparison:')
+  console.log('Duration:', success.duration, 'vs', failure.duration)
+  console.log('Memory:', success.memory, 'vs', failure.memory)
+  console.log('Params:', JSON.stringify(success.params), 'vs', JSON.stringify(failure.params))
+}
+```
+
+## Alerting
+
+### Basic Alerts
+
+Send alerts for critical events:
+
+```typescript
+const result = await executeFunction('critical-function', {
+  params: { data: 'process' },
+})
+
+if (!result.success) {
+  await send($.Alert.send, {
+    severity: 'critical',
+    title: `Function ${result.execution.functionId} failed`,
+    message: result.error?.message,
+    executionId: result.execution.executionId,
+    timestamp: new Date(),
+  })
+}
+```
+
+### Threshold-Based Alerts
+
+Alert when metrics exceed thresholds:
+
+```typescript
+async function checkThresholds(functionId: string) {
+  const executions = await db.list($.FunctionExecution, {
+    where: {
+      functionId,
+      startedAt: { $gte: new Date(Date.now() - 60 * 60 * 1000) },
+    },
+  })
+
+  // Check average duration
+  const avgDuration = executions.reduce((sum, e) => sum + e.duration, 0) / executions.length
+  if (avgDuration > 5000) {
+    await send($.Alert.send, {
+      severity: 'warning',
+      title: 'Function duration threshold exceeded',
+      message: `${functionId} average duration is ${avgDuration.toFixed(0)}ms`,
+    })
+  }
+
+  // Check error rate
+  const errorRate = (executions.filter((e) => !e.success).length / executions.length) * 100
+  if (errorRate > 5) {
+    await send($.Alert.send, {
+      severity: 'error',
+      title: 'Function error rate threshold exceeded',
+      message: `${functionId} error rate is ${errorRate.toFixed(2)}%`,
+    })
+  }
+}
+
+// Check every 15 minutes
+every($.Every15Minutes, () => checkThresholds('critical-function'))
+```
+
+### Alert Channels
+
+Route alerts to different channels:
+
+```typescript
+async function sendAlert(alert: { severity: 'info' | 'warning' | 'error' | 'critical'; title: string; message: string }) {
+  // Send to appropriate channels based on severity
+  if (alert.severity === 'critical') {
+    // PagerDuty, phone, email
+    await send($.PagerDuty.trigger, alert)
+    await send($.SMS.send, alert)
+    await send($.Email.send, alert)
+  } else if (alert.severity === 'error') {
+    // Email and Slack
+    await send($.Email.send, alert)
+    await send($.Slack.message, alert)
+  } else if (alert.severity === 'warning') {
+    // Slack only
+    await send($.Slack.message, alert)
+  }
+  // Info alerts - logged only
+}
+```
+
+## Dashboards
+
+### Real-Time Metrics
+
+Create a real-time monitoring dashboard:
+
+```typescript
+async function getDashboardMetrics(functionId: string) {
+  const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000)
+
+  const executions = await db.list($.FunctionExecution, {
+    where: {
+      functionId,
+      startedAt: { $gte: last24h },
+    },
+  })
+
+  const successful = executions.filter((e) => e.success)
+  const failed = executions.filter((e) => !e.success)
+
+  return {
+    totalExecutions: executions.length,
+    successCount: successful.length,
+    failureCount: failed.length,
+    successRate: (successful.length / executions.length) * 100,
+    avgDuration: executions.reduce((sum, e) => sum + e.duration, 0) / executions.length,
+    maxDuration: Math.max(...executions.map((e) => e.duration)),
+    minDuration: Math.min(...executions.map((e) => e.duration)),
+    avgMemory: executions.reduce((sum, e) => sum + e.memory, 0) / executions.length,
+    lastExecution: executions[0]?.startedAt,
+  }
+}
+
+// Update dashboard every minute
+every($.EveryMinute, async () => {
+  const metrics = await getDashboardMetrics('critical-function')
+  await db.update($.Dashboard, 'critical-function-metrics', metrics)
+})
+```
+
+### Historical Analysis
+
+Analyze trends over time:
+
+```typescript
+async function getHistoricalTrends(functionId: string, days = 7) {
+  const dailyMetrics = []
+
+  for (let i = 0; i < days; i++) {
+    const dayStart = new Date()
+    dayStart.setDate(dayStart.getDate() - i)
+    dayStart.setHours(0, 0, 0, 0)
+
+    const dayEnd = new Date(dayStart)
+    dayEnd.setHours(23, 59, 59, 999)
+
+    const executions = await db.list($.FunctionExecution, {
+      where: {
+        functionId,
+        startedAt: { $gte: dayStart, $lte: dayEnd },
+      },
+    })
+
+    dailyMetrics.push({
+      date: dayStart.toISOString().split('T')[0],
+      totalExecutions: executions.length,
+      successRate: (executions.filter((e) => e.success).length / executions.length) * 100,
+      avgDuration: executions.reduce((sum, e) => sum + e.duration, 0) / executions.length,
+    })
+  }
+
+  return dailyMetrics.reverse()
+}
+
+const trends = await getHistoricalTrends('my-function')
+console.log('7-day trends:', trends)
+```
+
+## Best Practices
+
+### 1. Always Track Executions
+
+```typescript
+// Store every execution for analysis
+await db.create($.FunctionExecution, executionMetadata)
+```
+
+### 2. Set Up Alerts Early
+
+```typescript
+// Configure alerts before issues occur
+every($.Every15Minutes, () => checkHealthMetrics())
+```
+
+### 3. Use Structured Logging
+
+```typescript
+// JSON logging for easy parsing
+console.log(JSON.stringify({ level: 'info', msg: 'Processing started', orderId: '123' }))
+```
+
+### 4. Monitor Critical Functions
+
+```typescript
+// Extra monitoring for business-critical functions
+if (isCritical(functionId)) {
+  await trackDetailedMetrics(result)
+}
+```
+
+### 5. Implement Health Checks
+
+```typescript
+// Regular health checks
+every($.Every5Minutes, () => healthCheck('critical-function'))
+```
+
+## Troubleshooting
+
+### High Error Rate
+
+```typescript
+// Investigate errors
+const recentErrors = await db.list($.ErrorLog, {
+  where: {
+    functionId: 'problematic-function',
+    timestamp: { $gte: new Date(Date.now() - 60 * 60 * 1000) },
+  },
+})
+
+// Group by error message to find patterns
+const errorPatterns = groupBy(recentErrors, 'errorMessage')
+```
+
+### Slow Performance
+
+```typescript
+// Find slow executions
+const slowExecutions = await db.list($.FunctionExecution, {
+  where: {
+    functionId: 'slow-function',
+    duration: { $gt: 5000 },
+  },
+  limit: 10,
+  orderBy: { duration: 'desc' },
+})
+```
+
+### Memory Issues
+
+```typescript
+// Track memory usage over time
+const memoryTrend = await db.list($.FunctionExecution, {
+  where: { functionId: 'memory-hungry' },
+  select: ['executionId', 'memory', 'startedAt'],
+  orderBy: { startedAt: 'desc' },
+  limit: 100,
+})
+```
+
+## Next Steps
+
+- [Integration](./integration) - Integrate monitoring with other tools
+- [Best Practices](./best-practices) - Production monitoring patterns
+- [API Reference](./api-reference) - Complete API documentation
+- [Deployment](./deployment) - Deploy with monitoring enabled

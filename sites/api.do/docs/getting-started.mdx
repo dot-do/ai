@@ -1,0 +1,720 @@
+---
+$id: https://api.do/docs/getting-started
+$type: TechArticle
+title: Getting Started with api.do
+description: Quick start guide for external API integration in the .do platform
+keywords: [api, getting started, http, rest, integration]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Getting Started
+
+Get started with external API integration in the `.do` platform in under 5 minutes.
+
+## Installation
+
+Install the SDK in your project:
+
+```bash
+pnpm add sdk.do
+```
+
+Or use the CLI:
+
+```bash
+pnpm add -g cli.do
+```
+
+## Basic Usage
+
+### Simple GET Request
+
+Make a basic GET request to any API:
+
+```typescript
+import { api } from 'sdk.do'
+
+const users = await api.get('https://jsonplaceholder.typicode.com/users')
+
+console.log(users)
+// Array of user objects
+```
+
+### POST Request
+
+Create a new resource with POST:
+
+```typescript
+import { api } from 'sdk.do'
+
+const newUser = await api.post('https://jsonplaceholder.typicode.com/users', {
+  name: 'John Smith',
+  email: 'john@example.com',
+  username: 'jsmith',
+})
+
+console.log(newUser)
+// { id: 11, name: "John Smith", email: "john@example.com", ... }
+```
+
+### PUT Request
+
+Update a resource with PUT:
+
+```typescript
+import { api } from 'sdk.do'
+
+const updated = await api.put('https://jsonplaceholder.typicode.com/users/1', {
+  name: 'John Smith Updated',
+  email: 'john.updated@example.com',
+})
+
+console.log(updated)
+```
+
+### DELETE Request
+
+Delete a resource:
+
+```typescript
+import { api } from 'sdk.do'
+
+await api.delete('https://jsonplaceholder.typicode.com/users/1')
+console.log('User deleted')
+```
+
+## Authentication
+
+### Bearer Token
+
+Use bearer token authentication:
+
+```typescript
+import { api } from 'sdk.do'
+
+const data = await api.get('https://api.github.com/user', {
+  auth: {
+    type: 'bearer',
+    token: process.env.GITHUB_TOKEN,
+  },
+})
+
+console.log(data)
+```
+
+### API Key
+
+Use API key authentication:
+
+```typescript
+import { api } from 'sdk.do'
+
+const data = await api.get('https://api.example.com/data', {
+  auth: {
+    type: 'apiKey',
+    key: process.env.API_KEY,
+    header: 'X-API-Key',
+  },
+})
+```
+
+### Basic Auth
+
+Use basic authentication:
+
+```typescript
+import { api } from 'sdk.do'
+
+const data = await api.get('https://api.example.com/data', {
+  auth: {
+    type: 'basic',
+    username: process.env.API_USERNAME,
+    password: process.env.API_PASSWORD,
+  },
+})
+```
+
+## Request Options
+
+### Custom Headers
+
+Add custom headers to requests:
+
+```typescript
+import { api } from 'sdk.do'
+
+const data = await api.get('https://api.example.com/data', {
+  headers: {
+    Accept: 'application/json',
+    'User-Agent': 'MyApp/1.0',
+    'X-Custom-Header': 'value',
+  },
+})
+```
+
+### Query Parameters
+
+Add query parameters:
+
+```typescript
+import { api } from 'sdk.do'
+
+const data = await api.get('https://api.example.com/users', {
+  params: {
+    page: 1,
+    limit: 10,
+    sort: 'name',
+    order: 'asc',
+  },
+})
+// Sends: https://api.example.com/users?page=1&limit=10&sort=name&order=asc
+```
+
+### Timeout
+
+Set request timeout:
+
+```typescript
+import { api } from 'sdk.do'
+
+const data = await api.get('https://api.example.com/data', {
+  timeout: 5000, // 5 seconds
+})
+```
+
+## Response Handling
+
+### JSON Responses
+
+Handle JSON responses (default):
+
+```typescript
+import { api } from 'sdk.do'
+
+const data = await api.get('https://api.example.com/users')
+console.log(data.users)
+```
+
+### Text Responses
+
+Get raw text responses:
+
+```typescript
+import { api } from 'sdk.do'
+
+const html = await api.get('https://example.com', {
+  responseType: 'text',
+})
+console.log(html)
+```
+
+### Binary Responses
+
+Handle binary data:
+
+```typescript
+import { api } from 'sdk.do'
+
+const image = await api.get('https://example.com/image.png', {
+  responseType: 'blob',
+})
+```
+
+### Full Response
+
+Get full response including headers and status:
+
+```typescript
+import { api } from 'sdk.do'
+
+const response = await api.get('https://api.example.com/data', {
+  fullResponse: true,
+})
+
+console.log(response.status) // 200
+console.log(response.headers) // Response headers
+console.log(response.data) // Response body
+```
+
+## Schema.org Integration
+
+### Map to Schema Types
+
+Map API responses to Schema.org types:
+
+```typescript
+import { $, api } from 'sdk.do'
+
+const person = await api.get('https://api.example.com/users/123', {
+  schema: $.Person,
+  mapping: {
+    full_name: 'name',
+    email_address: 'email',
+    phone_number: 'telephone',
+  },
+})
+
+console.log(person.$type) // "Person"
+console.log(person.name) // Mapped from full_name
+console.log(person.email) // Mapped from email_address
+```
+
+### Structured Requests
+
+Send Schema.org typed requests:
+
+```typescript
+import { $, api } from 'sdk.do'
+
+const order = await api.post('https://api.example.com/orders', {
+  $type: 'Order',
+  customer: {
+    $type: 'Person',
+    name: 'John Smith',
+    email: 'john@example.com',
+  },
+  orderItems: [
+    {
+      $type: 'OrderItem',
+      orderedItem: {
+        $type: 'Product',
+        name: 'Laptop',
+        price: 999,
+      },
+      orderQuantity: 1,
+    },
+  ],
+})
+```
+
+## Error Handling
+
+Handle API errors gracefully:
+
+```typescript
+import { api } from 'sdk.do'
+
+try {
+  const data = await api.get('https://api.example.com/data')
+  console.log(data)
+} catch (error) {
+  if (error.code === 'RATE_LIMIT_EXCEEDED') {
+    console.error('Rate limit exceeded, retry after:', error.retryAfter)
+  } else if (error.code === 'AUTH_FAILED') {
+    console.error('Authentication failed')
+  } else if (error.code === 'NOT_FOUND') {
+    console.error('Resource not found')
+  } else if (error.code === 'TIMEOUT') {
+    console.error('Request timeout')
+  } else {
+    console.error('API error:', error.message)
+  }
+}
+```
+
+## Configuration
+
+### Global Configuration
+
+Set default configuration for all requests:
+
+```typescript
+import { api } from 'sdk.do'
+
+api.config({
+  baseURL: 'https://api.example.com',
+  timeout: 30000,
+  headers: {
+    'User-Agent': 'MyApp/1.0',
+  },
+  retry: {
+    attempts: 3,
+    delay: 1000,
+  },
+})
+
+// Now all requests use these defaults
+const data = await api.get('/users') // Uses baseURL
+```
+
+### Environment Variables
+
+Configure API settings via environment variables:
+
+```bash
+# .env file
+API_TIMEOUT=30000
+API_RETRY_ATTEMPTS=3
+API_RETRY_DELAY=1000
+API_RATE_LIMIT=100
+
+# External service API keys
+GITHUB_API_KEY=ghp_...
+STRIPE_API_KEY=sk_live_...
+CLEARBIT_API_KEY=sk_...
+```
+
+Use in your code:
+
+```typescript
+import { api } from 'sdk.do'
+
+const data = await api.get('https://api.github.com/user', {
+  auth: {
+    type: 'bearer',
+    token: process.env.GITHUB_API_KEY,
+  },
+})
+```
+
+## Common Patterns
+
+### List Resources
+
+Get a list of resources:
+
+```typescript
+import { api } from 'sdk.do'
+
+const users = await api.get('https://api.example.com/users', {
+  params: {
+    page: 1,
+    limit: 20,
+  },
+})
+
+console.log(users.data)
+console.log(users.total)
+console.log(users.page)
+```
+
+### Create Resource
+
+Create a new resource:
+
+```typescript
+import { api } from 'sdk.do'
+
+const created = await api.post('https://api.example.com/users', {
+  name: 'John Smith',
+  email: 'john@example.com',
+  role: 'admin',
+})
+
+console.log(created.id)
+```
+
+### Update Resource
+
+Update an existing resource:
+
+```typescript
+import { api } from 'sdk.do'
+
+const updated = await api.put('https://api.example.com/users/123', {
+  name: 'John Smith Updated',
+  role: 'editor',
+})
+```
+
+### Delete Resource
+
+Delete a resource:
+
+```typescript
+import { api } from 'sdk.do'
+
+await api.delete('https://api.example.com/users/123')
+```
+
+### Search Resources
+
+Search for resources:
+
+```typescript
+import { api } from 'sdk.do'
+
+const results = await api.get('https://api.example.com/search', {
+  params: {
+    q: 'search query',
+    type: 'user',
+    limit: 10,
+  },
+})
+```
+
+## Integration with .do Platform
+
+### With Database Operations
+
+Sync external API data with database:
+
+```typescript
+import { $, api, db } from 'sdk.do'
+
+// Fetch users from external API
+const users = await api.get('https://api.example.com/users')
+
+// Store in database
+for (const user of users) {
+  await db.create($.Person, {
+    $type: 'Person',
+    name: user.name,
+    email: user.email,
+    externalId: user.id,
+  })
+}
+```
+
+### With Event Listeners
+
+React to events with API calls:
+
+```typescript
+import { $, api, on } from 'sdk.do'
+
+on($.Order.created, async (event) => {
+  const order = event.data
+
+  // Notify external fulfillment service
+  await api.post(
+    'https://fulfillment.com/api/orders',
+    {
+      order_id: order.$id,
+      items: order.orderItems,
+      shipping: order.shippingAddress,
+    },
+    {
+      auth: {
+        type: 'apiKey',
+        key: process.env.FULFILLMENT_API_KEY,
+      },
+    }
+  )
+})
+```
+
+### With AI Services
+
+Enhance API responses with AI:
+
+```typescript
+import { $, ai, api } from 'sdk.do'
+
+// Get product from external API
+const product = await api.get('https://api.example.com/products/123')
+
+// Generate description with AI
+const description = await ai.generate(`Generate product description for ${product.name}`, {
+  context: product,
+  schema: $.Product,
+})
+
+// Update product with AI-generated description
+const updated = await api.patch(`https://api.example.com/products/123`, {
+  description,
+})
+```
+
+## Real-World Examples
+
+### GitHub API
+
+```typescript
+import { api } from 'sdk.do'
+
+// Get user repositories
+const repos = await api.get('https://api.github.com/user/repos', {
+  auth: {
+    type: 'bearer',
+    token: process.env.GITHUB_TOKEN,
+  },
+  params: {
+    sort: 'updated',
+    per_page: 10,
+  },
+})
+
+console.log(repos.map((r) => r.name))
+```
+
+### Stripe API
+
+```typescript
+import { api } from 'sdk.do'
+
+// Create a customer
+const customer = await api.post(
+  'https://api.stripe.com/v1/customers',
+  {
+    email: 'customer@example.com',
+    name: 'John Smith',
+  },
+  {
+    auth: {
+      type: 'bearer',
+      token: process.env.STRIPE_API_KEY,
+    },
+  }
+)
+
+console.log(customer.id)
+```
+
+### SendGrid API
+
+```typescript
+import { api } from 'sdk.do'
+
+// Send email
+await api.post(
+  'https://api.sendgrid.com/v3/mail/send',
+  {
+    personalizations: [
+      {
+        to: [{ email: 'recipient@example.com' }],
+      },
+    ],
+    from: { email: 'sender@example.com' },
+    subject: 'Test Email',
+    content: [
+      {
+        type: 'text/plain',
+        value: 'Hello from api.do!',
+      },
+    ],
+  },
+  {
+    auth: {
+      type: 'bearer',
+      token: process.env.SENDGRID_API_KEY,
+    },
+  }
+)
+```
+
+## Next Steps
+
+Now that you have api.do set up, explore more features:
+
+- [Making Requests](./making-requests) - HTTP methods and patterns
+- [Authentication](./authentication) - Auth methods and configuration
+- [API Reference](../api/) - Complete API documentation
+
+## Examples
+
+Check out practical examples:
+
+- [REST API Integration](../examples/rest-api) - Integrate REST APIs
+- [GraphQL API](../examples/graphql-api) - Query GraphQL endpoints
+- [Webhook Integration](../examples/webhook-integration) - Send and receive webhooks
+
+## Best Practices
+
+### 1. Store Credentials Securely
+
+Always use environment variables for API keys:
+
+```typescript
+// Good
+const token = process.env.API_TOKEN
+
+// Avoid
+const token = 'hardcoded-token-here'
+```
+
+### 2. Handle Errors
+
+Always implement error handling:
+
+```typescript
+try {
+  const data = await api.get('https://api.example.com/data')
+} catch (error) {
+  console.error('API call failed:', error)
+}
+```
+
+### 3. Use Timeouts
+
+Set appropriate timeouts:
+
+```typescript
+await api.get('https://api.example.com/data', {
+  timeout: 10000, // 10 seconds
+})
+```
+
+### 4. Respect Rate Limits
+
+Implement rate limiting:
+
+```typescript
+await api.get('https://api.example.com/data', {
+  rateLimit: {
+    maxRequests: 100,
+    perMilliseconds: 60000,
+  },
+})
+```
+
+### 5. Use Schema Mapping
+
+Map responses to Schema.org types:
+
+```typescript
+const person = await api.get('https://api.example.com/users/123', {
+  schema: $.Person,
+  mapping: { full_name: 'name' },
+})
+```
+
+## Troubleshooting
+
+### "Invalid API key" Error
+
+Check that your API key is set correctly:
+
+```bash
+echo $API_KEY
+```
+
+### "Rate limit exceeded" Error
+
+Implement retry logic or reduce request frequency:
+
+```typescript
+await api.get('https://api.example.com/data', {
+  retry: {
+    attempts: 3,
+    delay: 1000,
+  },
+})
+```
+
+### "Connection timeout" Error
+
+Increase timeout or check network:
+
+```typescript
+await api.get('https://api.example.com/data', {
+  timeout: 30000, // 30 seconds
+})
+```
+
+### CORS Errors
+
+If running in browser, ensure API supports CORS or use a proxy.
+
+## Support
+
+- [API Reference](../api/) - Complete API documentation
+- [Examples](../examples/) - Code examples
+- [GitHub Issues](https://github.com/dot-do/ai/issues) - Report bugs
+- [Discord Community](https://discord.gg/dotdo) - Get help
+
+## License
+
+MIT (Open Source)

@@ -1,0 +1,584 @@
+---
+$id: https://sdk.do/docs/installation
+$type: TechArticle
+title: Installation Guide
+description: Complete installation instructions for sdk.do
+keywords: [installation, setup, npm, pnpm, dependencies]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Installation Guide
+
+This guide covers everything you need to install and configure sdk.do for your project.
+
+## System Requirements
+
+### Required
+
+- **Node.js** version 18.0 or higher
+- **Package Manager**: pnpm (recommended), npm, or yarn
+- **TypeScript** 5.0+ (for TypeScript projects)
+
+### Recommended
+
+- **PostgreSQL** 14+ (for database features)
+- **Redis** 6+ (for caching, optional)
+- **OpenAI API Key** (for AI features)
+
+## Quick Installation
+
+### Using pnpm (Recommended)
+
+```bash
+pnpm add sdk.do
+```
+
+### Using npm
+
+```bash
+npm install sdk.do
+```
+
+### Using yarn
+
+```bash
+yarn add sdk.do
+```
+
+## Installing Dependencies
+
+sdk.do has minimal dependencies, but you'll want to install related packages for full functionality:
+
+### Core Dependencies
+
+```bash
+# Schema.org types for TypeScript
+pnpm add schema.org.ai
+
+# GraphDL for semantic graph patterns
+pnpm add graphdl
+
+# MDXLD for linked data in MDX
+pnpm add mdxld
+```
+
+### Optional Dependencies
+
+```bash
+# CLI for command-line access
+pnpm add cli.do
+
+# MCP server for AI assistants
+pnpm add mcp.do
+
+# Database adapter (choose one)
+pnpm add pg              # PostgreSQL
+pnpm add mysql2          # MySQL
+pnpm add mongodb         # MongoDB
+pnpm add @libsql/client  # Turso/SQLite
+
+# Redis for caching
+pnpm add redis
+```
+
+## Environment Configuration
+
+Create a `.env` file in your project root:
+
+```bash
+# Database (Required)
+SDK_DATABASE_URL=postgres://user:pass@localhost:5432/dbname
+
+# OpenAI API (Required for AI features)
+SDK_OPENAI_API_KEY=sk-your-openai-api-key
+
+# AI Model Configuration (Optional)
+SDK_AI_MODEL=gpt-5                # Default: gpt-5
+SDK_AI_TEMPERATURE=0.7            # Default: 0.7
+SDK_AI_MAX_TOKENS=4096            # Default: 4096
+
+# Performance (Optional)
+SDK_BATCH_SIZE=100                # Batch processing size
+SDK_CACHE_TTL=3600                # Cache TTL in seconds
+SDK_MAX_CONNECTIONS=10            # Database connection pool
+
+# Environment (Optional)
+SDK_ENV=development               # development, production
+SDK_LOG_LEVEL=info                # debug, info, warn, error
+```
+
+### Environment Variables Reference
+
+| Variable              | Required | Default       | Description                              |
+| --------------------- | -------- | ------------- | ---------------------------------------- |
+| `SDK_DATABASE_URL`    | Yes      | -             | Database connection string               |
+| `SDK_OPENAI_API_KEY`  | Yes\*    | -             | OpenAI API key (\* if using AI features) |
+| `SDK_AI_MODEL`        | No       | `gpt-5`       | Default AI model                         |
+| `SDK_AI_TEMPERATURE`  | No       | `0.7`         | AI temperature (0-1)                     |
+| `SDK_AI_MAX_TOKENS`   | No       | `4096`        | Max tokens per request                   |
+| `SDK_BATCH_SIZE`      | No       | `100`         | Batch processing size                    |
+| `SDK_CACHE_TTL`       | No       | `3600`        | Cache TTL in seconds                     |
+| `SDK_MAX_CONNECTIONS` | No       | `10`          | Max database connections                 |
+| `SDK_ENV`             | No       | `development` | Environment mode                         |
+| `SDK_LOG_LEVEL`       | No       | `info`        | Logging level                            |
+
+## Database Setup
+
+### PostgreSQL (Recommended)
+
+Install PostgreSQL:
+
+```bash
+# macOS
+brew install postgresql@16
+brew services start postgresql@16
+
+# Ubuntu/Debian
+sudo apt-get install postgresql
+sudo systemctl start postgresql
+
+# Docker
+docker run -d \
+  --name postgres \
+  -e POSTGRES_PASSWORD=password \
+  -p 5432:5432 \
+  postgres:16
+```
+
+Create database:
+
+```bash
+createdb myapp
+```
+
+Configure connection:
+
+```bash
+SDK_DATABASE_URL=postgres://user:password@localhost:5432/myapp
+```
+
+### MySQL
+
+Install MySQL:
+
+```bash
+# macOS
+brew install mysql
+brew services start mysql
+
+# Ubuntu/Debian
+sudo apt-get install mysql-server
+sudo systemctl start mysql
+
+# Docker
+docker run -d \
+  --name mysql \
+  -e MYSQL_ROOT_PASSWORD=password \
+  -p 3306:3306 \
+  mysql:8
+```
+
+Configure connection:
+
+```bash
+SDK_DATABASE_URL=mysql://user:password@localhost:3306/myapp
+```
+
+### Turso (SQLite Cloud)
+
+Create Turso database:
+
+```bash
+# Install Turso CLI
+curl -sSfL https://get.tur.so/install.sh | bash
+
+# Create database
+turso db create myapp
+
+# Get connection URL
+turso db show myapp --url
+```
+
+Configure connection:
+
+```bash
+SDK_DATABASE_URL=libsql://myapp-username.turso.io
+SDK_DATABASE_AUTH_TOKEN=your-auth-token
+```
+
+### MongoDB
+
+Install MongoDB:
+
+```bash
+# macOS
+brew tap mongodb/brew
+brew install mongodb-community
+brew services start mongodb-community
+
+# Ubuntu/Debian
+wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo apt-key add -
+sudo apt-get install -y mongodb-org
+sudo systemctl start mongod
+
+# Docker
+docker run -d \
+  --name mongodb \
+  -p 27017:27017 \
+  mongo:6
+```
+
+Configure connection:
+
+```bash
+SDK_DATABASE_URL=mongodb://localhost:27017/myapp
+```
+
+## TypeScript Configuration
+
+Add TypeScript configuration (`tsconfig.json`):
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "lib": ["ES2020"],
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["node", "schema.org.ai"]
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
+```
+
+## Project Structure
+
+Recommended project structure:
+
+```
+my-project/
+├── src/
+│   ├── index.ts              # Main entry point
+│   ├── db/
+│   │   ├── schema.ts         # Database schema
+│   │   └── migrations/       # Database migrations
+│   ├── events/
+│   │   ├── handlers.ts       # Event handlers
+│   │   └── emitters.ts       # Event emitters
+│   ├── workflows/
+│   │   └── scheduled.ts      # Scheduled workflows
+│   └── ai/
+│       └── prompts.ts        # AI prompts
+├── .env                      # Environment variables
+├── .env.example              # Example environment
+├── tsconfig.json             # TypeScript config
+├── package.json              # Package dependencies
+└── README.md                 # Project documentation
+```
+
+## Verification
+
+Verify your installation:
+
+```typescript
+// test.ts
+import $, { db, ai } from 'sdk.do'
+
+async function test() {
+  console.log('Testing sdk.do installation...')
+
+  // Test database connection
+  try {
+    const businesses = await db.list($.Business, { limit: 1 })
+    console.log('✓ Database connection successful')
+  } catch (error) {
+    console.error('✗ Database connection failed:', error.message)
+  }
+
+  // Test AI connection (if API key provided)
+  if (process.env.SDK_OPENAI_API_KEY) {
+    try {
+      const response = await ai.generate('Hello!')
+      console.log('✓ AI connection successful')
+    } catch (error) {
+      console.error('✗ AI connection failed:', error.message)
+    }
+  }
+
+  console.log('Installation test complete!')
+}
+
+test()
+```
+
+Run the test:
+
+```bash
+tsx test.ts
+```
+
+Expected output:
+
+```
+Testing sdk.do installation...
+✓ Database connection successful
+✓ AI connection successful
+Installation test complete!
+```
+
+## Framework Integration
+
+### Next.js
+
+Install sdk.do in a Next.js project:
+
+```bash
+pnpm add sdk.do
+```
+
+Create API route (`app/api/business/route.ts`):
+
+```typescript
+import $, { db } from 'sdk.do'
+import { NextResponse } from 'next/server'
+
+export async function GET() {
+  const businesses = await db.list($.Business, { limit: 10 })
+  return NextResponse.json(businesses)
+}
+
+export async function POST(request: Request) {
+  const data = await request.json()
+  const business = await db.create($.Business, data)
+  return NextResponse.json(business)
+}
+```
+
+### Express
+
+Install sdk.do with Express:
+
+```bash
+pnpm add sdk.do express
+```
+
+Create Express app:
+
+```typescript
+import $, { db } from 'sdk.do'
+import express from 'express'
+
+const app = express()
+app.use(express.json())
+
+app.get('/api/businesses', async (req, res) => {
+  const businesses = await db.list($.Business, { limit: 10 })
+  res.json(businesses)
+})
+
+app.post('/api/businesses', async (req, res) => {
+  const business = await db.create($.Business, req.body)
+  res.json(business)
+})
+
+app.listen(3000, () => {
+  console.log('Server running on http://localhost:3000')
+})
+```
+
+### Cloudflare Workers
+
+Install sdk.do for Cloudflare Workers:
+
+```bash
+pnpm add sdk.do
+```
+
+Create worker (`src/index.ts`):
+
+```typescript
+import $, { db } from 'sdk.do'
+
+export default {
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url)
+
+    if (url.pathname === '/api/businesses') {
+      const businesses = await db.list($.Business, { limit: 10 })
+      return Response.json(businesses)
+    }
+
+    return new Response('Not Found', { status: 404 })
+  },
+}
+```
+
+Configure wrangler.toml:
+
+```toml
+name = "my-worker"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+[vars]
+SDK_DATABASE_URL = "..."
+
+[secrets]
+SDK_OPENAI_API_KEY = "..."
+```
+
+## Docker Setup
+
+Create `Dockerfile`:
+
+```dockerfile
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Install pnpm
+RUN npm install -g pnpm
+
+# Copy package files
+COPY package.json pnpm-lock.yaml ./
+
+# Install dependencies
+RUN pnpm install --frozen-lockfile
+
+# Copy source
+COPY . .
+
+# Build TypeScript
+RUN pnpm build
+
+# Expose port
+EXPOSE 3000
+
+# Start application
+CMD ["node", "dist/index.js"]
+```
+
+Create `docker-compose.yml`:
+
+```yaml
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - '3000:3000'
+    environment:
+      - SDK_DATABASE_URL=postgres://user:pass@db:5432/myapp
+      - SDK_OPENAI_API_KEY=${SDK_OPENAI_API_KEY}
+    depends_on:
+      - db
+
+  db:
+    image: postgres:16
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=pass
+      - POSTGRES_DB=myapp
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
+```
+
+Run with Docker:
+
+```bash
+docker-compose up
+```
+
+## Troubleshooting
+
+### Installation Issues
+
+**Problem**: `Cannot find module 'sdk.do'`
+
+**Solution**: Ensure package is installed:
+
+```bash
+pnpm install sdk.do
+```
+
+**Problem**: TypeScript type errors
+
+**Solution**: Install type definitions:
+
+```bash
+pnpm add -D @types/node schema.org.ai
+```
+
+### Database Connection Issues
+
+**Problem**: `Connection refused` or `ECONNREFUSED`
+
+**Solution**: Verify database is running:
+
+```bash
+# PostgreSQL
+pg_isready
+
+# MySQL
+mysqladmin ping
+
+# MongoDB
+mongosh --eval "db.adminCommand('ping')"
+```
+
+**Problem**: `Authentication failed`
+
+**Solution**: Check credentials in `SDK_DATABASE_URL`
+
+### OpenAI API Issues
+
+**Problem**: `Invalid API key`
+
+**Solution**: Verify API key is valid:
+
+```bash
+curl https://api.openai.com/v1/models \
+  -H "Authorization: Bearer $SDK_OPENAI_API_KEY"
+```
+
+**Problem**: `Rate limit exceeded`
+
+**Solution**: Implement rate limiting or use batch processing:
+
+```typescript
+const results = await ai.batch(requests) // 50% cost savings
+```
+
+## Next Steps
+
+Now that sdk.do is installed, continue to:
+
+1. [Getting Started Guide](./getting-started) - Build your first app
+2. [Quick Start Tutorial](./quickstart) - 5-minute walkthrough
+3. [API Reference](./api-reference) - Complete API docs
+4. [Examples](../examples/) - Code examples
+
+## Support
+
+Need help with installation?
+
+- **Documentation**: [sdk.do](https://sdk.do)
+- **GitHub Issues**: [github.com/dot-do/ai/issues](https://github.com/dot-do/ai/issues)
+- **Discord**: Join our community server
+
+---
+
+Continue to [Getting Started Guide](./getting-started) to build your first application.

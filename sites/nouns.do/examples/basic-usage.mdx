@@ -1,0 +1,204 @@
+---
+$id: https://nouns.do/examples/basic-usage
+$type: HowTo
+title: Basic Usage Examples
+description: Simple examples of working with semantic entity types in nouns.do
+keywords: [examples, tutorial, basic, getting started]
+---
+
+# Basic Usage Examples
+
+Simple examples demonstrating core nouns.do functionality.
+
+## Creating Entities
+
+### Create a Person
+
+```typescript
+import $, { db } from 'sdk.do'
+
+const person = await db.create($.Person, {
+  $type: 'Person',
+  name: 'Jane Smith',
+  givenName: 'Jane',
+  familyName: 'Smith',
+  email: 'jane@example.com',
+  telephone: '+1-555-0123',
+  jobTitle: 'Software Engineer',
+})
+
+console.log('Created person:', person.$id)
+```
+
+### Create an Organization
+
+```typescript
+const organization = await db.create($.Organization, {
+  $type: 'Organization',
+  name: 'Acme Corporation',
+  legalName: 'Acme Corporation Inc.',
+  taxID: '12-3456789',
+  industry: 'Technology',
+  foundingDate: '2020-01-15',
+  numberOfEmployees: 250,
+  address: {
+    $type: 'PostalAddress',
+    streetAddress: '123 Main St',
+    addressLocality: 'San Francisco',
+    addressRegion: 'CA',
+    postalCode: '94102',
+    addressCountry: 'US',
+  },
+})
+```
+
+### Create a Product
+
+```typescript
+const product = await db.create($.Product, {
+  $type: 'Product',
+  name: 'Smart Widget 2025',
+  brand: 'Acme',
+  model: 'SW-2025',
+  sku: 'ACM-SW-001',
+  price: 299.99,
+  priceCurrency: 'USD',
+  description: 'Next-generation smart device',
+  category: 'Electronics',
+  availability: 'InStock',
+})
+```
+
+## Reading Entities
+
+### Get Entity by ID
+
+```typescript
+const person = await db.get($.Person, 'person-123')
+console.log(person.name, person.email)
+```
+
+### List All Entities of a Type
+
+```typescript
+const people = await db.list($.Person)
+console.log(`Found ${people.length} people`)
+
+const organizations = await db.list($.Organization, { limit: 10 })
+console.log(`Found ${organizations.length} organizations`)
+```
+
+### Query with Filters
+
+```typescript
+const engineers = await db.list($.Person, {
+  where: { jobTitle: { $contains: 'Engineer' } },
+  limit: 10,
+  orderBy: { name: 'asc' },
+})
+
+const techCompanies = await db.list($.Organization, {
+  where: { industry: 'Technology' },
+})
+```
+
+## Updating Entities
+
+### Update Single Property
+
+```typescript
+await db.update(person, {
+  jobTitle: 'Senior Engineer',
+})
+```
+
+### Update Multiple Properties
+
+```typescript
+await db.update(person, {
+  jobTitle: 'Lead Engineer',
+  telephone: '+1-555-0199',
+  email: 'jane.smith@newcompany.com',
+})
+```
+
+### Update Nested Properties
+
+```typescript
+await db.update(organization, {
+  address: {
+    $type: 'PostalAddress',
+    streetAddress: '456 New Street',
+    addressLocality: 'Seattle',
+    addressRegion: 'WA',
+    postalCode: '98101',
+  },
+})
+```
+
+## Deleting Entities
+
+### Delete Single Entity
+
+```typescript
+await db.delete(person)
+console.log('Person deleted')
+```
+
+### Delete by ID
+
+```typescript
+await db.delete($.Person, 'person-123')
+```
+
+### Delete Multiple Entities
+
+```typescript
+await db.deleteMany($.Person, {
+  where: { email: null },
+})
+```
+
+## Working with Relationships
+
+### Create Related Entities
+
+```typescript
+const person = await db.create($.Person, { name: 'John' })
+const organization = await db.create($.Organization, { name: 'Acme' })
+
+await db.relate(person, $.worksFor, organization)
+```
+
+### Query Relationships
+
+```typescript
+const employer = await db.related(person, $.worksFor, $.Organization)
+console.log('Works for:', employer.name)
+
+const employees = await db.related(organization, $.employs, $.Person)
+console.log('Employees:', employees.length)
+```
+
+## Type Validation
+
+### Validate Entity
+
+```typescript
+import { validate } from 'sdk.do'
+
+const person = {
+  $type: 'Person',
+  name: 'John',
+  email: 'john@example.com',
+}
+
+const result = validate(person, $.Person)
+if (result.valid) {
+  await db.create($.Person, person)
+} else {
+  console.error('Invalid:', result.errors)
+}
+```
+
+See [Advanced Patterns](./advanced-patterns) for more complex examples.

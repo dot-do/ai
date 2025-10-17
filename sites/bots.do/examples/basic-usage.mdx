@@ -1,0 +1,188 @@
+---
+$id: https://bots.do/examples/basic-usage
+$type: HowTo
+title: Basic Bot Usage Examples
+description: Learn the fundamentals of creating and using bots with simple, practical examples.
+keywords: [examples, basic usage, tutorial, bots, getting started]
+author:
+  $type: Organization
+  name: .do Platform
+---
+
+# Basic Bot Usage Examples
+
+Simple examples to get you started with bots.do.
+
+## Example 1: Simple Task Bot
+
+Create a bot that processes tasks from a queue:
+
+```typescript
+import $, { bot, on } from 'sdk.do'
+
+// Create a simple task processing bot
+const taskBot = await bot.create({
+  $type: 'Bot',
+  name: 'Simple Task Bot',
+  task: 'Process incoming tasks',
+  capabilities: ['task_processing'],
+})
+
+// Define task handler
+taskBot.onTask(async (task) => {
+  console.log(`Processing task: ${task.id}`)
+
+  // Simple processing logic
+  const result = {
+    taskId: task.id,
+    processed: true,
+    timestamp: new Date(),
+  }
+
+  return result
+})
+
+// Start the bot
+await taskBot.start()
+console.log('Task bot is running!')
+```
+
+## Example 2: Email Notification Bot
+
+Send email notifications based on events:
+
+```typescript
+import $, { bot, on } from 'sdk.do'
+
+// Create email bot
+const emailBot = await bot.create({
+  $type: 'Bot',
+  name: 'Email Bot',
+  task: 'Send email notifications',
+  capabilities: ['email_sending'],
+})
+
+// Listen for order completion
+await on($.Order.completed, async (order) => {
+  await emailBot.execute({
+    action: 'send_confirmation',
+    to: order.customer.email,
+    subject: 'Order Confirmation',
+    template: 'order_confirmation',
+    data: {
+      orderNumber: order.id,
+      total: order.total,
+      items: order.items,
+    },
+  })
+})
+
+console.log('Email bot is listening for events!')
+```
+
+## Example 3: Data Sync Bot
+
+Synchronize data between systems on a schedule:
+
+```typescript
+import $, { bot, every } from 'sdk.do'
+
+// Create data sync bot
+const syncBot = await bot.create({
+  $type: 'Bot',
+  name: 'Data Sync Bot',
+  task: 'Sync data between systems',
+  capabilities: ['data_extraction', 'data_loading'],
+})
+
+// Run every hour
+await every($.Hourly, async () => {
+  console.log('Starting data sync...')
+
+  const result = await syncBot.execute({
+    action: 'sync',
+    source: 'crm',
+    destination: 'warehouse',
+  })
+
+  console.log('Sync completed:', result)
+})
+```
+
+## Example 4: Monitoring Bot
+
+Monitor system health and send alerts:
+
+```typescript
+import $, { bot, every, send } from 'sdk.do'
+
+// Create monitoring bot
+const monitorBot = await bot.create({
+  $type: 'Bot',
+  name: 'Monitor Bot',
+  task: 'Monitor system health',
+  capabilities: ['health_checking', 'alerting'],
+})
+
+// Check every 5 minutes
+await every('*/5 * * * *', async () => {
+  const health = await monitorBot.execute({
+    action: 'check_health',
+    endpoints: ['https://api.example.com/health', 'https://app.example.com/health'],
+  })
+
+  // Send alert if unhealthy
+  if (!health.healthy) {
+    await send($.System.unhealthy, {
+      endpoints: health.failedEndpoints,
+      timestamp: new Date(),
+    })
+  }
+})
+```
+
+## Example 5: Queue Processing Bot
+
+Process items from a queue with configurable concurrency:
+
+```typescript
+import $, { bot } from 'sdk.do'
+
+// Create queue processor
+const queueBot = await bot.create({
+  $type: 'Bot',
+  name: 'Queue Bot',
+  task: 'Process queue items',
+  capabilities: ['queue_processing'],
+  concurrency: 5, // Process 5 items simultaneously
+  batchSize: 10, // Fetch 10 items at a time
+})
+
+// Configure queue connection
+await queueBot.configure({
+  source: {
+    type: 'queue',
+    name: 'processing-queue',
+    connection: process.env.QUEUE_URL,
+  },
+})
+
+// Define handler
+queueBot.onTask(async (item) => {
+  // Process item
+  await processQueueItem(item)
+
+  // Return success
+  return { processed: true }
+})
+
+// Start processing
+await queueBot.start()
+
+async function processQueueItem(item) {
+  // Your processing logic
+  console.log('Processing:', item)
+}
+```
+
+See [Advanced Patterns](./advanced-patterns) for more complex examples.

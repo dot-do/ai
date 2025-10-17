@@ -1,0 +1,809 @@
+---
+$id: https://integrations.do/bitbucket
+$type: Integration
+name: Bitbucket
+service: bitbucket
+description: Git hosting and CI/CD pipelines for teams
+category: developer-tools
+sdkBased: false
+baseUrl: https://api.bitbucket.org/2.0
+
+auth:
+  type: oauth2
+  authorizationUrl: https://bitbucket.org/site/oauth2/authorize
+  tokenUrl: https://bitbucket.org/site/oauth2/access_token
+  scopes:
+    - repository
+    - repository:write
+    - pullrequest
+    - pullrequest:write
+    - pipeline
+    - webhook
+
+resources:
+  - name: Repository
+    plural: Repositories
+    description: Git repository management
+    operations:
+      - name: create
+        method: POST
+        path: /repositories/{workspace}/{repo_slug}
+        params:
+          - name: workspace
+            type: string
+            required: true
+            description: Workspace ID
+          - name: repo_slug
+            type: string
+            required: true
+            description: Repository slug
+          - name: scm
+            type: string
+            required: false
+            description: SCM type (git or hg)
+          - name: is_private
+            type: boolean
+            required: false
+            description: Private repository flag
+        returns: Repository
+
+      - name: get
+        method: GET
+        path: /repositories/{workspace}/{repo_slug}
+        params:
+          - name: workspace
+            type: string
+            required: true
+            description: Workspace ID
+          - name: repo_slug
+            type: string
+            required: true
+            description: Repository slug
+        returns: Repository
+
+      - name: update
+        method: PUT
+        path: /repositories/{workspace}/{repo_slug}
+        params:
+          - name: workspace
+            type: string
+            required: true
+            description: Workspace ID
+          - name: repo_slug
+            type: string
+            required: true
+            description: Repository slug
+          - name: description
+            type: string
+            required: false
+            description: Updated description
+        returns: Repository
+
+      - name: delete
+        method: DELETE
+        path: /repositories/{workspace}/{repo_slug}
+        params:
+          - name: workspace
+            type: string
+            required: true
+            description: Workspace ID
+          - name: repo_slug
+            type: string
+            required: true
+            description: Repository slug
+        returns: boolean
+
+      - name: list
+        method: GET
+        path: /repositories/{workspace}
+        params:
+          - name: workspace
+            type: string
+            required: true
+            description: Workspace ID
+          - name: role
+            type: string
+            required: false
+            description: Filter by role (owner, contributor, member)
+        returns: Repository[]
+        pagination:
+          type: cursor
+          cursorField: page
+          defaultLimit: 10
+          maxLimit: 100
+
+  - name: PullRequest
+    plural: PullRequests
+    description: Code review and pull requests
+    operations:
+      - name: create
+        method: POST
+        path: /repositories/{workspace}/{repo_slug}/pullrequests
+        params:
+          - name: workspace
+            type: string
+            required: true
+            description: Workspace ID
+          - name: repo_slug
+            type: string
+            required: true
+            description: Repository slug
+          - name: title
+            type: string
+            required: true
+            description: Pull request title
+          - name: source
+            type: object
+            required: true
+            description: Source branch info
+          - name: destination
+            type: object
+            required: true
+            description: Destination branch info
+        returns: PullRequest
+
+      - name: get
+        method: GET
+        path: /repositories/{workspace}/{repo_slug}/pullrequests/{pull_request_id}
+        params:
+          - name: workspace
+            type: string
+            required: true
+            description: Workspace ID
+          - name: repo_slug
+            type: string
+            required: true
+            description: Repository slug
+          - name: pull_request_id
+            type: number
+            required: true
+            description: Pull request ID
+        returns: PullRequest
+
+      - name: update
+        method: PUT
+        path: /repositories/{workspace}/{repo_slug}/pullrequests/{pull_request_id}
+        params:
+          - name: workspace
+            type: string
+            required: true
+            description: Workspace ID
+          - name: repo_slug
+            type: string
+            required: true
+            description: Repository slug
+          - name: pull_request_id
+            type: number
+            required: true
+            description: Pull request ID
+          - name: title
+            type: string
+            required: false
+            description: Updated title
+        returns: PullRequest
+
+      - name: merge
+        method: POST
+        path: /repositories/{workspace}/{repo_slug}/pullrequests/{pull_request_id}/merge
+        params:
+          - name: workspace
+            type: string
+            required: true
+            description: Workspace ID
+          - name: repo_slug
+            type: string
+            required: true
+            description: Repository slug
+          - name: pull_request_id
+            type: number
+            required: true
+            description: Pull request ID
+          - name: merge_strategy
+            type: string
+            required: false
+            description: Merge strategy (merge_commit, squash, fast_forward)
+        returns: PullRequest
+
+      - name: list
+        method: GET
+        path: /repositories/{workspace}/{repo_slug}/pullrequests
+        params:
+          - name: workspace
+            type: string
+            required: true
+            description: Workspace ID
+          - name: repo_slug
+            type: string
+            required: true
+            description: Repository slug
+          - name: state
+            type: string
+            required: false
+            description: Filter by state (OPEN, MERGED, DECLINED, SUPERSEDED)
+        returns: PullRequest[]
+        pagination:
+          type: cursor
+          cursorField: page
+          defaultLimit: 10
+          maxLimit: 100
+
+  - name: Issue
+    plural: Issues
+    description: Issue tracking
+    operations:
+      - name: create
+        method: POST
+        path: /repositories/{workspace}/{repo_slug}/issues
+        params:
+          - name: workspace
+            type: string
+            required: true
+            description: Workspace ID
+          - name: repo_slug
+            type: string
+            required: true
+            description: Repository slug
+          - name: title
+            type: string
+            required: true
+            description: Issue title
+          - name: content
+            type: object
+            required: false
+            description: Issue content
+        returns: Issue
+
+      - name: get
+        method: GET
+        path: /repositories/{workspace}/{repo_slug}/issues/{issue_id}
+        params:
+          - name: workspace
+            type: string
+            required: true
+            description: Workspace ID
+          - name: repo_slug
+            type: string
+            required: true
+            description: Repository slug
+          - name: issue_id
+            type: number
+            required: true
+            description: Issue ID
+        returns: Issue
+
+      - name: update
+        method: PUT
+        path: /repositories/{workspace}/{repo_slug}/issues/{issue_id}
+        params:
+          - name: workspace
+            type: string
+            required: true
+            description: Workspace ID
+          - name: repo_slug
+            type: string
+            required: true
+            description: Repository slug
+          - name: issue_id
+            type: number
+            required: true
+            description: Issue ID
+          - name: title
+            type: string
+            required: false
+            description: Updated title
+        returns: Issue
+
+      - name: list
+        method: GET
+        path: /repositories/{workspace}/{repo_slug}/issues
+        params:
+          - name: workspace
+            type: string
+            required: true
+            description: Workspace ID
+          - name: repo_slug
+            type: string
+            required: true
+            description: Repository slug
+        returns: Issue[]
+        pagination:
+          type: cursor
+          cursorField: page
+          defaultLimit: 10
+          maxLimit: 100
+
+  - name: Pipeline
+    plural: Pipelines
+    description: CI/CD pipeline management
+    operations:
+      - name: create
+        method: POST
+        path: /repositories/{workspace}/{repo_slug}/pipelines/
+        params:
+          - name: workspace
+            type: string
+            required: true
+            description: Workspace ID
+          - name: repo_slug
+            type: string
+            required: true
+            description: Repository slug
+          - name: target
+            type: object
+            required: true
+            description: Pipeline target (branch, commit, etc.)
+        returns: Pipeline
+
+      - name: get
+        method: GET
+        path: /repositories/{workspace}/{repo_slug}/pipelines/{pipeline_uuid}
+        params:
+          - name: workspace
+            type: string
+            required: true
+            description: Workspace ID
+          - name: repo_slug
+            type: string
+            required: true
+            description: Repository slug
+          - name: pipeline_uuid
+            type: string
+            required: true
+            description: Pipeline UUID
+        returns: Pipeline
+
+      - name: stop
+        method: POST
+        path: /repositories/{workspace}/{repo_slug}/pipelines/{pipeline_uuid}/stopPipeline
+        params:
+          - name: workspace
+            type: string
+            required: true
+            description: Workspace ID
+          - name: repo_slug
+            type: string
+            required: true
+            description: Repository slug
+          - name: pipeline_uuid
+            type: string
+            required: true
+            description: Pipeline UUID
+        returns: Pipeline
+
+      - name: list
+        method: GET
+        path: /repositories/{workspace}/{repo_slug}/pipelines/
+        params:
+          - name: workspace
+            type: string
+            required: true
+            description: Workspace ID
+          - name: repo_slug
+            type: string
+            required: true
+            description: Repository slug
+        returns: Pipeline[]
+        pagination:
+          type: cursor
+          cursorField: page
+          defaultLimit: 10
+          maxLimit: 100
+
+webhooks:
+  enabled: true
+  signatureHeader: X-Hub-Signature
+  signatureAlgorithm: sha256
+  verificationMethod: signature
+  events:
+    - name: repo:push
+      type: repo:push
+      description: Code pushed to repository
+    - name: repo:commit_status_created
+      type: repo:commit_status_created
+      description: Commit status created
+    - name: repo:commit_status_updated
+      type: repo:commit_status_updated
+      description: Commit status updated
+    - name: pullrequest:created
+      type: pullrequest:created
+      description: Pull request created
+    - name: pullrequest:updated
+      type: pullrequest:updated
+      description: Pull request updated
+    - name: pullrequest:approved
+      type: pullrequest:approved
+      description: Pull request approved
+    - name: pullrequest:fulfilled
+      type: pullrequest:fulfilled
+      description: Pull request merged
+    - name: issue:created
+      type: issue:created
+      description: Issue created
+    - name: issue:updated
+      type: issue:updated
+      description: Issue updated
+
+errors:
+  mapping:
+    - code: 401
+      type: authentication
+      statusCode: 401
+      message: Unauthorized
+      retryable: false
+    - code: 403
+      type: authorization
+      statusCode: 403
+      message: Forbidden
+      retryable: false
+    - code: 404
+      type: not_found
+      statusCode: 404
+      message: Resource not found
+      retryable: false
+    - code: 400
+      type: validation
+      statusCode: 400
+      message: Bad request
+      retryable: false
+    - code: 429
+      type: rate_limit
+      statusCode: 429
+      message: Rate limit exceeded
+      retryable: true
+    - code: 500
+      type: server
+      statusCode: 500
+      message: Internal server error
+      retryable: true
+  retryable: [429, 500, 502, 503]
+  nonRetryable: [400, 401, 403, 404]
+
+tests:
+  enabled: true
+  cleanup: true
+  scenarios:
+    - name: Repository Management
+      description: Test repository CRUD operations
+      steps:
+        - action: create
+          resource: Repository
+        - action: retrieve
+          resource: Repository
+        - action: update
+          resource: Repository
+        - action: list
+          resource: Repository
+        - action: delete
+          resource: Repository
+
+    - name: Pull Request Workflow
+      description: Test pull request operations
+      steps:
+        - action: create
+          resource: PullRequest
+        - action: retrieve
+          resource: PullRequest
+        - action: update
+          resource: PullRequest
+        - action: list
+          resource: PullRequest
+        - action: custom
+          resource: PullRequest
+
+    - name: Issue Tracking
+      description: Test issue operations
+      steps:
+        - action: create
+          resource: Issue
+        - action: retrieve
+          resource: Issue
+        - action: update
+          resource: Issue
+        - action: list
+          resource: Issue
+
+    - name: Pipeline Management
+      description: Test CI/CD pipeline operations
+      steps:
+        - action: create
+          resource: Pipeline
+        - action: retrieve
+          resource: Pipeline
+        - action: list
+          resource: Pipeline
+        - action: custom
+          resource: Pipeline
+
+    - name: Webhook Verification
+      description: Test webhook HMAC signature verification
+      steps:
+        - action: assert
+          expects:
+            status: 200
+
+docs:
+  homepage: https://bitbucket.org
+  apiDocs: https://developer.atlassian.com/cloud/bitbucket/rest/intro/
+  guides:
+    quickstart: https://developer.atlassian.com/cloud/bitbucket/rest/intro/
+    webhooks: https://support.atlassian.com/bitbucket-cloud/docs/manage-webhooks/
+    authentication: https://developer.atlassian.com/cloud/bitbucket/oauth-2/
+---
+
+# Bitbucket Integration
+
+Bitbucket is a Git hosting and CI/CD platform for teams to collaborate on code.
+
+## Features
+
+- **Repositories**: Git repository management
+- **Pull Requests**: Code review and collaboration
+- **Issues**: Issue tracking
+- **Pipelines**: CI/CD pipeline orchestration
+- **OAuth 2.0**: Secure authentication
+- **Webhooks**: Real-time event notifications with HMAC
+
+## Quick Start
+
+```typescript
+import { BitbucketClient } from '@dotdo/sdk.do/integrations/bitbucket'
+
+const bitbucket = new BitbucketClient({
+  clientId: process.env.BITBUCKET_CLIENT_ID,
+  clientSecret: process.env.BITBUCKET_CLIENT_SECRET,
+  accessToken: process.env.BITBUCKET_ACCESS_TOKEN,
+})
+
+// Create a repository
+const repo = await bitbucket.repository.create({
+  workspace: 'my-workspace',
+  repo_slug: 'my-repo',
+  is_private: true,
+})
+
+// Create a pull request
+const pr = await bitbucket.pullRequest.create({
+  workspace: 'my-workspace',
+  repo_slug: 'my-repo',
+  title: 'Add new feature',
+  source: { branch: { name: 'feature-branch' } },
+  destination: { branch: { name: 'main' } },
+})
+```
+
+## Authentication
+
+Bitbucket uses OAuth 2.0 authentication:
+
+```bash
+export BITBUCKET_CLIENT_ID=your_client_id
+export BITBUCKET_CLIENT_SECRET=your_client_secret
+export BITBUCKET_ACCESS_TOKEN=your_access_token
+```
+
+## Resources
+
+### Repositories
+
+Manage Git repositories:
+
+```typescript
+// Create repository
+const repo = await bitbucket.repository.create({
+  workspace: 'my-workspace',
+  repo_slug: 'new-repo',
+  scm: 'git',
+  is_private: false,
+})
+
+// Get repository
+const repo = await bitbucket.repository.get({
+  workspace: 'my-workspace',
+  repo_slug: 'my-repo',
+})
+
+// Update repository
+await bitbucket.repository.update({
+  workspace: 'my-workspace',
+  repo_slug: 'my-repo',
+  description: 'Updated description',
+})
+
+// List repositories
+const repos = await bitbucket.repository.list({
+  workspace: 'my-workspace',
+  role: 'owner',
+})
+
+// Delete repository
+await bitbucket.repository.delete({
+  workspace: 'my-workspace',
+  repo_slug: 'my-repo',
+})
+```
+
+### Pull Requests
+
+Code review workflow:
+
+```typescript
+// Create pull request
+const pr = await bitbucket.pullRequest.create({
+  workspace: 'my-workspace',
+  repo_slug: 'my-repo',
+  title: 'Implement feature X',
+  source: {
+    branch: { name: 'feature-x' },
+  },
+  destination: {
+    branch: { name: 'main' },
+  },
+})
+
+// Get pull request
+const pr = await bitbucket.pullRequest.get({
+  workspace: 'my-workspace',
+  repo_slug: 'my-repo',
+  pull_request_id: 42,
+})
+
+// Update pull request
+await bitbucket.pullRequest.update({
+  workspace: 'my-workspace',
+  repo_slug: 'my-repo',
+  pull_request_id: 42,
+  title: 'Updated: Implement feature X',
+})
+
+// Merge pull request
+await bitbucket.pullRequest.merge({
+  workspace: 'my-workspace',
+  repo_slug: 'my-repo',
+  pull_request_id: 42,
+  merge_strategy: 'squash',
+})
+
+// List pull requests
+const pullRequests = await bitbucket.pullRequest.list({
+  workspace: 'my-workspace',
+  repo_slug: 'my-repo',
+  state: 'OPEN',
+})
+```
+
+### Issues
+
+Track issues:
+
+```typescript
+// Create issue
+const issue = await bitbucket.issue.create({
+  workspace: 'my-workspace',
+  repo_slug: 'my-repo',
+  title: 'Bug: Login fails',
+  content: {
+    raw: 'Users cannot log in with valid credentials',
+  },
+})
+
+// Get issue
+const issue = await bitbucket.issue.get({
+  workspace: 'my-workspace',
+  repo_slug: 'my-repo',
+  issue_id: 123,
+})
+
+// Update issue
+await bitbucket.issue.update({
+  workspace: 'my-workspace',
+  repo_slug: 'my-repo',
+  issue_id: 123,
+  title: 'Fixed: Login issue resolved',
+})
+
+// List issues
+const issues = await bitbucket.issue.list({
+  workspace: 'my-workspace',
+  repo_slug: 'my-repo',
+})
+```
+
+### Pipelines
+
+CI/CD pipeline management:
+
+```typescript
+// Create pipeline
+const pipeline = await bitbucket.pipeline.create({
+  workspace: 'my-workspace',
+  repo_slug: 'my-repo',
+  target: {
+    ref_type: 'branch',
+    ref_name: 'main',
+    type: 'pipeline_ref_target',
+  },
+})
+
+// Get pipeline
+const pipeline = await bitbucket.pipeline.get({
+  workspace: 'my-workspace',
+  repo_slug: 'my-repo',
+  pipeline_uuid: '{12345678-1234-1234-1234-123456789012}',
+})
+
+// Stop pipeline
+await bitbucket.pipeline.stop({
+  workspace: 'my-workspace',
+  repo_slug: 'my-repo',
+  pipeline_uuid: '{12345678-1234-1234-1234-123456789012}',
+})
+
+// List pipelines
+const pipelines = await bitbucket.pipeline.list({
+  workspace: 'my-workspace',
+  repo_slug: 'my-repo',
+})
+```
+
+## Webhooks
+
+Bitbucket supports webhooks with HMAC-SHA256 signature verification:
+
+```typescript
+import { BitbucketWebhookHandler, WebhookEventRouter } from '@dotdo/sdk.do/integrations/bitbucket'
+
+const handler = new BitbucketWebhookHandler(process.env.BITBUCKET_WEBHOOK_SECRET)
+const event = await handler.handleRequest(request)
+
+const router = new WebhookEventRouter()
+router.onRepoPush(async (event) => {
+  console.log('Push event:', event.data)
+})
+
+router.onPullrequestCreated(async (event) => {
+  console.log('PR created:', event.data)
+})
+
+router.onPullrequestFulfilled(async (event) => {
+  console.log('PR merged:', event.data)
+})
+
+await router.route(event)
+```
+
+## Error Handling
+
+```typescript
+import { BitbucketError } from '@dotdo/sdk.do/integrations/bitbucket'
+
+try {
+  await bitbucket.repository.create({
+    /* ... */
+  })
+} catch (error) {
+  if (error instanceof BitbucketError) {
+    console.error('Bitbucket Error:', error.code, error.message)
+    if (error.isRetriable()) {
+      // Retry logic
+    }
+  }
+}
+```
+
+## Best Practices
+
+1. **Workspace**: All resources are scoped to a workspace
+2. **Repository Slug**: Use URL-friendly slugs for repository names
+3. **OAuth Scopes**: Request minimum required scopes
+4. **Rate Limits**: Bitbucket Cloud has 1,000 requests/hour per user
+5. **Pagination**: Use cursor-based pagination for large result sets
+6. **Webhooks**: Always verify HMAC signatures using constant-time comparison
+7. **UUIDs**: Pipelines use UUIDs with curly braces (e.g., `{uuid}`)
+
+## API Reference
+
+Full API documentation: https://developer.atlassian.com/cloud/bitbucket/rest/intro/
+
+## License
+
+MIT
