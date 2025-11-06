@@ -1,10 +1,5 @@
 # `.do` Business-as-Code - AI & SDK
 
-[![CI](https://github.com/dot-do/ai/actions/workflows/ci.yml/badge.svg)](https://github.com/dot-do/ai/actions/workflows/ci.yml)
-[![Lint](https://github.com/dot-do/ai/actions/workflows/lint.yml/badge.svg)](https://github.com/dot-do/ai/actions/workflows/lint.yml)
-[![Security](https://github.com/dot-do/ai/actions/workflows/security.yml/badge.svg)](https://github.com/dot-do/ai/actions/workflows/security.yml)
-[![Publish](https://github.com/dot-do/ai/actions/workflows/publish.yml/badge.svg)](https://github.com/dot-do/ai/actions/workflows/publish.yml)
-
 Open-source SDKs, packages, and tools for building autonomous Business-as-Code with semantic intent.
 
 ## Everything is a Semantic Function
