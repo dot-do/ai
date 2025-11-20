@@ -1,0 +1,705 @@
+---
+title: WireWatt - Energy Optimization for Wire Drawing
+description: Business-as-Code implementation for WireWatt's energy optimization platform for wire drawing manufacturers
+---
+
+# WireWatt Business-as-Code
+
+WireWatt is an energy optimization platform that helps wire drawing manufacturers reduce electricity consumption per ton by 8-12% through real-time monitoring, drift detection, and prescriptive recommendations.
+
+```typescript
+import { Business, on, every } from 'workflows.do'
+import { Agent } from 'agents.do'
+import { Human } from 'humans.do'
+
+// Core business types
+interface Lead {
+  id: string
+  company: string
+  contactEmail: string
+  plantLocation: string
+  annualThroughput: number // tons per year
+  electricityCost: number // $/kWh
+  numberOfLines: number
+  currentEPT?: number // kWh per ton baseline
+}
+
+interface Customer {
+  id: string
+  company: string
+  sites: Site[]
+  contractValue: number
+  onboardingDate: Date
+}
+
+interface Site {
+  id: string
+  location: string
+  lines: ProductionLine[]
+  electricityRate: number
+  demandCharges: number
+}
+
+interface ProductionLine {
+  id: string
+  lineNumber: string
+  equipment: string[]
+  currentEPT: number // kWh per ton
+  targetEPT: number
+  lastMaintenanceDate: Date
+}
+
+interface EnergyDrift {
+  lineId: string
+  currentEPT: number
+  baselineEPT: number
+  driftPercentage: number
+  detectedAt: Date
+  rootCauses: string[]
+  confidence: number
+}
+
+interface OptimizationRecommendation {
+  type: 'setpoint' | 'scheduling' | 'maintenance'
+  lineId: string
+  action: string
+  expectedSavings: number // kWh/ton
+  confidence: number
+  priority: 'high' | 'medium' | 'low'
+}
+
+// WireWatt Business Definition
+export const wireWatt = Business({
+  name: 'WireWatt',
+  url: 'https://wirewatt.com',
+  vision: 'Optimize energy efficiency in wire drawing manufacturing through AI-powered insights',
+  
+  leanCanvas: {
+    problem: [
+      'Energy cost volatility and rising TOU/demand charges increase OPEX unpredictably',
+      'Plants measure kWh at facility level but lack line/product-level normalization',
+      'Undetected process drift can add 5–15% energy per ton before quality alarms trigger',
+      'Scheduling decisions often ignore electricity pricing windows',
+      'OEM/EMS dashboards report consumption but don\'t prescribe actions',
+      'Hard to prove savings and secure utility incentives without M&V methods',
+      'Limited internal data science resources for building models'
+    ],
+    solution: [
+      'Real-time power integration via OPC UA/Modbus/MQTT in 2–4 weeks',
+      'Energy per Ton (EPT) normalization by line, product, and conditions',
+      'SPC-style drift detection with ML residual analysis',
+      'Prescriptive advisor for setpoints, scheduling, and maintenance',
+      'Demand optimization with peak shaving and load shifting',
+      'IPMVP-compliant M&V and automated savings reports',
+      'Secure cloud or on-prem deployment options'
+    ],
+    uniqueValueProposition: 'Cut 8–12% electricity per ton within 90 days through physics-informed EPT normalization and prescriptive actions',
+    unfairAdvantage: 'Purpose-built EPT normalization engine with pre-trained models and utility-grade M&V',
+    customerSegments: [
+      'VP Operations and Plant Managers at steel wire drawing manufacturers',
+      'Production supervisors and process engineers',
+      'Energy managers and sustainability directors'
+    ],
+    channels: [
+      'Direct sales via targeted outbound and LinkedIn ABM',
+      '90-day Proof of Value programs',
+      'OEM partnerships with wire drawing machine vendors',
+      'System integrator partnerships',
+      'Utility incentive program channels'
+    ],
+    revenueStreams: [
+      'Annual subscription: $15k/site + $8k per line/year',
+      'Implementation: $10k per site + $2k per line',
+      'Performance bonus: 10% of verified savings in year 1',
+      'Premium features and professional services'
+    ],
+    costStructure: [
+      'Cloud/edge infrastructure: $120–$180 per line/month',
+      'Data integration and support: 0.2–0.4 FTE per plant',
+      'Customer success and M&V: $6k–$12k per plant/year',
+      'R&D: 25–35% of opex',
+      'Sales and marketing: events, outbound, PoV equipment'
+    ],
+    keyMetrics: [
+      'EPT reduction: 8–12% within 90 days',
+      'False alert rate <5%, detection lead time <2 hours',
+      'Recommendation acceptance rate ≥50%',
+      'Time-to-value: integration ≤4 weeks, first savings ≤6 weeks',
+      'PoV win rate ≥25%, conversion ≥60%'
+    ]
+  },
+
+  goals: [
+    { 
+      objective: 'Achieve market leadership in wire drawing energy optimization',
+      keyResults: [
+        'Sign 25 manufacturing sites by end of year',
+        'Achieve average 10% EPT reduction across all customers',
+        'Maintain <5% annual churn rate'
+      ]
+    },
+    {
+      objective: 'Build scalable technology platform',
+      keyResults: [
+        'Support 100+ production lines simultaneously',
+        'Achieve 99.5% uptime across all deployments',
+        'Reduce integration time to <2 weeks'
+      ]
+    },
+    {
+      objective: 'Establish profitable unit economics',
+      keyResults: [
+        'Achieve $50k+ annual revenue per customer',
+        'Maintain 70%+ gross margins',
+        'Payback period <8 months for customers'
+      ]
+    }
+  ],
+
+  team: {
+    ceo: Human({ 
+      name: 'Sarah Chen',
+      email: 'sarah@wirewatt.com',
+      objective: 'Scale WireWatt to become the leading energy optimization platform for manufacturing'
+    }),
+    cto: Human({
+      name: 'Marcus Rodriguez', 
+      email: 'marcus@wirewatt.com',
+      objective: 'Build industry-leading physics-informed ML platform',
+      keyResults: [
+        'Deploy real-time drift detection with <2 hour latency',
+        'Achieve 80%+ accuracy in energy savings predictions'
+      ]
+    }),
+    vp_sales: Human({
+      name: 'Jennifer Walsh',
+      email: 'jen@wirewatt.com', 
+      objective: 'Drive customer acquisition and revenue growth',
+      keyResults: [
+        'Generate $2M+ in new bookings annually',
+        'Maintain 25%+ PoV win rate'
+      ]
+    }),
+    head_of_customer_success: Agent({
+      name: 'Alex',
+      objective: 'Ensure customer success and minimize churn',
+      keyResults: [
+        'Achieve 95%+ customer satisfaction',
+        'Deliver promised energy savings within 90 days'
+      ]
+    })
+  }
+})
+
+// Customer Acquisition Workflows
+export async function acquireCustomer(lead: Lead): Promise<Customer> {
+  try {
+    // Qualify the lead based on fit criteria
+    const qualifiedLead = await qualifyLead(lead)
+    if (!qualifiedLead.isQualified) {
+      throw new Error(`Lead ${lead.id} does not meet qualification criteria`)
+    }
+
+    // Generate customized proposal
+    const proposal = await generateProposal(qualifiedLead)
+    
+    // Conduct Proof of Value if needed
+    const povResults = await conductProofOfValue(qualifiedLead)
+    
+    // Negotiate contract terms
+    const contract = await negotiateContract(proposal, povResults)
+    
+    // Onboard the new customer
+    const customer = await onboardCustomer(contract)
+    
+    return customer
+  } catch (error) {
+    throw new Error(`Customer acquisition failed: ${error.message}`)
+  }
+}
+
+export async function qualifyLead(lead: Lead): Promise<{ isQualified: boolean; score: number; reasons: string[] }> {
+  const qualificationCriteria = {
+    minThroughput: 10000, // tons/year
+    minLines: 3,
+    minElectricityCost: 0.06, // $/kWh
+    targetIndustries: ['NAICS 331222'] // Steel wire drawing
+  }
+
+  const score = calculateLeadScore(lead, qualificationCriteria)
+  const isQualified = score >= 70
+  const reasons = generateQualificationReasons(lead, qualificationCriteria)
+
+  return { isQualified, score, reasons }
+}
+
+export async function generateProposal(lead: Lead): Promise<{
+  estimatedSavings: number;
+  paybackPeriod: number;
+  proposedSolution: string[];
+  pricing: { setup: number; annual: number };
+}> {
+  // Calculate potential energy savings
+  const baselineEPT = lead.currentEPT || await estimateBaselineEPT(lead)
+  const targetReduction = 0.10 // 10% reduction target
+  const estimatedSavings = calculateAnnualSavings(lead, baselineEPT, targetReduction)
+  
+  // Generate pricing based on number of lines and complexity
+  const pricing = calculatePricing(lead.numberOfLines, lead.annualThroughput)
+  
+  // Calculate payback period
+  const paybackPeriod = pricing.annual / estimatedSavings
+  
+  const proposedSolution = [
+    'Real-time energy monitoring and EPT normalization',
+    'AI-powered drift detection and root cause analysis', 
+    'Prescriptive recommendations for optimization',
+    'Demand management and TOU optimization',
+    'IPMVP-compliant measurement and verification'
+  ]
+
+  return { estimatedSavings, paybackPeriod, proposedSolution, pricing }
+}
+
+export async function conductProofOfValue(lead: Lead): Promise<{
+  actualSavings: number;
+  driftDetections: number;
+  recommendationAccuracy: number;
+  customerSatisfaction: number;
+}> {
+  // Install monitoring on 2-3 lines for 90 days
+  const monitoredLines = await selectPilotLines(lead, 3)
+  
+  // Collect baseline data
+  const baseline = await establishBaseline(monitoredLines, 30) // 30 days
+  
+  // Deploy optimization recommendations
+  const recommendations = await generateOptimizationPlan(monitoredLines, baseline)
+  await implementRecommendations(recommendations)
+  
+  // Measure results over 60 days
+  const results = await measurePovResults(monitoredLines, 60)
+  
+  return results
+}
+
+// Product Development Processes
+export async function developEnergyOptimizationFeature(
+  featureSpec: { name: string; requirements: string[]; priority: 'high' | 'medium' | 'low' }
+): Promise<{ feature: any; testResults: any; deploymentPlan: any }> {
+  try {
+    // Research and design phase
+    const research = await conductFeatureResearch(featureSpec)
+    const design = await createFeatureDesign(research, featureSpec)
+    
+    // Development phase
+    const implementation = await implementFeature(design)
+    const testResults = await testFeature(implementation)
+    
+    // Validation with customer data
+    const validation = await validateWithCustomerData(implementation, testResults)
+    
+    // Create deployment plan
+    const deploymentPlan = await createDeploymentPlan(implementation, validation)
+    
+    return { feature: implementation, testResults: validation, deploymentPlan }
+  } catch (error) {
+    throw new Error(`Feature development failed: ${error.message}`)
+  }
+}
+
+export async function enhanceMLModels(): Promise<{
+  driftDetectionAccuracy: number;
+  predictionAccuracy: number;
+  falsePositiveRate: number;
+}> {
+  // Collect training data from all customer sites
+  const trainingData = await aggregateCustomerData()
+  
+  // Retrain drift detection models
+  const driftModel = await trainDriftDetectionModel(trainingData)
+  
+  // Retrain energy prediction models  
+  const predictionModel = await trainEnergyPredictionModel(trainingData)
+  
+  // Validate model performance
+  const performance = await validateModelPerformance(driftModel, predictionModel)
+  
+  // Deploy improved models
+  await deployModels(driftModel, predictionModel)
+  
+  return performance
+}
+
+// Revenue Generation Flows
+export async function optimizeCustomerValue(customer: Customer): Promise<{
+  upsellOpportunities: string[];
+  renewalLikelihood: number;
+  expansionRevenue: number;
+}> {
+  // Analyze customer usage and success metrics
+  const usage = await analyzeCustomerUsage(customer)
+  const satisfaction = await measureCustomerSatisfaction(customer)
+  const savings = await calculateRealizedSavings(customer)
+  
+  // Identify upsell opportunities
+  const upsellOpportunities = await identifyUpsellOpportunities(customer, usage, savings)
+  
+  // Predict renewal likelihood
+  const renewalLikelihood = await predictRenewalLikelihood(customer, satisfaction, savings)
+  
+  // Calculate potential expansion revenue
+  const expansionRevenue = await calculateExpansionRevenue(customer, upsellOpportunities)
+  
+  return { upsellOpportunities, renewalLikelihood, expansionRevenue }
+}
+
+export async function processUtilityIncentive(customer: Customer, site: Site): Promise<{
+  incentiveAmount: number;
+  applicationStatus: string;
+  documentation: string[];
+}> {
+  // Generate M&V documentation
+  const mvDocumentation = await generateMVDocumentation(customer, site)
+  
+  // Calculate verified savings
+  const verifiedSavings = await calculateVerifiedSavings(site, mvDocumentation)
+  
+  // Submit incentive application
+  const application = await submitIncentiveApplication(customer, site, verifiedSavings)
+  
+  // Track application status
+  const status = await trackIncentiveStatus(application)
+  
+  return {
+    incentiveAmount: application.requestedAmount,
+    applicationStatus: status,
+    documentation: mvDocumentation.files
+  }
+}
+
+// Operational Procedures
+export async function monitorSystemHealth(): Promise<{
+  uptime: number;
+  dataCompleteness: number;
+  alertsGenerated: number;
+  issuesResolved: number;
+}> {
+  // Check all customer deployments
+  const deployments = await getAllCustomerDeployments()
+  
+  // Monitor system metrics
+  const healthMetrics = await Promise.all(
+    deployments.map(deployment => checkDeploymentHealth(deployment))
+  )
+  
+  // Aggregate metrics
+  const aggregated = aggregateHealthMetrics(healthMetrics)
+  
+  // Generate alerts for issues
+  const alerts = await generateHealthAlerts(healthMetrics)
+  
+  // Auto-resolve known issues
+  const resolved = await autoResolveIssues(alerts)
+  
+  return {
+    uptime: aggregated.uptime,
+    dataCompleteness: aggregated.dataCompleteness,
+    alertsGenerated: alerts.length,
+    issuesResolved: resolved.length
+  }
+}
+
+export async function performPreventiveMaintenance(site: Site): Promise<{
+  maintenanceActions: string[];
+  predictedIssues: string[];
+  scheduledDowntime: number;
+}> {
+  // Analyze equipment performance trends
+  const performanceTrends = await analyzeEquipmentTrends(site)
+  
+  // Predict potential issues
+  const predictedIssues = await predictEquipmentIssues(performanceTrends)
+  
+  // Generate maintenance recommendations
+  const maintenanceActions = await generateMaintenanceRecommendations(predictedIssues)
+  
+  // Schedule maintenance windows
+  const scheduledDowntime = await scheduleMaintenanceWindows(site, maintenanceActions)
+  
+  return { maintenanceActions, predictedIssues, scheduledDowntime }
+}
+
+// Decision-Making Workflows
+export async function evaluateCustomerExpansion(customer: Customer): Promise<{
+  recommendation: 'expand' | 'maintain' | 'reduce';
+  reasoning: string[];
+  projectedROI: number;
+}> {
+  // Analyze customer performance metrics
+  const performance = await analyzeCustomerPerformance(customer)
+  
+  // Calculate current ROI
+  const currentROI = await calculateCustomerROI(customer, performance)
+  
+  // Assess expansion potential
+  const expansionPotential = await assessExpansionPotential(customer)
+  
+  // Make recommendation based on data
+  const recommendation = makeExpansionRecommendation(currentROI, expansionPotential, performance)
+  
+  return recommendation
+}
+
+export async function prioritizeProductRoadmap(
+  features: Array<{ name: string; effort: number; impact: number; customerDemand: number }>
+): Promise<Array<{ feature: string; priority: number; rationale: string }>> {
+  // Score features based on multiple criteria
+  const scoredFeatures = features.map(feature => ({
+    ...feature,
+    score: calculateFeatureScore(feature.effort, feature.impact, feature.customerDemand)
+  }))
+  
+  // Apply strategic filters
+  const strategicAlignment = await assessStrategicAlignment(scoredFeatures)
+  
+  // Generate prioritized roadmap
+  const prioritizedRoadmap = generateRoadmapPriorities(scoredFeatures, strategicAlignment)
+  
+  return prioritizedRoadmap
+}
+
+// Event-driven workflows
+wireWatt.on('EnergyDrift.Detected', async (drift: EnergyDrift, { ai, db, taskQueue }) => {
+  // Log the drift detection
+  await db.events.create({
+    type: 'EnergyDrift.Detected',
+    lineId: drift.lineId,
+    severity: drift.driftPercentage > 0.05 ? 'high' : 'medium',
+    data: drift
+  })
+  
+  // Generate root cause analysis
+  const rootCause = await ai.call('analyzeEnergyDrift', {
+    lineId: drift.lineId,
+    driftData: drift,
+    historicalData: await db.energyData.getHistory(drift.lineId, 30)
+  })
+  
+  // Generate recommendations
+  const recommendations = await ai.call('generateOptimizationRecommendations', {
+    drift,
+    rootCause,
+    lineConfiguration: await db.lines.get(drift.lineId)
+  })
+  
+  // Notify customer and queue follow-up actions
+  taskQueue.enqueue('NotifyCustomer', { 
+    type: 'drift_detected',
+    lineId: drift.lineId,
+    recommendations 
+  })
+  
+  if (drift.driftPercentage > 0.10) {
+    taskQueue.enqueue('ScheduleUrgentMaintenance', { lineId: drift.lineId, drift })
+  }
+})
+
+wireWatt.on('Customer.Onboarded', async (customer: Customer, { ai, db, taskQueue }) => {
+  // Initialize monitoring for all customer sites
+  for (const site of customer.sites) {
+    await db.monitoring.initialize(site.id)
+    
+    // Establish baselines for each production line
+    for (const line of site.lines) {
+      taskQueue.enqueue('EstablishBaseline', { 
+        customerId: customer.id,
+        siteId: site.id,
+        lineId: line.id 
+      })
+    }
+  }
+  
+  // Schedule first optimization review
+  taskQueue.enqueue('ScheduleOptimizationReview', {
+    customerId: customer.id,
+    scheduledDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
+  })
+  
+  // Set up automated reporting
+  await db.reports.setupAutomation(customer.id, {
+    frequency: 'weekly',
+    recipients: [customer.team.energyManager?.email, customer.team.plantManager?.email]
+  })
+})
+
+// Scheduled operations
+wireWatt.every('hour', async ({ ai, db, taskQueue }) => {
+  // Monitor all active production lines for drift
+  const activeLines = await db.lines.getActive()
+  
+  for (const line of activeLines) {
+    const currentEPT = await db.energyData.getCurrentEPT(line.id)
+    const baseline = await db.baselines.get(line.id)
+    
+    if (currentEPT && baseline) {
+      const driftPercentage = (currentEPT - baseline.ept) / baseline.ept
+      
+      if (Math.abs(driftPercentage) > 0.03) { // 3% threshold
+        const drift: EnergyDrift = {
+          lineId: line.id,
+          currentEPT,
+          baselineEPT: baseline.ept,
+          driftPercentage,
+          detectedAt: new Date(),
+          rootCauses: [],
+          confidence: 0.85
+        }
+        
+        // Trigger drift detection event
+        await db.events.create({
+          type: 'EnergyDrift.Detected',
+          data: drift
+        })
+      }
+    }
+  }
+})
+
+wireWatt.every('day at 06:00', async ({ ai, db, taskQueue }) => {
+  // Generate daily optimization recommendations
+  const customers = await db.customers.getActive()
+  
+  for (const customer of customers) {
+    const dailyReport = await ai.call('generateDailyOptimizationReport', {
+      customerId: customer.id,
+      date: new Date().toISOString().split('T')[0]
+    })
+    
+    if (dailyReport.recommendations.length > 0) {
+      taskQueue.enqueue('SendDailyReport', {
+        customerId: customer.id,
+        report: dailyReport
+      })
+    }
+  }
+  
+  // Update demand forecasts for TOU optimization
+  const sites = await db.sites.getAll()
+  for (const site of sites) {
+    const forecast = await ai.call('forecastEnergyDemand', {
+      siteId: site.id,
+      historicalData: await db.energyData.getHistory(site.id, 90),
+      weatherForecast: await getWeatherForecast(site.location)
+    })
+    
+    await db.forecasts.update(site.id, forecast)
+  }
+})
+
+wireWatt.every('week on Mon at 08:00', async ({ ai, db, taskQueue }) => {
+  // Weekly performance review and KPI reporting
+  const weeklyMetrics = await db.kpis.getWeeklyMetrics()
+  const performanceReport = await ai.call('generateWeeklyPerformanceReport', {
+    metrics: weeklyMetrics,
+    goals: wireWatt.goals
+  })
+  
+  // Send executive summary
+  taskQueue.enqueue('SendExecutiveReport', {
+    to: wireWatt.team.ceo.email,
+    report: performanceReport,
+    type: 'weekly_performance'
+  })
+  
+  // Review customer health scores
+  const customers = await db.customers.getActive()
+  for (const customer of customers) {
+    const healthScore = await ai.call('calculateCustomerHealthScore', {
+      customerId: customer.id,
+      metrics: await db.customerMetrics.get(customer.id, 7) // last 7 days
+    })
+    
+    if (healthScore < 70) {
+      taskQueue.enqueue('TriggerCustomerSuccessIntervention', {
+        customerId: customer.id,
+        healthScore,
+        urgency: healthScore < 50 ? 'high' : 'medium'
+      })
+    }
+  }
+})
+
+// Task handlers
+wireWatt.on('NotifyCustomer', async (task, { email, sms }) => {
+  const customer = await db.customers.get(task.customerId)
+  const message = formatCustomerNotification(task.type, task.data)
+  
+  await email.send({
+    to: customer.primaryContact.email,
+    subject: `WireWatt Alert: ${task.type}`,
+    body: message.email
+  })
+  
+  if (task.urgency === 'high') {
+    await sms.send({
+      to: customer.primaryContact.phone,
+      message: message.sms
+    })
+  }
+})
+
+wireWatt.on('SendDailyReport', async (task, { email }) => {
+  const customer = await db.customers.get(task.customerId)
+  const reportHtml = await generateReportHtml(task.report)
+  
+  await email.send({
+    to: customer.reportingContacts.map(c => c.email),
+    subject: `Daily Energy Optimization Report - ${task.report.date}`,
+    html: reportHtml,
+    attachments: task.report.attachments
+  })
+})
+
+// Helper functions (would be implemented elsewhere)
+async function calculateLeadScore(lead: Lead, criteria: any): Promise<number> {
+  // Implementation would score lead based on qualification criteria
+  return 85
+}
+
+async function estimateBaselineEPT(lead: Lead): Promise<number> {
+  // Implementation would estimate baseline energy per ton
+  return 450 // kWh/ton
+}
+
+async function calculateAnnualSavings(lead: Lead, baseline: number, reduction: number): Promise<number> {
+  const savedEPT = baseline * reduction
+  const annualSavings = savedEPT * lead.annualThroughput * lead.electricityCost
+  return annualSavings
+}
+
+async function calculatePricing(lines: number, throughput: number): Promise<{ setup: number; annual: number }> {
+  const setup = 10000 + (lines * 2000) // $10k base + $2k per line
+  const annual = 15000 + (lines * 8000) // $15k base + $8k per line
+  return { setup, annual }
+}
+
+// Export the business definition and key functions
+export default wireWatt
+export {
+  acquireCustomer,
+  qualifyLead,
+  generateProposal,
+  conductProofOfValue,
+  developEnergyOptimizationFeature,
+  enhanceMLModels,
+  optimizeCustomerValue,
+  processUtilityIncentive,
+  monitorSystemHealth,
+  performPreventiveMaintenance,
+  evaluateCustomerExpansion,
+  prioritizeProductRoadmap
+}
+```
+
+This Business-as-Code implementation for WireWatt defines the complete business model as executable TypeScript code, including customer acquisition workflows, product development processes, revenue optimization, and operational procedures. The code follows the patterns established in the dot-do platform with event-driven workflows, scheduled operations, and AI-powered decision making.
