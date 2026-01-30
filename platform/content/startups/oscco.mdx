@@ -1,0 +1,477 @@
+---
+title: OSCCO - AI Online Sales Counselor
+---
+
+# OSCCO Business-as-Code
+
+OSCCO provides 24/7 AI-powered Online Sales Counselor (OSC) services for home builders, delivering sub-60 second response times across all channels while qualifying leads, answering FAQs, and booking appointments directly to community calendars.
+
+```ts
+import { Business, Agent, Human } from 'workflows.do'
+import { AI, DB } from 'workflows.do'
+
+const oscco = Business({
+  name: 'OSCCO',
+  url: 'https://oscco.ai',
+  vision: '24/7 AI OSC that responds in under 60 seconds across web, SMS, voice, and social; qualifies, answers builder-specific FAQs, and books model or virtual tours directly to the correct community calendar',
+  leanCanvas: {
+    problem: [
+      'Slow speed-to-lead: 40–60% of builder web/form leads receive first response after 10+ minutes or not at all, causing 8–15% lower contact and appointment rates',
+      'No after-hours coverage: 55–70% of inquiries arrive outside 9–5; most builders lack 24/7 response, leaking high-intent traffic to competitors',
+      'Inconsistent qualification and scripting across OSCs leads to poor data hygiene in CRM (missing budget/timeline/location; 20–35% duplicate or incomplete records)',
+      'Manual appointment coordination across communities and sales teams drives friction (no-shows, double-bookings, and poor calendar utilization)',
+      'High cost per kept appointment using human-only OSC or outsourced ISAs ($120–$300 per kept appt) with volatile quality and limited scalability',
+      'Fragmented channel handling (web chat, forms, SMS, FB/IG lead ads, phone) results in untracked conversations and poor attribution'
+    ],
+    solution: [
+      'Always-on concierge: inbound triage across web forms, chat widgets, SMS, Facebook/Instagram lead ads, and tracked phone numbers with sub-60s first response',
+      'Structured qualification: collects budget, timeline, location/community preference, household needs, financing status, and contact preferences; enforces required CRM fields',
+      'Real-time FAQs: incentives, HOA/amenities, floor plans, lot availability windows, school districts, commute times, warranty—kept current via CMS/feeds',
+      'Automatic scheduling: checks builder calendars by community/sales agent, books in-person or virtual tours, sends confirmations and reminders, manages reschedules/cancellations',
+      'Smart routing and escalation: detects hot leads and patches to live OSC/agent, or schedules callbacks; de-duplicates and merges with existing CRM contacts',
+      'Compliance-by-design: TCPA consent capture and logging, fair-housing guardrails, language accessibility (EN/ES), audit trails of all messages and calls'
+    ],
+    uniqueValueProposition: '24/7 AI OSC that responds in under 60 seconds across web, SMS, voice, and social; qualifies, answers builder-specific FAQs, and books model or virtual tours directly to the correct community calendar—cutting cost per kept appointment by 30–50% while improving CRM hygiene and after-hours coverage to 100%.',
+    unfairAdvantage: 'Builder-specific corpus, integrations, and playbooks tuned for NAICS 236117 workflows; fair-housing and TCPA guardrails embedded at the core; growing network effects from cross-builder benchmarks (by market, time-of-day, channel) that continuously improve contact, set, and show rates.',
+    customerSegments: [
+      'Top 200 national and large regional for-sale builders (20+ communities; dedicated OSC teams; high lead volume)',
+      'Mid-market local/regional builders (5–20 communities; 1–2 OSCs or shared marketing role)',
+      'Small builders (1–5 communities) needing turnkey lead response and appointment setting',
+      'Builder marketing agencies and digital partners serving multiple builders',
+      'Adjacent stakeholders for expansion: new home marketplaces/ILS (e.g., BDX/NewHomeSource), on-site sales teams, preferred lenders for pre-approval handoff'
+    ],
+    channels: [
+      'Direct sales to top 200 builders via SDR + founder-led demos; land-and-expand pilots by division/market',
+      'Partnerships/integrations: CRMs (Lasso/ECI, Salesforce, HubSpot), BDX/NewHomeSource, website agencies (e.g., Do You Convert, Blue Tangerine, Outhouse), call tracking vendors',
+      'Industry events: NAHB International Builders' Show (IBS), PCBC, SEBC, local HBA chapter events; speaking slots on OSC best practices',
+      'Content-led growth: Speed-to-Lead Benchmark report for builders; Fair Housing AI guide; webinar series with partners; case studies by community type',
+      'Paid acquisition: LinkedIn ads targeting titles (VP Sales/Marketing, OSC Manager, Digital Marketing), retargeting site visitors, Meta ads for agencies',
+      'Pilot offers: after-hours-only pilot for 60–90 days; performance-based pricing on kept appointments to reduce risk',
+      'Referral program: rev-share with agencies and tech partners; customer referral incentives'
+    ],
+    revenueStreams: [
+      'SaaS subscription per community or per builder division (tiered): Starter $499/community/mo; Pro $999/community/mo; Enterprise custom',
+      'Usage fees: messages/minutes over plan, phone numbers, additional languages/markets',
+      'Performance add-on: $40–$75 per kept appointment bonus, optional pay-per-kept-appt pilot',
+      'Onboarding/implementation: $2,500–$10,000 per builder (size/integrations)',
+      'Professional services: script customization, CRM field mapping, analytics reports, fair housing review',
+      'Enterprise support/SLA: premium support, dedicated CSM, quarterly optimization workshops'
+    ],
+    costStructure: [
+      'COGS: LLM inference, vector DB, orchestration; telephony/SMS/voice (e.g., Twilio), TTS/STT, hosting and monitoring',
+      'Integrations and maintenance: CRM connectors, calendar APIs, lead ad webhooks, BDX/ILS feeds',
+      'People: solutions engineers for onboarding, CSMs, sales (AE/SDR), ML/eng, compliance/legal advisor',
+      'Security/compliance: SOC 2 Type II, TCPA compliance tooling, data retention and audit capabilities',
+      'Sales and marketing: events (IBS booth), partner MDF, paid ads, content production',
+      'R&D: domain-tuned models, fair-housing guardrails, multi-language expansion, analytics',
+      'General & administrative: finance, HR, insurance (including cyber liability and E&O)'
+    ],
+    keyMetrics: [
+      'Speed-to-lead: median and 95th percentile first-response time by channel (target <60s; 95th <120s)',
+      'Coverage rate: % of inbound leads engaged within SLA, overall and after-hours (target >95% overall, >99% after-hours)',
+      'Contact rate: % of leads that reply or converse (baseline +10–20% lift vs control)',
+      'Qualification rate: % of leads with required fields completed (target 60–75% of engaged leads)',
+      'Appointment set rate: % of qualified leads booked (target 20–35% depending on community/offer)',
+      'Show rate: % of appointments kept (target 60–75% with reminders)',
+      'Cost per kept appointment: blended (target $60–$140; 30–50% cheaper vs human-only)',
+      'Lead leakage reduction: % of leads previously unattended now processed (target +20–40%)',
+      'After-hours lead share: % of appointments originating after-hours (baseline to tracked)',
+      'CRM hygiene: duplicate rate, data completeness score (target <5% duplicates; >90% completeness)',
+      'No-show reduction: change after implementing reminders/rescheduling (target −15–25%)',
+      'Customer NPS/CSAT and agent satisfaction; time saved per OSC (target 30–50%)'
+    ]
+  },
+  goals: {
+    'Achieve market leadership': ['▲ builder customers', '▲ communities served', '▲ market share in top 200 builders'],
+    'Optimize operational efficiency': ['▼ response time <60s', '▲ qualification rate >70%', '▲ appointment show rate >70%'],
+    'Drive revenue growth': ['▲ ARR', '▼ cost per kept appointment', '▲ customer LTV'],
+    'Ensure compliance excellence': ['100% TCPA compliance', '100% fair housing compliance', 'SOC 2 Type II certification']
+  }
+})
+
+// Customer Acquisition Workflows
+export async function acquireCustomer(lead: BuilderLead): Promise<Customer> {
+  try {
+    const qualifiedLead = await qualifyBuilderLead(lead)
+    const proposal = await generateCustomProposal(qualifiedLead)
+    const demo = await schedulePilotDemo(proposal)
+    const contract = await negotiateContract(demo)
+    return await onboardBuilder(contract)
+  } catch (error) {
+    await logAcquisitionError(error, lead)
+    throw new Error(`Customer acquisition failed: ${error.message}`)
+  }
+}
+
+export async function qualifyBuilderLead(lead: BuilderLead): Promise<QualifiedBuilderLead> {
+  const builderProfile = await enrichBuilderData(lead)
+  const fitScore = await calculateBuilderFitScore(builderProfile)
+  
+  if (fitScore < 70) {
+    throw new Error('Builder does not meet qualification criteria')
+  }
+  
+  return {
+    ...lead,
+    profile: builderProfile,
+    fitScore,
+    qualificationDate: new Date(),
+    nextSteps: await generateQualificationNextSteps(builderProfile)
+  }
+}
+
+export async function generateCustomProposal(lead: QualifiedBuilderLead): Promise<Proposal> {
+  const communityAnalysis = await analyzeCommunityPortfolio(lead.profile.communities)
+  const competitorBenchmark = await benchmarkAgainstCompetitors(lead.profile.market)
+  const roiProjection = await calculateROIProjection(lead.profile, communityAnalysis)
+  
+  return {
+    builderId: lead.id,
+    pricing: await generateTieredPricing(lead.profile),
+    implementation: await createImplementationPlan(lead.profile.communities),
+    roi: roiProjection,
+    pilot: await designPilotProgram(lead.profile),
+    timeline: await estimateDeploymentTimeline(lead.profile.communities.length)
+  }
+}
+
+// Lead Processing Workflows
+export async function processInboundLead(lead: InboundLead): Promise<ProcessedLead> {
+  const startTime = Date.now()
+  
+  try {
+    // Sub-60 second response requirement
+    const response = await Promise.race([
+      handleLeadWithTimeout(lead),
+      timeoutAfter(58000) // 58 seconds to ensure sub-60s response
+    ])
+    
+    const responseTime = Date.now() - startTime
+    await trackResponseMetrics(lead.channel, responseTime)
+    
+    return response
+  } catch (error) {
+    await escalateToHumanOSC(lead, error)
+    throw error
+  }
+}
+
+async function handleLeadWithTimeout(lead: InboundLead): Promise<ProcessedLead> {
+  // Immediate acknowledgment
+  await sendImmediateResponse(lead)
+  
+  // Parallel processing for speed
+  const [
+    qualification,
+    builderContext,
+    availableSlots
+  ] = await Promise.all([
+    qualifyLead(lead),
+    getBuilderContext(lead.builderId),
+    getAvailableAppointmentSlots(lead.communityId)
+  ])
+  
+  const processedLead = {
+    ...lead,
+    qualification,
+    context: builderContext,
+    availableSlots,
+    processedAt: new Date(),
+    nextAction: await determineNextAction(qualification, builderContext)
+  }
+  
+  // Trigger appropriate follow-up workflow
+  await triggerFollowUpWorkflow(processedLead)
+  
+  return processedLead
+}
+
+export async function qualifyLead(lead: InboundLead): Promise<LeadQualification> {
+  const questions = await getQualificationQuestions(lead.builderId)
+  const responses = await collectQualificationData(lead, questions)
+  
+  return {
+    budget: await extractBudget(responses),
+    timeline: await extractTimeline(responses),
+    location: await extractLocationPreference(responses),
+    householdNeeds: await extractHouseholdNeeds(responses),
+    financingStatus: await extractFinancingStatus(responses),
+    contactPreferences: await extractContactPreferences(responses),
+    completeness: await calculateQualificationCompleteness(responses),
+    score: await calculateLeadScore(responses)
+  }
+}
+
+// Product Development Workflows
+export async function developAICapability(requirement: ProductRequirement): Promise<AICapability> {
+  const researchPhase = await conductMarketResearch(requirement)
+  const designPhase = await designAIArchitecture(researchPhase)
+  const developmentPhase = await buildAICapability(designPhase)
+  const testingPhase = await testAICapability(developmentPhase)
+  
+  return await deployAICapability(testingPhase)
+}
+
+export async function enhanceBuilderIntegration(builderId: string): Promise<Integration> {
+  const currentIntegration = await getCurrentIntegration(builderId)
+  const requirements = await gatherEnhancementRequirements(builderId)
+  const enhancedIntegration = await buildEnhancedIntegration(currentIntegration, requirements)
+  
+  return await deployIntegrationUpdate(enhancedIntegration)
+}
+
+export async function optimizeConversationFlows(communityId: string): Promise<OptimizedFlows> {
+  const conversationData = await analyzeConversationHistory(communityId)
+  const painPoints = await identifyConversationPainPoints(conversationData)
+  const optimizations = await generateFlowOptimizations(painPoints)
+  
+  return await implementFlowOptimizations(optimizations)
+}
+
+// Revenue Generation Workflows
+export async function generateRevenue(customer: Customer): Promise<RevenueResult> {
+  const subscriptionRevenue = await processSubscriptionBilling(customer)
+  const usageRevenue = await calculateUsageFees(customer)
+  const upsellOpportunities = await identifyUpsellOpportunities(customer)
+  
+  return {
+    subscription: subscriptionRevenue,
+    usage: usageRevenue,
+    upsells: await executeUpsellCampaigns(upsellOpportunities),
+    total: subscriptionRevenue + usageRevenue,
+    projectedGrowth: await projectRevenueGrowth(customer)
+  }
+}
+
+export async function optimizePricing(segment: CustomerSegment): Promise<PricingStrategy> {
+  const marketAnalysis = await analyzeMarketPricing(segment)
+  const valueAnalysis = await analyzeCustomerValue(segment)
+  const competitorAnalysis = await analyzeCompetitorPricing(segment)
+  
+  return await generateOptimalPricing(marketAnalysis, valueAnalysis, competitorAnalysis)
+}
+
+export async function expandCustomerValue(customerId: string): Promise<ExpansionResult> {
+  const currentUsage = await analyzeCurrentUsage(customerId)
+  const expansionOpportunities = await identifyExpansionOpportunities(currentUsage)
+  const expansionPlan = await createExpansionPlan(expansionOpportunities)
+  
+  return await executeExpansionPlan(expansionPlan)
+}
+
+// Operational Procedures
+export async function maintainSystemHealth(): Promise<HealthStatus> {
+  const systemMetrics = await collectSystemMetrics()
+  const healthChecks = await runHealthChecks()
+  const performanceAnalysis = await analyzePerformance(systemMetrics)
+  
+  if (performanceAnalysis.issues.length > 0) {
+    await triggerMaintenanceWorkflows(performanceAnalysis.issues)
+  }
+  
+  return {
+    status: await determineOverallHealth(healthChecks),
+    metrics: systemMetrics,
+    issues: performanceAnalysis.issues,
+    recommendations: await generateMaintenanceRecommendations(performanceAnalysis)
+  }
+}
+
+export async function ensureCompliance(): Promise<ComplianceStatus> {
+  const tcpaCompliance = await auditTCPACompliance()
+  const fairHousingCompliance = await auditFairHousingCompliance()
+  const dataPrivacyCompliance = await auditDataPrivacyCompliance()
+  const securityCompliance = await auditSecurityCompliance()
+  
+  return {
+    tcpa: tcpaCompliance,
+    fairHousing: fairHousingCompliance,
+    dataPrivacy: dataPrivacyCompliance,
+    security: securityCompliance,
+    overallScore: await calculateComplianceScore([
+      tcpaCompliance, fairHousingCompliance, dataPrivacyCompliance, securityCompliance
+    ])
+  }
+}
+
+export async function manageCustomerSuccess(customerId: string): Promise<SuccessMetrics> {
+  const healthScore = await calculateCustomerHealthScore(customerId)
+  const usageAnalysis = await analyzeCustomerUsage(customerId)
+  const satisfactionMetrics = await collectSatisfactionMetrics(customerId)
+  
+  if (healthScore < 70) {
+    await triggerCustomerSuccessIntervention(customerId, healthScore)
+  }
+  
+  return {
+    healthScore,
+    usage: usageAnalysis,
+    satisfaction: satisfactionMetrics,
+    recommendations: await generateSuccessRecommendations(customerId)
+  }
+}
+
+// Decision-Making Workflows
+export async function makeStrategicDecision(decision: StrategyDecision): Promise<DecisionResult> {
+  const dataAnalysis = await gatherDecisionData(decision)
+  const scenarioAnalysis = await runScenarioAnalysis(decision, dataAnalysis)
+  const riskAssessment = await assessDecisionRisks(decision, scenarioAnalysis)
+  const recommendation = await generateRecommendation(dataAnalysis, scenarioAnalysis, riskAssessment)
+  
+  return {
+    decision: decision.id,
+    recommendation,
+    confidence: recommendation.confidence,
+    risks: riskAssessment,
+    timeline: await estimateImplementationTimeline(recommendation),
+    resources: await estimateRequiredResources(recommendation)
+  }
+}
+
+export async function optimizeResourceAllocation(): Promise<AllocationPlan> {
+  const currentAllocation = await getCurrentResourceAllocation()
+  const demandForecast = await forecastResourceDemand()
+  const optimizationModel = await buildOptimizationModel(currentAllocation, demandForecast)
+  
+  return await generateOptimalAllocation(optimizationModel)
+}
+
+export async function evaluateMarketOpportunity(opportunity: MarketOpportunity): Promise<OpportunityAssessment> {
+  const marketSize = await estimateMarketSize(opportunity)
+  const competitiveAnalysis = await analyzeCompetitiveLandscape(opportunity)
+  const feasibilityAnalysis = await assessFeasibility(opportunity)
+  const roiProjection = await projectROI(opportunity, marketSize, competitiveAnalysis)
+  
+  return {
+    opportunity: opportunity.id,
+    marketSize,
+    competition: competitiveAnalysis,
+    feasibility: feasibilityAnalysis,
+    roi: roiProjection,
+    recommendation: await generateOpportunityRecommendation(marketSize, competitiveAnalysis, feasibilityAnalysis, roiProjection)
+  }
+}
+
+// Event-driven workflows
+oscco.on('Lead.Received', async (lead, { ai, db, taskQueue }) => {
+  const processedLead = await processInboundLead(lead)
+  await db.leads.update(lead.id, processedLead)
+  
+  if (processedLead.qualification.score >= 80) {
+    taskQueue.enqueue('ScheduleAppointment', { leadId: lead.id })
+  } else {
+    taskQueue.enqueue('NurtureSequence', { leadId: lead.id })
+  }
+})
+
+oscco.on('Appointment.Scheduled', async (appointment, { ai, db, taskQueue }) => {
+  await sendAppointmentConfirmation(appointment)
+  taskQueue.enqueue('SendReminder', { 
+    appointmentId: appointment.id, 
+    reminderTime: appointment.scheduledTime - (24 * 60 * 60 * 1000) // 24 hours before
+  })
+})
+
+oscco.on('Customer.Onboarded', async (customer, { ai, db, taskQueue }) => {
+  await setupCustomerIntegrations(customer)
+  await trainCustomerTeam(customer)
+  taskQueue.enqueue('HealthCheck', { 
+    customerId: customer.id, 
+    checkTime: Date.now() + (7 * 24 * 60 * 60 * 1000) // 7 days after onboarding
+  })
+})
+
+// Scheduled workflows
+oscco.every('minute', async ({ ai, db }) => {
+  const pendingLeads = await db.leads.findPendingResponse()
+  await Promise.all(pendingLeads.map(lead => processInboundLead(lead)))
+})
+
+oscco.every('hour', async ({ ai, db }) => {
+  const metrics = await collectPerformanceMetrics()
+  await db.metrics.insert(metrics)
+  
+  if (metrics.responseTime > 60000) { // > 60 seconds
+    await alertOnPerformanceIssue(metrics)
+  }
+})
+
+oscco.every('day at 06:00', async ({ ai, db, taskQueue }) => {
+  const dailyReport = await generateDailyReport()
+  taskQueue.enqueue('SendReport', { 
+    report: dailyReport, 
+    recipients: ['team@oscco.ai'] 
+  })
+})
+
+oscco.every('week on Mon at 08:00', async ({ ai, db }) => {
+  const weeklyAnalysis = await analyzeWeeklyPerformance()
+  const optimizations = await identifyOptimizationOpportunities(weeklyAnalysis)
+  await implementAutomaticOptimizations(optimizations)
+})
+
+// Type definitions for the workflow functions
+interface BuilderLead {
+  id: string
+  companyName: string
+  contactName: string
+  email: string
+  phone: string
+  communities: Community[]
+  market: string
+  leadSource: string
+}
+
+interface QualifiedBuilderLead extends BuilderLead {
+  profile: BuilderProfile
+  fitScore: number
+  qualificationDate: Date
+  nextSteps: string[]
+}
+
+interface InboundLead {
+  id: string
+  builderId: string
+  communityId: string
+  channel: 'web' | 'sms' | 'phone' | 'social'
+  contact: ContactInfo
+  initialMessage: string
+  timestamp: Date
+}
+
+interface ProcessedLead extends InboundLead {
+  qualification: LeadQualification
+  context: BuilderContext
+  availableSlots: AppointmentSlot[]
+  processedAt: Date
+  nextAction: string
+}
+
+interface LeadQualification {
+  budget: string
+  timeline: string
+  location: string
+  householdNeeds: string[]
+  financingStatus: string
+  contactPreferences: string[]
+  completeness: number
+  score: number
+}
+
+interface Customer {
+  id: string
+  builderId: string
+  tier: 'starter' | 'pro' | 'enterprise'
+  communities: Community[]
+  integrations: Integration[]
+  onboardedAt: Date
+}
+
+interface RevenueResult {
+  subscription: number
+  usage: number
+  upsells: UpsellResult[]
+  total: number
+  projectedGrowth: number
+}
+```
