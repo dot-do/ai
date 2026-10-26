@@ -1,3 +1,7 @@
+<p align="center">
+  <a href="https://platform.do"><img src=".github/cover.png" alt="Business-as-Code: open-source SDKs, packages and tools for autonomous business" width="100%"></a>
+</p>
+
 # `.do` Business-as-Code - AI & SDK
 
 Open-source SDKs, packages, and tools for building autonomous Business-as-Code with semantic intent.
